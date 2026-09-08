@@ -397,10 +397,10 @@ func tgChannelSearch(ctx context.Context, query string) ([]searchResult, error) 
 	}
 	// fetch the detail pages in parallel to resolve the t.me links
 	var (
-		mu   sync.Mutex
-		wg   sync.WaitGroup
-		out  []searchResult
-		sem  = make(chan struct{}, 3)
+		mu  sync.Mutex
+		wg  sync.WaitGroup
+		out []searchResult
+		sem = make(chan struct{}, 3)
 	)
 	for _, e := range entries {
 		wg.Add(1)
@@ -552,6 +552,10 @@ func handleTTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		s.Reply(info, ttGuide(prefix))
 		return
 	}
+	// direct link → instant download (no search list)
+	if SearchDirectLink(s, info, pickTT, args, prefix) {
+		return
+	}
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		results, err := ttUserSearch(ctx, query)
 		if err != nil {
@@ -576,6 +580,10 @@ func handleFBSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 	query := strings.TrimSpace(strings.Join(args, " "))
 	if query == "" {
 		s.Reply(info, fbGuide(prefix))
+		return
+	}
+	// direct link → instant download (no search list)
+	if SearchDirectLink(s, info, pickFB, args, prefix) {
 		return
 	}
 	RunWithTimeout(s, info, func(ctx context.Context) {
@@ -606,6 +614,10 @@ func handleIGSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		s.Reply(info, igGuide(prefix))
 		return
 	}
+	// direct link → instant download (no search list)
+	if SearchDirectLink(s, info, pickIG, args, prefix) {
+		return
+	}
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		results, err := igAccountSearch(ctx, query)
 		if err != nil {
@@ -630,6 +642,10 @@ func handleTGSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 	query := strings.TrimSpace(strings.Join(args, " "))
 	if query == "" {
 		s.Reply(info, tgGuide(prefix))
+		return
+	}
+	// direct link → instant download (no search list)
+	if SearchDirectLink(s, info, pickTG, args, prefix) {
 		return
 	}
 	RunWithTimeout(s, info, func(ctx context.Context) {
@@ -660,6 +676,10 @@ func handleTWTSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 		s.Reply(info, twtGuide(prefix))
 		return
 	}
+	// direct link → instant download (no search list)
+	if SearchDirectLink(s, info, pickTWT, args, prefix) {
+		return
+	}
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		results, err := twtAccountSearch(ctx, query)
 		if err != nil {
@@ -684,6 +704,15 @@ func handleAPKSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 	query := strings.TrimSpace(strings.Join(args, " "))
 	if query == "" {
 		s.Reply(info, apkGuide(prefix))
+		return
+	}
+	// direct link → instant download (no search list)
+	if SearchDirectLink(s, info, pickAPK, args, prefix) {
+		return
+	}
+	// bare package name → instant download
+	if apkPkgRe.MatchString(strings.ToLower(query)) {
+		searchPickAPK(s, info, searchResult{Title: query, Handle: strings.ToLower(query), Link: apkComboBase + "/app/" + strings.ToLower(query)})
 		return
 	}
 	RunWithTimeout(s, info, func(ctx context.Context) {

@@ -151,6 +151,54 @@ func SearchTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 	return true
 }
 
+// ── direct-link router ─────────────────────────────────────────────────────
+
+// SearchDirectLink — call at the top of every search handler: when the args
+// contain a link of that handler's platform, skip the search list and route
+// straight to the platform downloader (instant download, .video-style UX).
+// Returns true when the message was consumed.
+func SearchDirectLink(s SessionBridge, info types.MessageInfo, kind searchPickKind, args []string, prefix string) bool {
+	joined := strings.ToLower(strings.TrimSpace(strings.Join(args, " ")))
+	if joined == "" {
+		return false
+	}
+	route := func(run func()) bool {
+		clearSearchSession(info.Sender.String())
+		run()
+		return true
+	}
+	switch kind {
+	case pickTT:
+		if strings.Contains(joined, "tiktok.com") {
+			return route(func() { handleTikTok(s, info, args, prefix) })
+		}
+	case pickFB:
+		if strings.Contains(joined, "facebook.com") || strings.Contains(joined, "fb.watch") || strings.Contains(joined, "fb.com") {
+			return route(func() { handleFB(s, info, args, prefix) })
+		}
+	case pickIG:
+		if strings.Contains(joined, "instagram.com") || strings.Contains(joined, "instagr.am") {
+			return route(func() { handleInsta(s, info, args, prefix) })
+		}
+	case pickTG:
+		if strings.Contains(joined, "t.me/") || strings.Contains(joined, "telegram.me") {
+			return route(func() { handleTG(s, info, args, prefix) })
+		}
+	case pickTWT:
+		if strings.Contains(joined, "twitter.com") || strings.Contains(joined, "//x.com") {
+			return route(func() { handleTwitter(s, info, args, prefix) })
+		}
+	case pickAPK:
+		if strings.Contains(joined, "apkcombo.com/") {
+			raw := strings.TrimSpace(strings.Join(args, " "))
+			return route(func() {
+				searchPickAPK(s, info, searchResult{Title: raw, Handle: apkPkgFromLink(raw), Link: strings.TrimRight(raw, "/")})
+			})
+		}
+	}
+	return false
+}
+
 // ── pick actions ──────────────────────────────────────────────────────────
 
 // searchPickAPK resolves the app through the jina reader proxy (direct
@@ -309,6 +357,16 @@ func searchPickLinkCard(s SessionBridge, info types.MessageInfo, kind searchPick
 		"🔰 *SEARCHED BY GOLD-MD* 🔰"
 
 	s.Reply(info, card)
+}
+
+// apkPkgFromLink pulls the package name out of an apkcombo.com URL:
+// https://apkcombo.com/<slug>/<pkg>/  →  <pkg>
+func apkPkgFromLink(link string) string {
+	m := regexp.MustCompile(`apkcombo\.com/[a-z0-9-]+/([a-z0-9._]+)/?`).FindStringSubmatch(strings.ToLower(link))
+	if m != nil {
+		return m[1]
+	}
+	return ""
 }
 
 // ── APK resolver (jina route) ─────────────────────────────────────────────
