@@ -540,6 +540,13 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		return
 	}
 
+	// 🔰 SEARCH PICK SESSION (search commands' number → download flow).
+	// Runs BEFORE audio/video sessions and command dispatch so a bare
+	// "1".."5" reply after a search card is consumed here.
+	if goldcmds.SearchTryHandle(brCP, info, body, prefix) {
+		return
+	}
+
 	// Handle pending audio selections first.
 	if sess := getAudioSession(sender); sess != nil {
 		trimmed := strings.TrimSpace(body)

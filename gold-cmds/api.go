@@ -50,6 +50,9 @@ type SessionBridge interface {
 	SetVideoSession2(jid string, results []VideoResult, hd bool)
 	SetAudioSession(jid string, results []VideoResult)
 	SetAudioSession2(jid string, results []VideoResult, play2 bool)
+	// ClearSearchSession drops any pending search-list pick window for this
+	// JID — called whenever a play/video search replaces the pick context.
+	ClearSearchSession(jid string)
 	// DownloadImage downloads the image attached to the incoming message
 	// identified by info. Returns the raw image bytes and true if the message
 	// contained an image (direct or quoted); returns nil,false otherwise.

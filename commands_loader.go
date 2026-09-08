@@ -269,7 +269,14 @@ func (b *bridge) SetAudioSession(jid string, results []goldcmds.VideoResult) {
 	setAudioSession(jid, internalResults)
 }
 
+// ClearSearchSession drops a pending search-list pick window (a play/video
+// search just replaced the pick context).
+func (b *bridge) ClearSearchSession(jid string) {
+	goldcmds.ClearSearchSession(jid)
+}
+
 func (b *bridge) SetVideoSession(jid string, results []goldcmds.VideoResult) {
+	goldcmds.ClearSearchSession(jid) // a new video search replaces any search pick
 	var internalResults []VideoResult
 	for _, r := range results {
 		internalResults = append(internalResults, VideoResult{
@@ -285,6 +292,7 @@ func (b *bridge) SetVideoSession(jid string, results []goldcmds.VideoResult) {
 // SetVideoSession2 stores a .video2 (turbo engine) search session so number
 // picks route back through the video2 parallel engine, with HD when set.
 func (b *bridge) SetAudioSession2(jid string, results []goldcmds.VideoResult, play2 bool) {
+	goldcmds.ClearSearchSession(jid) // a new play search replaces any search pick
 	internal := make([]VideoResult, 0, len(results))
 	for _, r := range results {
 		internal = append(internal, VideoResult{URL: r.URL, Thumbnail: r.Thumbnail, Title: r.Title, Duration: r.Duration})

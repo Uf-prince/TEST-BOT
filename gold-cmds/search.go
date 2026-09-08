@@ -539,8 +539,9 @@ func handleTTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		if len(results) > searchMaxResults {
 			results = results[:searchMaxResults]
 		}
+		setSearchSession(info.Sender.String(), pickTT, query, results)
 		s.Reply(info, searchCard("TIKTOK SEARCH", query, "USER", "STATS", results,
-			"*🔰 DOWNLOAD :❱ "+prefix+"tiktok ❰ LINK ❯*"))
+			searchPickFooter()))
 	})
 }
 
@@ -566,8 +567,9 @@ func handleFBSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		if len(results) > searchMaxResults {
 			results = results[:searchMaxResults]
 		}
+		setSearchSession(info.Sender.String(), pickFB, query, results)
 		s.Reply(info, searchCard("FACEBOOK SEARCH", query, "", "", results,
-			"*🔰 DOWNLOAD :❱ "+prefix+"fb ❰ LINK ❯*"))
+			searchPickFooter()))
 	})
 }
 
@@ -591,8 +593,9 @@ func handleIGSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		if len(results) > searchMaxResults {
 			results = results[:searchMaxResults]
 		}
+		setSearchSession(info.Sender.String(), pickIG, query, results)
 		s.Reply(info, searchCard("INSTAGRAM SEARCH", query, "ACCOUNT", "", results,
-			"*🔰 DOWNLOAD :❱ "+prefix+"insta ❰ LINK ❯*"))
+			searchPickFooter()))
 	})
 }
 
@@ -618,8 +621,9 @@ func handleTGSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		if len(results) > searchMaxResults {
 			results = results[:searchMaxResults]
 		}
+		setSearchSession(info.Sender.String(), pickTG, query, results)
 		s.Reply(info, searchCard("TELEGRAM SEARCH", query, "", "", results,
-			"*🔰 DOWNLOAD POSTS :❱ "+prefix+"tg ❰ POST LINK ❯*"))
+			searchPickFooter()))
 	})
 }
 
@@ -643,8 +647,9 @@ func handleTWTSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 		if len(results) > searchMaxResults {
 			results = results[:searchMaxResults]
 		}
+		setSearchSession(info.Sender.String(), pickTWT, query, results)
 		s.Reply(info, searchCard("X / TWITTER SEARCH", query, "ACCOUNT", "", results,
-			"*🔰 DOWNLOAD :❱ "+prefix+"twitter ❰ LINK ❯*"))
+			searchPickFooter()))
 	})
 }
 
@@ -670,8 +675,9 @@ func handleAPKSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 		if len(results) > searchMaxResults {
 			results = results[:searchMaxResults]
 		}
+		setSearchSession(info.Sender.String(), pickAPK, query, results)
 		s.Reply(info, searchCard("APK SEARCH", query, "PACKAGE", "DETAILS", results,
-			"*🔰 DOWNLOAD :❱ "+prefix+"apk ❰ NUMBER OR NAME ❯*"))
+			searchPickFooter()))
 	})
 }
 
