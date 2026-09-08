@@ -29,6 +29,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -255,27 +256,40 @@ func ytOEmbedInfo(id string) (*ytInfoData, error) {
 // ── reply builders ───────────────────────────────────────────────────
 
 // ytSearchCard renders the search results reply.
+// ytSearchCard renders the list in the .video fancy-border style, so all
+// search lists across the bot look identical.
 func ytSearchCard(query string, results []ytVideo, prefix string) string {
 	var b strings.Builder
 	b.WriteString("*🔰 YOUTUBE SEARCH 🔰*\n\n")
 	b.WriteString("*QUERY :❱ " + strings.ToUpper(query) + "*\n\n")
+	b.WriteString("*TOP " + strconv.Itoa(len(results)) + " RESULTS FOR YOUR SEARCH*\n\n")
 	for i, v := range results {
-		n := fmt.Sprintf("%d", i+1)
-		b.WriteString("*" + n + ". " + v.Title + "*\n")
+		durStr := v.Length
+		if durStr == "" {
+			durStr = "NOT FOUND"
+		}
+		meta := durStr
+		if v.Views != "" {
+			if meta != "" {
+				meta += " ❮ "
+			}
+			meta += v.Views
+		}
+		nameStr := v.Title
+		if nameStr == "" {
+			nameStr = "NULL"
+		}
+		b.WriteString("\n" + searchBorder + "\n")
+		b.WriteString("*TYPE ❰ " + strconv.Itoa(i+1) + " ❱ TO DOWNLOAD THIS FROM YT*\n")
+		b.WriteString(strings.ToUpper(nameStr) + "\n")
 		if v.Channel != "" {
 			b.WriteString("*CHANNEL :❱ " + v.Channel + "*\n")
 		}
-		if v.Length != "" || v.Views != "" {
-			d := v.Length
-			if d != "" && v.Views != "" {
-				d += " ❮ "
-			}
-			d += v.Views
-			b.WriteString("*" + d + "*\n")
-		}
-		b.WriteString("*LINK :❱ " + v.Link + "*\n\n")
+		b.WriteString("*" + meta + "*\n")
+		b.WriteString("*LINK :❱ " + v.Link + "*\n")
+		b.WriteString(searchBorder + "\n\n")
 	}
-	b.WriteString("*🔰 DOWNLOAD :❱ " + prefix + "video ❮ NUMBER OR NAME ❯*")
+	b.WriteString("*TYPE NUMBER WHICH VIDEO DO YOU WANT TO DOWNLOAD — REPLY WITH ANY NUMBER 1 TO " + strconv.Itoa(len(results)) + "*")
 	return b.String()
 }
 
@@ -316,6 +330,17 @@ func handleYTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 	if len(results) > ytMaxResults {
 		results = results[:ytMaxResults]
 	}
+	// wire the same number-pick flow as .video: bare "1".."5" after this
+	// card downloads the selected video instantly (video-session dispatch).
+	vids := make([]VideoResult, 0, len(results))
+	for _, v := range results {
+		thumb := ""
+		if v.ID != "" {
+			thumb = "https://i.ytimg.com/vi/" + v.ID + "/hqdefault.jpg"
+		}
+		vids = append(vids, VideoResult{Title: v.Title, URL: v.Link, Thumbnail: thumb, Duration: v.Length})
+	}
+	s.SetVideoSession(info.Sender.String(), vids)
 	s.Reply(info, ytSearchCard(query, results, prefix))
 }
 

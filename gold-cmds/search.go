@@ -174,12 +174,23 @@ func searchFmtCount(n int64) string {
 }
 
 // searchCard renders the results reply (ytsearch card style).
+// searchBorder is the fancy result border (same as .video / .play lists).
+const searchBorder = "✧═══════════•❁❀❁•═══════════✧"
+
+// searchCard renders the full list in the .video fancy-border style.
 func searchCard(header, query, handleLabel, statsLabel string, results []searchResult, footer string) string {
 	var b strings.Builder
 	b.WriteString("*🔰 " + header + " 🔰*\n\n")
 	b.WriteString("*QUERY :❱ " + strings.ToUpper(query) + "*\n\n")
+	b.WriteString("*TOP " + strconv.Itoa(len(results)) + " RESULTS FOR YOUR SEARCH*\n\n")
 	for i, r := range results {
-		b.WriteString(fmt.Sprintf("*%d. %s*\n", i+1, r.Title))
+		title := r.Title
+		if title == "" {
+			title = "NOT FOUND"
+		}
+		b.WriteString("\n" + searchBorder + "\n")
+		b.WriteString("*TYPE ❰ " + strconv.Itoa(i+1) + " ❱ TO SELECT THIS RESULT*\n")
+		b.WriteString(strings.ToUpper(title) + "\n")
 		if handleLabel != "" && r.Handle != "" {
 			b.WriteString("*" + handleLabel + " :❱ " + r.Handle + "*\n")
 		}
@@ -189,7 +200,8 @@ func searchCard(header, query, handleLabel, statsLabel string, results []searchR
 		if r.Snippet != "" {
 			b.WriteString("*" + r.Snippet + "*\n")
 		}
-		b.WriteString("*LINK :❱ " + r.Link + "*\n\n")
+		b.WriteString("*LINK :❱ " + r.Link + "*\n")
+		b.WriteString(searchBorder + "\n\n")
 	}
 	b.WriteString(footer)
 	return b.String()

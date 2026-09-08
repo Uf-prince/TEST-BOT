@@ -109,8 +109,9 @@ func clearSearchSession(jid string) {
 }
 
 // searchPickFooter is the pick-style footer shown under every search card.
+// searchPickFooter is the pick-style footer shown under every search card.
 func searchPickFooter() string {
-	return "*🔰 TYPE NUMBER WHICH APP / CHANNEL / USER YOU WANT — REPLY WITH ANY NUMBER ❰ 1 TO 5 ❯*"
+	return "*TYPE NUMBER WHICH RESULT YOU WANT TO OPEN OR DOWNLOAD — REPLY WITH ANY NUMBER 1 TO 5*"
 }
 
 // SearchTryHandle — call from the main message handler BEFORE dispatch
