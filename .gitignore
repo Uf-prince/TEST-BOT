@@ -38,4 +38,3 @@ run_local.sh
 tunnel.log
 run_11242.sh
 fix_emoji.py
-__pycache__/

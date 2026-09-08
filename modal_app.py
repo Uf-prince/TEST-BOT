@@ -57,6 +57,9 @@ def run_bot():
     os.environ["GOLDMD_DATA_DIR"] = "/data/nexstore"
     os.environ["GOLDMD_SERVER_ID"] = "svr1"
     os.environ["GOLDMD_MAX_SESSIONS"] = "10"
+    # .system truth values: billing limit 0.5 core + platform label
+    os.environ["GOLDMD_CPU_LIMIT"] = "0.5 core (Modal billing limit)"
+    os.environ["GOLDMD_PLATFORM"] = "Modal.com"
     # Bot ka binary (Dockerfile me /app/gold-md pe build hota hai)
     # stdout+stderr inherit — ab bot ke logs Modal logs me dikhenge
     subprocess.run(["./gold-md"])
