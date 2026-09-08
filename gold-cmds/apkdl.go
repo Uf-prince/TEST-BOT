@@ -4,7 +4,7 @@ package goldcmds
 // GOLD-MD — APK Downloader (Google Play apps)
 // File: apkdl.go
 // ============================================================================
-// COMMAND: .apk <app name or package name>
+// HANDLER: handleAPK — used by .apksearch direct-link router
 //   Finds an app on APKCombo and sends the APK/XAPK file as a document.
 //
 // Source (free, permanent, no API key): apkcombo.com
@@ -23,7 +23,6 @@ package goldcmds
 //     3. Stream-download the file (following redirects) and send it as a
 //        WhatsApp document.
 //
-// Aliases (Hidden): apkdl, app, playstore, play
 // ============================================================================
 
 import (
@@ -44,14 +43,14 @@ const apkComboBase = "https://apkcombo.com"
 
 const apkUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
 
-const apkHelpText = "*🔰 APK DOWNLOAD COMMAND 🔰*\n" +
-	"*DO YOU WANT TO DOWNLOAD AN APP APK? 🤔*\n" +
-	"*JUST WRITE THE APP NAME OR PACKAGE NAME 😊*\n\n" +
-	"*.APK ❰APP NAME❱*\n" +
+const apkHelpText = "*\U0001f530 APK DOWNLOAD COMMAND \U0001f530*\n" +
+	"*DO YOU WANT TO DOWNLOAD AN APP APK? \U0001f914*\n" +
+	"*JUST WRITE THE APP NAME OR PACKAGE NAME \U0001f60a*\n\n" +
+	"*.APKSEARCH \u2770APP NAME \u276f*\n" +
 	"*EXAMPLES.....*\n" +
-	"*.APK whatsapp*\n" +
-	"*.APK com.whatsapp*\n\n" +
-	"*THE APK FILE WILL BE SENT HERE 🤗*"
+	"*.APKSEARCH whatsapp*\n" +
+	"*.APKSEARCH com.whatsapp*\n\n" +
+	"*THE APK FILE WILL BE SENT HERE \U0001f917*"
 
 // apkAppInfo holds everything needed to download one app file.
 type apkAppInfo struct {
@@ -367,12 +366,4 @@ func apkStripTags(s string) string {
 	s = regexp.MustCompile(`<[^>]+>`).ReplaceAllString(s, " ")
 	s = strings.Join(strings.Fields(s), " ")
 	return strings.TrimSpace(s)
-}
-
-func init() {
-	Register(Command{Name: "apk", Category: "DOWNLOADER", Desc: "Download an app APK (play store apps)", Run: handleAPK})
-	Register(Command{Name: "apkdl", Hidden: true, Run: handleAPK})
-	Register(Command{Name: "app", Hidden: true, Run: handleAPK})
-	Register(Command{Name: "apps", Hidden: true, Run: handleAPK})
-	Register(Command{Name: "application", Hidden: true, Run: handleAPK})
 }

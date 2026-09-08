@@ -4,7 +4,7 @@ package goldcmds
 // GOLD-MD — TikTok Downloader
 // File: tiktok.go
 // ============================================================================
-// COMMAND: .tiktok <tiktok URL>
+// HANDLER: handleTikTok — used by .ttsearch direct-link router
 //   Downloads a TikTok video (HD preferred) and sends it.
 //
 // API: tikwm  (GET https://www.tikwm.com/api/?url=<URL>)
@@ -13,7 +13,6 @@ package goldcmds
 //     comment_count, share_count, collect_count, author: { nickname,
 //     unique_id } } }
 //
-// Aliases (Hidden): tt, ttdl, ttvideo, tiktokvideo
 // ============================================================================
 
 import (
@@ -31,13 +30,13 @@ import (
 
 const tikwmAPI = "https://www.tikwm.com/api/"
 
-const tiktokHelpText = "*🏅 TIKTOK COMMAND INFO 🏅*\n" +
+const tiktokHelpText = "*\U0001f3c5 TIKTOK COMMAND INFO \U0001f3c5*\n" +
 	"*COPY THE TIKTOK VIDEO LINK*\n" +
-	"*PASTE TIKTOK VIDEO LINK LIKE THIS 😊*\n\n" +
-	"*.TIKTOK ❰TIKTOK LINK❱*\n" +
+	"*PASTE TIKTOK VIDEO LINK LIKE THIS \U0001f60a*\n\n" +
+	"*.TTSEARCH \u2770TIKTOK LINK\u2771*\n" +
 	"*EXAMPLE.....*\n" +
-	"*.TIKTOK https://vm.tiktok.com/xxxxx*\n\n" +
-	"*YOUR TIKTOK VIDEO WILL BE SENT HERE 🤗*"
+	"*.TTSEARCH https://vm.tiktok.com/xxxxx*\n\n" +
+	"*YOUR TIKTOK VIDEO WILL BE SENT HERE \U0001f917*"
 
 // tikwmResponse models the tikwm API response.
 type tikwmResponse struct {
@@ -185,12 +184,4 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
-}
-
-func init() {
-	Register(Command{Name: "tiktok", Category: "DOWNLOADER", Desc: "Download a TikTok video (HD)", Run: handleTikTok})
-	Register(Command{Name: "tt", Hidden: true, Run: handleTikTok})
-	Register(Command{Name: "ttdl", Hidden: true, Run: handleTikTok})
-	Register(Command{Name: "ttvideo", Hidden: true, Run: handleTikTok})
-	Register(Command{Name: "tiktokvideo", Hidden: true, Run: handleTikTok})
 }

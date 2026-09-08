@@ -4,7 +4,7 @@ package goldcmds
 // GOLD-MD — Twitter/X Video Downloader
 // File: twitter.go
 // ============================================================================
-// COMMAND: .twitter <tweet/x.com video URL>
+// HANDLER: handleTwitter — used by .twtsearch direct-link router
 //   Downloads a Twitter/X video (best quality) and sends it with thumbnail.
 //   Photo-only tweets send up to 4 photos as images.
 //
@@ -15,7 +15,6 @@ package goldcmds
 //     duration, format, type } ] } } }
 //   Video URLs point directly at video.twimg.com CDN (very fast, no proxy).
 //
-// Aliases (Hidden): twt, tweet, twdl, xvideo, x
 // ============================================================================
 
 import (
@@ -33,11 +32,11 @@ import (
 
 const twAPIBase = "https://api.fxtwitter.com/i/status/"
 
-const twHelpText = "*🔰 TWITTER VIDEO DOWNLOAD COMMAND 🔰*\n" +
-	"*DO YOU WANT TO DOWNLOAD A TWITTER/X VIDEO? 🤔*\n" +
-	"*FIRST COPY THE TWEET LINK 🙄*\n" +
-	"*THEN WRITE LIKE THIS 😊*\n\n" +
-	"*EXAMPLE :* " + "." + "twitter https://x.com/NASASpaceflight/status/1811608378520588583\n\n" +
+const twHelpText = "*\U0001f530 TWITTER VIDEO DOWNLOAD COMMAND \U0001f530*\n" +
+	"*DO YOU WANT TO DOWNLOAD A TWITTER/X VIDEO? \U0001f914*\n" +
+	"*FIRST COPY THE TWEET LINK \U0001f644*\n" +
+	"*THEN WRITE LIKE THIS \U0001f60a*\n\n" +
+	"*EXAMPLE :* " + "." + "twtsearch https://x.com/NASASpaceflight/status/1811608378520588583\n\n" +
 	"*TO DOWNLOAD TWITTER/X VIDEOS"
 
 // twTweet mirrors the parts of the fxtwitter response we care about.
@@ -249,18 +248,4 @@ func twBuildCaption(tweet *twTweet) string {
 	}
 	cap += "\n*TWITTER VIDEO DOWNLOADED*"
 	return cap
-}
-
-func init() {
-	Register(Command{
-		Name:     "twitter",
-		Category: "DOWNLOADER",
-		Desc:     "Download a Twitter/X video or photo (super fast)",
-		Run:      handleTwitter,
-	})
-	Register(Command{Name: "twt", Hidden: true, Run: handleTwitter})
-	Register(Command{Name: "tweet", Hidden: true, Run: handleTwitter})
-	Register(Command{Name: "twdl", Hidden: true, Run: handleTwitter})
-	Register(Command{Name: "xvideo", Hidden: true, Run: handleTwitter})
-	Register(Command{Name: "x", Hidden: true, Run: handleTwitter})
 }

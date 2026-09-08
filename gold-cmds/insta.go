@@ -4,7 +4,7 @@ package goldcmds
 // GOLD-MD — Instagram Downloader
 // File: insta.go
 // ============================================================================
-// COMMAND: .insta <instagram reel/post URL>
+// HANDLER: handleInsta — used by .igsearch direct-link router
 //   Downloads an Instagram video (best quality) and sends it with thumbnail.
 //
 // API: ytdlp metadata service  (POST https://ytdlp-ufprince.onrender.com/api/metadata)
@@ -17,7 +17,6 @@ package goldcmds
 //   Best quality  = info["formats"][-1]["url"]        (direct MP4)
 //   Lower quality = first format with height == 640
 //
-// Aliases (Hidden): instagram, ig, instavideo
 // ============================================================================
 
 import (
@@ -35,12 +34,12 @@ import (
 
 const instaMetaAPI = "https://ytdlp-ufprince.onrender.com/api/metadata"
 
-const instaHelpText = "*🏅 INSTAGRAM VIDEO DOWNLOAD COMMAND 🏅*\n" +
-	"*DO YOU WANT TO DOWNLOAD AN INSTAGRAM VIDEO? 🤔*\n" +
-	"*FIRST COPY THE INSTAGRAM VIDEO LINK 🙄*\n" +
-	"*THEN WRITE LIKE THIS 😊*\n\n" +
-	"*.INSTA ❰INSTAGRAM VIDEO LINK❱*\n\n" +
-	"*WHEN YOU WRITE LIKE THIS YOUR INSTAGRAM VIDEO WILL BE DOWNLOADED AND SENT HERE 🤗*"
+const instaHelpText = "*\U0001f3c5 INSTAGRAM VIDEO DOWNLOAD COMMAND \U0001f3c5*\n" +
+	"*DO YOU WANT TO DOWNLOAD AN INSTAGRAM VIDEO? \U0001f914*\n" +
+	"*FIRST COPY THE INSTAGRAM VIDEO LINK \U0001f644*\n" +
+	"*THEN WRITE LIKE THIS \U0001f60a*\n\n" +
+	"*.IGSEARCH \u2770INSTAGRAM VIDEO LINK\u2771*\n\n" +
+	"*WHEN YOU WRITE LIKE THIS YOUR INSTAGRAM VIDEO WILL BE DOWNLOADED AND SENT HERE \U0001f917*"
 
 // instaMetaFormat models one entry of the ytdlp formats array.
 type instaMetaFormat struct {
@@ -243,14 +242,6 @@ func instaFetchMeta(ctx context.Context, instaURL string) (*instaMetaInfo, error
 	}
 	return &all[0], nil
 }
-
-func init() {
-	Register(Command{Name: "insta", Category: "DOWNLOADER", Desc: "Download an Instagram reel / post", Run: handleInsta})
-	Register(Command{Name: "instagram", Hidden: true, Run: handleInsta})
-	Register(Command{Name: "ig", Hidden: true, Run: handleInsta})
-	Register(Command{Name: "instavideo", Hidden: true, Run: handleInsta})
-}
-
 // instaTitleFromFilename turns a cobalt filename like "instagram_DcgpLPDidLj.mp4"
 // into a friendly title ("Instagram DcgpLPDidLj").
 func instaTitleFromFilename(filename string) string {

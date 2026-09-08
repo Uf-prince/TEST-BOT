@@ -4,7 +4,7 @@ package goldcmds
 // GOLD-MD — Facebook Video Downloader
 // File: fb.go
 // ============================================================================
-// COMMAND: .fb <facebook video/reel URL>
+// HANDLER: handleFB — used by .fbsearch direct-link router
 //   Downloads a Facebook video (HD preferred, falls back to SD) and sends it.
 //
 // API: cobalt instance  (POST https://cobalt-api-ufprince.onrender.com/)
@@ -16,7 +16,6 @@ package goldcmds
 //   Response JSON: { status, url, filename }   (status: redirect/tunnel/
 //   stream/picker/error)
 //
-// Aliases (Hidden): fbdl, facebook, reel
 // ============================================================================
 
 import (
@@ -35,12 +34,12 @@ import (
 const fbCobaltAPI = "https://cobalt-api-ufprince.onrender.com/"
 const fbCobaltAPIKey = "uf_428765ffed6c4cf9a4c746b517f9089d"
 
-const fbHelpText = "*🏅 FACEBOOK VIDEO DOWNLOAD COMMAND 🏅*\n" +
-	"*DO YOU WANT TO DOWNLOAD A FACEBOOK VIDEO? 🤔*\n" +
-	"*FIRST COPY THE FACEBOOK VIDEO LINK 🙄*\n" +
-	"*THEN WRITE LIKE THIS 😊*\n\n" +
-	"*.FB ❰FACEBOOK VIDEO LINK❱*\n\n" +
-	"*WHEN YOU WRITE LIKE THIS YOUR FACEBOOK VIDEO WILL BE DOWNLOADED AND SENT HERE 🤗*"
+const fbHelpText = "*\U0001f3c5 FACEBOOK VIDEO DOWNLOAD COMMAND \U0001f3c5*\n" +
+	"*DO YOU WANT TO DOWNLOAD A FACEBOOK VIDEO? \U0001f914*\n" +
+	"*FIRST COPY THE FACEBOOK VIDEO LINK \U0001f644*\n" +
+	"*THEN WRITE LIKE THIS \U0001f60a*\n\n" +
+	"*.FBSEARCH \u2770FACEBOOK VIDEO LINK\u2771*\n\n" +
+	"*WHEN YOU WRITE LIKE THIS YOUR FACEBOOK VIDEO WILL BE DOWNLOADED AND SENT HERE \U0001f917*"
 
 // fbCobaltResponse models the cobalt API response.
 type fbCobaltResponse struct {
@@ -178,11 +177,4 @@ func fbCobaltFetch(ctx context.Context, fbURL string) (*fbCobaltResponse, error)
 		return nil, fmt.Errorf("API returned error status")
 	}
 	return &parsed, nil
-}
-
-func init() {
-	Register(Command{Name: "fb", Category: "DOWNLOADER", Desc: "Download a Facebook video / reel", Run: handleFB})
-	Register(Command{Name: "fbdl", Hidden: true, Run: handleFB})
-	Register(Command{Name: "facebook", Hidden: true, Run: handleFB})
-	Register(Command{Name: "reel", Hidden: true, Run: handleFB})
 }

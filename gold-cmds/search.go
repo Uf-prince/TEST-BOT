@@ -506,7 +506,7 @@ func ttGuide(prefix string) string {
 		"*🔰 SEARCH TIKTOK USERS :❱*\n*" + prefix + "ttsearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "ttsearch carti*\n*SHOWS THE TOP TIKTOK USERS WITH NAME, FOLLOWERS AND LINK*\n\n" +
 				"*❁ DIRECT TIKTOK LINK :❱*\n*" + prefix + "ttsearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "ttsearch https://www.tiktok.com/@user/video/1234567890*\n*PASTE A TIKTOK LINK AND THE VIDEO DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "tts ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "tiktok ❰ LINK ❯*"
+		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "ttsearch ❰ LINK ❯*"
 }
 
 func fbGuide(prefix string) string {
@@ -514,7 +514,7 @@ func fbGuide(prefix string) string {
 		"*🔰 SEARCH FACEBOOK PROFILES :❱*\n*" + prefix + "fbsearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "fbsearch mark zuckerberg*\n*SHOWS MATCHING FACEBOOK PROFILES WITH NAME AND LINK*\n\n" +
 				"*❁ DIRECT FACEBOOK LINK :❱*\n*" + prefix + "fbsearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "fbsearch https://www.facebook.com/watch?v=1234567890*\n*PASTE A FACEBOOK VIDEO / REEL LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "fbs ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "fb ❰ LINK ❯*"
+		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "fbsearch ❰ LINK ❯*"
 }
 
 func igGuide(prefix string) string {
@@ -522,7 +522,7 @@ func igGuide(prefix string) string {
 		"*🔰 SEARCH INSTAGRAM ACCOUNTS :❱*\n*" + prefix + "igsearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "igsearch ronaldo*\n*SHOWS MATCHING INSTAGRAM ACCOUNTS WITH NAME AND LINK*\n\n" +
 				"*❁ DIRECT INSTAGRAM LINK :❱*\n*" + prefix + "igsearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "igsearch https://www.instagram.com/reel/Cxxxxxxxx/*\n*PASTE AN INSTAGRAM POST / REEL LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "igs ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "insta ❰ LINK ❯*"
+		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "igsearch ❰ LINK ❯*"
 }
 
 func tgGuide(prefix string) string {
@@ -530,7 +530,7 @@ func tgGuide(prefix string) string {
 		"*🔰 SEARCH TELEGRAM CHANNELS :❱*\n*" + prefix + "tgsearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "tgsearch movies*\n*SHOWS CHANNELS AND GROUPS WITH THEIR JOIN LINKS*\n\n" +
 				"*❁ DIRECT TELEGRAM LINK :❱*\n*" + prefix + "tgsearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "tgsearch https://t.me/channelname/123*\n*PASTE A T.ME POST LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "tgs ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD POSTS :❱*\n*" + prefix + "tg ❰ POST LINK ❯*"
+		"*🔰 TO DOWNLOAD POSTS :❱*\n*" + prefix + "tgsearch ❰ POST LINK ❯*"
 }
 
 func twtGuide(prefix string) string {
@@ -538,7 +538,7 @@ func twtGuide(prefix string) string {
 		"*🔰 SEARCH X ACCOUNTS :❱*\n*" + prefix + "twtsearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "twtsearch elon musk*\n*SHOWS MATCHING X / TWITTER ACCOUNTS WITH NAME AND LINK*\n\n" +
 				"*❁ DIRECT X LINK :❱*\n*" + prefix + "twtsearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "twtsearch https://x.com/username/status/1234567890*\n*PASTE AN X / TWITTER LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "twts ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "twitter ❰ LINK ❯*"
+		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "twtsearch ❰ LINK ❯*"
 }
 
 func apkGuide(prefix string) string {
@@ -546,7 +546,7 @@ func apkGuide(prefix string) string {
 		"*🔰 SEARCH APK APPS :❱*\n*" + prefix + "apksearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "apksearch whatsapp*\n*SHOWS APPS WITH NAME, PACKAGE, DOWNLOADS, RATING AND SIZE*\n\n" +
 				"*❁ DIRECT APK LINK :❱*\n*" + prefix + "apksearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "apksearch https://apkcombo.com/whatsapp/com.whatsapp/*\n*PASTE AN APK LINK AND THE APK DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "apks ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "apk ❰ NUMBER OR NAME ❯*"
+		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "apksearch ❰ NUMBER OR NAME ❯*"
 }
 
 // ── handlers ────────────────────────────────────────────────────────────

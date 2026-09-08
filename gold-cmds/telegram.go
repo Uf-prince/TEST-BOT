@@ -4,7 +4,7 @@ package goldcmds
 // GOLD-MD — Telegram Media Downloader
 // File: telegram.go
 // ============================================================================
-// COMMAND: .tg <t.me / telegram.me link>
+// HANDLER: handleTG — used by .tgsearch direct-link router
 //   Downloads a video / photo from a PUBLIC Telegram post and sends it.
 //
 // METHOD (100% FREE — koi API key nahi):
@@ -15,7 +15,6 @@ package goldcmds
 //   Embed page public posts ke liye hamesha open hota hai — bot token,
 //   API ID/HASH kuch nahi chahiye.
 //
-// Aliases (Hidden): telegram, tgdl, tgvid
 // ============================================================================
 
 import (
@@ -53,7 +52,7 @@ type tgMedia struct {
 	text    string
 }
 
-// handleTG — .tg <link>
+// handleTG — t.me link (via .tgsearch)
 func handleTG(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		handleTGAsync(ctx, s, info, args, prefix)
@@ -203,16 +202,9 @@ func tgStripTags(s string) string {
 	return strings.TrimSpace(r.Replace(s))
 }
 
-const tgHelpText = "🔰 *TELEGRAM VIDEO DOWNLOAD COMMAND* 🔰\n" +
-	"*DO YOU WANT TO DOWNLOAD A TELEGRAM VIDEO? 🤔*\n" +
-	"*FIRST COPY THE TELEGRAM VIDEO LINK 🔰*\n" +
-	"*THEN WRITE LIKE THIS 😊*\n\n" +
-	"*.TG ❰TELEGRAM LINK❱*\n\n" +
-	"*WHEN YOU WRITE LIKE THIS YOUR TELEGRAM VIDEO WILL BE DOWNLOADED AND SENT HERE 🤗*"
-
-func init() {
-	Register(Command{Name: "tg", Category: "DOWNLOADER", Desc: "Download a video/photo from a public Telegram post (t.me link)", Run: handleTG})
-	Register(Command{Name: "telegram", Hidden: true, Run: handleTG})
-	Register(Command{Name: "tgdl", Hidden: true, Run: handleTG})
-	Register(Command{Name: "tgvid", Hidden: true, Run: handleTG})
-}
+const tgHelpText = "\U0001f530 *TELEGRAM VIDEO DOWNLOAD COMMAND* \U0001f530\n" +
+	"*DO YOU WANT TO DOWNLOAD A TELEGRAM VIDEO? \U0001f914*\n" +
+	"*FIRST COPY THE TELEGRAM VIDEO LINK \U0001f530*\n" +
+	"*THEN WRITE LIKE THIS \U0001f60a*\n\n" +
+	"*.TGSEARCH \u2770TELEGRAM LINK\u2771*\n\n" +
+	"*WHEN YOU WRITE LIKE THIS YOUR TELEGRAM VIDEO WILL BE DOWNLOADED AND SENT HERE \U0001f917*"

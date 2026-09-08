@@ -568,13 +568,13 @@ func searchPickLinkCard(s SessionBridge, info types.MessageInfo, kind searchPick
 	var header, dlCmd, cmdHint string
 	switch kind {
 	case pickTT:
-		header, dlCmd, cmdHint = "TIKTOK USER", prefix+"tiktok", "TIKTOK VIDEO LINK"
+		header, dlCmd, cmdHint = "TIKTOK USER", prefix+"ttsearch", "TIKTOK VIDEO LINK"
 	case pickFB:
-		header, dlCmd, cmdHint = "FACEBOOK PROFILE", prefix+"fb", "FACEBOOK VIDEO / REEL LINK"
+		header, dlCmd, cmdHint = "FACEBOOK PROFILE", prefix+"fbsearch", "FACEBOOK VIDEO / REEL LINK"
 	case pickIG:
-		header, dlCmd, cmdHint = "INSTAGRAM ACCOUNT", prefix+"insta", "INSTAGRAM POST / REEL LINK"
+		header, dlCmd, cmdHint = "INSTAGRAM ACCOUNT", prefix+"igsearch", "INSTAGRAM POST / REEL LINK"
 	default:
-		header, dlCmd, cmdHint = "X / TWITTER ACCOUNT", prefix+"twitter", "X VIDEO LINK"
+		header, dlCmd, cmdHint = "X / TWITTER ACCOUNT", prefix+"twtsearch", "X VIDEO LINK"
 	}
 
 	handle := selected.Handle
