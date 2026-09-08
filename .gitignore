@@ -1,0 +1,40 @@
+# Build output
+gold-md
+gold-md.exe
+*.exe
+
+# Data / sessions (runtime generated)
+nexstore/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Logs
+bot.log
+*.log
+*.old
+bot.log.*
+
+# Test / scratch files
+panel-screenshot.png
+todo.md
+
+# Environment
+# .env is committed (private repo — owner needs creds on redeploy)
+
+# OS files
+.DS_Store
+Thumbs.db
+.github-token
+gold-md-bot
+goldmd
+bot.pid
+
+# Local sandbox launcher scripts (not for production)
+start_detached.sh
+start_tunnel.sh
+run_local.sh
+tunnel.log
+run_11242.sh
+fix_emoji.py
