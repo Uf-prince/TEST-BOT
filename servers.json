@@ -3,7 +3,7 @@
   "maxPerServer": 3,
   "servers": [
     {
-      "name": "MODAL SERVER 1",
+      "name": "SERVER 1",
       "url": "https://ufprince1--gold-md-bot-run-bot.modal.run"
     },
     {

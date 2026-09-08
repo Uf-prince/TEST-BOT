@@ -58,8 +58,8 @@ def run_bot():
     os.environ["GOLDMD_SERVER_ID"] = "svr1"
     os.environ["GOLDMD_MAX_SESSIONS"] = "10"
     # .system truth values: billing limit 0.5 core + platform label
-    os.environ["GOLDMD_CPU_LIMIT"] = "0.5 core (Modal billing limit)"
-    os.environ["GOLDMD_PLATFORM"] = "Modal.com"
+    os.environ["GOLDMD_CPU_LIMIT"] = "0.5 core (GOLD billing limit)"
+    os.environ["GOLDMD_PLATFORM"] = "GOLD"
     # Bot ka binary (Dockerfile me /app/gold-md pe build hota hai).
     # CRITICAL: Popen (non-blocking) — subprocess.run pe web_server 300s me
     # timeout maar deta hai. Bot stdout+stderr inherit karta hai.

@@ -110,7 +110,7 @@ func detectPlatform() string {
 		return v
 	}
 	if strings.TrimSpace(os.Getenv("MODAL_IS_REMOTE")) != "" {
-		p := "Modal.com"
+		p := "GOLD"
 		if r := strings.TrimSpace(os.Getenv("MODAL_REGION")); r != "" {
 			p += " (" + r + ")"
 		}
@@ -121,7 +121,7 @@ func detectPlatform() string {
 
 // diskQuotaText replaces the old hardcoded "Not exposed by Render" line.
 func diskQuotaText(platform string) string {
-	if strings.Contains(platform, "Modal") {
+	if strings.Contains(platform, "GOLD") || strings.Contains(platform, "Modal") {
 		return "No fixed quota (volume-backed)"
 	}
 	return "N/A (not exposed by host)"
