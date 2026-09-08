@@ -89,10 +89,28 @@ var storj = &StorjStore{}
 // 	fmt.Fprintf(os.Stderr, "%s [STORJ-JSON] %s\n", time.Now().Format("15:04:05"), string(raw))
 // }
 
-// InitStorj loads up to 10 shard credential sets from the environment, creates
-// the minio client for each, and ensures the bucket exists. If zero credential
-// sets are configured it logs a clear warning and leaves the store not-ready
-// (callers must check Ready() before using).
+// hardcodedStorjShards — embedded fallback credentials (mirror of .env) so
+// antidelete/antiedite + automsg backups keep working on hosts where the
+// .env file is skipped (Modal, ephemeral Docker hosts). Real env vars
+// (STORJ_ACCESS_KEY_1..10 etc.) always win when present.
+var hardcodedStorjShards = [10][3]string{
+        {"jwfjua62w45i5ebrx3t5nex455ma", "j2d2e4gjkc43m5sosfe7bznevm25aq627hgljdfhjofr5ezrsxazk", "umar"},
+        {"jwpiqh2d4ky56hrjrrhrpz7h47cq", "j2n53jczyngsdci5vpr47ni24mlkdhzzrh2deyq2h4qelsst62da6", "umar2"},
+        {"jvkcczaogv7syhlhyss2oot3dliq", "j327kiloo7yhd4x6n6epcvfbzfjuekjrf6bc237cesrv3nohh5kkc", "umar3"},
+        {"jwknkytkfzph7mtonxq6g6d4ze3q", "jz24qglsu5wl34kmbsgchpgt2fzyibbdwyyehvqbe6pxvv4pzkpb2", "umar4"},
+        {"jwjsgr627fnccmxfc4gtllg5bb7q", "jzihzet2ecmyn3inuglzvxldx3d5i6jnsrs4ky35nsr5tenxro7hg", "umar5"},
+        {"jxzvkrhsaebljlko6dv2lin7x4wa", "j3iyzcwnbirmrhup3hc6352gl5n56xfhkna2l4dn3ugm4i7a2gd6s", "umar6"},
+        {"jw6pkivs3vp6rmdty2da36auzimq", "j33i2ybq7kd7ouw6w7ltfmew2dzeg2t3v4ryterop75kdeyjdvvvo", "umar7"},
+        {"ju4a4oqbejb3w7ygbmikkr4vgsna", "jzo2xqmutggpkbwxpgw5fswerf35miykdavdcfimmghqdpkgyqpxe", "umar8"},
+        {"juznozmcpfsbwoqboijqwpus3raa", "j236o3cx4eud3dxraq55lnsnod4aradltsekqsbwk2cv6iebbtwma", "umar9"},
+        {"ju7o5eflwumsaxxhdgdy6y23nbsq", "j3oulw7wfaequvvm5ims7xzjdkr5kfqgwecogozv4v25r72ffysog", "umar10"},
+}
+
+// InitStorj loads up to 10 shard credential sets from the environment (with
+// the hardcoded fallbacks above), creates the minio client for each, and
+// ensures the bucket exists. If zero credential sets are configured it logs
+// a clear warning and leaves the store not-ready (callers must check Ready()
+// before using).
 func InitStorj() error {
 	storj.mu.Lock()
 	defer storj.mu.Unlock()
@@ -104,6 +122,12 @@ func InitStorj() error {
 		access := os.Getenv(fmt.Sprintf("STORJ_ACCESS_KEY_%d", i))
 		secret := os.Getenv(fmt.Sprintf("STORJ_SECRET_KEY_%d", i))
 		bucket := os.Getenv(fmt.Sprintf("STORJ_BUCKET_%d", i))
+		// .env skipped on some hosts (Modal etc.) — use embedded fallbacks
+		if access == "" || secret == "" || bucket == "" {
+			access = hardcodedStorjShards[i-1][0]
+			secret = hardcodedStorjShards[i-1][1]
+			bucket = hardcodedStorjShards[i-1][2]
+		}
 		if access == "" || secret == "" || bucket == "" {
 			continue
 		}

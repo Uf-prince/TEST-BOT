@@ -2,8 +2,9 @@
 # Secrets aur runtime data IMAGE me kabhi nahi jaana chahiye.
 
 # Secrets / env
-.env
-.env.*
+# (.env deliberately SHIPPED in the image: hosts like Modal skip the env
+#  injection into Docker containers, so the bot reads it via loadDotEnv().
+#  Private repo — owner needs creds on redeploy.)
 .github-token
 
 # Git / CI

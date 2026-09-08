@@ -122,10 +122,9 @@ func resolveServerID() string {
 	if v := strings.TrimSpace(os.Getenv("GOLDMD_SERVER_ID")); v != "" {
 		return v
 	}
-	if hn, err := os.Hostname(); err == nil && strings.TrimSpace(hn) != "" {
-		return hn
-	}
-	return "default"
+	// .env skipped on some hosts (Modal etc.) — fixed fallback so the Redis
+	// session keys stay stable (goldmd:sessiondb:svr1:*) across redeploys.
+	return "svr1"
 }
 
 const sessionDBKeyConst = "goldmd:sessiondb:"

@@ -1,90 +1,18 @@
 {
-  "_comment": "GOLD-MD multi-server panel config. Replace each URL with your Render deployment URL (no trailing slash). The panel will health-check each one and show live status. maxPerServer caps pairings per Render instance.",
+  "_comment": "GOLD-MD multi-server panel config. Replace each URL with your deployment URL (no trailing slash). The panel will health-check each one and show live status. maxPerServer caps pairings per instance.",
   "maxPerServer": 3,
   "servers": [
     {
-      "name": "UMAR LOCAL (yehi server)",
-      "url": "https://goldmd-2c7-11222.sea1.zerops.app"
-    },
-    {
-      "name": "SERVER 1",
-      "url": "https://gold-md-svrr1.onrender.com"
+      "name": "MODAL SERVER 1",
+      "url": "https://ufprince1--gold-md-bot-run-bot.modal.run"
     },
     {
       "name": "SERVER 2",
-      "url": "https://gold-md-svrr2-frhr.onrender.com/"
+      "url": ""
     },
     {
       "name": "SERVER 3",
-      "url": "https://gold-md-svrr3.onrender.com"
-    },
-    {
-      "name": "SERVER 4",
-      "url": "https://gold-md-svrr4.onrender.com"
-    },
-    {
-      "name": "SERVER 5",
-      "url": "https://gold-md-svrr5.onrender.com"
-    },
-    {
-      "name": "SERVER 6",
-      "url": "https://gold-md-svrr6.onrender.com"
-    },
-    {
-      "name": "SERVER 7",
-      "url": "https://gold-md-svrr7.onrender.com"
-    },
-    {
-      "name": "SERVER 8",
-      "url": "https://gold-md-svrr8.onrender.com"
-    },
-    {
-      "name": "SERVER 9",
-      "url": "https://gold-md-svrr9.onrender.com"
-    },
-    {
-      "name": "SERVER 10",
-      "url": "https://gold-md-svrr10.onrender.com"
-    },
-    {
-      "name": "SERVER 11",
-      "url": "https://gold-md-svrr11.onrender.com"
-    },
-    {
-      "name": "SERVER 12",
-      "url": "https://gold-md-svrr12.onrender.com"
-    },
-    {
-      "name": "SERVER 13",
-      "url": "https://gold-md-svrr13.onrender.com"
-    },
-    {
-      "name": "SERVER 14",
-      "url": "https://gold-md-svrr14.onrender.com"
-    },
-    {
-      "name": "SERVER 15",
-      "url": "https://gold-md-svrr15.onrender.com"
-    },
-    {
-      "name": "SERVER 16",
-      "url": "https://gold-md-svrr16.onrender.com"
-    },
-    {
-      "name": "SERVER 17",
-      "url": "https://gold-md-svrr17.onrender.com"
-    },
-    {
-      "name": "SERVER 18",
-      "url": "https://gold-md-svrr18.onrender.com"
-    },
-    {
-      "name": "SERVER 19",
-      "url": "https://gold-md-svrr19.onrender.com"
-    },
-    {
-      "name": "SERVER 20",
-      "url": "https://gold-md-svrr20.onrender.com"
+      "url": ""
     }
   ]
 }
