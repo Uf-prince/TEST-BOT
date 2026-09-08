@@ -68,7 +68,6 @@ func handleSystem(s SessionBridge, info types.MessageInfo, args []string, prefix
 		"*CONTAINER FS VIEW* :❯ %s used / %s free\n"+
 		"*GPU* :❯ %s\n"+
 		"*CONTAINER UPTIME* :❯ %s\n"+
-		"*GO RUNTIME* :❯ %s\n"+
 		"*BOT IS RUNNING* ✅",
 		cpu.limit, cpu.usage, readLoadAverage(), memory.limit, memory.used,
 		memory.usedPct, memory.available, memory.peak, memory.swapLimit, memory.swapUsed, processRSS, formatBytes(mem.Alloc),
