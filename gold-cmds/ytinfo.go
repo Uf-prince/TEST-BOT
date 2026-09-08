@@ -310,6 +310,7 @@ func ytGuide(prefix string) string {
 	return "*🔰 YOUTUBE SEARCH GUIDE 🔰*\n\n" +
 		"*🔰 SEARCH YOUTUBE :❱*\n*" + prefix + "ytsearch ❮ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "ytsearch lofi mix*\n*SHOWS THE TOP RESULTS WITH TITLE, CHANNEL, LENGTH, VIEWS AND LINK*\n\n" +
 		"*🔰 VIDEO DETAILS :❱*\n*" + prefix + "ytinfo ❮ LINK OR ID ❯*\n*EXAMPLE :❱ " + prefix + "ytinfo https://youtube.com/watch?v=xxxxxxx*\n*SHOWS THE FULL DETAILS OF ONE VIDEO*\n\n" +
+				"*✱ DIRECT YOUTUBE LINK :❱*\n*" + prefix + "ytsearch ❰ YOUTUBE LINK ❯*\n*EXAMPLE :❱ " + prefix + "ytsearch https://www.youtube.com/watch?v=xxxxxxxxxxx*\n*PASTE A YOUTUBE LINK AND THE VIDEO DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 NOTE :❱*\n*COMPLETELY FREE — NO API KEY, NO LOGIN, NO QUOTA*\n*TO DOWNLOAD A VIDEO USE " + prefix + "video*"
 }
 
@@ -320,6 +321,27 @@ func handleYTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 	query := strings.TrimSpace(strings.Join(args, " "))
 	if query == "" {
 		s.Reply(info, ytGuide(prefix))
+		return
+	}
+
+	// ── smart link detection (same system as the other search commands) ──
+	if link := searchLinkRe.FindString(query); link != "" {
+		lowLink := strings.ToLower(strings.TrimSpace(link))
+		host := strings.TrimPrefix(strings.TrimPrefix(lowLink, "https://"), "http://")
+		host = strings.SplitN(host, "/", 2)[0]
+		if strings.Contains(host, "youtube.com") || strings.Contains(host, "youtu.be") {
+			// correct platform link → instant download through the .video pipeline
+			handleVideo(s, info, []string{link}, prefix)
+			return
+		}
+		// wrong-platform link → error card with a valid example
+		s.Reply(info, "❌ *YOUTUBE SEARCH ERROR* 🔰\n\n"+
+			"*GIVE ME THE VALID YOUTUBE LINK* ❗\n\n"+
+			"*THIS LINK IS FROM :❱ "+strings.ToUpper(host)+"*\n"+
+			"*IT IS NOT A YOUTUBE LINK* 🙅\n\n"+
+			"*EXAMPLE SAME LIKE THAT :❱*\n"+
+			"*"+prefix+"ytsearch https://www.youtube.com/watch?v=xxxxxxxxxxx*\n\n"+
+			"*SEARCHED BY GOLD-MD* 🔰")
 		return
 	}
 	results, err := ytInnertubeSearch(query)

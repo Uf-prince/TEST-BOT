@@ -151,52 +151,293 @@ func SearchTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 	return true
 }
 
-// ── direct-link router ─────────────────────────────────────────────────────
+// ── direct-link router ──────────────────────────────────────────────────────
+
+// searchLinkRe matches any http(s) URL anywhere in the args (the smart
+// link-detector for every search command).
+var searchLinkRe = regexp.MustCompile(`https?://[^\s]+`)
+
+// searchPlatformDomains lists every platform the search commands know.
+// The first matching domain decides which platform a pasted link is for.
+var searchPlatformDomains = []struct {
+	kind   searchPickKind
+	domain string
+}{
+	{pickTT, "tiktok.com"},
+	{pickTT, "vm.tiktok.com"},
+	{pickTT, "vt.tiktok.com"},
+	{pickFB, "facebook.com"},
+	{pickFB, "fb.watch"},
+	{pickFB, "fb.com"},
+	{pickIG, "instagram.com"},
+	{pickIG, "instagr.am"},
+	{pickIG, "ddinstagram.com"},
+	{pickTG, "t.me/"},
+	{pickTG, "telegram.me"},
+	{pickTG, "telegram.dog"},
+	{pickTWT, "twitter.com"},
+	{pickTWT, "x.com"},
+	{pickAPK, "apkcombo.com"},
+	{pickAPK, "apkpure.com"},
+	{pickAPK, "apk.support"},
+	{pickAPK, "apkmirror.com"},
+}
+
+// searchPlatformName returns the human platform name for error cards.
+func searchPlatformName(kind searchPickKind) string {
+	switch kind {
+	case pickTT:
+		return "TIKTOK"
+	case pickFB:
+		return "FACEBOOK"
+	case pickIG:
+		return "INSTAGRAM"
+	case pickTG:
+		return "TELEGRAM"
+	case pickTWT:
+		return "X / TWITTER"
+	case pickAPK:
+		return "APK"
+	}
+	return "SEARCH"
+}
+
+// valid example links shown in the wrong-link error cards
+const (
+	tiktokExampleLink = "https://www.tiktok.com/@user/video/1234567890"
+	fbExampleLink     = "https://www.facebook.com/watch?v=1234567890"
+	igExampleLink     = "https://www.instagram.com/reel/Cxxxxxxxx/"
+	tgExampleLink     = "https://t.me/channelname/123"
+	twtExampleLink    = "https://x.com/username/status/1234567890"
+	apkExampleLink    = "https://apkcombo.com/whatsapp/com.whatsapp/"
+)
+
+// searchPlatformExample returns a valid example command for error cards.
+func searchPlatformExample(kind searchPickKind, prefix string) string {
+	switch kind {
+	case pickTT:
+		return prefix + "ttsearch " + tiktokExampleLink
+	case pickFB:
+		return prefix + "fbsearch " + fbExampleLink
+	case pickIG:
+		return prefix + "igsearch " + igExampleLink
+	case pickTG:
+		return prefix + "tgsearch " + tgExampleLink
+	case pickTWT:
+		return prefix + "twtsearch " + twtExampleLink
+	case pickAPK:
+		return prefix + "apksearch " + apkExampleLink
+	}
+	return prefix + "search <query>"
+}
+
+// searchWrongLinkCard is the error reply when the pasted link does not belong
+// to this search command's platform. Same style as the user's example:
+//
+//	.apksearch <facebook link>  →  "GIVE ME THE VALID APK LINK" + EXAMPLE
+func searchWrongLinkCard(kind searchPickKind, pastedDomain string, prefix string) string {
+	name := searchPlatformName(kind)
+	return "❌ *" + name + " SEARCH ERROR* 🔰\n\n" +
+		"*GIVE ME THE VALID " + name + " LINK* ❗\n\n" +
+		"*THIS LINK IS FROM :❱ " + strings.ToUpper(pastedDomain) + "*\n" +
+		"*IT IS NOT A " + name + " LINK* 🙅\n\n" +
+		"*EXAMPLE SAME LIKE THAT :❱*\n" +
+		"*" + searchPlatformExample(kind, prefix) + "*\n\n" +
+		"*SEARCHED BY GOLD-MD* 🔰"
+}
+
+// searchLinkExtractQuery reports the query when the pasted link is a
+// search-page URL that carries the query itself (apkcombo.com/search/<query>,
+// facebook.com/public/<query>). The handler then runs a normal search with it.
+func searchLinkExtractQuery(link string) string {
+	low := strings.ToLower(link)
+	if m := regexp.MustCompile(`apkcombo\.com/search/([^/?#\s]+)`).FindStringSubmatch(low); m != nil {
+		q := m[1]
+		if q != "" && q != "search" {
+			q = strings.ReplaceAll(q, "%20", " ")
+			q = strings.ReplaceAll(q, "+", " ")
+			return strings.TrimSpace(q)
+		}
+	}
+	if m := regexp.MustCompile(`facebook\.com/public/([^/?#\s]+)`).FindStringSubmatch(low); m != nil {
+		q := m[1]
+		q = strings.ReplaceAll(q, "%20", " ")
+		q = strings.ReplaceAll(q, "+", " ")
+		return strings.TrimSpace(q)
+	}
+	return ""
+
+}
+
+// searchPickAPKDirect routes a pasted APK-store link straight to the
+// apkcombo downloader (app page link → instant APK download).
+func searchPickAPKDirect(s SessionBridge, info types.MessageInfo, raw string) {
+	raw = strings.TrimSpace(raw)
+	link := strings.TrimRight(raw, "/")
+	pkg := apkPkgFromLink(link)
+	if pkg == "" {
+		// apkpure / apkmirror / apk.support links → search by slug word
+		low := strings.ToLower(link)
+		low = strings.TrimPrefix(strings.TrimPrefix(low, "https://"), "http://")
+		parts := strings.SplitN(low, "/", 3)
+		if len(parts) >= 2 && parts[1] != "" {
+			pkg = parts[1]
+		}
+	}
+	searchPickAPK(s, info, searchResult{Title: raw, Handle: pkg, Link: link})
+}
+
+// searchLinkHost extracts the lowercase hostname of a pasted link
+// (https://VM.TikTok.com/x/ → vm.tiktok.com) — precise domain matching.
+func searchLinkHost(link string) string {
+	u := strings.ToLower(strings.TrimSpace(link))
+	u = strings.TrimPrefix(u, "https://")
+	u = strings.TrimPrefix(u, "http://")
+	if i := strings.IndexAny(u, "/?#"); i >= 0 {
+		u = u[:i]
+	}
+	if i := strings.Index(u, "@"); i >= 0 {
+		u = u[i+1:]
+	}
+	if i := strings.Index(u, ":"); i >= 0 {
+		u = u[:i]
+	}
+	return u
+}
+
+// searchLinkDomainMatch reports whether a host equals a known domain or is a
+// subdomain of it (www. / m. / vm. ... all match).
+func searchLinkDomainMatch(host, domain string) bool {
+	return host == domain || strings.HasSuffix(host, "."+domain)
+}
+
+// runSelfSearch runs the normal search flow for a self-searching link
+// (apkcombo.com/search/<query> pasted into .apksearch): extract the query
+// and show the regular search card, exactly like a typed query.
+func runSelfSearch(s SessionBridge, info types.MessageInfo, kind searchPickKind, query, prefix string) {
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		var (
+			results                                 []searchResult
+			err                                     error
+			header, handleLabel, statsLabel, failed string
+		)
+		switch kind {
+		case pickTT:
+			header, handleLabel, statsLabel, failed = "TIKTOK SEARCH", "USER", "STATS", "TIKTOK"
+			results, err = ttUserSearch(ctx, query)
+		case pickFB:
+			header, handleLabel, statsLabel, failed = "FACEBOOK SEARCH", "", "", "FACEBOOK"
+			results, err = fbProfileSearch(ctx, query)
+		case pickIG:
+			header, handleLabel, statsLabel, failed = "INSTAGRAM SEARCH", "ACCOUNT", "", "INSTAGRAM"
+			results, err = igAccountSearch(ctx, query)
+		case pickTG:
+			header, handleLabel, statsLabel, failed = "TELEGRAM SEARCH", "", "", "TELEGRAM"
+			results, err = tgChannelSearch(ctx, query)
+		case pickTWT:
+			header, handleLabel, statsLabel, failed = "X / TWITTER SEARCH", "ACCOUNT", "", "X / TWITTER"
+			results, err = twtAccountSearch(ctx, query)
+		case pickAPK:
+			header, handleLabel, statsLabel, failed = "APK SEARCH", "PACKAGE", "DETAILS", "APK STORE"
+			results, err = apkAppSearch(ctx, query)
+		}
+		if err != nil {
+			s.Reply(info, searchFailed(failed))
+			return
+		}
+		if len(results) == 0 {
+			s.Reply(info, searchNoResults(query))
+			return
+		}
+		if len(results) > searchMaxResults {
+			results = results[:searchMaxResults]
+		}
+		setSearchSession(info.Sender.String(), kind, query, results)
+		s.Reply(info, searchCard(header, query, handleLabel, statsLabel, results, searchPickFooter()))
+	})
+}
 
 // SearchDirectLink — call at the top of every search handler: when the args
-// contain a link of that handler's platform, skip the search list and route
-// straight to the platform downloader (instant download, .video-style UX).
+// contain ANY link, the bot instantly checks what platform that link is from:
+//
+//   - correct platform link → skip the search list, route straight to the
+//     platform downloader (instant download, .video-style UX)
+//   - wrong-platform link   → instant "GIVE ME THE VALID X LINK" error card
+//     with a correct example (the user's requested behaviour)
+//   - self-searching link (apkcombo.com/search/<q>) → extract the query and
+//     run the normal search flow with it
+//
 // Returns true when the message was consumed.
 func SearchDirectLink(s SessionBridge, info types.MessageInfo, kind searchPickKind, args []string, prefix string) bool {
-	joined := strings.ToLower(strings.TrimSpace(strings.Join(args, " ")))
+	joined := strings.TrimSpace(strings.Join(args, " "))
 	if joined == "" {
 		return false
 	}
+	link := searchLinkRe.FindString(joined)
+	if link == "" {
+		return false
+	}
+
+	// identify the platform of the pasted link (precise host matching)
+	host := searchLinkHost(link)
+	var pastedKind searchPickKind
+	for _, p := range searchPlatformDomains {
+		if searchLinkDomainMatch(host, p.domain) {
+			pastedKind = p.kind
+			break
+		}
+	}
+
 	route := func(run func()) bool {
 		clearSearchSession(info.Sender.String())
 		run()
 		return true
 	}
+
+	// unknown domain (random website) → wrong-link error card
+	if pastedKind == "" {
+		s.Reply(info, searchWrongLinkCard(kind, host, prefix))
+		return true
+	}
+
+	// self-searching link of THIS platform → extract the query, run the
+	// normal search flow (search card + number-pick, like a typed query)
+	if pastedKind == kind {
+		if q := searchLinkExtractQuery(link); q != "" {
+			return route(func() { runSelfSearch(s, info, kind, q, prefix) })
+		}
+	}
+
 	switch kind {
 	case pickTT:
-		if strings.Contains(joined, "tiktok.com") {
+		if pastedKind == pickTT {
 			return route(func() { handleTikTok(s, info, args, prefix) })
 		}
 	case pickFB:
-		if strings.Contains(joined, "facebook.com") || strings.Contains(joined, "fb.watch") || strings.Contains(joined, "fb.com") {
+		if pastedKind == pickFB {
 			return route(func() { handleFB(s, info, args, prefix) })
 		}
 	case pickIG:
-		if strings.Contains(joined, "instagram.com") || strings.Contains(joined, "instagr.am") {
+		if pastedKind == pickIG {
 			return route(func() { handleInsta(s, info, args, prefix) })
 		}
 	case pickTG:
-		if strings.Contains(joined, "t.me/") || strings.Contains(joined, "telegram.me") {
+		if pastedKind == pickTG {
 			return route(func() { handleTG(s, info, args, prefix) })
 		}
 	case pickTWT:
-		if strings.Contains(joined, "twitter.com") || strings.Contains(joined, "//x.com") {
+		if pastedKind == pickTWT {
 			return route(func() { handleTwitter(s, info, args, prefix) })
 		}
 	case pickAPK:
-		if strings.Contains(joined, "apkcombo.com/") {
-			raw := strings.TrimSpace(strings.Join(args, " "))
-			return route(func() {
-				searchPickAPK(s, info, searchResult{Title: raw, Handle: apkPkgFromLink(raw), Link: strings.TrimRight(raw, "/")})
-			})
+		if pastedKind == pickAPK {
+			return route(func() { searchPickAPKDirect(s, info, strings.Join(args, " ")) })
 		}
 	}
-	return false
+
+	// pasted link belongs to another platform → error card
+	s.Reply(info, searchWrongLinkCard(kind, host, prefix))
+	return true
 }
 
 // ── pick actions ──────────────────────────────────────────────────────────
