@@ -79,19 +79,19 @@ var defaultServers = []serverEntry{
 
 func loadServersConfig() {
 	serversCfgOnce.Do(func() {
-		serversCfg = serversConfig{MaxPerServer: 3}
+		serversCfg = serversConfig{MaxPerServer: 10}
 		raw, err := os.ReadFile("servers.json")
 		if err != nil {
 			// FALLBACK: file missing (e.g. not copied in Docker image) -> use
 			// built-in defaults so the panel still shows all servers.
 			serversCfg.Servers = defaultServers
-			serversCfg.MaxPerServer = 3
+			serversCfg.MaxPerServer = 10
 			return
 		}
 		if err := json.Unmarshal(raw, &serversCfg); err != nil {
 			// FALLBACK: file present but invalid JSON -> use defaults.
 			serversCfg.Servers = defaultServers
-			serversCfg.MaxPerServer = 3
+			serversCfg.MaxPerServer = 10
 			return
 		}
 		if len(serversCfg.Servers) == 0 {
@@ -99,7 +99,7 @@ func loadServersConfig() {
 			serversCfg.Servers = defaultServers
 		}
 		if serversCfg.MaxPerServer <= 0 {
-			serversCfg.MaxPerServer = 3
+			serversCfg.MaxPerServer = 10
 		}
 	})
 }
@@ -630,7 +630,7 @@ func panelHTML(mgr *Manager) string {
 </div>
 <div class="videoBtn" id="videoBtn" onclick="openVideoBox()">I NEED THE BOT CREATING VIDEO</div>
 <script>
-let SERVERS=[],MAXP=3,sel=null;
+let SERVERS=[],MAXP=10,sel=null;
 function openVideoBox(){
   const link='https://youtu.be/w4a_3wYUMr0?si=nUrgD6IvUMrFoz_S9';
   window.open(link,'_blank');
@@ -638,7 +638,7 @@ function openVideoBox(){
 async function loadServers(){
   try{
     const r=await fetch('/api/servers'),d=await r.json();
-    SERVERS=d.servers||[];MAXP=d.max||3;sel=document.getElementById('server');
+    SERVERS=d.servers||[];MAXP=d.max||10;sel=document.getElementById('server');
     if(!SERVERS.length){sel.innerHTML='<option value="">No servers configured (edit servers.json)</option>';return;}
     const prev=sel?sel.value:'';
     let opts='<option value="">— Select a server —</option>';

@@ -1,6 +1,6 @@
 {
   "_comment": "GOLD-MD multi-server panel config. Replace each URL with your deployment URL (no trailing slash). The panel will health-check each one and show live status. maxPerServer caps pairings per instance.",
-  "maxPerServer": 3,
+  "maxPerServer": 10,
   "servers": [
     {
       "name": "SERVER 1",
