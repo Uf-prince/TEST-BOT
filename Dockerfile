@@ -21,5 +21,5 @@ COPY --from=builder /build/.env .
 RUN mkdir -p nexstore/pairing
 EXPOSE 2081
 CMD ["./gold-md"]
-# build-stamp: 20260908-134129 fresh rebuild
-# build-stamp: 20260908-141741 .system cgroup v1 fix
+# build-stamp: 20260908-142651 fresh full redeploy
+# build-stamp: 20260908-142651 fresh full redeploy
