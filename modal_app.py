@@ -60,6 +60,7 @@ def run_bot():
     # .system truth values: billing limit 0.5 core + platform label
     os.environ["GOLDMD_CPU_LIMIT"] = "0.5 core (Modal billing limit)"
     os.environ["GOLDMD_PLATFORM"] = "Modal.com"
-    # Bot ka binary (Dockerfile me /app/gold-md pe build hota hai)
-    # stdout+stderr inherit — ab bot ke logs Modal logs me dikhenge
-    subprocess.run(["./gold-md"])
+    # Bot ka binary (Dockerfile me /app/gold-md pe build hota hai).
+    # CRITICAL: Popen (non-blocking) — subprocess.run pe web_server 300s me
+    # timeout maar deta hai. Bot stdout+stderr inherit karta hai.
+    subprocess.Popen(["./gold-md"])
