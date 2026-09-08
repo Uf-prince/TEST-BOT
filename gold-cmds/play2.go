@@ -27,7 +27,7 @@ import (
 
 // handlePlay2 is the entry point for the .play2 turbo audio command.
 func handlePlay2(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutCmd(s, info, "PLAY2", "PLAY", func(ctx context.Context) {
 		handlePlay2Async(ctx, s, info, args, prefix)
 	})
 }
@@ -70,7 +70,7 @@ func searchProgressPlay2(ctx context.Context, s SessionBridge, info types.Messag
 	}
 
 	if len(results) == 0 {
-		s.Reply(info, "*TRY AGAIN LATER*")
+		play2CmdError(s, info)
 		return
 	}
 
@@ -129,7 +129,7 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 		ws, err := ytLoaderToFallback(ctx, linkClient, videoURL, "mp3")
 		if err != nil || ws == nil || ws.Result.AudioURL == "" {
 			clearWait()
-			s.Reply(info, "*TRY AGAIN LATER*")
+			play2CmdError(s, info)
 			return
 		}
 		st = &yt2Stream{title: ws.Metadata.Title, itag18: ws.Result.AudioURL}
@@ -175,7 +175,7 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 	}
 	if aURL == "" {
 		clearWait()
-		s.Reply(info, "*TRY AGAIN LATER*")
+		play2CmdError(s, info)
 		return
 	}
 
@@ -189,7 +189,7 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 		}
 		if err != nil {
 			clearWait()
-			s.Reply(info, fmt.Sprintf("*TRY AGAIN LATER* %v", err))
+			play2CmdError(s, info)
 			return
 		}
 	}
@@ -215,7 +215,7 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 
 	// STEP 8: send audio
 	if err := s.SendAudioFile(info, audioPath, "", 0); err != nil {
-		s.Reply(info, "*TRY AGAIN LATER*")
+		play2CmdError(s, info)
 	}
 }
 

@@ -94,7 +94,7 @@ func init() {
 func handleVideo(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	// Hard 3-minute watchdog: on timeout the context is cancelled, every
 	// HTTP call and ffmpeg job aborts, and the user gets TRY AGAIN LATER.
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutCmd(s, info, "VIDEO", "VIDEO2", func(ctx context.Context) {
 		handleVideoAsync(ctx, s, info, args, prefix)
 	})
 }
@@ -142,7 +142,7 @@ func searchProgress(ctx context.Context, s SessionBridge, info types.MessageInfo
 	s.DeleteMessage(info, waitMsgID)
 
 	if len(results) == 0 {
-		s.Reply(info, "*TRY AGAIN LATER*")
+		videoCmdError(s, info)
 		return
 	}
 
@@ -209,7 +209,7 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 	}
 	if err != nil || wsData == nil || wsData.Result.VideoURL == "" {
 		clearWait()
-		s.Reply(info, "*TRY AGAIN LATER*")
+		videoCmdError(s, info)
 		return
 	}
 
@@ -248,7 +248,7 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 	videoPath, dlErr := streamDownloadToFile(ctx, dlClient, wsData.Result.VideoURL, nil)
 	if dlErr != nil {
 		clearWait()
-		s.Reply(info, fmt.Sprintf("*TRY AGAIN LATER* %v", dlErr))
+		videoCmdError(s, info)
 		return
 	}
 	defer os.Remove(videoPath)
@@ -277,7 +277,7 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 	err = s.SendVideoFile(info, finalVideoPath, "", nil, 0, 0, 0)
 
 	if err != nil {
-		s.Reply(info, "*TRY AGAIN LATER*")
+		videoCmdError(s, info)
 	} else {
 	}
 }
@@ -302,7 +302,7 @@ func init() {
 func handlePlay(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	// Hard 3-minute watchdog: on timeout the context is cancelled, every
 	// HTTP call and ffmpeg job aborts, and the user gets TRY AGAIN LATER.
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutCmd(s, info, "PLAY", "PLAY2", func(ctx context.Context) {
 		handlePlayAsync(ctx, s, info, args, prefix)
 	})
 }
@@ -324,7 +324,7 @@ func handlePlayAsync(ctx context.Context, s SessionBridge, info types.MessageInf
 		s.DeleteMessage(info, waitID)
 	}
 	if len(results) == 0 {
-		s.Reply(info, "*TRY AGAIN LATER*")
+		playCmdError(s, info)
 		return
 	}
 	var b strings.Builder
@@ -380,7 +380,7 @@ func sendAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, vid
 	}
 	if wsErr != nil || wsAudio == nil || wsAudio.Result.AudioURL == "" {
 		clearWait()
-		s.Reply(info, "*TRY AGAIN LATER*")
+		playCmdError(s, info)
 		return
 	}
 	data := *wsAudio
@@ -416,7 +416,7 @@ func sendAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, vid
 	rawAudioPath, err := streamDownloadToFile(ctx, client, data.Result.AudioURL, nil)
 	if err != nil {
 		clearWait()
-		s.Reply(info, fmt.Sprintf("*TRY AGAIN LATER* %v", err))
+		playCmdError(s, info)
 		return
 	}
 	defer os.Remove(rawAudioPath)
@@ -443,7 +443,7 @@ func sendAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, vid
 
 	// STEP 4: Send plain audio (no caption, no footer)
 	if err := s.SendAudioFile(info, audioPath, "", 0); err != nil {
-		s.Reply(info, "*TRY AGAIN LATER*")
+		playCmdError(s, info)
 	}
 }
 

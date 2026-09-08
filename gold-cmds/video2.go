@@ -115,7 +115,7 @@ func init() {
 // handleVideo2 is the entry point for the .video2 turbo command.
 // Supports: URL / name search / number pick from session / "hd" quality flag.
 func handleVideo2(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutCmd(s, info, "VIDEO2", "VIDEO", func(ctx context.Context) {
 		handleVideo2Async(ctx, s, info, args, prefix)
 	})
 }
@@ -177,7 +177,7 @@ func searchProgressVideo2(ctx context.Context, s SessionBridge, info types.Messa
 	s.DeleteMessage(info, waitMsgID)
 
 	if len(results) == 0 {
-		s.Reply(info, "*TRY AGAIN LATER*")
+		video2CmdError(s, info)
 		return
 	}
 
@@ -463,7 +463,7 @@ func downloadAndSendVideo2(ctx context.Context, s SessionBridge, info types.Mess
 		ws, err := ytLoaderToFallback(ctx, linkClient, videoURL, "360")
 		if err != nil || ws == nil || ws.Result.VideoURL == "" {
 			clearWait()
-			s.Reply(info, "*TRY AGAIN LATER*")
+			video2CmdError(s, info)
 			return
 		}
 		st = &yt2Stream{title: ws.Metadata.Title, itag18: ws.Result.VideoURL}
@@ -529,7 +529,7 @@ func downloadAndSendVideo2(ctx context.Context, s SessionBridge, info types.Mess
 
 	if dlErr != nil || finalPath == "" {
 		clearWait()
-		s.Reply(info, "*TRY AGAIN LATER*")
+		video2CmdError(s, info)
 		return
 	}
 	defer os.Remove(finalPath)
@@ -547,6 +547,6 @@ func downloadAndSendVideo2(ctx context.Context, s SessionBridge, info types.Mess
 
 	// STEP 6: send plain video (no caption, no footer)
 	if err := s.SendVideoFile(info, finalPath, "", nil, 0, 0, 0); err != nil {
-		s.Reply(info, "*TRY AGAIN LATER*")
+		video2CmdError(s, info)
 	}
 }
