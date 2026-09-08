@@ -1,0 +1,47 @@
+# GOLD-MD Docker build context — sirf source + vendor + Dockerfile jane chahiye
+# Secrets aur runtime data IMAGE me kabhi nahi jaana chahiye.
+
+# Secrets / env
+.env
+.env.*
+.github-token
+
+# Git / CI
+.git
+.gitignore
+.github
+
+# Local runtime data (sessions, DBs) — yeh sirf server pe env/volume se aata hai
+nexstore/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+bot.pid
+
+# Logs
+*.log
+*.log.*
+*.old
+
+# Local builds / binaries (CI me waise bhi nahi hote)
+gold-md
+gold-md-bot
+gold-md.exe
+*.exe
+goldmd
+
+# Scratch / local-only files
+panel-screenshot.png
+todo.md
+hosting_guide.md
+start_detached.sh
+start_tunnel.sh
+run_local.sh
+tunnel.log
+run_11242.sh
+fix_emoji.py
+
+# OS
+.DS_Store
+Thumbs.db
