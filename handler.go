@@ -550,8 +550,17 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		if _, err := fmt.Sscanf(trimmed, "%d", &choice); err == nil && choice >= 1 && choice <= len(sess.Results) {
 			selected := sess.Results[choice-1]
 			clearAudioSession(sender)
-			if cmd, ok := Commands["play"]; ok {
-				cmd(s, info, []string{selected.URL}, prefix)
+			cmdName := "play"
+			if sess.Play2 {
+				cmdName = "play2"
+			}
+			if cmd, ok := Commands[cmdName]; ok {
+				if sess.Play2 {
+					// turbo engine quick-pick: URL + metadata (fast path)
+					cmd(s, info, []string{selected.URL, selected.Thumbnail, selected.Title, selected.Duration}, prefix)
+				} else {
+					cmd(s, info, []string{selected.URL}, prefix)
+				}
 				return
 			}
 		}

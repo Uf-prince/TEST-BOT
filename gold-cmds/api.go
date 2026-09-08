@@ -49,6 +49,7 @@ type SessionBridge interface {
 	SetVideoSession(jid string, results []VideoResult)
 	SetVideoSession2(jid string, results []VideoResult, hd bool)
 	SetAudioSession(jid string, results []VideoResult)
+	SetAudioSession2(jid string, results []VideoResult, play2 bool)
 	// DownloadImage downloads the image attached to the incoming message
 	// identified by info. Returns the raw image bytes and true if the message
 	// contained an image (direct or quoted); returns nil,false otherwise.

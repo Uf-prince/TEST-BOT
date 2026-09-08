@@ -284,6 +284,14 @@ func (b *bridge) SetVideoSession(jid string, results []goldcmds.VideoResult) {
 
 // SetVideoSession2 stores a .video2 (turbo engine) search session so number
 // picks route back through the video2 parallel engine, with HD when set.
+func (b *bridge) SetAudioSession2(jid string, results []goldcmds.VideoResult, play2 bool) {
+	internal := make([]VideoResult, 0, len(results))
+	for _, r := range results {
+		internal = append(internal, VideoResult{URL: r.URL, Thumbnail: r.Thumbnail, Title: r.Title, Duration: r.Duration})
+	}
+	setAudioSession2(jid, internal, play2)
+}
+
 func (b *bridge) SetVideoSession2(jid string, results []goldcmds.VideoResult, hd bool) {
 	var internalResults []VideoResult
 	for _, r := range results {
