@@ -504,6 +504,7 @@ var CategoryOrder = []string{
 	"GROUP MANAGEMENT",
 	"ANTI & PROTECTION",
 	"DOWNLOADER",
+	"SEARCH",
 	"AI & MEDIA",
 	"PRESENCE & STATUS",
 }
@@ -514,6 +515,7 @@ var CategoryEmoji = map[string]string{
 	"GROUP MANAGEMENT":  "👥",
 	"ANTI & PROTECTION": "🛡️",
 	"DOWNLOADER":        "⬇️",
+	"SEARCH":            "🔎",
 	"AI & MEDIA":        "🎨",
 	"PRESENCE & STATUS": "📱",
 }
