@@ -21,4 +21,4 @@ COPY --from=builder /build/.env .
 RUN mkdir -p nexstore/pairing
 EXPOSE 2081
 CMD ["./gold-md"]
-# build-stamp: 20260908-143503 COMPLETE FRESH DEPLOY (old app deleted)
+# build-stamp: 20260908-145029 volume auto-commit fix

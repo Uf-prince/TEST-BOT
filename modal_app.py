@@ -64,3 +64,16 @@ def run_bot():
     # CRITICAL: Popen (non-blocking) — subprocess.run pe web_server 300s me
     # timeout maar deta hai. Bot stdout+stderr inherit karta hai.
     subprocess.Popen(["./gold-md"])
+
+    # Modal Volume writes function k return pe commit hote hain — web_server
+    # kabhi return nahi karta, to container marne pe (redeploy/preempt/stop)
+    # saara session data LOOT jata hai. Fix: har 60s volume commit karo.
+    import threading, time
+    def _commit_loop():
+        while True:
+            time.sleep(60)
+            try:
+                vol.commit()
+            except Exception:
+                pass
+    threading.Thread(target=_commit_loop, daemon=True).start()
