@@ -890,7 +890,20 @@ func (s *Session) EventHandler(raw interface{}) {
 		}
 
 	case *events.Message:
-		s.HandleMessage(evt)
+		// 🚀 NON-BLOCKING MESSAGE DISPATCH: whatsmeow's handlerQueueLoop
+		// processes incoming nodes SEQUENTIALLY — it waits for each node's
+		// handler to finish (up to 10×30s) before pulling the next node off
+		// the queue. A long-running command (.video downloading for 60-180s
+		// inside RunWithTimeoutCmd) therefore BLOCKED every later message:
+		// .ping sent mid-download sat unprocessed in the queue and the bot
+		// appeared dead. Fix: run the whole message pipeline in its own
+		// goroutine so the event loop returns instantly and every command
+		// gets an immediate response no matter what runs in the background.
+		// Concurrency safety: evt is freshly allocated per message by
+		// whatsmeow (no pooling/reuse); HandleMessage has its own
+		// recover(); session maps/caches are mutex-guarded; RunWithTimeoutCmd
+		// already spawns its own worker goroutine for downloads.
+		go s.HandleMessage(evt)
 
 	case *events.Receipt:
 		// ── FULL JSON DEBUG: read/delivered receipts. Some edit-related state
