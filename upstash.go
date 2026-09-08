@@ -1,5 +1,34 @@
 package main
 
+// ============================================================================
+// GOLD-MD — Storage layer (Storj-backed; Upstash Redis FULLY REMOVED)
+//
+// OWNER REQUEST: Redis (Upstash) ko poora hatao. Jo data pehle Redis me
+// jata tha (prefix, sudo, banned, premium, settings, session DB blob,
+// JID registry) wo SAB ab STORJ me store hota hai — bilkul waise hi
+// jaise antidelete/antiedit apne messages Storj me safe karta hai
+// (storj.go — 10 shards, minio S3 client, hardcoded fallback creds).
+//
+// API SURFACE UNCHANGED: struct ka naam (Upstash) aur saare method
+// signatures EXACTLY wahi hain jo pehle the, taake manager.go / handler.go
+// / commands_loader.go ke 100+ call sites ko touch na karna pade. Sirf
+// internal implementation badla: cmd() ab Upstash REST API ki jagah
+// Storj kv/ objects read/write karta hai.
+//
+// Storage layout (TTL-guard SAFE — guard sirf msgs/ prefix sweep karta hai):
+//   kv/strings/<key>                 → string value   (GET/SET/DEL)
+//   kv/sets/<key>/<member>           → one object per set member
+//                                      (SADD/SREM/SMEMBERS/SISMEMBER)
+//   kv/hashes/<hash>/<field>         → one object per hash field, body=value
+//                                      (HSET/HGET/HDEL/HGETALL/HEXISTS)
+//
+// Session DB blob : kv/strings/goldmd:sessiondb:<serverID>:blob (base64 sqlite)
+// Session JID set : kv/sets/goldmd:sessiondb:<serverID>:jids/<jid>
+//
+// kv/ data has NO TTL — permanent, aur 48h message TTL guard ka scope
+// msgs/ prefix tak seemit hai, is liye ye data kabhi sweep nahi hota.
+// ============================================================================
+
 import (
 	"context"
 	"database/sql"
@@ -7,39 +36,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/minio/minio-go/v7"
 )
 
-// ============================================================================
-// GOLD-MD — Upstash Redis config + session-persistence layer (port of db.js)
-//
-// Mirrors the Node bot's db.js: per-session prefix, sudo list, settings,
-// banned list, premium, accounts. Uses the Upstash REST API so no TCP
-// redis client is needed (works on Railway / Fly / Render too).
-//
-// Keys are IDENTICAL to the Node bot:
-//   prefix:<jid>      string
-//   prefix:keys       set
-//   sudo:set          set
-//   banned:set        set
-//   settings:<jid>    hash
-//
-// ADDED — session persistence (so sessions survive a server restart even
-// when the disk is wiped, e.g. Railway/Fly/Render ephemeral filesystems):
-//   goldmd:sessiondb:blob    string  (base64 of the whole sqlite auth file)
-//   goldmd:sessiondb:jids    set     (every paired JID, so pairing folders
-//                                     can be recreated after a wipe)
-// ============================================================================
-
 type Upstash struct {
+	// Kept for API compatibility — no longer used (no REST endpoint).
 	BaseURL string
 	Token   string
-	client  *http.Client
 
 	// serverID namespaces the session-DB persistence keys so each
 	// deployment restores only its own sessions (see resolveServerID).
@@ -47,27 +58,16 @@ type Upstash struct {
 
 	// in-memory cache (TTL below) — same as db.js.
 	// The cache is the #1 speed optimisation: every GetSetting / GetPrefix
-	// hits memory (0ms) instead of doing a synchronous HTTP round-trip to
-	// Upstash (200-500ms each).
+	// hits memory (0ms) instead of a synchronous S3 round-trip to Storj.
 	mu    sync.Mutex
 	cache map[string]cacheEntry
 
 	// refreshCtx / refreshCancel control the background cache refresher
-	// goroutine. It periodically re-fetches all cached settings from
-	// Redis so the cache never goes stale even if the TTL is long. This
-	// means: bot speed = instant (cache), but config changes made from
-	// other sources still propagate within the refresh interval.
+	// goroutine.
 	refreshCtx    context.Context
 	refreshCancel context.CancelFunc
 
 	// ── Memory-guard safe re-fetch ──
-	// When ClearCache() runs (RAM high), it drops all cache entries and
-	// immediately triggers a background re-fetch. To prevent a race where
-	// the re-fetch overwrites a config change the user just made via
-	// SetSetting, we track:
-	//   refetching      — true while a background re-fetch is in progress
-	//   pendingUpdates  — keys the user updated DURING the re-fetch; these
-	//                     are preserved (never overwritten by re-fetched values)
 	refetchMu      sync.Mutex
 	refetching     bool
 	pendingUpdates map[string]string // cacheKey → user's fresh value
@@ -77,12 +77,10 @@ type Upstash struct {
 	warmedGroups map[string]bool
 }
 
-// sessionDBKey returns the per-server blob key.
 func (u *Upstash) sessionDBKey() string {
 	return sessionDBKeyConst + u.serverID + sessionDBKeySuffix
 }
 
-// sessionJidsKey returns the per-server JID-set key.
 func (u *Upstash) sessionJidsKey() string {
 	return sessionJidsKeyConst + u.serverID + sessionJidsKeySuffix
 }
@@ -92,38 +90,15 @@ type cacheEntry struct {
 	ts    time.Time
 }
 
-// upstashCacheTTL is how long a cached entry is considered fresh.
-// 3 minutes — short enough that a server restart picks up fresh config
-// quickly, but long enough to avoid hammering Redis. The background
-// refresher (StartCacheRefresher) refreshes entries BEFORE they expire,
-// so in practice the cache is always warm and the TTL is just a safety net.
 const upstashCacheTTL = 3 * time.Minute
 
-// upstashRefreshInterval is how often the background refresher wakes up
-// to re-fetch all cached settings from Redis. It runs slightly BEFORE the
-// TTL expires so entries are always fresh without the bot ever waiting on
-// a network call.
+// upstashRefreshInterval is how often the background refresher wakes up.
 const upstashRefreshInterval = 2 * time.Minute
-
-// keys used for full session-DB persistence are NAMESPACED per server so
-// that deploying the same repo on a second server does NOT pull the first
-// server's sessions. serverID is resolved once at startup (see resolveServerID)
-// from the GOLDMD_SERVER_ID env var, falling back to the machine hostname,
-// then "default". Each Upstash instance stores its own serverID and builds
-// its keys from it.
-//
-// Examples:
-//   GOLDMD_SERVER_ID=svr1 -> goldmd:sessiondb:svr1:blob / :svr1:jids
-//   (no env, hostname web-abc) -> goldmd:sessiondb:web-abc:blob / :web-abc:jids
-//
-// To KEEP the old shared behaviour on purpose, set GOLDMD_SERVER_ID=default.
 
 func resolveServerID() string {
 	if v := strings.TrimSpace(os.Getenv("GOLDMD_SERVER_ID")); v != "" {
 		return v
 	}
-	// .env skipped on some hosts (Modal etc.) — fixed fallback so the Redis
-	// session keys stay stable (goldmd:sessiondb:svr1:*) across redeploys.
 	return "svr1"
 }
 
@@ -132,69 +107,433 @@ const sessionJidsKeyConst = "goldmd:sessiondb:"
 const sessionDBKeySuffix = ":blob"
 const sessionJidsKeySuffix = ":jids"
 
+// NewUpstash keeps the old signature (main.go compatibility) but now only
+// needs Storj (global `storj` in storj.go) to be initialised. The url/token
+// args are ignored — kept so existing call sites don't break.
 func NewUpstash(url, token string) *Upstash {
 	sid := resolveServerID()
-	InfoLog("Upstash serverID resolved: %q (session keys will be namespaced by this id)", sid)
+	InfoLog("Storj-backed config storage ready (serverID=%q) — Redis fully removed", sid)
 	ctx, cancel := context.WithCancel(context.Background())
 	u := &Upstash{
-		BaseURL:        strings.TrimRight(url, "/"),
-		Token:          token,
-		client:         &http.Client{Timeout: 10 * time.Second},
 		serverID:       sid,
 		cache:          map[string]cacheEntry{},
 		refreshCtx:     ctx,
 		refreshCancel:  cancel,
 		pendingUpdates: map[string]string{},
 	}
-	// Start the background cache refresher. It silently re-fetches all
-	// cached settings from Redis every upstashRefreshInterval so the cache
-	// never goes stale. This keeps bot speed instant (cache hits) while
-	// ensuring config changes propagate even if they were made from
-	// another source (e.g. a different bot instance or direct Redis edit).
 	go u.startCacheRefresher()
 	return u
 }
 
-// ── low-level pipeline command ────────────────────────────────────────────
-// Upstash REST: POST {url}  body = ["GET","key"]  header: Authorization Bearer <token>
-func (u *Upstash) cmd(args ...string) (json.RawMessage, error) {
-	body, _ := json.Marshal(args)
-	req, err := http.NewRequest("POST", u.BaseURL, strings.NewReader(string(body)))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+u.Token)
-	req.Header.Set("Content-Type", "application/json")
+// ─────────────────────────────────────────────────────────────────────────────
+// Low-level command pipeline — Storj S3-backed implementation.
+//
+// Redis commands translated to Storj kv/ object operations. Return values
+// are JSON-shaped EXACTLY like Upstash REST used to return them (quoted
+// strings / JSON arrays / "1" / "0" / null) so every caller that does
+// trimQuotes / json.Unmarshal keeps working unchanged.
+// ─────────────────────────────────────────────────────────────────────────────
 
-	resp, err := u.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+const (
+	kvStringsPrefix = "kv/strings/"
+	kvSetsPrefix    = "kv/sets/"
+	kvHashesPrefix  = "kv/hashes/"
+)
 
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("upstash HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
-	}
-
-	// Upstash wraps result as {"result": ...}
-	var wrap struct {
-		Result json.RawMessage `json:"result"`
-		Error  string          `json:"error"`
-	}
-	if err := json.Unmarshal(raw, &wrap); err != nil {
-		return nil, fmt.Errorf("upstash parse: %s", string(raw))
-	}
-	if wrap.Error != "" {
-		return nil, fmt.Errorf("upstash: %s", wrap.Error)
-	}
-	return wrap.Result, nil
+// kvEncode URL-encodes an unsafe key component (JIDs contain ':', '@', '#',
+// spaces etc.) so it is always a single, safe S3 path component. '/' is
+// escaped to %2F so a key can never fan out into nested prefixes.
+func kvEncode(s string) string {
+	return url.PathEscape(s)
 }
 
-// ── safe wrappers (return fallback on error — like UmarSafe) ─────────────
+func kvDecode(s string) string {
+	out, err := url.PathUnescape(s)
+	if err != nil {
+		return s
+	}
+	return out
+}
+
+// cmd is the central dispatcher — mirrors the old Upstash REST pipeline.
+// Signature kept identical (variadic string args) so direct call sites
+// (commands_loader.go: cmd("DEL", key)) keep working.
+func (u *Upstash) cmd(args ...string) (json.RawMessage, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("kv: empty command")
+	}
+	op := strings.ToUpper(args[0])
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	switch op {
+	case "PING":
+		return u.kvPing(ctx)
+	case "GET":
+		if len(args) < 2 {
+			return nil, fmt.Errorf("kv GET: missing key")
+		}
+		return u.kvGet(ctx, args[1])
+	case "SET":
+		if len(args) < 3 {
+			return nil, fmt.Errorf("kv SET: missing key/val")
+		}
+		return u.kvSet(ctx, args[1], args[2])
+	case "DEL":
+		if len(args) < 2 {
+			return nil, fmt.Errorf("kv DEL: missing key")
+		}
+		return u.kvDel(ctx, args[1])
+	case "SADD":
+		if len(args) < 3 {
+			return nil, fmt.Errorf("kv SADD: missing members")
+		}
+		return u.kvSAdd(ctx, args[1], args[2:])
+	case "SREM":
+		if len(args) < 3 {
+			return nil, fmt.Errorf("kv SREM: missing members")
+		}
+		return u.kvSRem(ctx, args[1], args[2:])
+	case "SMEMBERS":
+		if len(args) < 2 {
+			return nil, fmt.Errorf("kv SMEMBERS: missing key")
+		}
+		return u.kvSMembers(ctx, args[1])
+	case "SISMEMBER":
+		if len(args) < 3 {
+			return nil, fmt.Errorf("kv SISMEMBER: missing member")
+		}
+		return u.kvSIsMember(ctx, args[1], args[2])
+	case "HSET":
+		if len(args) < 4 {
+			return nil, fmt.Errorf("kv HSET: missing field/val")
+		}
+		return u.kvHSet(ctx, args[1], args[2], args[3])
+	case "HGET":
+		if len(args) < 3 {
+			return nil, fmt.Errorf("kv HGET: missing field")
+		}
+		return u.kvHGet(ctx, args[1], args[2])
+	case "HDEL":
+		if len(args) < 3 {
+			return nil, fmt.Errorf("kv HDEL: missing field")
+		}
+		return u.kvHDel(ctx, args[1], args[2])
+	case "HGETALL":
+		if len(args) < 2 {
+			return nil, fmt.Errorf("kv HGETALL: missing key")
+		}
+		return u.kvHGetAll(ctx, args[1])
+	case "HEXISTS":
+		if len(args) < 3 {
+			return nil, fmt.Errorf("kv HEXISTS: missing field")
+		}
+		return u.kvHExists(ctx, args[1], args[2])
+	}
+	return nil, fmt.Errorf("kv: unsupported command %q", op)
+}
+
+// ── shard helper (storj.go's global store + deterministic sharding) ──
+
+func (u *Upstash) kvShard(key string) *storjShard {
+	if !storj.Ready() {
+		return nil
+	}
+	return storj.shardForID(key)
+}
+
+// kvRead fully reads an object; (nil,false,nil) when the key doesn't exist.
+func (u *Upstash) kvRead(ctx context.Context, shard *storjShard, key string) ([]byte, bool, error) {
+	obj, err := shard.client.GetObject(ctx, shard.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		if minioIsNotFound(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	defer obj.Close()
+	data, err := io.ReadAll(obj)
+	if err != nil {
+		if minioIsNotFound(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return data, true, nil
+}
+
+func (u *Upstash) kvPing(ctx context.Context) (json.RawMessage, error) {
+	if !storj.Ready() {
+		return nil, fmt.Errorf("kv: storj not initialised")
+	}
+	shard := storj.shardForID("ping")
+	if shard == nil {
+		return nil, fmt.Errorf("kv: no shard")
+	}
+	if _, err := shard.client.BucketExists(ctx, shard.bucket); err != nil {
+		return nil, err
+	}
+	return json.RawMessage(`"PONG"`), nil
+}
+
+func (u *Upstash) kvGet(ctx context.Context, key string) (json.RawMessage, error) {
+	shard := u.kvShard(key)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	data, found, err := u.kvRead(ctx, shard, kvStringsPrefix+kvEncode(key))
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return json.RawMessage(`null`), nil
+	}
+	raw, err := json.Marshal(string(data))
+	if err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func (u *Upstash) kvSet(ctx context.Context, key, val string) (json.RawMessage, error) {
+	shard := u.kvShard(key)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	_, err := shard.client.PutObject(ctx, shard.bucket, kvStringsPrefix+kvEncode(key),
+		strings.NewReader(val), int64(len(val)), minio.PutObjectOptions{ContentType: "text/plain"})
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(`"OK"`), nil
+}
+
+func (u *Upstash) kvDel(ctx context.Context, key string) (json.RawMessage, error) {
+	shard := u.kvShard(key)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	// 1. plain string key
+	_ = shard.client.RemoveObject(ctx, shard.bucket, kvStringsPrefix+kvEncode(key), minio.RemoveObjectOptions{})
+	// 2. hash field objects (settings etc.)
+	u.kvRemovePrefix(ctx, shard, kvHashesPrefix+kvEncode(key)+"/")
+	// 3. set member objects
+	u.kvRemovePrefix(ctx, shard, kvSetsPrefix+kvEncode(key)+"/")
+	return json.RawMessage(`1`), nil
+}
+
+// kvRemovePrefix deletes every object under a Storj prefix (used by DEL on
+// set/hash keys). Best-effort: errors are ignored so DEL never fails hard.
+func (u *Upstash) kvRemovePrefix(ctx context.Context, shard *storjShard, prefix string) {
+	objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: true,
+	})
+	for obj := range objCh {
+		if obj.Err != nil {
+			continue
+		}
+		_ = shard.client.RemoveObject(ctx, shard.bucket, obj.Key, minio.RemoveObjectOptions{})
+	}
+}
+
+func (u *Upstash) kvSAdd(ctx context.Context, key string, members []string) (json.RawMessage, error) {
+	shard := u.kvShard(key)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	n := 0
+	for _, m := range members {
+		_, err := shard.client.PutObject(ctx, shard.bucket,
+			kvSetsPrefix+kvEncode(key)+"/"+kvEncode(m),
+			strings.NewReader("1"), 1, minio.PutObjectOptions{ContentType: "text/plain"})
+		if err != nil {
+			return nil, err
+		}
+		n++
+	}
+	return json.RawMessage(fmt.Sprintf(`%d`, n)), nil
+}
+
+func (u *Upstash) kvSRem(ctx context.Context, key string, members []string) (json.RawMessage, error) {
+	shard := u.kvShard(key)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	n := 0
+	for _, m := range members {
+		// S3 RemoveObject on a missing key is not an error — callers ignore
+		// the count anyway.
+		_ = shard.client.RemoveObject(ctx, shard.bucket,
+			kvSetsPrefix+kvEncode(key)+"/"+kvEncode(m), minio.RemoveObjectOptions{})
+		n++
+	}
+	return json.RawMessage(fmt.Sprintf(`%d`, n)), nil
+}
+
+func (u *Upstash) kvSMembers(ctx context.Context, key string) (json.RawMessage, error) {
+	shard := u.kvShard(key)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	prefix := kvSetsPrefix + kvEncode(key) + "/"
+	members := []string{}
+	objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: true,
+	})
+	for obj := range objCh {
+		if obj.Err != nil {
+			continue
+		}
+		m := kvDecode(strings.TrimPrefix(obj.Key, prefix))
+		if m == "" {
+			continue
+		}
+		members = append(members, m)
+	}
+	sort.Strings(members)
+	raw, err := json.Marshal(members)
+	if err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func (u *Upstash) kvSIsMember(ctx context.Context, key, member string) (json.RawMessage, error) {
+	shard := u.kvShard(key)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	_, err := shard.client.StatObject(ctx, shard.bucket,
+		kvSetsPrefix+kvEncode(key)+"/"+kvEncode(member), minio.StatObjectOptions{})
+	if err != nil {
+		if minioIsNotFound(err) {
+			return json.RawMessage(`0`), nil
+		}
+		return nil, err
+	}
+	return json.RawMessage(`1`), nil
+}
+
+func (u *Upstash) kvHSet(ctx context.Context, hash, field, val string) (json.RawMessage, error) {
+	shard := u.kvShard(hash)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	_, err := shard.client.PutObject(ctx, shard.bucket,
+		kvHashesPrefix+kvEncode(hash)+"/"+kvEncode(field),
+		strings.NewReader(val), int64(len(val)), minio.PutObjectOptions{ContentType: "text/plain"})
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(`1`), nil
+}
+
+func (u *Upstash) kvHGet(ctx context.Context, hash, field string) (json.RawMessage, error) {
+	shard := u.kvShard(hash)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	data, found, err := u.kvRead(ctx, shard, kvHashesPrefix+kvEncode(hash)+"/"+kvEncode(field))
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return json.RawMessage(`null`), nil
+	}
+	raw, err := json.Marshal(string(data))
+	if err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func (u *Upstash) kvHDel(ctx context.Context, hash, field string) (json.RawMessage, error) {
+	shard := u.kvShard(hash)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	// Stat-first so we return an accurate 0/1 count like Redis HDEL.
+	_, err := shard.client.StatObject(ctx, shard.bucket,
+		kvHashesPrefix+kvEncode(hash)+"/"+kvEncode(field), minio.StatObjectOptions{})
+	if err != nil && !minioIsNotFound(err) {
+		return nil, err
+	}
+	existed := err == nil
+	_ = shard.client.RemoveObject(ctx, shard.bucket,
+		kvHashesPrefix+kvEncode(hash)+"/"+kvEncode(field), minio.RemoveObjectOptions{})
+	if existed {
+		return json.RawMessage(`1`), nil
+	}
+	return json.RawMessage(`0`), nil
+}
+
+func (u *Upstash) kvHGetAll(ctx context.Context, hash string) (json.RawMessage, error) {
+	shard := u.kvShard(hash)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	prefix := kvHashesPrefix + kvEncode(hash) + "/"
+	pairs := []string{}
+	objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: true,
+	})
+	for obj := range objCh {
+		if obj.Err != nil {
+			continue
+		}
+		field := kvDecode(strings.TrimPrefix(obj.Key, prefix))
+		if field == "" {
+			continue
+		}
+		data, found, err := u.kvRead(ctx, shard, obj.Key)
+		if err != nil || !found {
+			continue
+		}
+		pairs = append(pairs, field, string(data))
+	}
+	raw, err := json.Marshal(pairs)
+	if err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func (u *Upstash) kvHExists(ctx context.Context, hash, field string) (json.RawMessage, error) {
+	shard := u.kvShard(hash)
+	if shard == nil {
+		return nil, fmt.Errorf("kv: storj not ready")
+	}
+	_, err := shard.client.StatObject(ctx, shard.bucket,
+		kvHashesPrefix+kvEncode(hash)+"/"+kvEncode(field), minio.StatObjectOptions{})
+	if err != nil {
+		if minioIsNotFound(err) {
+			return json.RawMessage(`0`), nil
+		}
+		return nil, err
+	}
+	return json.RawMessage(`1`), nil
+}
+
+// minioIsNotFound reports whether an S3 error means "object doesn't exist".
+func minioIsNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	if resp := minio.ToErrorResponse(err); resp.Code == "NoSuchKey" || resp.Code == "NotFound" {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "NoSuchKey") ||
+		strings.Contains(msg, "The specified key does not exist") ||
+		strings.Contains(msg, "not found")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Safe wrappers (return fallback on error — like UmarSafe)
+// ─────────────────────────────────────────────────────────────────────────────
 
 func (u *Upstash) safeString(key, fb string) string {
 	r, err := u.cmd("GET", key)
@@ -257,19 +596,8 @@ func (u *Upstash) setRem(key string, members ...string) error {
 	return err
 }
 
-// ── cache helpers ─────────────────────────────────────────────────────────
+// ── cache helpers ────────────────────────────────────────────────────────────
 
-// cacheGet returns the cached value for a key.
-//
-// Stale-while-refresh: if the entry exists but its TTL has expired, we
-// STILL return the (stale) value so the bot never blocks on a network
-// call. The background refresher (startCacheRefresher) will have already
-// refreshed most entries before they expire, so stale returns are rare.
-// When they do happen (e.g. right after a server restart), the stale
-// value is still correct unless the config changed in the last 3 minutes
-// — and even then, the next background refresh cycle picks it up.
-//
-// The second return value is true if the entry exists (fresh OR stale).
 func (u *Upstash) cacheGet(key string) (string, bool) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -277,13 +605,9 @@ func (u *Upstash) cacheGet(key string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	// Note: we do NOT delete expired entries here. Returning stale data
-	// is intentional — the background refresher handles refresh/delete.
 	return e.value, true
 }
 
-// cacheGetFresh returns the value only if it is within TTL (truly fresh).
-// Used by the refresher to decide which entries need re-fetching.
 func (u *Upstash) cacheGetFresh(key string) (string, bool) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -314,9 +638,10 @@ func (u *Upstash) cacheDel(key string) {
 	delete(u.cache, key)
 }
 
-// ── public API used by session/manager (mirrors db.js) ────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API used by session/manager (mirrors db.js) — logic UNCHANGED
+// ─────────────────────────────────────────────────────────────────────────────
 
-// UmarGetPrefix → GetPrefix
 func (u *Upstash) GetPrefix(jid, def string) string {
 	ck := "prefix:" + jid
 	if v, ok := u.cacheGet(ck); ok {
@@ -333,7 +658,6 @@ func (u *Upstash) SetPrefix(jid, prefix string) {
 	_ = u.setAdd("prefix:keys", jid)
 }
 
-// UmarIsSudo → IsSudo
 func (u *Upstash) IsSudo(jid string) bool {
 	r, err := u.cmd("SISMEMBER", "sudo:set", jid)
 	if err != nil {
@@ -346,13 +670,6 @@ func (u *Upstash) AddSudo(jid string)    { _ = u.setAdd("sudo:set", jid) }
 func (u *Upstash) RemoveSudo(jid string) { _ = u.setRem("sudo:set", jid) }
 func (u *Upstash) SudoList() []string    { return u.setMembers("sudo:set") }
 
-// UmarIsBanned → IsBanned
-// IsBanned checks whether a JID is in the bot-wide banned set.
-//
-// CACHED: the membership result is cached in-memory (stale-while-refresh)
-// so the bot NEVER blocks on a network call for the ban check on every
-// incoming message. BanUser/UnbanUser invalidate this cache instantly.
-// 0% speed impact.
 func (u *Upstash) IsBanned(jid string) bool {
 	ck := "banned:ismember:" + jid
 	if v, ok := u.cacheGet(ck); ok {
@@ -367,12 +684,6 @@ func (u *Upstash) IsBanned(jid string) bool {
 	return val == "1"
 }
 
-// BannedMembersCached returns all JIDs in the banned:set list.
-//
-// CACHED: the full member list is cached in-memory (stale-while-refresh)
-// so the number-tolerant ban check (botBanSenderCheck) runs at 0ms instead
-// of doing an SMEMBERS network round-trip on every message.
-// BanUser/UnbanUser invalidate this cache instantly.
 func (u *Upstash) BannedMembersCached() []string {
 	ck := "banned:members"
 	if v, ok := u.cacheGet(ck); ok {
@@ -402,12 +713,6 @@ func (u *Upstash) BannedMembersCached() []string {
 	return arr
 }
 
-// CachedBannedTails returns the precomputed "number tail" (last 10 digits)
-// of every JID in the bot-wide banned list, resolving each member's preferred
-// number (from its goldmd:<bot>:bannedmeta:<jid> key) in ONE call per member
-// on first use and caching the merged result. Ban/unban invalidate instantly
-// (invalidateBannedCache). Previously the metadata lookup ran UNCACHED on
-// EVERY non-owner command dispatch (~290ms per banned member).
 func (u *Upstash) CachedBannedTails(botJID string) []string {
 	ck := "banned:tails"
 	if v, ok := u.cacheGet(ck); ok {
@@ -430,11 +735,10 @@ func (u *Upstash) CachedBannedTails(botJID string) []string {
 		if i := strings.IndexByte(jid, '@'); i >= 0 {
 			num = jid[:i]
 		}
-		// prefer stored metadata number (may be local or intl format)
 		if raw := u.safeString("goldmd:"+botJID+":bannedmeta:"+jid, ""); raw != "" {
-			if m := strings.Index(raw, "\"number\":"); m >= 0 {
+			if m := strings.Index(raw, `"number":`); m >= 0 {
 				raw = raw[m+9:]
-				if e := strings.Index(raw, "\""); e > 0 {
+				if e := strings.Index(raw, `"`); e > 0 {
 					raw = raw[:e]
 				}
 				if raw != "" {
@@ -445,7 +749,7 @@ func (u *Upstash) CachedBannedTails(botJID string) []string {
 		var digits []byte
 		for i := 0; i < len(num); i++ {
 			if c := num[i]; c >= '0' && c <= '9' {
-					digits = append(digits, c)
+				digits = append(digits, c)
 			}
 		}
 		if len(digits) == 0 {
@@ -462,8 +766,6 @@ func (u *Upstash) CachedBannedTails(botJID string) []string {
 	return tails
 }
 
-// invalidateBannedCache clears the cached banned membership/list entries.
-// Called by setAdd/setRem whenever banned:set is modified.
 func (u *Upstash) invalidateBannedCache() {
 	u.cacheDel("banned:members")
 	u.cacheDel("banned:tails")
@@ -473,13 +775,6 @@ func (u *Upstash) BanUser(jid string)   { _ = u.setAdd("banned:set", jid) }
 func (u *Upstash) UnbanUser(jid string) { _ = u.setRem("banned:set", jid) }
 func (u *Upstash) BannedList() []string { return u.setMembers("banned:set") }
 
-// UmarIsPremium → IsPremium (premium:set)
-//
-// CACHED: the membership result is cached in-memory (stale-while-refresh,
-// same as GetSetting) so the bot NEVER blocks on a network call for the
-// premium check on every incoming message. Cache TTL is upstashCacheTTL
-// and the background refresher keeps it fresh. PremiumAdd/Remove
-// invalidate the per-jid cache entry instantly.
 func (u *Upstash) IsPremium(jid string) bool {
 	ck := "premium:ismember:" + jid
 	if v, ok := u.cacheGet(ck); ok {
@@ -494,12 +789,6 @@ func (u *Upstash) IsPremium(jid string) bool {
 	return val == "1"
 }
 
-// PremiumMembersCached returns all JIDs in the premium:set list.
-//
-// CACHED: the full member list is cached in-memory (stale-while-refresh)
-// so the number-tolerant bypass check (premiumSenderBypass) runs at 0ms
-// instead of doing an SMEMBERS network round-trip on every message.
-// PremiumAdd/Remove invalidate this cache instantly.
 func (u *Upstash) PremiumMembersCached() []string {
 	ck := "premium:members"
 	if v, ok := u.cacheGet(ck); ok {
@@ -529,37 +818,10 @@ func (u *Upstash) PremiumMembersCached() []string {
 	return arr
 }
 
-// invalidatePremiumCache clears the cached premium membership/list entries.
-// Called by setAdd/setRem whenever premium:set is modified so changes take
-// effect immediately.
 func (u *Upstash) invalidatePremiumCache() {
 	u.cacheDel("premium:members")
 }
 
-// settings hash: HGET settings:<jid> <field>
-//
-// CACHED with stale-while-refresh + background refresher.
-//
-// Speed: GetSetting reads from the in-memory cache (0ms). This is the #1
-// speed optimisation — without it, every call does a synchronous HTTP
-// round-trip to Upstash (200-500ms), and a single incoming message can
-// trigger 3-5 GetSetting calls (mode, prefix, alwaysonline, autotyping,
-// autorecording, antidelete, antiedit ...), adding up to ~1s of latency
-// PER MESSAGE.
-//
-// Freshness: A background goroutine (startCacheRefresher) re-fetches all
-// cached settings from Redis every upstashRefreshInterval (2 min), which
-// is BEFORE the 3-min TTL expires. So the cache is always fresh without
-// the bot ever waiting on a network call.
-//
-// Config updates: When the user changes a config via WhatsApp commands
-// (.autotyping, .botpic, .alwaysonline, etc.), SetSetting is called which
-// updates the cache INSTANTLY + writes to Redis. So config changes take
-// effect immediately, and the TTL is refreshed (new timestamp).
-//
-// Server restart: The cache is empty, so the first GetSetting for each
-// field does one Redis fetch, then caches it. After that, all reads are
-// instant and the background refresher keeps everything fresh.
 func (u *Upstash) GetSetting(jid, field, def string) string {
 	ck := "settings:" + jid + ":" + field
 	if v, ok := u.cacheGet(ck); ok {
@@ -568,16 +830,12 @@ func (u *Upstash) GetSetting(jid, field, def string) string {
 		}
 		return v
 	}
-	// Single HGET: Upstash REST returns JSON null for a MISSING field but a
-	// quoted "" for a field that EXISTS with an empty-string value (live-
-	// verified). One ~290ms round-trip now distinguishes both cases —
-	// previously this cost HEXISTS + HGET (two calls on every cache miss).
+	// Single HGET: null (JSON) for a MISSING field, quoted "" for a field
+	// that EXISTS with an empty-string value — same semantics as before.
 	r, err := u.cmd("HGET", "settings:"+jid, field)
 	if err != nil {
 		return def
 	}
-	// null (field absent) => sentinel so we don't re-hit Upstash next time;
-	// quoted "" (field exists) => real empty value, kept as-is.
 	if strings.TrimSpace(string(r)) == "null" || len(r) == 0 {
 		u.cacheSet(ck, "\x00")
 		return def
@@ -587,18 +845,12 @@ func (u *Upstash) GetSetting(jid, field, def string) string {
 	return val
 }
 
-// SetSetting writes a config value to Redis AND updates the in-memory
-// cache INSTANTLY. This is called when the user changes a config via
-// WhatsApp commands (.autotyping on, .botpic <url>, .alwaysonline off, etc.).
-// The cache update means the very next message will see the new value —
-// no TTL wait, no Redis round-trip needed. The TTL timestamp is also
-// refreshed (cacheSet sets ts=now), so the entry is fresh again.
 func (u *Upstash) SetSetting(jid, field, val string) {
 	ck := "settings:" + jid + ":" + field
 	u.cacheSet(ck, val)
 	// If a background re-fetch (triggered by ClearCache) is in progress,
-	// record this update so the re-fetch does NOT overwrite it with the
-	// stale value from Redis. The user's change always wins.
+	// record this update so the re-fetch does NOT overwrite it. The user's
+	// change always wins.
 	u.refetchMu.Lock()
 	if u.refetching {
 		u.pendingUpdates[ck] = val
@@ -607,29 +859,13 @@ func (u *Upstash) SetSetting(jid, field, val string) {
 	_, _ = u.cmd("HSET", "settings:"+jid, field, val)
 }
 
-// DelSetting removes a field from the settings:<jid> hash (redis-safe delete).
-// Used by alivemsg/ownername/ownernumber/botname reset to fully clear the
-// field instead of leaving an empty string.
 func (u *Upstash) DelSetting(jid, field string) {
 	u.cacheDel("settings:" + jid + ":" + field)
 	_, _ = u.cmd("HDEL", "settings:"+jid, field)
 }
 
-// startCacheRefresher is the background goroutine that keeps the settings
-// cache fresh. Every upstashRefreshInterval it:
-//  1. Snapshots all cached "settings:*" keys (under the lock, fast).
-//  2. For each key, re-fetches the value from Redis (outside the lock,
-//     concurrently via a small worker pool so it's fast even with many keys).
-//  3. Updates the cache with the fresh value + new timestamp.
-//
-// This means config changes made from ANY source (WhatsApp commands,
-// another bot instance, direct Redis edits) propagate to this bot's
-// cache within upstashRefreshInterval — without the bot ever waiting on
-// a network call during message processing.
-//
-// The bot speed is unaffected because GetSetting still reads from cache
-// (0ms). The refresher runs in the background and never blocks the
-// event handler.
+// ── background cache refresher ───────────────────────────────────────────────
+
 func (u *Upstash) startCacheRefresher() {
 	ticker := time.NewTicker(upstashRefreshInterval)
 	defer ticker.Stop()
@@ -644,14 +880,7 @@ func (u *Upstash) startCacheRefresher() {
 	}
 }
 
-// refreshAllSettings re-fetches all cached settings entries from Redis
-// and updates the cache. It runs in the background and is best-effort:
-// if a Redis call fails, the existing (possibly stale) cached value is
-// kept rather than deleted, so the bot keeps working.
 func (u *Upstash) refreshAllSettings() {
-	// If a ClearCache-triggered re-fetch is in progress, skip this periodic
-	// refresh to avoid a double-fetch race. The re-fetch will repopulate
-	// everything, and the next periodic tick will run normally.
 	u.refetchMu.Lock()
 	busy := u.refetching
 	u.refetchMu.Unlock()
@@ -659,7 +888,6 @@ func (u *Upstash) refreshAllSettings() {
 		return
 	}
 
-	// Snapshot all settings keys (under lock, fast).
 	u.mu.Lock()
 	var keys []string
 	for k := range u.cache {
@@ -673,12 +901,7 @@ func (u *Upstash) refreshAllSettings() {
 		return
 	}
 
-	// Refresh each key. We parse "settings:<jid>:<field>" back into jid
-	// and field, then do an HGET. This is done WITHOUT holding the cache
-	// lock so message processing is never blocked.
 	for _, ck := range keys {
-		// ck = "settings:<jid>:<field>"
-		// Strip "settings:" prefix, then split on first ":"
 		rest := strings.TrimPrefix(ck, "settings:")
 		idx := strings.Index(rest, ":")
 		if idx < 0 {
@@ -687,16 +910,11 @@ func (u *Upstash) refreshAllSettings() {
 		jid := rest[:idx]
 		field := rest[idx+1:]
 
-		// Single HGET: JSON null => missing field (sentinel); quoted "" =>
-		// real empty-string value (live-verified Upstash REST semantics).
 		r, err := u.cmd("HGET", "settings:"+jid, field)
 		if err != nil {
-			// Keep the existing cached value on error (best-effort).
-			continue
+			continue // best-effort: keep existing cached value
 		}
 		if strings.TrimSpace(string(r)) == "null" || len(r) == 0 {
-			// Field genuinely does not exist in Redis — cache sentinel so
-		// GetSetting returns the default without re-hitting Upstash.
 			u.cacheSet(ck, "\x00")
 			continue
 		}
@@ -705,27 +923,13 @@ func (u *Upstash) refreshAllSettings() {
 	}
 }
 
-// StopCacheRefresher stops the background cache refresher goroutine.
-// Called on graceful shutdown.
 func (u *Upstash) StopCacheRefresher() {
 	if u.refreshCancel != nil {
 		u.refreshCancel()
 	}
 }
 
-// ClearCache drops all cached entries to free memory, then immediately
-// triggers a background re-fetch so the cache is repopulated from Redis
-// WITHOUT the bot ever blocking on a network call.
-//
-// Called by the memory watchdog when container RAM crosses 450 MB.
-//
-// Race-safety: While the re-fetch is running, any SetSetting call (user
-// changing config via WhatsApp) is recorded in pendingUpdates. After the
-// re-fetch completes, those pending values are written back to the cache,
-// so the user's config change is NEVER overwritten by the stale Redis
-// value. The user always sees their latest change.
 func (u *Upstash) ClearCache() {
-	// 1. Snapshot all settings keys BEFORE clearing (so we know what to re-fetch).
 	u.mu.Lock()
 	var keys []string
 	for k := range u.cache {
@@ -735,37 +939,23 @@ func (u *Upstash) ClearCache() {
 	}
 	n := len(u.cache)
 	u.cache = map[string]cacheEntry{}
-	// Drop the group warmup markers too: the cache is empty now, so the
-	// next message from each group triggers ONE fresh background HGETALL
-	// (prevents "marked warmed but nothing cached" after a cache clear).
 	u.warmedGroups = nil
 	u.mu.Unlock()
 
 	if n > 0 {
-		InfoLog("Upstash cache cleared (%d entries, %d settings keys) — re-fetching in background", n, len(keys))
+		InfoLog("Storj config cache cleared (%d entries, %d settings keys) — re-fetching in background", n, len(keys))
 	}
 
-	// 2. Mark re-fetch in progress + clear any stale pending updates.
 	u.refetchMu.Lock()
 	u.refetching = true
 	u.pendingUpdates = map[string]string{}
 	u.refetchMu.Unlock()
 
-	// 3. Launch background re-fetch (non-blocking — runs in its own goroutine).
 	go u.refetchAfterClear(keys)
 }
 
-// refetchAfterClear re-fetches all previously-cached settings keys from
-// Redis and re-populates the cache. Runs in a background goroutine so the
-// memory watchdog (and bot message processing) never blocks.
-//
-// After re-fetching, any keys the user updated DURING the re-fetch
-// (tracked in pendingUpdates) are written back with the user's value,
-// so config changes made while clearing are preserved.
 func (u *Upstash) refetchAfterClear(keys []string) {
-	// Re-fetch each key from Redis (best-effort — keep going on error).
 	for _, ck := range keys {
-		// ck = "settings:<jid>:<field>"
 		rest := strings.TrimPrefix(ck, "settings:")
 		idx := strings.Index(rest, ":")
 		if idx < 0 {
@@ -774,14 +964,13 @@ func (u *Upstash) refetchAfterClear(keys []string) {
 		jid := rest[:idx]
 		field := rest[idx+1:]
 
-		// HEXISTS-first: preserve empty-string values (e.g. autoreactemojis="",
-		// welcomemsg="") that .autoreact reset / .welcome reset intentionally store.
+		// HEXISTS-first: preserve empty-string values that resets store.
 		he, err := u.cmd("HEXISTS", "settings:"+jid, field)
 		if err != nil {
-			continue // best-effort: skip on error, GetSetting will lazy-fill later
+			continue
 		}
 		if strings.TrimSpace(string(he)) == "0" {
-			u.cacheSet(ck, "\x00") // sentinel for missing field
+			u.cacheSet(ck, "\x00")
 			continue
 		}
 		r, err := u.cmd("HGET", "settings:"+jid, field)
@@ -791,8 +980,6 @@ func (u *Upstash) refetchAfterClear(keys []string) {
 		u.cacheSet(ck, trimQuotes(string(r), ""))
 	}
 
-	// 4. Apply pending updates (user's config changes made DURING re-fetch).
-	//    These WIN over the re-fetched values — the user's change is preserved.
 	u.refetchMu.Lock()
 	pending := u.pendingUpdates
 	u.pendingUpdates = map[string]string{}
@@ -810,14 +997,12 @@ func (u *Upstash) refetchAfterClear(keys []string) {
 	}
 }
 
-// CacheLen returns the number of cached entries (for diagnostics).
 func (u *Upstash) CacheLen() int {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	return len(u.cache)
 }
 
-// WarmCache loads banned set into memory for fast lookups (UmarLoadBannedToGlobal)
 func (u *Upstash) WarmCache() {
 	banned := u.BannedList()
 	u.mu.Lock()
@@ -825,32 +1010,9 @@ func (u *Upstash) WarmCache() {
 		u.cache["banned:"+b] = cacheEntry{value: "1", ts: time.Now()}
 	}
 	u.mu.Unlock()
-	OkLog("Upstash cache warmed: %d banned entries", len(banned))
+	OkLog("Config cache warmed: %d banned entries", len(banned))
 }
 
-// PreloadSettings loads ALL fields of the settings:<jid> hash into the
-// in-memory cache in a SINGLE HGETALL round-trip. This is called when a
-// WhatsApp session connects (bot JID) so that every config value
-// (.autoreact, .ownerreact, .welcome, .goodbye, .typing, .statusseen, etc.)
-// is immediately available in cache with zero latency on the first message.
-//
-// Without this, the first access to each setting triggers a separate HGET
-// (or HEXISTS+HGET) round-trip to Upstash. Preloading avoids that cold-start
-// penalty and ensures config is consistent right after boot / restart.
-//
-// Uses HGETALL which returns ["field1","val1","field2","val2", ...]. We
-// cache each field under "settings:<jid>:<field>". Empty-string values
-// (e.g. welcomemsg="" after .welcome reset) are cached as "" (NOT sentinel)
-// because HGETALL only returns fields that EXIST — so "" means the field
-// is genuinely set to empty, which is a valid stored value.
-// WarmGroupSettings warms a group's entire settings hash into cache in
-// ONE background HGETALL round-trip (first message from that group only).
-// It is fire-and-forget and NEVER blocks the reply path: handler.go calls it
-// before dispatch, and by the time the group's anti-features / bangc /
-// welcome settings are read, most fields are already cached at 0ms.
-// The warmedGroups map ensures each group pays exactly ONE HGETALL for its
-// lifetime of this process (restarts re-warm, config changes update via
-// SetGroupSetting directly which writes cache too).
 func (u *Upstash) WarmGroupSettings(groupJID string) {
 	if u.warmedGroups == nil {
 		u.mu.Lock()
@@ -885,9 +1047,7 @@ func (u *Upstash) WarmGroupSettings(groupJID string) {
 }
 
 func (u *Upstash) PreloadSettings(jid, defPrefix string) {
-	// ── 1. Bot settings hash → cache (single HGETALL round-trip). ──
-	// A missing/nonexistent hash returns a JSON null result — handle it
-	// silently (fresh pairing: nothing stored yet, nothing to warm).
+	// 1. Bot settings hash → cache (single HGETALL round-trip).
 	r, err := u.cmd("HGETALL", "settings:"+jid)
 	if err == nil {
 		var pairs []string
@@ -905,12 +1065,7 @@ func (u *Upstash) PreloadSettings(jid, defPrefix string) {
 		}
 	}
 
-	// ── 2. Hot-path fields: default-sentinel any NOT present in the hash. ──
-	// These are read on EVERY message/command dispatch (handler.go). If the
-	// owner never set them, the hash has no entry — without this warmup the
-	// FIRST message after (re)connect would pay a ~290ms HGET miss each.
-	// Sentinel \x00 = "field does not exist → use default" (same semantics
-	// as GetSetting miss path, now arrived at instantly).
+	// 2. Hot-path fields: default-sentinel any NOT present in the hash.
 	for _, f := range []string{"mode", "sudowners", "botname", "ownername", "ownernumber", "botpic"} {
 		ck := "settings:" + jid + ":" + f
 		if _, ok := u.cacheGet(ck); !ok {
@@ -918,29 +1073,28 @@ func (u *Upstash) PreloadSettings(jid, defPrefix string) {
 		}
 	}
 
-	// ── 3. Prefix (own Redis key, separate from the settings hash). ──
-	// GetPrefix(jid, def) checks the cache first — warming it here means the
-	// first command after (re)connect resolves its prefix at 0ms instead of
-	// a ~290ms REST GET.
+	// 3. Prefix (own key, separate from the settings hash).
 	ckp := "prefix:" + jid
 	if _, ok := u.cacheGet(ckp); !ok {
 		u.cacheSet(ckp, u.safeString("prefix:"+jid, defPrefix))
 	}
 }
 
-// Ping tests connectivity (UmarConnectDB)
+// Ping tests connectivity (Storj bucket reachable).
 func (u *Upstash) Ping() bool {
 	_, err := u.cmd("PING")
 	if err != nil {
-		ErrLog("Upstash ping failed: %v", err)
+		ErrLog("Storj storage ping failed: %v", err)
 		return false
 	}
-	InfoLog("Upstash Redis health check passed")
+	InfoLog("Storj storage health check passed")
 	return true
 }
 
-// ── util ─────────────────────────────────────────────────────────────────
-// Upstash returns quoted JSON strings; trim them.
+// ── util ─────────────────────────────────────────────────────────────────────
+
+// Values marshalled through JSON arrive quoted; trim them (same semantics
+// the old Upstash REST layer had).
 func trimQuotes(s, fb string) string {
 	s = strings.TrimSpace(s)
 	if s == "" || s == "null" {
@@ -953,22 +1107,20 @@ func trimQuotes(s, fb string) string {
 }
 
 // ============================================================================
-// ── SESSION PERSISTENCE (NEW) ──────────────────────────────────────────────
+// ── SESSION PERSISTENCE (Storj-backed) ──────────────────────────────────────
 //
 // whatsmeow keeps every session's auth material (device identity, signal
-// session keys, prekeys, etc.) inside ONE shared sqlite file
-// ("goldmd.db" in cfg.DataDir). On ephemeral hosts that file disappears on
-// every restart/redeploy, which is why sessions had to be re-paired.
+// session keys, prekeys, etc.) inside ONE shared sqlite file ("goldmd.db"
+// in cfg.DataDir). On ephemeral hosts that file disappears on every
+// restart/redeploy, which is why sessions had to be re-paired.
 //
-// Fix: back the whole file up to Upstash (base64 string) whenever a session
-// connects/pairs, and restore it from Upstash BEFORE the sqlite container
-// is opened on the next boot. We also keep a JID set so AutoLoad() can
-// recreate the pairing marker folders it depends on.
+// Fix: back the whole file up to Storj (base64 string) whenever a session
+// connects/pairs, and restore it BEFORE the sqlite container is opened on
+// the next boot. A JID set is kept so AutoLoad() can recreate the pairing
+// marker folders it depends on.
 // ============================================================================
 
-// SaveSessionDB checkpoints SQLite before uploading the auth database. This is
-// important when SQLite is using WAL mode: recent credentials may otherwise be
-// left in the -wal sidecar and omitted from the Redis snapshot.
+// SaveSessionDB checkpoints SQLite before uploading the auth database.
 func (u *Upstash) SaveSessionDB(path string) error {
 	if _, err := os.Stat(path); err != nil {
 		return err
@@ -981,15 +1133,9 @@ func (u *Upstash) SaveSessionDB(path string) error {
 		return err
 	}
 	encoded := base64.StdEncoding.EncodeToString(data)
-	//	JSONDebug("REDIS_SAVE_BLOB", map[string]any{
-	//		"path":       path,
-	//		"rawBytes":   len(data),
-	//		"encodedLen": len(encoded),
-	//	})
 	if err := u.setString(u.sessionDBKey(), encoded); err != nil {
 		return fmt.Errorf("save session blob: %w", err)
 	}
-	//	JSONDebug("REDIS_SAVE_BLOB_OK", map[string]any{"key": u.sessionDBKey()})
 	return nil
 }
 
@@ -998,10 +1144,6 @@ func checkpointSQLite(path string) error {
 	if err != nil {
 		return err
 	}
-	// mode=rwc = read-write-create (never falls back to readonly).
-	// _txlock=immediate avoids the WAL/lock race that previously left the
-	// DB in a "readonly database" state after a TRUNCATE checkpoint while
-	// the main whatsmeow container had the file open.
 	db, err := sql.Open("sqlite3", "file:"+absPath+"?mode=rwc&_busy_timeout=10000&_txlock=immediate")
 	if err != nil {
 		return err
@@ -1009,16 +1151,11 @@ func checkpointSQLite(path string) error {
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// PASSIVE checkpoint never blocks writers — it only merges the WAL
-	// if no one is actively writing. Safe to run while the bot's main
-	// connection is live. (TRUNCATE was forcing a full lock that sometimes
-	// collided with an in-flight device-store write and left the DB flagged
-	// readonly, breaking pairing.)
 	_, err = db.ExecContext(ctx, "PRAGMA wal_checkpoint(PASSIVE)")
 	return err
 }
 
-// RestoreSessionDB writes the Redis-stored sqlite file back to disk.
+// RestoreSessionDB writes the Storj-stored sqlite file back to disk.
 // Returns (true, nil) if a backup was found and restored.
 func (u *Upstash) RestoreSessionDB(path string) (bool, error) {
 	r, err := u.cmd("GET", u.sessionDBKey())
@@ -1027,7 +1164,6 @@ func (u *Upstash) RestoreSessionDB(path string) (bool, error) {
 	}
 	encoded := trimQuotes(string(r), "")
 	if encoded == "" {
-		//		JSONDebug("REDIS_RESTORE_BLOB_EMPTY", map[string]any{"key": u.sessionDBKey()})
 		return false, nil // nothing backed up yet
 	}
 	data, err := base64.StdEncoding.DecodeString(encoded)
@@ -1037,45 +1173,31 @@ func (u *Upstash) RestoreSessionDB(path string) (bool, error) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return false, err
 	}
-	//	JSONDebug("REDIS_RESTORE_BLOB_OK", map[string]any{
-	//		"path":     path,
-	//		"rawBytes": len(data),
-	//	})
 	return true, nil
 }
 
 // RegisterJID remembers a paired JID so its pairing folder can be recreated
 // after a disk wipe (AutoLoad scans folders under cfg.PairingDir).
 func (u *Upstash) RegisterJID(jid string) error {
-	if err := u.setAdd(u.sessionJidsKey(), jid); err != nil {
-		return err
-	}
-	return nil
+	return u.setAdd(u.sessionJidsKey(), jid)
 }
 
 // ListJIDs returns every JID ever registered.
 func (u *Upstash) ListJIDs() []string { return u.setMembers(u.sessionJidsKey()) }
 
-// HasJID reports whether Redis has a registered session for the base JID.
+// HasJID reports whether the registry has a session for the base JID.
 func (u *Upstash) HasJID(jid string) bool {
 	r, err := u.cmd("SISMEMBER", u.sessionJidsKey(), jid)
 	return err == nil && trimQuotes(string(r), "0") == "1"
 }
 
-// RemoveJID drops a JID from the session registry. Called when a session
-// logs out (or its linked device is manually removed from the phone) so
-// the next SaveSessionDB / AutoLoad no longer tries to restore it.
-// This ONLY touches the session registry — prefix/sudo/banned/settings
-// config keys for that jid are left completely untouched.
+// RemoveJID drops a JID from the session registry.
 func (u *Upstash) RemoveJID(jid string) error {
 	return u.setRem(u.sessionJidsKey(), jid)
 }
 
-// DelSessionDB removes the session DB blob from Redis. This is used by
-// cleanupSession when the LAST paired device is removed — instead of
-// saving an empty DB (which would create a stale-empty-blob that gets
-// "restored" on the next restart), we delete the blob entirely so the
-// next boot sees REDIS_RESTORE_BLOB_EMPTY and starts truly fresh.
+// DelSessionDB removes the session DB blob. Used by cleanupSession when the
+// LAST paired device is removed so the next boot starts truly fresh.
 func (u *Upstash) DelSessionDB() error {
 	return u.setDel(u.sessionDBKey())
 }

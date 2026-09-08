@@ -34,8 +34,10 @@ func LoadConfig() *Config {
 		BatchDelaySec: envInt("GOLDMD_BATCH_DELAY", 2),
 		PanelEnabled:  envBool("GOLDMD_PANEL_ENABLED", true),
 		PanelPort:     envInt("PORT", 2081),
-		UpstashURL:    envOr("UPSTASH_REDIS_REST_URL", "https://hopeful-skink-183889.upstash.io"),
-		UpstashToken:  envOr("UPSTASH_REDIS_REST_TOKEN", "gQAAAAAAAs5RAAIgcDJmMzY1MWY5ZTI4ZDk0NzUxODFkNjE4ZDcxYjRmZDNjNw"),
+		// Upstash Redis REMOVED — storage is Storj-backed now (upstash.go).
+		// Fields kept only for struct/compat; values unused.
+		UpstashURL:   envOr("UPSTASH_REDIS_REST_URL", ""),
+		UpstashToken: envOr("UPSTASH_REDIS_REST_TOKEN", ""),
 		OwnerSet:      map[string]bool{},
 	}
 	c.PairingDir = c.DataDir + "/pairing"
@@ -137,5 +139,5 @@ func (c *Config) IsOwner(jid string) bool {
 func (c *Config) String() string {
 	return fmt.Sprintf("data=%s pairing=%s prefix=%q batch=%d delay=%d panel=%v/%d owners=%d redis=%v",
 		c.DataDir, c.PairingDir, c.DefaultPrefix, c.BatchSize, c.BatchDelaySec,
-		c.PanelEnabled, c.PanelPort, len(c.OwnerNumbers), c.UpstashURL != "")
+		c.PanelEnabled, c.PanelPort, len(c.OwnerNumbers), true)
 }

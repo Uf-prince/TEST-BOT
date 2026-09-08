@@ -81,65 +81,59 @@ func main() {
 	_ = os.MkdirAll(cfg.DataDir, 0o755)
 	dbPath := filepath.Join(cfg.DataDir, "goldmd.db")
 
-	// ── optional Upstash Redis layer (config + session persistence) ──
-	// If UPSTASH_REDIS_REST_URL + token are present, per-session prefix /
-	// sudo / settings AND the full WhatsApp auth store survive across
-	// redeployments — even on ephemeral disks (Railway/Fly/Render).
-	// Set GOLDMD_DISABLE_UPSTASH=1 to skip the Redis layer entirely (useful for
-	// local testing / temp hosting where the Redis REST endpoint is unreachable).
+	// ── STORJ: init the Storj S3-compatible store FIRST — it now backs BOTH
+	// the antidelete/antiedit message store AND the config/session storage
+	// layer (Redis/Upstash is fully removed). 10 shards + 48h TTL guard
+	// (guard only sweeps msgs/, the kv/ config data is permanent).
+	if err := InitStorj(); err != nil {
+		FatalLog("Storj init failed: %v (config + session storage require Storj)", err)
+	}
+	OkLog("Storj store ready (%d shards)", len(storj.shards))
+	storj.StartTTLGuard()
+
+	// ── config + session persistence layer (Storj-backed) ──
+	// Per-session prefix / sudo / settings AND the full WhatsApp auth store
+	// now live in Storj (same shards/buckets as antidelete) and survive
+	// across redeployments — even on ephemeral disks (Modal/Railway/Fly).
 	var redis *Upstash
-	if cfg.UpstashURL != "" && cfg.UpstashToken != "" && os.Getenv("GOLDMD_DISABLE_UPSTASH") != "1" {
-  // ErrLog("Upstash Redis configured; checking REST connection")
+	if os.Getenv("GOLDMD_DISABLE_UPSTASH") != "1" {
 		redis = NewUpstash(cfg.UpstashURL, cfg.UpstashToken)
 		if !redis.Ping() {
-   // ErrLog("Upstash Redis health check failed; session persistence may be unavailable")
+			ErrLog("Storj storage health check failed; session persistence may be unavailable")
 		}
 
 		// Restore before opening sqlstore whenever the local DB is missing or
 		// does not contain a usable WhatsApp device. A plain file-exists check
 		// is not enough: an empty/stale sqlite file can survive a restart while
-		// the real auth DB is safely stored in Upstash.
+		// the real auth DB is safely stored in Storj.
 		localOK := hasUsableWhatsAppDevice(dbPath)
-//		JSONDebug("BOOT_DB_CHECK", map[string]any{
-//			"dbPath":     dbPath,
-//			"localValid": localOK,
-//		})
 		if !localOK {
-			InfoLog("Local session DB has no usable WhatsApp device — checking Upstash for a backup...")
-//			JSONDebug("REDIS_RESTORE_START", map[string]any{"dbPath": dbPath})
+			InfoLog("Local session DB has no usable WhatsApp device — checking Storj for a backup...")
 			tmpPath := dbPath + ".restore.tmp"
 			_ = os.Remove(tmpPath)
 			restored, rerr := redis.RestoreSessionDB(tmpPath)
 			if rerr != nil {
-    // ErrLog("Could not restore session DB from Upstash: %v", rerr)
-//				JSONDebug("REDIS_RESTORE_ERR", map[string]any{"error": rerr.Error()})
+				ErrLog("Could not restore session DB from Storj: %v", rerr)
 			} else if restored {
 				if rerr = os.Rename(tmpPath, dbPath); rerr != nil {
-     // ErrLog("Could not activate restored session DB: %v", rerr)
+					ErrLog("Could not activate restored session DB: %v", rerr)
 				} else {
-					InfoLog("Upstash session DB restored successfully (local DB was missing/invalid)")
+					InfoLog("Storj session DB restored successfully (local DB was missing/invalid)")
 					// recreate the pairing marker folders AutoLoad() scans for
 					jids := redis.ListJIDs()
 					for _, jid := range jids {
 						_ = os.MkdirAll(filepath.Join(cfg.PairingDir, jid), 0o755)
 					}
-					OkLog("Recreated %d pairing folder(s) from Upstash JID registry", len(jids))
-//					JSONDebug("REDIS_RESTORE_OK", map[string]any{
-//						"dbPath":  dbPath,
-//						"jids":    jids,
-//						"folders": len(jids),
-//					})
+					OkLog("Recreated %d pairing folder(s) from Storj JID registry", len(jids))
 				}
 			} else {
-    // ErrLog("Upstash has no session DB backup; starting fresh")
-//				JSONDebug("REDIS_RESTORE_EMPTY", map[string]any{"msg": "no backup in redis yet, fresh start"})
+				ErrLog("Storj has no session DB backup; starting fresh")
 			}
 		} else {
-			InfoLog("Local WhatsApp session DB is valid; keeping it and skipping Redis overwrite")
-//			JSONDebug("REDIS_RESTORE_SKIP", map[string]any{"reason": "local DB valid"})
+			InfoLog("Local WhatsApp session DB is valid; keeping it and skipping Storj overwrite")
 		}
 	} else {
-		WarnLog("Upstash Redis env vars not set — sessions will NOT survive a disk wipe/restart.")
+		WarnLog("GOLDMD_DISABLE_UPSTASH=1 — sessions will NOT survive a disk wipe/restart.")
 	}
 
 	// ── container holds every session's SQLite auth store ──
@@ -201,16 +195,6 @@ func main() {
 
 	go memoryWatchdog(mgr, redis, dbPath)
 
-	// ── STORJ: init the Storj S3-compatible message store (10 shards) + start
-	// the 48h TTL guard (sweeps every 24h). Full JSON debug in logs. If Storj
-	// creds are missing it logs a clear warning and continues (antidelete/
-	// antiedit fall back to the in-memory cache).
-	if err := InitStorj(); err != nil {
-  // ErrLog("Storj init failed: %v (antidelete/antiedit will use in-memory cache fallback)", err)
-	} else {
-		OkLog("Storj store ready (%d shards)", len(storj.shards))
-		storj.StartTTLGuard()
-	}
 
 	// ── HTTP control panel (pair new sessions / list sessions) ──
 	if cfg.PanelEnabled {
