@@ -54,12 +54,52 @@ var searchHTTP = &http.Client{Timeout: 40 * time.Second}
 // jinaFetch reads a page through the r.jina.ai reader proxy and returns the
 // markdown text. Needed for sites that block plain HTTP clients
 // (facebook.com/public, apkcombo.com, telegram-group.com).
+// The proxy rate-limits rapid calls with HTTP 403/429, so transient failures
+// are retried with backoff (up to 3 attempts).
 func jinaFetch(ctx context.Context, target string) (string, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-time.After(time.Duration(attempt*5) * time.Second):
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
+		}
+		md, err := jinaFetchOnce(ctx, target)
+		if err == nil {
+			return md, nil
+		}
+		lastErr = err
+		if !searchRetryable(err) {
+			return "", err
+		}
+	}
+	return "", lastErr
+}
+
+// searchRetryable reports whether a fetch error is worth retrying
+// (rate-limit responses and transient network faults).
+func searchRetryable(err error) bool {
+	s := err.Error()
+	if strings.Contains(s, "HTTP 403") || strings.Contains(s, "HTTP 429") || strings.Contains(s, "HTTP 5") {
+		return true
+	}
+	if strings.Contains(s, "Client.Timeout") || strings.Contains(s, "context deadline") ||
+		strings.Contains(s, "reset by peer") || strings.Contains(s, "EOF") {
+		return true
+	}
+	return false
+}
+
+func jinaFetchOnce(ctx context.Context, target string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://r.jina.ai/"+target, nil)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+	// NB: the reader proxy rejects browser-like UAs with a challenge page,
+	// but serves plain clients — a curl UA keeps it working.
+	req.Header.Set("User-Agent", "curl/8.5.0")
 	req.Header.Set("Accept", "text/plain")
 	res, err := searchHTTP.Do(req)
 	if err != nil {
@@ -334,7 +374,7 @@ func tgChannelSearch(ctx context.Context, query string) ([]searchResult, error) 
 		mu   sync.Mutex
 		wg   sync.WaitGroup
 		out  []searchResult
-		sem  = make(chan struct{}, 5)
+		sem  = make(chan struct{}, 3)
 	)
 	for _, e := range entries {
 		wg.Add(1)
@@ -423,7 +463,7 @@ func apkAppSearch(ctx context.Context, query string) ([]searchResult, error) {
 		if d := apkDlRe.FindStringSubmatch(meta); d != nil {
 			dl := strings.TrimSpace(d[1]) + "+"
 			if stats != "" {
-				stats = dl + " DOWNLOADS ❰ " + stats + " ❯"
+				stats = dl + " DOWNLOADS ❰ " + stats
 			} else {
 				stats = dl + " DOWNLOADS"
 			}
