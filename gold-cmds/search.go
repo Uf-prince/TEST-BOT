@@ -503,50 +503,50 @@ func apkAppSearch(ctx context.Context, query string) ([]searchResult, error) {
 
 func ttGuide(prefix string) string {
 	return "*🔰 TIKTOK SEARCH GUIDE 🔰*\n\n" +
-		"*🔰 SEARCH TIKTOK USERS :❱*\n*" + prefix + "ttsearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "ttsearch carti*\n*SHOWS THE TOP TIKTOK USERS WITH NAME, FOLLOWERS AND LINK*\n\n" +
-				"*❁ DIRECT TIKTOK LINK :❱*\n*" + prefix + "ttsearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "ttsearch https://www.tiktok.com/@user/video/1234567890*\n*PASTE A TIKTOK LINK AND THE VIDEO DOWNLOADS INSTANTLY*\n\n" +
+		"*🔰 SEARCH TIKTOK USERS :❱*\n*" + prefix + "tt ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "tt carti*\n*SHOWS THE TOP TIKTOK USERS WITH NAME, FOLLOWERS AND LINK*\n\n" +
+				"*❁ DIRECT TIKTOK LINK :❱*\n*" + prefix + "tt ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "tt https://www.tiktok.com/@user/video/1234567890*\n*PASTE A TIKTOK LINK AND THE VIDEO DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "tts ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "ttsearch ❰ LINK ❯*"
+		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "tt ❰ LINK ❯*"
 }
 
 func fbGuide(prefix string) string {
 	return "*🔰 FACEBOOK SEARCH GUIDE 🔰*\n\n" +
-		"*🔰 SEARCH FACEBOOK PROFILES :❱*\n*" + prefix + "fbsearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "fbsearch mark zuckerberg*\n*SHOWS MATCHING FACEBOOK PROFILES WITH NAME AND LINK*\n\n" +
-				"*❁ DIRECT FACEBOOK LINK :❱*\n*" + prefix + "fbsearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "fbsearch https://www.facebook.com/watch?v=1234567890*\n*PASTE A FACEBOOK VIDEO / REEL LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
+		"*🔰 SEARCH FACEBOOK PROFILES :❱*\n*" + prefix + "fb ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "fb mark zuckerberg*\n*SHOWS MATCHING FACEBOOK PROFILES WITH NAME AND LINK*\n\n" +
+				"*❁ DIRECT FACEBOOK LINK :❱*\n*" + prefix + "fb ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "fb https://www.facebook.com/watch?v=1234567890*\n*PASTE A FACEBOOK VIDEO / REEL LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "fbs ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "fbsearch ❰ LINK ❯*"
+		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "fb ❰ LINK ❯*"
 }
 
 func igGuide(prefix string) string {
 	return "*🔰 INSTAGRAM SEARCH GUIDE 🔰*\n\n" +
-		"*🔰 SEARCH INSTAGRAM ACCOUNTS :❱*\n*" + prefix + "igsearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "igsearch ronaldo*\n*SHOWS MATCHING INSTAGRAM ACCOUNTS WITH NAME AND LINK*\n\n" +
-				"*❁ DIRECT INSTAGRAM LINK :❱*\n*" + prefix + "igsearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "igsearch https://www.instagram.com/reel/Cxxxxxxxx/*\n*PASTE AN INSTAGRAM POST / REEL LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
+		"*🔰 SEARCH INSTAGRAM ACCOUNTS :❱*\n*" + prefix + "ig ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "ig ronaldo*\n*SHOWS MATCHING INSTAGRAM ACCOUNTS WITH NAME AND LINK*\n\n" +
+				"*❁ DIRECT INSTAGRAM LINK :❱*\n*" + prefix + "ig ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "ig https://www.instagram.com/reel/Cxxxxxxxx/*\n*PASTE AN INSTAGRAM POST / REEL LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "igs ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "igsearch ❰ LINK ❯*"
+		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "ig ❰ LINK ❯*"
 }
 
 func tgGuide(prefix string) string {
 	return "*🔰 TELEGRAM SEARCH GUIDE 🔰*\n\n" +
-		"*🔰 SEARCH TELEGRAM CHANNELS :❱*\n*" + prefix + "tgsearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "tgsearch movies*\n*SHOWS CHANNELS AND GROUPS WITH THEIR JOIN LINKS*\n\n" +
-				"*❁ DIRECT TELEGRAM LINK :❱*\n*" + prefix + "tgsearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "tgsearch https://t.me/channelname/123*\n*PASTE A T.ME POST LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
+		"*🔰 SEARCH TELEGRAM CHANNELS :❱*\n*" + prefix + "tg ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "tg movies*\n*SHOWS CHANNELS AND GROUPS WITH THEIR JOIN LINKS*\n\n" +
+				"*❁ DIRECT TELEGRAM LINK :❱*\n*" + prefix + "tg ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "tg https://t.me/channelname/123*\n*PASTE A T.ME POST LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "tgs ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD POSTS :❱*\n*" + prefix + "tgsearch ❰ POST LINK ❯*"
+		"*🔰 TO DOWNLOAD POSTS :❱*\n*" + prefix + "tg ❰ POST LINK ❯*"
 }
 
 func twtGuide(prefix string) string {
 	return "*🔰 X / TWITTER SEARCH GUIDE 🔰*\n\n" +
-		"*🔰 SEARCH X ACCOUNTS :❱*\n*" + prefix + "twtsearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "twtsearch elon musk*\n*SHOWS MATCHING X / TWITTER ACCOUNTS WITH NAME AND LINK*\n\n" +
-				"*❁ DIRECT X LINK :❱*\n*" + prefix + "twtsearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "twtsearch https://x.com/username/status/1234567890*\n*PASTE AN X / TWITTER LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
+		"*🔰 SEARCH X ACCOUNTS :❱*\n*" + prefix + "twt ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "twt elon musk*\n*SHOWS MATCHING X / TWITTER ACCOUNTS WITH NAME AND LINK*\n\n" +
+				"*❁ DIRECT X LINK :❱*\n*" + prefix + "twt ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "twt https://x.com/username/status/1234567890*\n*PASTE AN X / TWITTER LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "twts ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "twtsearch ❰ LINK ❯*"
+		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "twt ❰ LINK ❯*"
 }
 
 func apkGuide(prefix string) string {
 	return "*🔰 APK SEARCH GUIDE 🔰*\n\n" +
-		"*🔰 SEARCH APK APPS :❱*\n*" + prefix + "apksearch ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "apksearch whatsapp*\n*SHOWS APPS WITH NAME, PACKAGE, DOWNLOADS, RATING AND SIZE*\n\n" +
-				"*❁ DIRECT APK LINK :❱*\n*" + prefix + "apksearch ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "apksearch https://apkcombo.com/whatsapp/com.whatsapp/*\n*PASTE AN APK LINK AND THE APK DOWNLOADS INSTANTLY*\n\n" +
+		"*🔰 SEARCH APK APPS :❱*\n*" + prefix + "apk ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "apk whatsapp*\n*SHOWS APPS WITH NAME, PACKAGE, DOWNLOADS, RATING AND SIZE*\n\n" +
+				"*❁ DIRECT APK LINK :❱*\n*" + prefix + "apk ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "apk https://apkcombo.com/whatsapp/com.whatsapp/*\n*PASTE AN APK LINK AND THE APK DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "apks ❰ QUERY ❯*\n\n" +
-		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "apksearch ❰ NUMBER OR NAME ❯*"
+		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "apk ❰ NUMBER OR NAME ❯*"
 }
 
 // ── handlers ────────────────────────────────────────────────────────────
@@ -743,21 +743,49 @@ func handleAPKSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 }
 
 func init() {
-	Register(Command{Name: "ttsearch", Category: "SEARCH", Desc: "Search TikTok users (name, followers, videos, link)", Run: handleTTSearch})
+	Register(Command{Name: "tt", Category: "SEARCH", Desc: "Search TikTok users or paste a TikTok link to download (name, followers, videos, link)", Run: handleTTSearch})
+	Register(Command{Name: "ttsearch", Hidden: true, Run: handleTTSearch})
 	Register(Command{Name: "tts", Hidden: true, Run: handleTTSearch})
+	Register(Command{Name: "tiktok", Hidden: true, Run: handleTTSearch})
+	Register(Command{Name: "ttdl", Hidden: true, Run: handleTTSearch})
+	Register(Command{Name: "ttvideo", Hidden: true, Run: handleTTSearch})
+	Register(Command{Name: "tiktokvideo", Hidden: true, Run: handleTTSearch})
 
-	Register(Command{Name: "fbsearch", Category: "SEARCH", Desc: "Search Facebook profiles (name, link)", Run: handleFBSearch})
+	Register(Command{Name: "fb", Category: "SEARCH", Desc: "Search Facebook profiles or paste a Facebook video/reel link to download (name, link)", Run: handleFBSearch})
+	Register(Command{Name: "fbsearch", Hidden: true, Run: handleFBSearch})
 	Register(Command{Name: "fbs", Hidden: true, Run: handleFBSearch})
+	Register(Command{Name: "fbdl", Hidden: true, Run: handleFBSearch})
+	Register(Command{Name: "facebook", Hidden: true, Run: handleFBSearch})
+	Register(Command{Name: "reel", Hidden: true, Run: handleFBSearch})
 
-	Register(Command{Name: "igsearch", Category: "SEARCH", Desc: "Search Instagram accounts (name, link)", Run: handleIGSearch})
+	Register(Command{Name: "ig", Category: "SEARCH", Desc: "Search Instagram accounts or paste an Instagram reel/post link to download (name, link)", Run: handleIGSearch})
+	Register(Command{Name: "igsearch", Hidden: true, Run: handleIGSearch})
 	Register(Command{Name: "igs", Hidden: true, Run: handleIGSearch})
+	Register(Command{Name: "instagram", Hidden: true, Run: handleIGSearch})
+	Register(Command{Name: "insta", Hidden: true, Run: handleIGSearch})
+	Register(Command{Name: "instavideo", Hidden: true, Run: handleIGSearch})
 
-	Register(Command{Name: "tgsearch", Category: "SEARCH", Desc: "Search Telegram channels and groups (name, join link)", Run: handleTGSearch})
+	Register(Command{Name: "tg", Category: "SEARCH", Desc: "Search Telegram channels/groups or paste a t.me post link to download (name, join link)", Run: handleTGSearch})
+	Register(Command{Name: "tgsearch", Hidden: true, Run: handleTGSearch})
 	Register(Command{Name: "tgs", Hidden: true, Run: handleTGSearch})
+	Register(Command{Name: "telegram", Hidden: true, Run: handleTGSearch})
+	Register(Command{Name: "tgdl", Hidden: true, Run: handleTGSearch})
+	Register(Command{Name: "tgvid", Hidden: true, Run: handleTGSearch})
 
-	Register(Command{Name: "twtsearch", Category: "SEARCH", Desc: "Search X / Twitter accounts (name, link)", Run: handleTWTSearch})
+	Register(Command{Name: "twt", Category: "SEARCH", Desc: "Search X / Twitter accounts or paste an X video link to download (name, link)", Run: handleTWTSearch})
+	Register(Command{Name: "twtsearch", Hidden: true, Run: handleTWTSearch})
 	Register(Command{Name: "twts", Hidden: true, Run: handleTWTSearch})
+	Register(Command{Name: "twitter", Hidden: true, Run: handleTWTSearch})
+	Register(Command{Name: "tweet", Hidden: true, Run: handleTWTSearch})
+	Register(Command{Name: "twdl", Hidden: true, Run: handleTWTSearch})
+	Register(Command{Name: "xvideo", Hidden: true, Run: handleTWTSearch})
+	Register(Command{Name: "x", Hidden: true, Run: handleTWTSearch})
 
-	Register(Command{Name: "apksearch", Category: "SEARCH", Desc: "Search APK apps (name, package, rating, size)", Run: handleAPKSearch})
+	Register(Command{Name: "apk", Category: "SEARCH", Desc: "Search APK apps or paste an APK store link to download (name, package, rating, size)", Run: handleAPKSearch})
+	Register(Command{Name: "apksearch", Hidden: true, Run: handleAPKSearch})
 	Register(Command{Name: "apks", Hidden: true, Run: handleAPKSearch})
+	Register(Command{Name: "apkdl", Hidden: true, Run: handleAPKSearch})
+	Register(Command{Name: "app", Hidden: true, Run: handleAPKSearch})
+	Register(Command{Name: "apps", Hidden: true, Run: handleAPKSearch})
+	Register(Command{Name: "application", Hidden: true, Run: handleAPKSearch})
 }

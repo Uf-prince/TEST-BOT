@@ -33,9 +33,9 @@ const tikwmAPI = "https://www.tikwm.com/api/"
 const tiktokHelpText = "*\U0001f3c5 TIKTOK COMMAND INFO \U0001f3c5*\n" +
 	"*COPY THE TIKTOK VIDEO LINK*\n" +
 	"*PASTE TIKTOK VIDEO LINK LIKE THIS \U0001f60a*\n\n" +
-	"*.TTSEARCH \u2770TIKTOK LINK\u2771*\n" +
+	"*.TT \u2770TIKTOK LINK\u2771*\n" +
 	"*EXAMPLE.....*\n" +
-	"*.TTSEARCH https://vm.tiktok.com/xxxxx*\n\n" +
+	"*.TT https://vm.tiktok.com/xxxxx*\n\n" +
 	"*YOUR TIKTOK VIDEO WILL BE SENT HERE \U0001f917*"
 
 // tikwmResponse models the tikwm API response.

@@ -216,17 +216,17 @@ const (
 func searchPlatformExample(kind searchPickKind, prefix string) string {
 	switch kind {
 	case pickTT:
-		return prefix + "ttsearch " + tiktokExampleLink
+		return prefix + "tt " + tiktokExampleLink
 	case pickFB:
-		return prefix + "fbsearch " + fbExampleLink
+		return prefix + "fb " + fbExampleLink
 	case pickIG:
-		return prefix + "igsearch " + igExampleLink
+		return prefix + "ig " + igExampleLink
 	case pickTG:
-		return prefix + "tgsearch " + tgExampleLink
+		return prefix + "tg " + tgExampleLink
 	case pickTWT:
-		return prefix + "twtsearch " + twtExampleLink
+		return prefix + "twt " + twtExampleLink
 	case pickAPK:
-		return prefix + "apksearch " + apkExampleLink
+		return prefix + "apk " + apkExampleLink
 	}
 	return prefix + "search <query>"
 }
@@ -234,7 +234,7 @@ func searchPlatformExample(kind searchPickKind, prefix string) string {
 // searchWrongLinkCard is the error reply when the pasted link does not belong
 // to this search command's platform. Same style as the user's example:
 //
-//	.apksearch <facebook link>  →  "GIVE ME THE VALID APK LINK" + EXAMPLE
+//	.apk <facebook link>  →  "GIVE ME THE VALID APK LINK" + EXAMPLE
 func searchWrongLinkCard(kind searchPickKind, pastedDomain string, prefix string) string {
 	name := searchPlatformName(kind)
 	return "❌ *" + name + " SEARCH ERROR* 🔰\n\n" +
@@ -568,13 +568,13 @@ func searchPickLinkCard(s SessionBridge, info types.MessageInfo, kind searchPick
 	var header, dlCmd, cmdHint string
 	switch kind {
 	case pickTT:
-		header, dlCmd, cmdHint = "TIKTOK USER", prefix+"ttsearch", "TIKTOK VIDEO LINK"
+		header, dlCmd, cmdHint = "TIKTOK USER", prefix+"tt", "TIKTOK VIDEO LINK"
 	case pickFB:
-		header, dlCmd, cmdHint = "FACEBOOK PROFILE", prefix+"fbsearch", "FACEBOOK VIDEO / REEL LINK"
+		header, dlCmd, cmdHint = "FACEBOOK PROFILE", prefix+"fb", "FACEBOOK VIDEO / REEL LINK"
 	case pickIG:
-		header, dlCmd, cmdHint = "INSTAGRAM ACCOUNT", prefix+"igsearch", "INSTAGRAM POST / REEL LINK"
+		header, dlCmd, cmdHint = "INSTAGRAM ACCOUNT", prefix+"ig", "INSTAGRAM POST / REEL LINK"
 	default:
-		header, dlCmd, cmdHint = "X / TWITTER ACCOUNT", prefix+"twtsearch", "X VIDEO LINK"
+		header, dlCmd, cmdHint = "X / TWITTER ACCOUNT", prefix+"twt", "X VIDEO LINK"
 	}
 
 	handle := selected.Handle

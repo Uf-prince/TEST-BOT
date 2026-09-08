@@ -36,7 +36,7 @@ const twHelpText = "*\U0001f530 TWITTER VIDEO DOWNLOAD COMMAND \U0001f530*\n" +
 	"*DO YOU WANT TO DOWNLOAD A TWITTER/X VIDEO? \U0001f914*\n" +
 	"*FIRST COPY THE TWEET LINK \U0001f644*\n" +
 	"*THEN WRITE LIKE THIS \U0001f60a*\n\n" +
-	"*EXAMPLE :* " + "." + "twtsearch https://x.com/NASASpaceflight/status/1811608378520588583\n\n" +
+	"*EXAMPLE :* " + "." + "twt https://x.com/NASASpaceflight/status/1811608378520588583\n\n" +
 	"*TO DOWNLOAD TWITTER/X VIDEOS"
 
 // twTweet mirrors the parts of the fxtwitter response we care about.

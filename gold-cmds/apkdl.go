@@ -46,10 +46,10 @@ const apkUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.
 const apkHelpText = "*\U0001f530 APK DOWNLOAD COMMAND \U0001f530*\n" +
 	"*DO YOU WANT TO DOWNLOAD AN APP APK? \U0001f914*\n" +
 	"*JUST WRITE THE APP NAME OR PACKAGE NAME \U0001f60a*\n\n" +
-	"*.APKSEARCH \u2770APP NAME \u276f*\n" +
+	"*.APK \u2770APP NAME \u276f*\n" +
 	"*EXAMPLES.....*\n" +
-	"*.APKSEARCH whatsapp*\n" +
-	"*.APKSEARCH com.whatsapp*\n\n" +
+	"*.APK whatsapp*\n" +
+	"*.APK com.whatsapp*\n\n" +
 	"*THE APK FILE WILL BE SENT HERE \U0001f917*"
 
 // apkAppInfo holds everything needed to download one app file.

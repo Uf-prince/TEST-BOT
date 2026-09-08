@@ -308,9 +308,9 @@ func ytInfoCard(d *ytInfoData, prefix string) string {
 // ytGuide — full 🔰 styled guide (pure English).
 func ytGuide(prefix string) string {
 	return "*🔰 YOUTUBE SEARCH GUIDE 🔰*\n\n" +
-		"*🔰 SEARCH YOUTUBE :❱*\n*" + prefix + "ytsearch ❮ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "ytsearch lofi mix*\n*SHOWS THE TOP RESULTS WITH TITLE, CHANNEL, LENGTH, VIEWS AND LINK*\n\n" +
+		"*🔰 SEARCH YOUTUBE :❱*\n*" + prefix + "yts ❮ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "yts lofi mix*\n*SHOWS THE TOP RESULTS WITH TITLE, CHANNEL, LENGTH, VIEWS AND LINK*\n\n" +
 		"*🔰 VIDEO DETAILS :❱*\n*" + prefix + "ytinfo ❮ LINK OR ID ❯*\n*EXAMPLE :❱ " + prefix + "ytinfo https://youtube.com/watch?v=xxxxxxx*\n*SHOWS THE FULL DETAILS OF ONE VIDEO*\n\n" +
-				"*✱ DIRECT YOUTUBE LINK :❱*\n*" + prefix + "ytsearch ❰ YOUTUBE LINK ❯*\n*EXAMPLE :❱ " + prefix + "ytsearch https://www.youtube.com/watch?v=xxxxxxxxxxx*\n*PASTE A YOUTUBE LINK AND THE VIDEO DOWNLOADS INSTANTLY*\n\n" +
+				"*✱ DIRECT YOUTUBE LINK :❱*\n*" + prefix + "yts ❰ YOUTUBE LINK ❯*\n*EXAMPLE :❱ " + prefix + "yts https://www.youtube.com/watch?v=xxxxxxxxxxx*\n*PASTE A YOUTUBE LINK AND THE VIDEO DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 NOTE :❱*\n*COMPLETELY FREE — NO API KEY, NO LOGIN, NO QUOTA*\n*TO DOWNLOAD A VIDEO USE " + prefix + "video*"
 }
 
@@ -340,7 +340,7 @@ func handleYTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 			"*THIS LINK IS FROM :❱ "+strings.ToUpper(host)+"*\n"+
 			"*IT IS NOT A YOUTUBE LINK* 🙅\n\n"+
 			"*EXAMPLE SAME LIKE THAT :❱*\n"+
-			"*"+prefix+"ytsearch https://www.youtube.com/watch?v=xxxxxxxxxxx*\n\n"+
+			"*"+prefix+"yts https://www.youtube.com/watch?v=xxxxxxxxxxx*\n\n"+
 			"*SEARCHED BY GOLD-MD* 🔰")
 		return
 	}
@@ -387,7 +387,7 @@ func handleYTInfo(s SessionBridge, info types.MessageInfo, args []string, prefix
 }
 
 func init() {
-	Register(Command{Name: "ytsearch", Category: "SEARCH", Desc: "Search YouTube videos (title, channel, views, link)", Run: handleYTSearch})
-	Register(Command{Name: "yts", Hidden: true, Run: handleYTSearch})
+	Register(Command{Name: "yts", Category: "SEARCH", Desc: "Search YouTube videos or paste a YouTube link to download (title, channel, views, link)", Run: handleYTSearch})
+	Register(Command{Name: "ytsearch", Hidden: true, Run: handleYTSearch})
 	Register(Command{Name: "ytinfo", Hidden: true, Run: handleYTInfo})
 }
