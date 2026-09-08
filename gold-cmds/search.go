@@ -177,6 +177,20 @@ func searchFmtCount(n int64) string {
 // searchBorder is the fancy result border (same as .video / .play lists).
 const searchBorder = "✧═══════════•❁❀❁•═══════════✧"
 
+// searchCardPlatform maps a card header to the short platform name used in
+// the "TYPE ❰ N ❯ TO DOWNLOAD THIS FROM <PLATFORM>" line.
+func searchCardPlatform(header string) string {
+	h := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(header), "SEARCH"))
+	switch h {
+	case "X / TWITTER":
+		return "X"
+	case "APK":
+		return "APKCOMBO"
+	default:
+		return h
+	}
+}
+
 // searchCard renders the full list in the .video fancy-border style.
 func searchCard(header, query, handleLabel, statsLabel string, results []searchResult, footer string) string {
 	var b strings.Builder
@@ -189,7 +203,7 @@ func searchCard(header, query, handleLabel, statsLabel string, results []searchR
 			title = "NOT FOUND"
 		}
 		b.WriteString("\n" + searchBorder + "\n")
-		b.WriteString("*TYPE ❰ " + strconv.Itoa(i+1) + " ❱ TO SELECT THIS RESULT*\n")
+		b.WriteString("*TYPE ❰ " + strconv.Itoa(i+1) + " ❱ TO DOWNLOAD THIS FROM " + searchCardPlatform(header) + "*\n")
 		b.WriteString(strings.ToUpper(title) + "\n")
 		if handleLabel != "" && r.Handle != "" {
 			b.WriteString("*" + handleLabel + " :❱ " + r.Handle + "*\n")
