@@ -130,7 +130,13 @@ func handleInstaAsync(	ctx context.Context, s SessionBridge, info types.MessageI
 		s.Reply(info, "❌ PLEASE TRY AGAIN 🤗")
 		return
 	}
-	defer removeTempFile(path)
+	// WhatsApp-compat: HEVC/mjpeg reels ko h264+faststart me convert
+	if waPath, werr := whatsappifyVideo(ctx, path); werr == nil && waPath != path {
+		defer removeTempFile(path)
+		path = waPath
+	} else {
+		defer removeTempFile(path)
+	}
 
 	// Optional thumbnail for the video preview message.
 	var thumb []byte

@@ -1146,7 +1146,14 @@ func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected search
 					}
 					continue
 				}
-			defer removeTempFile(path)
+			// WhatsApp-compat: HEVC/mjpeg reels ko h264+faststart me convert
+			waPath, werr := whatsappifyVideo(ctx, path)
+			if werr == nil && waPath != path {
+				defer removeTempFile(path)
+				path = waPath
+			} else {
+				defer removeTempFile(path)
+			}
 
 			title := vid.Caption
 			if title == "" {
@@ -1223,7 +1230,14 @@ func igSendPermalink(ctx context.Context, s SessionBridge, info types.MessageInf
 	if err != nil {
 		return false
 	}
-	defer removeTempFile(path)
+	// WhatsApp-compat: HEVC/mjpeg/thumbnail reels ko h264+faststart me convert
+	waPath, werr := whatsappifyVideo(ctx, path)
+	if werr == nil && waPath != path {
+		defer removeTempFile(path)
+		path = waPath
+	} else {
+		defer removeTempFile(path)
+	}
 
 	title := igCleanCaption(r.Title)
 	if title == "" || strings.HasPrefix(title, "Instagram Reel") {
@@ -1376,7 +1390,13 @@ func searchPickFBDirect(s SessionBridge, info types.MessageInfo, selected search
 			s.DeleteMessage(info, waitID)
 			return
 		}
-		defer removeTempFile(path)
+		// WhatsApp-compat: HEVC/mjpeg ko h264+faststart me convert
+		if waPath, werr := whatsappifyVideo(ctx, path); werr == nil && waPath != path {
+			defer removeTempFile(path)
+			path = waPath
+		} else {
+			defer removeTempFile(path)
+		}
 
 		title := fbPrettyTitle(resp.Filename, "Facebook Video")
 		secs, w, h := probeVideoMeta(path)
