@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"regexp"
@@ -164,10 +165,11 @@ func SearchTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 			searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
 		}
 	default:
-		// TT — profile media is API-blocked from the server (tikwm CF wall on
-		// user/posts, mobile page carries no video IDs) → send the result
-		// card with the direct link + hint.
-		searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
+		// TT — try a direct download of the picked profile’s latest
+		// video; on failure send a short error card (no copy-link guidance).
+		if !searchPickTTDirect(s, info, selected) {
+			s.Reply(info, "❌ *TIKTOK DOWNLOAD ERROR*\nTRY AGAIN LATER 🤗")
+		}
 	}
 	return true
 }
@@ -581,6 +583,125 @@ func searchPickTG(s SessionBridge, info types.MessageInfo, selected searchResult
 		}
 		s.DeleteMessage(info, waitID)
 	})
+}
+
+// searchPickTTDirect tries to download the picked TikTok profile’s latest
+// video. Returns false when nothing downloadable was found (caller then
+// sends a short error card — NO link-copy guidance).
+func searchPickTTDirect(s SessionBridge, info types.MessageInfo, selected searchResult) bool {
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		waitID := s.ReplyWithID(info, "⏳ *DOWNLOADING TIKTOK VIDEO....*")
+
+		fail := func() {
+			s.DeleteMessage(info, waitID)
+			s.Reply(info, "❌ *TIKTOK DOWNLOAD ERROR*\nTRY AGAIN LATER 🤗")
+		}
+
+		link := strings.TrimSpace(selected.Link)
+		if !strings.Contains(link, "tiktok.com/@") {
+			fail()
+			return
+		}
+
+		videoURL, err := ttProfileLatestVideo(ctx, link)
+		if err != nil || videoURL == "" {
+			fail()
+			return
+		}
+
+		res, err := ttSelfFetch(ctx, videoURL)
+		if err != nil {
+			res, err = tikwmFetchResult(ctx, videoURL)
+		}
+		if err != nil {
+			fail()
+			return
+		}
+
+		videoDL := firstNonEmpty(res.HDPlay, res.Play, res.WMPlay)
+		if videoDL == "" {
+			fail()
+			return
+		}
+
+		s.EditMessage(info, waitID, "⬇️ *Downloading video...*")
+
+		client := res.SrcClient
+		if client == nil {
+			client = mediaHTTPClient()
+		}
+		path, err := ttStreamDownload(ctx, client, videoDL)
+		if err != nil {
+			fail()
+			return
+		}
+		defer removeTempFile(path)
+
+		secs, w, h := probeVideoMeta(path)
+
+		title := res.Title
+		if strings.TrimSpace(title) == "" {
+			title = "TikTok Video"
+		}
+		creator := res.AuthorName
+		if creator == "" {
+			creator = res.AuthorUnique
+		}
+		if creator == "" {
+			creator = selected.Handle
+		}
+		caption := "🏆 TIKTOK VIDEO NAME 🏆\n" +
+			"*" + title + "*\n\n" +
+			"🏆 *CREATOR :* " + creator + "\n" +
+			fmt.Sprintf("🏆 *TIME :* %ds\n", res.Duration) +
+			fmt.Sprintf("🏆 *LIKES :* %d\n", res.DiggCount) +
+			fmt.Sprintf("🏆 *COMMENTS :* %d\n", res.CommentCount) +
+			fmt.Sprintf("🏆 *VIEWS :* %d\n\n", res.PlayCount) +
+			"*TIKTOK VIDEO DOWNLOAD*"
+
+		if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
+			fail()
+			return
+		}
+		s.DeleteMessage(info, waitID)
+	})
+	return true
+}
+
+// ttProfileLatestVideo scrapes a TikTok profile page (mobile UA + cookies)
+// and returns the first /@user/video/<id> link found in the HTML.
+func ttProfileLatestVideo(ctx context.Context, profileURL string) (string, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return "", err
+	}
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+		Jar:     jar,
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, profileURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", ttMobileUA)
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("profile page returned status %d", resp.StatusCode)
+	}
+	page, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return "", err
+	}
+	m := regexp.MustCompile(`tiktok\.com/(@[A-Za-z0-9._]+)/video/([0-9]{15,})`).FindSubmatch(page)
+	if m == nil {
+		return "", fmt.Errorf("no video link found on profile page")
+	}
+	return "https://www.tiktok.com/" + string(m[1]) + "/video/" + string(m[2]), nil
 }
 
 // searchPickLinkCard is the fallback pick card for TT / FB / IG / TWT:
