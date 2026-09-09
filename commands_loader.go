@@ -262,6 +262,7 @@ func (b *bridge) DownloadImage(info types.MessageInfo) ([]byte, bool) {
 
 // SetVideoSession stores search results for later number selection.
 func (b *bridge) SetAudioSession(jid string, results []goldcmds.VideoResult) {
+	goldcmds.ClearYTSList(jid) // a new play search replaces any .yts pick
 	var internalResults []VideoResult
 	for _, r := range results {
 		internalResults = append(internalResults, VideoResult{Title: r.Title, URL: r.URL, Thumbnail: r.Thumbnail, Duration: r.Duration})
@@ -277,6 +278,7 @@ func (b *bridge) ClearSearchSession(jid string) {
 
 func (b *bridge) SetVideoSession(jid string, results []goldcmds.VideoResult) {
 	goldcmds.ClearSearchSession(jid) // a new video search replaces any search pick
+	goldcmds.ClearYTSList(jid)       // ...and any .yts pick
 	var internalResults []VideoResult
 	for _, r := range results {
 		internalResults = append(internalResults, VideoResult{
@@ -293,6 +295,7 @@ func (b *bridge) SetVideoSession(jid string, results []goldcmds.VideoResult) {
 // picks route back through the video2 parallel engine, with HD when set.
 func (b *bridge) SetAudioSession2(jid string, results []goldcmds.VideoResult, play2 bool) {
 	goldcmds.ClearSearchSession(jid) // a new play search replaces any search pick
+	goldcmds.ClearYTSList(jid)       // ...and any .yts pick
 	internal := make([]VideoResult, 0, len(results))
 	for _, r := range results {
 		internal = append(internal, VideoResult{URL: r.URL, Thumbnail: r.Thumbnail, Title: r.Title, Duration: r.Duration})
@@ -301,6 +304,7 @@ func (b *bridge) SetAudioSession2(jid string, results []goldcmds.VideoResult, pl
 }
 
 func (b *bridge) SetVideoSession2(jid string, results []goldcmds.VideoResult, hd bool) {
+	goldcmds.ClearYTSList(jid) // a new video search replaces any .yts pick
 	var internalResults []VideoResult
 	for _, r := range results {
 		internalResults = append(internalResults, VideoResult{

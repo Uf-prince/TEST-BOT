@@ -353,8 +353,8 @@ func handleYTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 	if len(results) > ytMaxResults {
 		results = results[:ytMaxResults]
 	}
-	// wire the same number-pick flow as .video: bare "1".."5" after this
-	// card downloads the selected video instantly (video-session dispatch).
+	// store the .yts pick list: a bare "1".."5" sends the thumbnail and
+	// asks 1=AUDIO / 2=VIDEO (ytpick flow, both-engine fallback on send).
 	vids := make([]VideoResult, 0, len(results))
 	for _, v := range results {
 		thumb := ""
@@ -363,7 +363,7 @@ func handleYTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		}
 		vids = append(vids, VideoResult{Title: v.Title, URL: v.Link, Thumbnail: thumb, Duration: v.Length})
 	}
-	s.SetVideoSession2(info.Sender.String(), vids, false)
+	StoreYTSList(info.Sender.String(), vids)
 	s.Reply(info, ytSearchCard(query, results, prefix))
 }
 

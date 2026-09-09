@@ -71,6 +71,55 @@ func HasPendingYTSChoice(sender string) bool {
 	return true
 }
 
+// ── .yts list-pick session (search-card number → thumbnail + ask) ──
+
+// ytsListSession is the .yts search-card pick window for one sender.
+type ytsListSession struct {
+	Vids   []VideoResult
+	Expiry time.Time
+}
+
+var (
+	ytsListMu   sync.Mutex
+	ytsListSess = map[string]*ytsListSession{}
+)
+
+// StoreYTSList stores the .yts search results so a bare number pick routes
+// into the thumbnail + 1=AUDIO / 2=VIDEO flow (replaces the old raw
+// video-session dispatch that silently downloaded a video).
+func StoreYTSList(jid string, vids []VideoResult) {
+	clearSearchSession(jid)
+	clearYTSChoice(jid)
+	ytsListMu.Lock()
+	defer ytsListMu.Unlock()
+	ytsListSess[jid] = &ytsListSession{Vids: vids, Expiry: time.Now().Add(ytsChoiceTTL)}
+}
+
+// ClearYTSList kills a pending .yts list-pick window (bridge-callable).
+func ClearYTSList(jid string) { clearYTSList(jid) }
+
+// clearYTSList kills a pending .yts list-pick window.
+func clearYTSList(jid string) {
+	ytsListMu.Lock()
+	defer ytsListMu.Unlock()
+	delete(ytsListSess, jid)
+}
+
+// getYTSList returns the live .yts list session or nil.
+func getYTSList(jid string) *ytsListSession {
+	ytsListMu.Lock()
+	defer ytsListMu.Unlock()
+	sess, ok := ytsListSess[jid]
+	if !ok {
+		return nil
+	}
+	if time.Now().After(sess.Expiry) {
+		delete(ytsListSess, jid)
+		return nil
+	}
+	return sess
+}
+
 // ytsAskFooter is the ask block appended to the thumbnail caption.
 func ytsAskFooter() string {
 	return "\n\n*TYPE ❮ 1 ❯ FOR AUDIO*\n*TYPE ❮ 2 ❯ FOR VIDEO*"
@@ -116,17 +165,36 @@ func ytPickThumbnail(ctx context.Context, s SessionBridge, info types.MessageInf
 // pick router. A bare "1" / "2" (or ".1" / ".2") after a .yts pick sends the
 // audio or video directly — both-engine fallback, no guidance messages.
 func YTSTryHandleChoice(s SessionBridge, info types.MessageInfo, body, prefix string) bool {
-	sess := getPickableYTSChoice(info.Sender.String())
-	if sess == nil {
-		return false
-	}
-
 	trimmed := strings.TrimSpace(body)
 	if strings.HasPrefix(trimmed, prefix) {
 		trimmed = strings.TrimSpace(trimmed[len(prefix):])
 	}
-	var choice int
-	if _, err := fmt.Sscanf(trimmed, "%d", &choice); err != nil || (choice != 1 && choice != 2) {
+	var num int
+	_, numErr := fmt.Sscanf(trimmed, "%d", &num)
+	isNum := numErr == nil
+
+	// 1) .yts LIST PICK — a bare number on a .yts search card sends the
+	// thumbnail and asks 1=AUDIO / 2=VIDEO (no engine download yet).
+	if isNum && num >= 1 {
+		if list := getYTSList(info.Sender.String()); list != nil && num <= len(list.Vids) {
+			vid := list.Vids[num-1]
+			clearYTSList(info.Sender.String())
+			clearYTSChoice(info.Sender.String())
+			RunWithTimeout(s, info, func(ctx context.Context) {
+				ytPickThumbnail(ctx, s, info, vid)
+			})
+			return true
+		}
+	}
+
+	// 2) AUDIO / VIDEO CHOICE — a bare "1"/"2" after the thumbnail sends the
+	// audio (play turbo → play2 classic) or the video (video turbo →
+	// video2 classic) directly, thumbnail already shown.
+	sess := getPickableYTSChoice(info.Sender.String())
+	if sess == nil {
+		return false
+	}
+	if !isNum || (num != 1 && num != 2) {
 		// Not a 1/2 reply — the choice window stays alive (2-min expiry) and
 		// the message is NOT swallowed: commands still run.
 		return false
@@ -136,7 +204,7 @@ func YTSTryHandleChoice(s SessionBridge, info types.MessageInfo, body, prefix st
 	clearYTSChoice(info.Sender.String())
 	clearSearchSession(info.Sender.String())
 
-	switch choice {
+	switch num {
 	case 1:
 		ytsRunAudio(s, info, vid, prefix)
 	case 2:

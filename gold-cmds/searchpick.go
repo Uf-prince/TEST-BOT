@@ -75,6 +75,9 @@ var (
 
 // setSearchSession stores a fresh pick window.
 func setSearchSession(jid string, kind searchPickKind, query string, results []searchResult) {
+	// a new platform search replaces any pending .yts pick windows
+	clearYTSList(jid)
+	clearYTSChoice(jid)
 	searchSessMu.Lock()
 	defer searchSessMu.Unlock()
 	searchSessions[jid] = &searchSession{
