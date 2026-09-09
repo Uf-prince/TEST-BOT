@@ -887,8 +887,10 @@ func igProfileMedia(ctx context.Context, profileURL string) ([]igProfileLatest, 
 							IsVideo    bool   `json:"is_video"`
 							DisplayURL string `json:"display_url"`
 							VideoURL   string `json:"video_url"`
-							LikeCount  int64  `json:"edge_liked_by"`
-							Caption    struct {
+							LikeCount  struct {
+								Count int64 `json:"count"`
+							} `json:"edge_liked_by"`
+							Caption struct {
 								Edges []struct {
 									Node struct {
 										Text string `json:"text"`
@@ -914,7 +916,7 @@ func igProfileMedia(ctx context.Context, profileURL string) ([]igProfileLatest, 
 			Shortcode:  n.Shortcode,
 			IsVideo:    n.IsVideo,
 			Caption:    "",
-			LikeCount:  n.LikeCount,
+			LikeCount:  n.LikeCount.Count,
 			DisplayURL: n.DisplayURL,
 			VideoURL:   n.VideoURL,
 		}
