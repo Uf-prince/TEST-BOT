@@ -1289,7 +1289,7 @@ func compressEncodeVideoTier(ctx context.Context, inPath, outPath string, tier c
 		"-b:v", strconv.Itoa(tier.VideoBitrateKbps) + "k",
 		"-maxrate", strconv.Itoa(tier.VideoBitrateKbps*3/2) + "k",
 		"-bufsize", strconv.Itoa(tier.VideoBitrateKbps*2) + "k",
-		"-preset", "veryfast",
+		"-preset", "ultrafast",
 		"-movflags", "+faststart",
 		"-threads", "2",
 	}
