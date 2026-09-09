@@ -366,7 +366,13 @@ func fbProfileSearch(ctx context.Context, query string) ([]searchResult, error) 
 			continue
 		}
 		seen[base] = true
-		out = append(out, searchResult{Title: name, Link: base})
+		// v3: numeric ID (?id=NNNN) zanda rakho - profile.php timeline route
+		// (reels wahan hoti hain) is ID se chalta hai.
+		final := base
+		if id := fbNumericIDFromLink(link); id != "" {
+			final = base + "?id=" + id
+		}
+		out = append(out, searchResult{Title: name, Link: final})
 	}
 	return out, nil
 }

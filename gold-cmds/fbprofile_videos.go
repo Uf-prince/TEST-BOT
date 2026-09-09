@@ -1,21 +1,14 @@
 package goldcmds
 
 // ============================================================================
-// GOLD-MD — FB Profile → Latest Video Resolver (FIXED)
-// File: fbprofile_videos.go
+// GOLD-MD - FB Profile -> Latest Video Resolver (v3 - REEL + TIMELINE support)
 // ============================================================================
-// BUG (OLD): fbLatestVideoLink people-style URLs ko galat parse karta tha:
-//   facebook.com/people/NAME/pfbidXXX/  → profile = "people"
-//   → listing = facebook.com/people/videos  (GARBAGE URL)
-//   → jina se koi video permalink nahi → empty → guidance card fallback.
-//
-// FIX (NEW): Multi-route resolver with proper URL parsing:
-//   Route 1: vanity URL (facebook.com/zuck) — www + m.facebook dono try
-//   Route 2: people-style URL — poora path use hota hai (NAME + pfbid),
-//            www + m.facebook dono try
-//   Route 3: numeric id URL — direct /videos tab
-// Har route jina reader se fetch hota hai (direct hits login-walled hain).
-// Pehla successful video permalink jeet-ta hai.
+// v3: naye FB profiles REELS post karte hain (facebook.com/reel/ID) aur unka
+// /videos tab 404 deta hai. Is liye:
+//   - REEL permalink matcher  (/reel/ID + /watch/?v=ID)
+//   - profile.php?id=NNN TIMELINE route (reels timeline pe hoti hain)
+//   - vanity timeline route (reels wahan bhi post hoti hain)
+// Pehla successful (reel ya video) permalink jeet-ta hai.
 // ============================================================================
 
 import (
@@ -24,14 +17,38 @@ import (
 	"strings"
 )
 
-// fbVideoLinkRe (searchpick.go se shared) — video permalink matcher:
-//   facebook.com/<user>/videos/<slug>/<id>
-//   facebook.com/<user>/videos/<id>
+// fbVideoLinkReFixed - /videos/ permalink matcher:
+//
+//	facebook.com/<user>/videos/<slug>/<id>  ya  facebook.com/<user>/videos/<id>
 var fbVideoLinkReFixed = regexp.MustCompile(
-	`facebook\.com/([^\s)\"\']+)/videos/(?:([^\s)\"\']+)/)?([0-9]{6,})/?`)
+	`facebook\.com/([^\s)"\']+)/videos/(?:([^\s)"\']+)/)?([0-9]{6,})/?`)
 
-// fbProfileVideoListing builds the /videos listing URL candidates for a
-// profile link (people-style, vanity, numeric — sab handled).
+// fbReelLinkRe - REEL permalink matcher (naye profiles reels post karte hain):
+//
+//	facebook.com/reel/1234567890123
+var fbReelLinkRe = regexp.MustCompile(`facebook\.com/reel/([0-9]{6,})/?`)
+
+// fbWatchLinkRe - watch permalink matcher:
+//
+//	facebook.com/watch/?v=1234567890123
+var fbWatchLinkRe = regexp.MustCompile(`facebook\.com/watch/\?v=([0-9]{6,})/?`)
+
+// fbExtractPermalink scans markdown for a video/reel/watch permalink.
+// Pehle REEL dhoondta hai (naye profiles), phir /videos/, phir /watch/.
+func fbExtractPermalink(md string) string {
+	if m := fbReelLinkRe.FindStringSubmatch(md); m != nil {
+		return "https://www.facebook.com/reel/" + m[1]
+	}
+	if m := fbVideoLinkReFixed.FindStringSubmatch(md); m != nil {
+		return "https://www.facebook.com/" + m[1] + "/videos/" + m[3]
+	}
+	if m := fbWatchLinkRe.FindStringSubmatch(md); m != nil {
+		return "https://www.facebook.com/watch/?v=" + m[1]
+	}
+	return ""
+}
+
+// fbProfileVideoListing builds the URL candidates for a profile link.
 func fbProfileVideoListing(profileURL string) []string {
 	raw := strings.TrimSpace(profileURL)
 	raw = strings.TrimPrefix(strings.TrimPrefix(raw, "https://"), "http://")
@@ -47,8 +64,6 @@ func fbProfileVideoListing(profileURL string) []string {
 		raw = lowHost
 	}
 
-	// keep only the profile path (drop query strings / sub-paths)
-	// e.g. people/Zuckerberg-Ind/pfbidXXX → path segments
 	slash := strings.Index(raw, "/")
 	path := ""
 	if slash >= 0 {
@@ -60,55 +75,79 @@ func fbProfileVideoListing(profileURL string) []string {
 		return candidates
 	}
 
-	// People-style: /people/NAME/pfbidXXX — poora path zinda rakho (BUG FIX)
+	numID := fbNumericIDFromLink(profileURL)
+
+	// People-style: /people/NAME/pfbidXXX ya /people/NAME/NNNN
 	if strings.HasPrefix(path, "/people/") {
 		segs := strings.Split(strings.Trim(path, "/"), "/")
-		// ["people", "NAME", "pfbidXXX"] — ya ["people", "NAME"]
 		if len(segs) >= 2 && segs[1] != "" {
 			peoplePath := "/people/" + segs[1]
+			isPfbid := false
 			if len(segs) >= 3 && strings.HasPrefix(segs[2], "pfbid") {
 				peoplePath += "/" + segs[2]
+				isPfbid = true
+				candidates = append(candidates,
+					"https://www.facebook.com"+peoplePath+"/videos",
+					"https://m.facebook.com"+peoplePath+"/videos",
+				)
 			}
-			candidates = append(candidates,
-				"https://www.facebook.com"+peoplePath+"/videos",
-				"https://m.facebook.com"+peoplePath+"/videos",
-			)
+			// v3.1: numeric teesra segment bhi profile ID hai
+			// (facebook.com/people/New-Videos/61593685756994)
+			if len(segs) >= 3 && !isPfbid && allDigits(segs[2]) && len(segs[2]) >= 6 {
+				if numID == "" {
+					numID = segs[2]
+				}
+			}
 		}
-		// numeric id fallback agar pfbid nahi mila
-		if id := fbNumericIDFromLink(profileURL); id != "" {
+		// v3: numeric-ID TIMELINE route FIRST - reels timeline pe hoti hain
+		// aur /videos tab in naye profiles ke liye 404 deta hai!
+		if numID != "" {
 			candidates = append(candidates,
-				"https://www.facebook.com/"+id+"/videos",
-				"https://m.facebook.com/"+id+"/videos",
+				"https://www.facebook.com/profile.php?id="+numID,
+				"https://m.facebook.com/profile.php?id="+numID,
 			)
 		}
 		return candidates
 	}
 
-	// /profile.php?id=NNN style → numeric id route
+	// /profile.php?id=NNN -> numeric timeline + /videos
 	if strings.HasPrefix(path, "/profile.php") {
-		if id := fbNumericIDFromLink(profileURL); id != "" {
+		if numID != "" {
 			candidates = append(candidates,
-				"https://www.facebook.com/"+id+"/videos",
-				"https://m.facebook.com/"+id+"/videos",
+				"https://www.facebook.com/profile.php?id="+numID,
+				"https://www.facebook.com/"+numID+"/videos",
 			)
 		}
 		return candidates
 	}
 
-	// Vanity style: /username (ya /username/photos etc.) — sirf pehla segment
+	// Vanity style: /username - /videos tab + timeline (v3)
 	segs := strings.Split(strings.Trim(path, "/"), "/")
 	vanity := segs[0]
 	if vanity != "" {
 		candidates = append(candidates,
 			"https://www.facebook.com/"+vanity+"/videos",
 			"https://m.facebook.com/"+vanity+"/videos",
+			"https://www.facebook.com/"+vanity,
 		)
 	}
 	return candidates
 }
 
-// fbNumericIDFromLink extracts a numeric profile id from any FB link
-// (?id=NNNN query param).
+// allDigits reports whether s is a non-empty all-digit string.
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// fbNumericIDFromLink extracts a numeric profile id (?id=NNNN).
 func fbNumericIDFromLink(link string) string {
 	idx := strings.Index(link, "id=")
 	if idx < 0 {
@@ -122,27 +161,30 @@ func fbNumericIDFromLink(link string) string {
 			break
 		}
 	}
-	if end >= 6 { // numeric ids are long
+	if end >= 6 {
 		return rest[:end]
 	}
 	return ""
 }
 
-// fbLatestVideoLinkFixed — multi-route resolver (replaces the broken one).
-// Returns the latest video permalink + title slug (empty on total failure).
+// fbLatestVideoLinkFixed - multi-route resolver (v3).
+// /videos tab -> profile.php timeline -> vanity timeline - sab try.
+// REEL (/reel/ID) and WATCH (/watch/?v=ID) permalinks bhi match.
+// Returns video/reel permalink (empty on total failure).
 func fbLatestVideoLinkFixed(ctx context.Context, profileURL string) string {
 	for _, listing := range fbProfileVideoListing(profileURL) {
 		md, err := jinaFetch(ctx, listing)
 		if err != nil || md == "" {
 			continue
 		}
-		if m := fbVideoLinkReFixed.FindStringSubmatch(md); m != nil {
-			return "https://www.facebook.com/" + m[1] + "/videos/" + m[3]
+		if link := fbExtractPermalink(md); link != "" {
+			return link
 		}
 	}
 	return ""
 }
-// FBLatestVideoLinkLive — exported wrapper for the live sandbox test binary.
+
+// FBLatestVideoLinkLive - exported wrapper for the live sandbox test binary.
 func FBLatestVideoLinkLive(ctx context.Context, profileURL string) string {
 	return fbLatestVideoLinkFixed(ctx, profileURL)
 }

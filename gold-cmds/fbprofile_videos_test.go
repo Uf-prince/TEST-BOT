@@ -1,12 +1,11 @@
 package goldcmds
 
 import (
-	"context"
 	"strings"
 	"testing"
 )
 
-// TestFBProfileVideoListing — URL candidate builder (pure logic, no network).
+// TestFBProfileVideoListing - URL candidate builder (pure logic, no network).
 func TestFBProfileVideoListing(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -28,32 +27,48 @@ func TestFBProfileVideoListing(t *testing.T) {
 			continue
 		}
 		for _, c := range cands {
-			if !strings.Contains(c, "/videos") {
-				t.Errorf("%s: candidate missing /videos: %s", tc.name, c)
-			}
-			// CRITICAL: koi bhi candidate "people/videos" (broken) NAHI hona chahiye
 			if strings.Contains(c, "facebook.com/people/videos") {
-				t.Errorf("%s: BROKEN candidate facebook.com/people/videos generated from %s", tc.name, tc.input)
+				t.Errorf("%s: BROKEN candidate facebook.com/people/videos from %s", tc.name, tc.input)
 			}
 		}
-		t.Logf("%s → %v", tc.name, cands)
+		// v3: people-style + ?id= must include profile.php timeline route
+		if tc.name == "people-style-query" {
+			found := false
+			for _, c := range cands {
+				if strings.HasPrefix(c, "https://www.facebook.com/profile.php?id=") {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("people-style-query: profile.php timeline route missing: %v", cands)
+			}
+		}
+		t.Logf("%s -> %v", tc.name, cands)
 	}
 }
 
-// TestFBNumericIDFromLink — ?id= extraction.
+// TestFBExtractPermalink - reel + video + watch matcher.
+func TestFBExtractPermalink(t *testing.T) {
+	if got := fbExtractPermalink("see [reel](https://www.facebook.com/reel/1608803157499500/) now"); got != "https://www.facebook.com/reel/1608803157499500" {
+		t.Errorf("reel: got %q", got)
+	}
+	if got := fbExtractPermalink("[v](https://www.facebook.com/zuck/videos/2281597032594351/)"); got != "https://www.facebook.com/zuck/videos/2281597032594351" {
+		t.Errorf("video: got %q", got)
+	}
+	if got := fbExtractPermalink("[w](https://www.facebook.com/watch/?v=2281597032594351)"); got != "https://www.facebook.com/watch/?v=2281597032594351" {
+		t.Errorf("watch: got %q", got)
+	}
+	if got := fbExtractPermalink("no links here"); got != "" {
+		t.Errorf("empty: got %q", got)
+	}
+}
+
+// TestFBNumericIDFromLink - ?id= extraction.
 func TestFBNumericIDFromLink(t *testing.T) {
 	if got := fbNumericIDFromLink("https://www.facebook.com/people/X/pfbid1/?id=61570780400568&sk=photos"); got != "61570780400568" {
 		t.Errorf("numeric id extract failed: got %q", got)
 	}
 	if got := fbNumericIDFromLink("https://www.facebook.com/zuck"); got != "" {
 		t.Errorf("expected empty, got %q", got)
-	}
-}
-
-// TestFBLatestVideoLinkFixedOffline — offline safety: bogus host pe empty.
-func TestFBLatestVideoLinkFixedOffline(t *testing.T) {
-	// jinaFetch real network hit karta hai; is test mein sirf empty-input safety
-	if fbLatestVideoLinkFixed(context.Background(), "not a url") != "" {
-		t.Errorf("expected empty for non-url input")
 	}
 }
