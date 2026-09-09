@@ -547,7 +547,16 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		return
 	}
 
-	// 🔰 SEARCH PICK SESSION (search commands' number → download flow).
+	// 🔰 TG TYPE-MENU CHOICE (1=TEXT 2=PHOTO 3=VIDEO 4=AUDIO after a .tg
+	// channel pick). Runs BEFORE the search pick session — the tg TYPE
+	// window is created by the pick itself, so its numbers win over any
+	// stale search-list window. BUSY TRACKING: audio/video delivery bhi
+	// download pipeline chalati hai - in-flight mark karo.
+	if goldcmds.TGTypeTryHandle(brCP, info, body, prefix) {
+		return
+	}
+
+	// 🔰 SEARCH PICK SESSION (search commands' number 1..5 → download flow).
 	// Runs BEFORE audio/video sessions and command dispatch so a bare
 	// "1".."5" reply after a search card is consumed here.
 	// BUSY TRACKING: search pick (number reply) bhi download pipeline

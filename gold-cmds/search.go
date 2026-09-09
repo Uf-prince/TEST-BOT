@@ -479,15 +479,28 @@ func igAccountSearch(ctx context.Context, query string) ([]searchResult, error) 
 
 // ── TELEGRAM ENGINE (telegram-group.com via jina) ───────────────────────
 
+// tgEntryRe — REAL search results: telegram-group.com search pages list
+// every entry as a "## [Title](detail-page-url)" heading. Nav menu links
+// are plain [..](..) links — the heading anchor keeps them out.
+// (Fix: pehle plain-link regex tha -> "No Results" page pe nav links hi
+// results ban jate the -> downloader ko telegram-group.com link milta tha
+// -> "not a channel link" download error.)
 var (
-	tgEntryRe = regexp.MustCompile(`\[([^\]]+)\]\((https://telegram-group\.com/[^)\s]+)\)`)
+	tgEntryRe = regexp.MustCompile(`(?m)^## \[([^\]]+)\]\((https://telegram-group\.com/[^)\s]+)\)`)
 	tgLinkRe  = regexp.MustCompile(`https?://t\.me/(joinchat/[A-Za-z0-9_-]+|[A-Za-z0-9_]+)`)
 )
 
 func tgChannelSearch(ctx context.Context, query string) ([]searchResult, error) {
-	md, err := jinaFetch(ctx, "https://www.telegram-group.com/search/"+url.PathEscape(query))
+	tgDebug("search_start", map[string]any{"query": query})
+	// EN site route: results/labels English me hote hain + stable layout.
+	// (Hebrew default site pe layout same hai, EN preferred.)
+	md, err := jinaFetch(ctx, "https://telegram-group.com/en/search/"+url.PathEscape(query))
 	if err != nil {
+		tgDebugErr("search_page_failed", err, map[string]any{"query": query})
 		return nil, err
+	}
+	if n := len(tgEntryRe.FindAllStringSubmatch(md, -1)); n == 0 {
+		tgDebug("search_no_results", map[string]any{"query": query, "hint": "no ## heading entries on page"})
 	}
 	// collect channel/group entries from the search page
 	type tgEntry struct {
@@ -501,9 +514,10 @@ func tgChannelSearch(ctx context.Context, query string) ([]searchResult, error) 
 		if title == "" || seenPage[page] {
 			continue
 		}
-		if strings.Contains(page, "wp-content") || strings.Contains(page, "/category/") ||
-			strings.Contains(page, "/tag/") || strings.HasSuffix(page, "/search/") ||
-			strings.HasSuffix(page, "telegram-group.com/") || strings.Contains(page, "/how-to-") {
+		// detail pages only: /<lang>/<category>/<slug>/ pattern (3+ segments).
+		// Nav pages (publish, blog, telegram-apps, categories, search, policy,
+		// language roots, "#") blacklist.
+		if !tgIsDetailPage(page) {
 			continue
 		}
 		seenPage[page] = true
@@ -525,18 +539,38 @@ func tgChannelSearch(ctx context.Context, query string) ([]searchResult, error) 
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			link := e.page
+			link := ""
 			if d, derr := jinaFetch(ctx, e.page); derr == nil {
 				if m := tgLinkRe.FindString(d); m != "" {
-					link = m
+					link = strings.Replace(m, "http://t.me/", "https://t.me/", 1)
 				}
+			} else {
+				tgDebugErr("search_detail_failed", derr, map[string]any{"page": e.page})
 			}
 			mu.Lock()
-			out = append(out, searchResult{Title: e.title, Link: link})
+			if link == "" {
+				// t.me resolve nahi hua -> result SKIP (pehle telegram-group.com
+				// link as-is jata tha -> download "not a channel link" error).
+				tgDebug("search_skip_unresolved", map[string]any{"page": e.page, "title": e.title})
+			} else {
+				out = append(out, searchResult{Title: e.title, Link: link})
+			}
 			mu.Unlock()
 		}(e)
 	}
 	wg.Wait()
+	if len(out) == 0 {
+		// multi-word query pe EN search aksar "no results" deta hai
+		// (e.g. "dua and azkar") -> first word pe ek retry
+		words := strings.Fields(query)
+		if len(words) > 1 {
+			first := strings.ToLower(words[0])
+			if first != "and" && first != "or" && first != "the" {
+				tgDebug("search_retry_first_word", map[string]any{"orig": query, "retry": first})
+				return tgChannelSearch(ctx, first)
+			}
+		}
+	}
 	return out, nil
 }
 
@@ -1132,4 +1166,38 @@ func FBExtractPermalinkLive(link string) string {
 // FBWatchLive - exported wrapper for the live sandbox test binary.
 func FBWatchLive(ctx context.Context, query string) ([]searchResult, error) {
 	return fbWatchSearch(ctx, query)
+}
+
+
+// tgIsDetailPage — telegram-group.com URL ek real channel/group detail page
+// hai ya nav/category/lang page. Detail pattern: /<lang>/<category>/<slug>/
+// (kam se kam 3 path segments + trailing slash).
+func tgIsDetailPage(page string) bool {
+	u := strings.ToLower(strings.TrimSpace(page))
+	if !strings.Contains(u, "telegram-group.com/") {
+		return false
+	}
+	// strip scheme + host
+	u = strings.TrimPrefix(u, "https://")
+	u = strings.TrimPrefix(u, "http://")
+	u = strings.TrimPrefix(u, "www.")
+	u = strings.TrimPrefix(u, "telegram-group.com/")
+	u = strings.TrimSuffix(u, "/")
+	if u == "" || strings.Contains(u, "#") || strings.Contains(u, "?") {
+		return false
+	}
+	// static/resource + known nav pages
+	for _, bad := range []string{"wp-content", "wp-admin", "wp-login", "feed", "/category/", "/tag/", "how-to-", "policy", "publish", "blog", "telegram-apps", "search"} {
+		if strings.Contains(u, bad) {
+			return false
+		}
+	}
+	// 2-letter lang segment (en/de/no/sv/nl/ja) optional; detail = 3+ segments
+	segs := strings.Split(u, "/")
+	if len(segs) < 3 {
+		return false
+	}
+	// agar pehla segment 2-letter lang nahi hai to kam-se-kam 2 aur chahiye —
+	// Hebrew default site category/slug bhi detail hi hai
+	return true
 }

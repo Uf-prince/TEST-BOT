@@ -77,8 +77,10 @@ var (
 // setSearchSession stores a fresh pick window.
 func setSearchSession(jid string, kind searchPickKind, query string, results []searchResult) {
 	// a new platform search replaces any pending .yts pick windows
+	// and any pending tg TYPE-menu choice window
 	clearYTSList(jid)
 	clearYTSChoice(jid)
+	clearTGTypeChoice(jid)
 	searchSessMu.Lock()
 	defer searchSessMu.Unlock()
 	searchSessions[jid] = &searchSession{
@@ -531,15 +533,24 @@ func searchPickAPK(s SessionBridge, info types.MessageInfo, selected searchResul
 // lock ho chuka tha, is liye tgLatestPost/tgFetchPost-embed route dead tha).
 func searchPickTG(s SessionBridge, info types.MessageInfo, selected searchResult) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "*DOWNLOADING TELEGRAM MEDIA....*")
+		tgDebug("cmd_start", map[string]any{
+			"cmd": "tg-search-pick", "title": selected.Title,
+			"link": selected.Link, "handle": selected.Handle,
+			"chat": info.Chat.String(), "sender": info.Sender.String(),
+		})
+		waitID := s.ReplyWithID(info, "⏳ *CHECKING TELEGRAM CHANNEL....*")
 
-		media, err := tgLatestMedia(ctx, selected.Link)
-		if err != nil || media == nil || media.url == "" {
+		inv, err := tgChannelScan(ctx, selected.Link)
+		if err != nil || inv.empty() {
+			tgDebugErr("fetch_failed", err, map[string]any{
+				"link": selected.Link, "empty": inv.empty(),
+			})
 			s.DeleteMessage(info, waitID)
 			s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nNo public media post found for this channel. 🤔")
 			return
 		}
-		tgSendMedia(ctx, s, info, waitID, media, selected.Title)
+		setTGTypeChoice(info.Sender.String(), inv, selected.Title)
+		s.EditMessage(info, waitID, tgTypeMenuCard(inv, selected.Title))
 	})
 }
 
