@@ -55,7 +55,7 @@ export STORJ_BUCKET_10=umar10
 export PORT=11233
 export GOLDMD_DEBUG=0
 export GOLDMD_PANEL_ENABLED=true
-export GOLDMD_MAX_SESSIONS=3
+export GOLDMD_MAX_SESSIONS=10
 export GOLDMD_SERVER_ID=svr1
 
 # ── Watchdog loop ──
