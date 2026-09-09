@@ -82,11 +82,11 @@ type WSFastResponse struct {
 
 func init() {
 	// Main video command (visible in menu + count)
-	Register(Command{Name: "video", Category: "DOWNLOADER", Desc: "Download a YouTube video by name or URL", Run: handleVideo})
+	Register(Command{Name: "video2", Category: "DOWNLOADER", Desc: "Download a YouTube video by name or URL", Run: handleVideo})
 	// Aliases — fully functional but Hidden from menu + TOTAL COMMANDS count
-	Register(Command{Name: "v", Hidden: true, Run: handleVideo})
-	Register(Command{Name: "ytvideo", Hidden: true, Run: handleVideo})
-	Register(Command{Name: "ytmp4", Hidden: true, Run: handleVideo})
+	Register(Command{Name: "v", Hidden: true, Run: handleVideo2})
+	Register(Command{Name: "ytvideo", Hidden: true, Run: handleVideo2})
+	Register(Command{Name: "ytmp4", Hidden: true, Run: handleVideo2})
 }
 
 // handleVideo is the main entry point for the video command.
@@ -94,7 +94,7 @@ func init() {
 func handleVideo(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	// Hard 3-minute watchdog: on timeout the context is cancelled, every
 	// HTTP call and ffmpeg job aborts, and the user gets TRY AGAIN LATER.
-	RunWithTimeoutCmd(s, info, "VIDEO", "VIDEO2", func(ctx context.Context) {
+	RunWithTimeoutCmd(s, info, "VIDEO2", "VIDEO", func(ctx context.Context) {
 		handleVideoAsync(ctx, s, info, args, prefix)
 	})
 }
@@ -117,7 +117,7 @@ func handleVideoAsync(ctx context.Context, s SessionBridge, info types.MessageIn
 	input := strings.TrimSpace(strings.Join(args, " "))
 
 	if input == "" {
-		s.Reply(info, fmt.Sprintf("*🔰 VIDEO COMMAND FULL GUIDE 🔰* \n\n*DOWNLOAD VIDEOS FROM YOUTUBE*\n*TYPE SAME LIKE THAT*\n*%sVIDEO ❮ VIDEO NAME ❯*\n\n*EXAMPLE LIKE THIS*\n*%sVIDEO SHAPE OF YOU*\n\n*TYPE COMMAND + VIDEO NAME TO DOWNLOAD VIDEO FROM YOUTUBE*", prefix, prefix))
+		s.Reply(info, fmt.Sprintf("*🔰 VIDEO2 COMMAND FULL GUIDE 🔰* \n\n*DOWNLOAD VIDEOS FROM YOUTUBE*\n*TYPE SAME LIKE THAT*\n*%sVIDEO2 ❮ VIDEO NAME ❯*\n\n*EXAMPLE LIKE THIS*\n*%sVIDEO2 SHAPE OF YOU*\n\n*TYPE COMMAND + VIDEO NAME TO DOWNLOAD VIDEO FROM YOUTUBE*", prefix, prefix))
 		return
 	}
 
@@ -290,11 +290,11 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 
 func init() {
 	// Main audio commands (visible in menu + count)
-	Register(Command{Name: "play", Category: "DOWNLOADER", Desc: "Play / download a song by name from YouTube", Run: handlePlay})
-	Register(Command{Name: "song", Hidden: true, Run: handlePlay}) // alias of play
+	Register(Command{Name: "play2", Category: "DOWNLOADER", Desc: "Play / download a song by name from YouTube", Run: handlePlay})
+	Register(Command{Name: "song", Hidden: true, Run: handlePlay2}) // alias of play
 	// Aliases — fully functional but Hidden from menu + TOTAL COMMANDS count
-	Register(Command{Name: "ytaudio", Hidden: true, Run: handlePlay})
-	Register(Command{Name: "mp3", Hidden: true, Run: handlePlay})
+	Register(Command{Name: "ytaudio", Hidden: true, Run: handlePlay2})
+	Register(Command{Name: "mp3", Hidden: true, Run: handlePlay2})
 }
 
 // handlePlay is the main entry point for the audio command.
@@ -302,7 +302,7 @@ func init() {
 func handlePlay(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	// Hard 3-minute watchdog: on timeout the context is cancelled, every
 	// HTTP call and ffmpeg job aborts, and the user gets TRY AGAIN LATER.
-	RunWithTimeoutCmd(s, info, "PLAY", "PLAY2", func(ctx context.Context) {
+	RunWithTimeoutCmd(s, info, "PLAY2", "PLAY", func(ctx context.Context) {
 		handlePlayAsync(ctx, s, info, args, prefix)
 	})
 }
@@ -310,7 +310,7 @@ func handlePlay(s SessionBridge, info types.MessageInfo, args []string, prefix s
 func handlePlayAsync(ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	input := strings.TrimSpace(strings.Join(args, " "))
 	if input == "" {
-		s.Reply(info, fmt.Sprintf("*🔰 AUDIO COMMAND FULL GUIDE 🔰* \n\n*DOWNLOAD AUDIOS FROM YOUTUBE*\n*TYPE SAME LIKE THAT*\n*%sAUDIO ❮ AUDIO NAME ❯*\n\n*EXAMPLE LIKE THIS*\n*AUDIO SHAPE OF YOU*\n\n*TYPE COMMAND + AUDIO NAME TO DOWNLOAD AUDIO FROM YOUTUBE*", prefix))
+		s.Reply(info, fmt.Sprintf("*🔰 PLAY2 COMMAND FULL GUIDE 🔰* \n\n*DOWNLOAD AUDIOS FROM YOUTUBE*\n*TYPE SAME LIKE THAT*\n*%sPLAY2 ❮ AUDIO NAME ❯*\n\n*EXAMPLE LIKE THIS*\n*PLAY2 SHAPE OF YOU*\n\n*TYPE COMMAND + AUDIO NAME TO DOWNLOAD AUDIO FROM YOUTUBE*", prefix))
 		return
 	}
 	if strings.Contains(input, "youtube.com/") || strings.Contains(input, "youtu.be/") {

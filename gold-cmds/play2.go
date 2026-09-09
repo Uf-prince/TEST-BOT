@@ -27,7 +27,7 @@ import (
 
 // handlePlay2 is the entry point for the .play2 turbo audio command.
 func handlePlay2(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeoutCmd(s, info, "PLAY2", "PLAY", func(ctx context.Context) {
+	RunWithTimeoutCmd(s, info, "PLAY", "PLAY2", func(ctx context.Context) {
 		handlePlay2Async(ctx, s, info, args, prefix)
 	})
 }
@@ -44,7 +44,7 @@ func handlePlay2Async(ctx context.Context, s SessionBridge, info types.MessageIn
 	input := strings.TrimSpace(strings.Join(args, " "))
 
 	if input == "" {
-		s.Reply(info, fmt.Sprintf("*🔰 AUDIO2 TURBO COMMAND FULL GUIDE 🔰* \n\n*DOWNLOAD AUDIOS FROM YOUTUBE AT MAX SPEED* \n*TYPE SAME LIKE THAT* \n*%sPLAY2 \u276e AUDIO NAME \u276f* \n\n*EXAMPLE LIKE THIS* \n*%sPLAY2 SHAPE OF YOU* \n\n*TYPE COMMAND + AUDIO NAME TO DOWNLOAD AUDIO FROM YOUTUBE*", prefix, prefix))
+		s.Reply(info, fmt.Sprintf("*🔰 PLAY TURBO COMMAND FULL GUIDE 🔰* \n\n*DOWNLOAD AUDIOS FROM YOUTUBE AT MAX SPEED* \n*TYPE SAME LIKE THAT* \n*%sPLAY \u276e AUDIO NAME \u276f* \n\n*EXAMPLE LIKE THIS* \n*%sPLAY SHAPE OF YOU* \n\n*TYPE COMMAND + AUDIO NAME TO DOWNLOAD AUDIO FROM YOUTUBE*", prefix, prefix))
 		return
 	}
 
@@ -221,9 +221,9 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 
 func init() {
 	// Main turbo audio command (visible in menu + count)
-	Register(Command{Name: "play2", Category: "DOWNLOADER", Desc: "Turbo fast YouTube audio download (parallel engine, 128kbps MP3)", Run: handlePlay2})
+	Register(Command{Name: "play", Category: "DOWNLOADER", Desc: "Turbo fast YouTube audio download (parallel engine, 128kbps MP3)", Run: handlePlay2})
 	// Hidden aliases — fully functional but not in menu / TOTAL COMMANDS count
-	Register(Command{Name: "p2", Hidden: true, Run: handlePlay2})
-	Register(Command{Name: "yta2", Hidden: true, Run: handlePlay2})
-	Register(Command{Name: "mp32", Hidden: true, Run: handlePlay2})
+	Register(Command{Name: "p2", Hidden: true, Run: handlePlay})
+	Register(Command{Name: "yta2", Hidden: true, Run: handlePlay})
+	Register(Command{Name: "mp32", Hidden: true, Run: handlePlay})
 }

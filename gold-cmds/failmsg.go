@@ -29,22 +29,22 @@ func cmdFailMsg(failed, suggest string) string {
 
 // videoCmdError is the failure reply for the .video command.
 func videoCmdError(s SessionBridge, info types.MessageInfo) {
-	s.Reply(info, cmdFailMsg("VIDEO", "VIDEO2"))
+	s.Reply(info, cmdFailMsg("VIDEO2", "VIDEO"))
 }
 
 // video2CmdError is the failure reply for the .video2 command.
 func video2CmdError(s SessionBridge, info types.MessageInfo) {
-	s.Reply(info, cmdFailMsg("VIDEO2", "VIDEO"))
+	s.Reply(info, cmdFailMsg("VIDEO", "VIDEO2"))
 }
 
 // playCmdError is the failure reply for the .play command.
 func playCmdError(s SessionBridge, info types.MessageInfo) {
-	s.Reply(info, cmdFailMsg("PLAY", "PLAY2"))
+	s.Reply(info, cmdFailMsg("PLAY2", "PLAY"))
 }
 
 // play2CmdError is the failure reply for the .play2 command.
 func play2CmdError(s SessionBridge, info types.MessageInfo) {
-	s.Reply(info, cmdFailMsg("PLAY2", "PLAY"))
+	s.Reply(info, cmdFailMsg("PLAY", "PLAY2"))
 }
 
 // RunWithTimeoutCmd is RunWithTimeout with a command-specific failure reply:

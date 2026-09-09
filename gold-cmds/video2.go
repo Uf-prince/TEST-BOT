@@ -106,16 +106,16 @@ func yt2Clients() []yt2Client {
 
 func init() {
 	// Main turbo command (visible in menu + count)
-	Register(Command{Name: "video2", Category: "DOWNLOADER", Desc: "Turbo fast YouTube video download (parallel engine)", Run: handleVideo2})
+	Register(Command{Name: "video", Category: "DOWNLOADER", Desc: "Turbo fast YouTube video download (parallel engine)", Run: handleVideo2})
 	// Hidden aliases — fully functional but not in menu / TOTAL COMMANDS count
-	Register(Command{Name: "v2", Hidden: true, Run: handleVideo2})
-	Register(Command{Name: "ytv2", Hidden: true, Run: handleVideo2})
+	Register(Command{Name: "v2", Hidden: true, Run: handleVideo})
+	Register(Command{Name: "ytv2", Hidden: true, Run: handleVideo})
 }
 
 // handleVideo2 is the entry point for the .video2 turbo command.
 // Supports: URL / name search / number pick from session / "hd" quality flag.
 func handleVideo2(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeoutCmd(s, info, "VIDEO2", "VIDEO", func(ctx context.Context) {
+	RunWithTimeoutCmd(s, info, "VIDEO", "VIDEO2", func(ctx context.Context) {
 		handleVideo2Async(ctx, s, info, args, prefix)
 	})
 }
@@ -133,7 +133,7 @@ func handleVideo2Async(ctx context.Context, s SessionBridge, info types.MessageI
 	input := strings.TrimSpace(strings.Join(args, " "))
 
 	if input == "" {
-		s.Reply(info, fmt.Sprintf("*🔰 VIDEO2 TURBO COMMAND FULL GUIDE 🔰* \n\n*DOWNLOAD VIDEOS FROM YOUTUBE AT MAX SPEED* \n*TYPE SAME LIKE THAT* \n*%sVIDEO2 ❮ VIDEO NAME ❯* \n\n*EXAMPLE LIKE THIS* \n*%sVIDEO2 SHAPE OF YOU* \n\n*FOR HD QUALITY TYPE* \n*%sVIDEO2 HD SHAPE OF YOU* \n\n*TYPE COMMAND + VIDEO NAME TO DOWNLOAD VIDEO FROM YOUTUBE*", prefix, prefix, prefix))
+		s.Reply(info, fmt.Sprintf("*🔰 VIDEO TURBO COMMAND FULL GUIDE 🔰* \n\n*DOWNLOAD VIDEOS FROM YOUTUBE AT MAX SPEED* \n*TYPE SAME LIKE THAT* \n*%sVIDEO ❮ VIDEO NAME ❯* \n\n*EXAMPLE LIKE THIS* \n*%sVIDEO SHAPE OF YOU* \n\n*FOR HD QUALITY TYPE* \n*%sVIDEO HD SHAPE OF YOU* \n\n*TYPE COMMAND + VIDEO NAME TO DOWNLOAD VIDEO FROM YOUTUBE*", prefix, prefix, prefix))
 		return
 	}
 
@@ -158,7 +158,7 @@ func handleVideo2Async(ctx context.Context, s SessionBridge, info types.MessageI
 	query := strings.TrimSpace(strings.Join(nameParts, " "))
 
 	if query == "" {
-		s.Reply(info, fmt.Sprintf("*🔰 VIDEO2 TURBO COMMAND FULL GUIDE 🔰* \n\n*DOWNLOAD VIDEOS FROM YOUTUBE AT MAX SPEED* \n*TYPE SAME LIKE THAT* \n*%sVIDEO2 ❮ VIDEO NAME ❯* \n\n*EXAMPLE LIKE THIS* \n*%sVIDEO2 HD SHAPE OF YOU*", prefix, prefix))
+		s.Reply(info, fmt.Sprintf("*🔰 VIDEO TURBO COMMAND FULL GUIDE 🔰* \n\n*DOWNLOAD VIDEOS FROM YOUTUBE AT MAX SPEED* \n*TYPE SAME LIKE THAT* \n*%sVIDEO ❮ VIDEO NAME ❯* \n\n*EXAMPLE LIKE THIS* \n*%sVIDEO HD SHAPE OF YOU*", prefix, prefix))
 		return
 	}
 
