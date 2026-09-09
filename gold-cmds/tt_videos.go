@@ -47,7 +47,6 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -192,20 +191,15 @@ func ttVideoSearchPage(ctx context.Context, u string) (results []searchResult, c
 	return results, parsed.Data.Cursor, parsed.Data.HasMore, nil
 }
 
-// ttFmtDuration renders seconds as "45s" / "4m" / "3m45s" (card ki
-// DURATION line is ko ToUpper kar ke "4M05S" render karti hai).
+// ttFmtDuration renders seconds in digital-clock style for the card's
+// DURATION line (owner round 3: "5M06S ikatha q likh dya — 00M : 00S
+// ese likho take parhne me asani ho"). 45s -> "00M : 45S",
+// 306s -> "05M : 06S".
 func ttFmtDuration(sec int64) string {
 	if sec <= 0 {
 		return ""
 	}
-	if sec < 60 {
-		return strconv.FormatInt(sec, 10) + "s"
-	}
-	m, s := sec/60, sec%60
-	if s == 0 {
-		return strconv.FormatInt(m, 10) + "m"
-	}
-	return fmt.Sprintf("%dm%02ds", m, s)
+	return fmt.Sprintf("%02dM : %02dS", sec/60, sec%60)
 }
 
 // ttVideoSearchResp is the tikwm feed/search/ response shape.

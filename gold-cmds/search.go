@@ -225,6 +225,10 @@ func searchCardEntry(i int, r searchResult, header, handleLabel, statsLabel stri
 	if statsLabel != "" && r.Stats != "" {
 		b.WriteString("*" + statsLabel + " :❱ " + r.Stats + "*\n")
 	}
+	// DURATION line (owner round 2+3) - video searches only
+	if r.DurationSec > 0 {
+		b.WriteString("*DURATION :❱ " + ttFmtDuration(r.DurationSec) + "*\n")
+	}
 	if r.Snippet != "" {
 		b.WriteString("*" + r.Snippet + "*\n")
 	}
