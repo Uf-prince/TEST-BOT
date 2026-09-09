@@ -352,7 +352,37 @@ func ttUserSearch(ctx context.Context, query string) ([]searchResult, error) {
 
 var fbProfileRe = regexp.MustCompile(`\[([^\]]+)\]\((https://www\.facebook\.com/people/[^)\s]+)\s+"[^"]*"\)`)
 
+// fbProfileSearch - FB public directory search with AUTO-SHORTEN retry.
+// FB directory lambi queries (5+ words) pe khali page deti hai
+// ("We couldn't find anything for aja ve mahiya song lyrics") jabke
+// chhoti versions pe results milte hain. Is liye: full query first;
+// 0 results par last word drop kar ke retry (max 3 attempts).
 func fbProfileSearch(ctx context.Context, query string) ([]searchResult, error) {
+	words := strings.Fields(strings.TrimSpace(query))
+	if len(words) == 0 {
+		return nil, fmt.Errorf("empty query")
+	}
+	attempts := 0
+	var lastErr error
+	for n := len(words); n >= 1 && attempts < 3; n-- {
+		attempts++
+		results, err := fbProfileSearchOnce(ctx, strings.Join(words[:n], " "))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if len(results) > 0 {
+			return results, nil
+		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, nil
+}
+
+// fbProfileSearchOnce - ek query ka FB public directory search.
+func fbProfileSearchOnce(ctx context.Context, query string) ([]searchResult, error) {
 	md, err := jinaFetch(ctx, "https://www.facebook.com/public/"+url.PathEscape(query))
 	if err != nil {
 		return nil, err
@@ -866,4 +896,9 @@ func init() {
 	Register(Command{Name: "app", Hidden: true, Run: handleAPKSearch})
 	Register(Command{Name: "apps", Hidden: true, Run: handleAPKSearch})
 	Register(Command{Name: "application", Hidden: true, Run: handleAPKSearch})
+}
+
+// FBProfileSearchLive - exported wrapper for the live sandbox test binary.
+func FBProfileSearchLive(ctx context.Context, query string) ([]searchResult, error) {
+	return fbProfileSearch(ctx, query)
 }
