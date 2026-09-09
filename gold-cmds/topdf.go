@@ -26,6 +26,7 @@ package goldcmds
 // ============================================================================
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -50,12 +51,18 @@ const topdfHelpText = "*╭─🔰「 TOPDF 」──⊷*\n" +
 // ──────────────────────────────────────────────────────────────────────────
 
 func handleToPDF(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleToPDFAsync(s, info, args, prefix)
+	// Hard 3-minute watchdog (0% speed impact — pure goroutine + select).
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		handleToPDFAsync(ctx, s, info, args, prefix)
+	})
 }
 
-func handleToPDFAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+func handleToPDFAsync(ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	// 1 ── Download the media (image/video/audio/document/sticker/quoted)
-	data, mime, ok := s.DownloadQuotedMedia(info)
+	data, mime, ok, tooBig := downloadMediaLimited(s, info)
+	if tooBig {
+		return // already replied: *❌ FILE TOO BIG — MAX 700MB*
+	}
 	if !ok || len(data) == 0 {
 		s.Reply(info, topdfHelpText)
 		return
@@ -65,10 +72,12 @@ func handleToPDFAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	waitID := s.ReplyWithID(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 CONVERTING TO PDF...\n*┃* 🔰 PLEASE WAIT...\n*╰───────────────⊷*")
 
 	// 3 ── Convert to PDF
-	pdfPath, pdfName, err := convertToPDF(data, mime)
+	pdfPath, pdfName, err := convertToPDF(ctx, data, mime)
 	if err != nil {
 		_ = s.DeleteMessage(info, waitID)
-		s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ❌ TOPDF FAILED\n*┃* 🔰 "+strings.ToUpper(err.Error())+"\n*╰───────────────⊷*")
+		if !ctxTimedOut(ctx) {
+			s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ❌ TOPDF FAILED\n*┃* 🔰 "+strings.ToUpper(err.Error())+"\n*╰───────────────⊷*")
+		}
 		return
 	}
 	defer removeTempFile(pdfPath)
@@ -77,14 +86,18 @@ func handleToPDFAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	pdfBytes, err := os.ReadFile(pdfPath)
 	if err != nil {
 		_ = s.DeleteMessage(info, waitID)
-		s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ❌ FAILED TO READ PDF OUTPUT\n*╰───────────────⊷*")
+		if !ctxTimedOut(ctx) {
+			s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ❌ FAILED TO READ PDF OUTPUT\n*╰───────────────⊷*")
+		}
 		return
 	}
 
 	if err := s.SendDocument(info, pdfBytes, pdfName, "application/pdf",
 		"*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ✅ TOPDF CONVERTED SUCCESSFULLY\n*┃* 🔰 FILE: "+strings.ToUpper(pdfName)+"\n*╰───────────────⊷*"); err != nil {
 		_ = s.DeleteMessage(info, waitID)
-		s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ❌ FAILED TO SEND PDF\n*╰───────────────⊷*")
+		if !ctxTimedOut(ctx) {
+			s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ❌ FAILED TO SEND PDF\n*╰───────────────⊷*")
+		}
 		return
 	}
 
@@ -96,7 +109,7 @@ func handleToPDFAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 //  convertToPDF — dispatches by mimetype, returns pdf path + filename
 // ──────────────────────────────────────────────────────────────────────────
 
-func convertToPDF(data []byte, mime string) (string, string, error) {
+func convertToPDF(ctx context.Context, data []byte, mime string) (string, string, error) {
 	m := strings.ToLower(mime)
 
 	// Already a PDF — just write and return
@@ -106,17 +119,17 @@ func convertToPDF(data []byte, mime string) (string, string, error) {
 
 	// Image → Pillow PDF
 	if isImageMime(m) {
-		return imageToPDF(data, m)
+		return imageToPDF(ctx, data, m)
 	}
 
 	// Sticker (webp) → treat as image
 	if strings.Contains(m, "webp") || strings.Contains(m, "sticker") {
-		return imageToPDF(data, m)
+		return imageToPDF(ctx, data, m)
 	}
 
 	// Video → ffmpeg frames → Pillow PDF
 	if isVideoMime(m) {
-		return videoToPDF(data, m)
+		return videoToPDF(ctx, data, m)
 	}
 
 	// Audio → can't convert to PDF meaningfully
@@ -125,7 +138,7 @@ func convertToPDF(data []byte, mime string) (string, string, error) {
 	}
 
 	// Document (office/text/html) → libreoffice
-	return docToPDF(data, m)
+	return docToPDF(ctx, data, m)
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -227,7 +240,7 @@ imgs[0].save(out, "PDF", save_all=True, append_images=imgs[1:], resolution=150.0
 //  Image → PDF  (via Python + Pillow)
 // ──────────────────────────────────────────────────────────────────────────
 
-func imageToPDF(data []byte, mime string) (string, string, error) {
+func imageToPDF(ctx context.Context, data []byte, mime string) (string, string, error) {
 	ext := extForMimePDF(mime)
 	inPath, err := writeTempMedia(data, ext)
 	if err != nil {
@@ -236,7 +249,7 @@ func imageToPDF(data []byte, mime string) (string, string, error) {
 	defer removeTempFile(inPath)
 
 	outPath := inPath + ".topdf.pdf"
-	cmd := exec.Command("python3", "-c", imageToPDFScript, inPath, outPath)
+	cmd := exec.CommandContext(ctx, "python3", "-c", imageToPDFScript, inPath, outPath)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -250,7 +263,7 @@ func imageToPDF(data []byte, mime string) (string, string, error) {
 //  Video → PDF  (ffmpeg extract frames → Pillow multi-page PDF)
 // ──────────────────────────────────────────────────────────────────────────
 
-func videoToPDF(data []byte, mime string) (string, string, error) {
+func videoToPDF(ctx context.Context, data []byte, mime string) (string, string, error) {
 	ext := extForMimePDF(mime)
 	inPath, err := writeTempMedia(data, ext)
 	if err != nil {
@@ -267,7 +280,7 @@ func videoToPDF(data []byte, mime string) (string, string, error) {
 
 	// Extract up to 10 key frames at ~1fps (capped to avoid huge PDFs)
 	framePattern := filepath.Join(framesDir, "frame_%03d.png")
-	ffcmd := exec.Command("ffmpeg", "-y", "-i", inPath,
+	ffcmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", inPath,
 		"-vf", "fps=1,scale=1280:-1",
 		"-frames:v", "10",
 		"-q:v", "3",
@@ -290,7 +303,7 @@ func videoToPDF(data []byte, mime string) (string, string, error) {
 	args = append(args, frames...)
 	args = append(args, outPath)
 
-	cmd := exec.Command("python3", args...)
+	cmd := exec.CommandContext(ctx, "python3", args...)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -304,7 +317,7 @@ func videoToPDF(data []byte, mime string) (string, string, error) {
 //  Document → PDF  (libreoffice headless)
 // ──────────────────────────────────────────────────────────────────────────
 
-func docToPDF(data []byte, mime string) (string, string, error) {
+func docToPDF(ctx context.Context, data []byte, mime string) (string, string, error) {
 	ext := extForMimePDF(mime)
 	inPath, err := writeTempMedia(data, ext)
 	if err != nil {
@@ -314,7 +327,7 @@ func docToPDF(data []byte, mime string) (string, string, error) {
 
 	// libreoffice headless converts to PDF in the same dir
 	outDir := filepath.Dir(inPath)
-	loCmd := exec.Command("libreoffice", "--headless", "--convert-to", "pdf",
+	loCmd := exec.CommandContext(ctx, "libreoffice", "--headless", "--convert-to", "pdf",
 		"--outdir", outDir, inPath)
 	var stderr strings.Builder
 	loCmd.Stderr = &stderr

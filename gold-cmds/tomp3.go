@@ -23,6 +23,7 @@ package goldcmds
 // ============================================================================
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,9 +33,9 @@ import (
 )
 
 // ffmpegToMP3 extracts/encodes audio from any media file to MP3.
-func ffmpegToMP3(inputPath string) (string, error) {
+func ffmpegToMP3(ctx context.Context, inputPath string) (string, error) {
 	outputPath := inputPath + ".out.mp3"
-	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath,
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", inputPath,
 		"-vn", "-codec:a", "libmp3lame", "-b:a", "128k", "-ar", "44100", "-ac", "2",
 		outputPath)
 	var stderr strings.Builder
@@ -47,17 +48,25 @@ func ffmpegToMP3(inputPath string) (string, error) {
 }
 
 func handleToMP3(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleToMP3Async(s, info, args, prefix)
+	// Hard 3-minute watchdog (0% speed impact — pure goroutine + select).
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		handleToMP3Async(ctx, s, info, args, prefix)
+	})
 }
 
-func handleToMP3Async(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	data, mime, ok := s.DownloadQuotedMedia(info)
+func handleToMP3Async(ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+	data, mime, ok, tooBig := downloadMediaLimited(s, info)
+	if tooBig {
+		return // already replied: *❌ FILE TOO BIG — MAX 700MB*
+	}
 	if !ok || len(data) == 0 {
 		s.Reply(info, "*FIRST MENTION THE VIDEO FIRST ⚠️*\n*AFTER MENTION TYPE*\n\n*❰ TOMO3 ❱*\n*\n*TO CONVERT VIDEO TO MP3 AUDIO*")
 		return
 	}
 	if !isFfmpegAvailable() {
-		s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+		}
 		return
 	}
 
@@ -67,21 +76,27 @@ func handleToMP3Async(s SessionBridge, info types.MessageInfo, args []string, pr
 	ext := extForMime(mime)
 	inPath, err := writeTempMedia(data, ext)
 	if err != nil {
-		s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+		}
 		return
 	}
 	defer removeTempFile(inPath)
 
-	outPath, err := ffmpegToMP3(inPath)
+	outPath, err := ffmpegToMP3(ctx, inPath)
 	if err != nil {
-		s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+		}
 		return
 	}
 	defer removeTempFile(outPath)
 
 	seconds := probeAudioDuration(outPath)
 	if err := s.SendAudioFile(info, outPath, "", seconds); err != nil {
-		s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+		}
 	}
 }
 

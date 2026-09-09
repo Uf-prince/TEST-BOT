@@ -29,6 +29,7 @@ package goldcmds
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -61,10 +62,10 @@ const toimgHelpText = "*🔰 STICKER TO IMAGE/VIDEO 🔰*\n\n" +
 
 // ffmpegImageToSticker converts an image file (jpg/png/webp/gif) to a
 // 512x512 static WebP sticker. Returns the path to the .webp output.
-func ffmpegImageToSticker(inputPath, inputExt string) (string, error) {
+func ffmpegImageToSticker(ctx context.Context, inputPath, inputExt string) (string, error) {
 	outputPath := inputPath + ".sticker.webp"
 	// Scale to fit 512x512, transparent background for PNG/WebP, libwebp.
-	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath,
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", inputPath,
 		"-vf", "scale=512:512:force_original_aspect_ratio=decrease,"+
 			"pad=512:512:-1:-1:color=white@0",
 		"-c:v", "libwebp", "-lossless", "1", "-q:v", "100",
@@ -81,9 +82,9 @@ func ffmpegImageToSticker(inputPath, inputExt string) (string, error) {
 
 // ffmpegVideoToSticker converts a video file to an animated 512x512 WebP
 // sticker. It trims to 10 seconds max and 30 fps to keep the file small.
-func ffmpegVideoToSticker(inputPath string) (string, error) {
+func ffmpegVideoToSticker(ctx context.Context, inputPath string) (string, error) {
 	outputPath := inputPath + ".sticker.webp"
-	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath,
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", inputPath,
 		"-t", "10",
 		"-vf", "scale=512:512:force_original_aspect_ratio=decrease,"+
 			"pad=512:512:-1:-1:color=white@0,fps=30",
@@ -100,9 +101,9 @@ func ffmpegVideoToSticker(inputPath string) (string, error) {
 }
 
 // ffmpegStickerToImage converts a WebP sticker to a PNG image.
-func ffmpegStickerToImage(inputPath string) (string, error) {
+func ffmpegStickerToImage(ctx context.Context, inputPath string) (string, error) {
 	outputPath := inputPath + ".out.png"
-	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath, outputPath)
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", inputPath, outputPath)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -113,9 +114,9 @@ func ffmpegStickerToImage(inputPath string) (string, error) {
 }
 
 // ffmpegStickerToVideo converts a WebP sticker (possibly animated) to an MP4.
-func ffmpegStickerToVideo(inputPath string) (string, error) {
+func ffmpegStickerToVideo(ctx context.Context, inputPath string) (string, error) {
 	outputPath := inputPath + ".out.mp4"
-	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath,
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", inputPath,
 		"-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
 		outputPath)
 	var stderr bytes.Buffer
@@ -178,10 +179,13 @@ func isVideoMime(mime string) bool {
 // ---------------------------------------------------------------------------
 
 func handleSticker(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleStickerAsync(s, info, args, prefix)
+	// Hard 3-minute watchdog (0% speed impact — pure goroutine + select).
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		handleStickerAsync(ctx, s, info, args, prefix)
+	})
 }
 
-func handleStickerAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+func handleStickerAsync(ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	data, mime, ok := s.DownloadQuotedMedia(info)
 	if !ok || len(data) == 0 {
 		s.Reply(info, stickerHelpText)
@@ -198,30 +202,38 @@ func handleStickerAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	ext := extForMime(mime)
 	inPath, err := writeTempMedia(data, ext)
 	if err != nil {
-		s.Reply(info, "❌ Failed to write media: "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ Failed to write media: "+err.Error())
+		}
 		return
 	}
 	defer removeTempFile(inPath)
 
 	var outPath string
 	if isVideoMime(mime) {
-		outPath, err = ffmpegVideoToSticker(inPath)
+		outPath, err = ffmpegVideoToSticker(ctx, inPath)
 	} else {
-		outPath, err = ffmpegImageToSticker(inPath, ext)
+		outPath, err = ffmpegImageToSticker(ctx, inPath, ext)
 	}
 	if err != nil {
-		s.Reply(info, "❌ "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ "+err.Error())
+		}
 		return
 	}
 	defer removeTempFile(outPath)
 
 	webpBytes, err := os.ReadFile(outPath)
 	if err != nil {
-		s.Reply(info, "❌ Failed to read sticker output: "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ Failed to read sticker output: "+err.Error())
+		}
 		return
 	}
 	if err := s.SendSticker(info, webpBytes); err != nil {
-		s.Reply(info, "❌ Failed to send sticker: "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ Failed to send sticker: "+err.Error())
+		}
 		return
 	}
 }
@@ -231,11 +243,17 @@ func handleStickerAsync(s SessionBridge, info types.MessageInfo, args []string, 
 // ---------------------------------------------------------------------------
 
 func handleTake(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleTakeAsync(s, info, args, prefix)
+	// Hard 3-minute watchdog (0% speed impact — pure goroutine + select).
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		handleTakeAsync(ctx, s, info, args, prefix)
+	})
 }
 
-func handleTakeAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	data, mime, ok := s.DownloadQuotedMedia(info)
+func handleTakeAsync(ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+	data, mime, ok, tooBig := downloadMediaLimited(s, info)
+	if tooBig {
+		return // already replied: *❌ FILE TOO BIG — MAX 700MB*
+	}
 	if !ok || len(data) == 0 {
 		s.Reply(info, toimgHelpText)
 		return
@@ -254,25 +272,33 @@ func handleTakeAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 
 	inPath, err := writeTempMedia(data, ".webp")
 	if err != nil {
-		s.Reply(info, "❌ Failed to write sticker: "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ Failed to write sticker: "+err.Error())
+		}
 		return
 	}
 	defer removeTempFile(inPath)
 
-	outPath, err := ffmpegStickerToImage(inPath)
+	outPath, err := ffmpegStickerToImage(ctx, inPath)
 	if err != nil {
-		s.Reply(info, "❌ "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ "+err.Error())
+		}
 		return
 	}
 	defer removeTempFile(outPath)
 
 	pngBytes, err := os.ReadFile(outPath)
 	if err != nil {
-		s.Reply(info, "❌ Failed to read image output: "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ Failed to read image output: "+err.Error())
+		}
 		return
 	}
 	if err := s.SendImage(info, pngBytes, "*STICKER TO IMAGE CONVERTED*"); err != nil {
-		s.Reply(info, "❌ Failed to send image: "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ Failed to send image: "+err.Error())
+		}
 	}
 }
 
@@ -281,11 +307,17 @@ func handleTakeAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 // ---------------------------------------------------------------------------
 
 func handleTakeVid(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleTakeVidAsync(s, info, args, prefix)
+	// Hard 3-minute watchdog (0% speed impact — pure goroutine + select).
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		handleTakeVidAsync(ctx, s, info, args, prefix)
+	})
 }
 
-func handleTakeVidAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	data, mime, ok := s.DownloadQuotedMedia(info)
+func handleTakeVidAsync(ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+	data, mime, ok, tooBig := downloadMediaLimited(s, info)
+	if tooBig {
+		return // already replied: *❌ FILE TOO BIG — MAX 700MB*
+	}
 	if !ok || len(data) == 0 {
 		s.Reply(info, toimgHelpText)
 		return
@@ -304,21 +336,27 @@ func handleTakeVidAsync(s SessionBridge, info types.MessageInfo, args []string, 
 
 	inPath, err := writeTempMedia(data, ".webp")
 	if err != nil {
-		s.Reply(info, "❌ Failed to write sticker: "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ Failed to write sticker: "+err.Error())
+		}
 		return
 	}
 	defer removeTempFile(inPath)
 
-	outPath, err := ffmpegStickerToVideo(inPath)
+	outPath, err := ffmpegStickerToVideo(ctx, inPath)
 	if err != nil {
-		s.Reply(info, "❌ "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ "+err.Error())
+		}
 		return
 	}
 	defer removeTempFile(outPath)
 
 	seconds, width, height := probeVideoMeta(outPath)
 	if err := s.SendVideoFile(info, outPath, "🎥 *Sticker → Video*", nil, seconds, width, height); err != nil {
-		s.Reply(info, "❌ Failed to send video: "+err.Error())
+		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
+			s.Reply(info, "❌ Failed to send video: "+err.Error())
+		}
 	}
 }
 
