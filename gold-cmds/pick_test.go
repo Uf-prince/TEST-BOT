@@ -31,21 +31,23 @@ func TestSearchPick(t *testing.T) {
 	}
 	t.Logf("APK E2E OK — %s %s (%s) -> %s...", app.Title, app.Version, app.Size, app.FileURL[:80])
 
-	// 2) TG latest post: t.me/telegram → newest post URL
-	post, err := tgLatestPost(ctx, "https://t.me/telegram")
-	if err != nil {
-		t.Errorf("tgLatestPost error: %v", err)
+	// 2) TG latest media post: t.me/telegram → newest media post (V2 /s/ route)
+	if media, merr := tgLatestMedia(ctx, "https://t.me/telegram"); merr != nil || media == nil || media.url == "" {
+		t.Errorf("tgLatestMedia: %v / %v", merr, media)
 	} else {
-		t.Logf("TG LATEST OK — %s", post)
-		if !strings.Contains(post, "t.me/telegram/") {
-			t.Errorf("tg latest wrong: %s", post)
-		}
-		// fetch that post's media through the embed downloader
-		if media, merr := tgFetchPost(ctx, post); merr != nil || media.url == "" {
-			t.Logf("TG FETCH POST (may be text-only post): %v", merr)
-		} else {
-			t.Logf("TG POST MEDIA OK — kind=%s url=%s", media.kind, media.url[:min(60, len(media.url))])
-		}
+		t.Logf("TG LATEST MEDIA OK — kind=%s chan=@%s views=%s url=%s", media.kind, media.channel, media.views, media.url[:min(60, len(media.url))])
+	}
+	// TG specific post (V2 ?before targeting)
+	if media, merr := tgFetchPost(ctx, "https://t.me/telegram/459"); merr != nil || media.url == "" {
+		t.Logf("TG POST 459 (may be text-only): %v", merr)
+	} else {
+		t.Logf("TG POST 459 MEDIA OK — kind=%s url=%s", media.kind, media.url[:min(60, len(media.url))])
+	}
+	// TG photo post via V2 route
+	if media, merr := tgFetchPost(ctx, "https://t.me/telegram/452"); merr != nil || media.url == "" {
+		t.Logf("TG POST 452 (may be text-only): %v", merr)
+	} else {
+		t.Logf("TG POST 452 MEDIA OK — kind=%s url=%s", media.kind, media.url[:min(60, len(media.url))])
 	}
 
 	// 3) engines quick re-check

@@ -37,7 +37,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -527,79 +526,20 @@ func searchPickAPK(s SessionBridge, info types.MessageInfo, selected searchResul
 	})
 }
 
-// searchPickTG scrapes the latest post off the t.me/s/<channel> preview page
-// and reuses the .tg embed downloader for that post.
+// searchPickTG — channel pick: /s/ preview page se channel ka newest MEDIA
+// post nikaal kar download+send karta hai (tgSendMedia reuse — embed page
+// lock ho chuka tha, is liye tgLatestPost/tgFetchPost-embed route dead tha).
 func searchPickTG(s SessionBridge, info types.MessageInfo, selected searchResult) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "*DOWNLOADING TELEGRAM MEDIA....*")
 
-		postURL, err := tgLatestPost(ctx, selected.Link)
-		if err != nil || postURL == "" {
+		media, err := tgLatestMedia(ctx, selected.Link)
+		if err != nil || media == nil || media.url == "" {
 			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nNo public post found for this channel. 🤔")
+			s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nNo public media post found for this channel. 🤔")
 			return
 		}
-
-		media, err := tgFetchPost(ctx, postURL)
-		if err != nil || media.url == "" {
-			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nMedia not found — is the post public? 🤔")
-			return
-		}
-
-		s.EditMessage(info, waitID, "⬇️ *Downloading "+media.kind+"...*")
-
-		client := mediaHTTPClient()
-		path, err := streamDownloadToFile(ctx, client, media.url, nil)
-		if err != nil {
-			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ PLEASE TRY AGAIN 🤔")
-			return
-		}
-		defer removeTempFile(path)
-
-		title := media.text
-		if title == "" {
-			title = selected.Title
-		}
-		if len(title) > 120 {
-			title = title[:120] + "..."
-		}
-		creator := media.name
-		if creator == "" {
-			creator = "@" + media.channel
-		}
-		caption := "🔰 *TELEGRAM VIDEO NAME* 🔰\n" +
-			"*" + title + "*\n\n" +
-			"🔰 *CREATOR :* " + creator + "\n"
-		if media.views != "" {
-			caption += "🔰 *VIEWS :* " + media.views + "\n"
-		}
-		caption += "\n*TELEGRAM VIDEO DOWNLOAD*"
-
-		if media.kind == "photo" {
-			data, rerr := os.ReadFile(path)
-			if rerr != nil {
-				s.DeleteMessage(info, waitID)
-				s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nPhoto could not be read.")
-				return
-			}
-			if err := s.SendImage(info, data, caption); err != nil {
-				s.DeleteMessage(info, waitID)
-				s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nPhoto could not be sent.")
-				return
-			}
-			s.DeleteMessage(info, waitID)
-			return
-		}
-
-		secs, w, h := probeVideoMeta(path)
-		if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
-			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nVideo could not be sent.")
-			return
-		}
-		s.DeleteMessage(info, waitID)
+		tgSendMedia(ctx, s, info, waitID, media, selected.Title)
 	})
 }
 
