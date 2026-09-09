@@ -155,9 +155,15 @@ func SearchTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 		if !searchPickIGDirect(s, info, selected) {
 			searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
 		}
+	case pickFB:
+		// profile → jina /videos tab → latest video permalink → cobalt
+		if !searchPickFBDirect(s, info, selected) {
+			searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
+		}
 	default:
-		// TT / FB — profile media is API-blocked (tikwm 403, cobalt rejects
-		// profiles) → send the result card with the direct link + hint.
+		// TT — profile media is API-blocked from the server (tikwm CF wall on
+		// user/posts, mobile page carries no video IDs) → send the result
+		// card with the direct link + hint.
 		searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
 	}
 	return true
@@ -998,6 +1004,116 @@ func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected search
 			ok = true
 		}
 		s.DeleteMessage(info, waitID)
+	})
+	return ok
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// FACEBOOK DIRECT PICK (profile → latest video → direct download)
+// ──────────────────────────────────────────────────────────────────────────────────────
+
+// fbVideoLinkRe matches a video permalink on a FB profile videos listing:
+//
+//	facebook.com/<user>/videos/<slug>/<id>
+//	facebook.com/<id>/videos/<id>            (page posts)
+var fbVideoLinkRe = regexp.MustCompile(
+	`facebook\.com/([^\s)\"\']+)/videos/(?:([^\s)\"\']+)/)?([0-9]{6,})/?`)
+
+// fbLatestVideoLink reads a FB profile's /videos tab through the jina reader
+// proxy (direct hits are login-walled) and returns the permalink of the most
+// recent video plus its pretty title (slug). Empty string when nothing was
+// found.
+func fbLatestVideoLink(ctx context.Context, profileURL string) string {
+	low := strings.ToLower(strings.TrimSpace(profileURL))
+	low = strings.TrimPrefix(strings.TrimPrefix(low, "https://"), "http://")
+	low = strings.TrimPrefix(low, "www.")
+	low = strings.TrimPrefix(low, "m.")
+	low = strings.TrimSuffix(low, "/")
+	// keep only the profile path (drop query strings / sub-paths)
+	parts := strings.SplitN(low, "/", 3)
+	profile := ""
+	if len(parts) >= 2 && parts[1] != "" {
+		profile = parts[1]
+	}
+	if profile == "" {
+		return ""
+	}
+	listing := "https://www.facebook.com/" + profile + "/videos"
+
+	md, err := jinaFetch(ctx, listing)
+	if err != nil {
+		return ""
+	}
+	m := fbVideoLinkRe.FindStringSubmatch(md)
+	if m == nil {
+		return ""
+	}
+	return "https://www.facebook.com/" + m[1] + "/videos/" + m[3]
+}
+
+// fbPrettyTitle turns a /videos/<slug>/<id> or filename into a readable title.
+func fbPrettyTitle(slugOrFile, fallback string) string {
+	t := slugOrFile
+	t = strings.TrimSuffix(t, ".mp4")
+	t = strings.ReplaceAll(t, "-", " ")
+	t = strings.TrimSpace(t)
+	if t == "" {
+		return fallback
+	}
+	return t
+}
+
+// searchPickFBDirect downloads the latest video from a Facebook profile
+// search result (jina /videos tab → latest permalink → cobalt → fbcdn MP4).
+// Returns false when it failed (caller falls back to the link card).
+func searchPickFBDirect(s SessionBridge, info types.MessageInfo, selected searchResult) bool {
+	ok := false
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		waitID := s.ReplyWithID(info, "*DOWNLOADING FACEBOOK VIDEO....*")
+
+		videoLink := fbLatestVideoLink(ctx, selected.Link)
+		if videoLink == "" {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+
+		resp, err := fbCobaltFetch(ctx, videoLink)
+		if err != nil {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+		videoURL, quality := fbResolveVideoURL(resp)
+		if videoURL == "" {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+
+		s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
+
+		client := mediaHTTPClient()
+		path, err := streamDownloadToFile(ctx, client, videoURL, nil)
+		if err != nil {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+		defer removeTempFile(path)
+
+		title := fbPrettyTitle(resp.Filename, "Facebook Video")
+		secs, w, h := probeVideoMeta(path)
+		if secs == 0 && w == 0 {
+			quality = "HD"
+		}
+		caption := "🏅 *FACEBOOK VIDEO NAME 🏅*\n" +
+			"*" + title + "*\n\n" +
+			"🏅 *QUALITY :❱ " + quality + "*\n\n" +
+			"*FACEBOOK VIDEO DOWNLOAD*"
+
+		if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+		s.DeleteMessage(info, waitID)
+		ok = true
 	})
 	return ok
 }
