@@ -187,3 +187,13 @@ func fbCobaltFetch(ctx context.Context, fbURL string) (*fbCobaltResponse, error)
 	}
 	return &parsed, nil
 }
+
+// FBCobaltFetchLive - exported wrapper for the live sandbox test binary.
+func FBCobaltFetchLive(ctx context.Context, url string) (*fbCobaltResponse, error) {
+	return fbCobaltFetch(ctx, url)
+}
+
+// FBResolveVideoURLLive - exported wrapper for the live sandbox test binary.
+func FBResolveVideoURLLive(resp *fbCobaltResponse) (string, string) {
+	return fbResolveVideoURL(resp)
+}

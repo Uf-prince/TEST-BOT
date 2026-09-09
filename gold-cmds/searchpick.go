@@ -161,7 +161,8 @@ func SearchTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 		}
 	case pickFB:
 		// profile → multi-route /videos tab → latest video permalink → cobalt
-		if !searchPickFBDirect(s, info, selected) {
+		// (private profile pe baqi results bhi try hote hain)
+		if !searchPickFBDirect(s, info, selected, sess.Results) {
 			// FB-STYLE SHORT ERROR (TT jaisa — copy-link guidance card NAHI)
 			s.Reply(info, "❌ *FACEBOOK DOWNLOAD ERROR*\nPRIVATE PROFILE VIDEO NOT AVAILABLE\nTRY ANOTHER RESULT OR A PAGE / PUBLIC PROFILE 🤗")
 		}
@@ -1208,12 +1209,40 @@ func fbPrettyTitle(slugOrFile, fallback string) string {
 // searchPickFBDirect downloads the latest video from a Facebook profile
 // search result (jina /videos tab → latest permalink → cobalt → fbcdn MP4).
 // Returns false when it failed (caller falls back to the link card).
-func searchPickFBDirect(s SessionBridge, info types.MessageInfo, selected searchResult) bool {
+func searchPickFBDirect(s SessionBridge, info types.MessageInfo, selected searchResult, all []searchResult) bool {
 	ok := false
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "*DOWNLOADING FACEBOOK VIDEO....*")
 
-		videoLink := fbLatestVideoLinkFixed(ctx, selected.Link)
+		// v6: selected profile ke saath shuru karo; wo private nikle
+		// (ya uska koi video nahi) to baqi results try karo — pehla
+		// milne wala public video download ho jata hai. Error card sirf
+		// tab jab SAB private hon.
+		tryList := []searchResult{selected}
+		for _, r := range all {
+			if r.Link != selected.Link {
+				tryList = append(tryList, r)
+			}
+		}
+		videoLink := ""
+		for i, r := range tryList {
+			// v7: DDG video results already direct permalinks (reel / videos /
+			// watch) hote hain — unhe seedha cobalt ko do. Profile links ke
+			// liye pura resolver (fbLatestVideoLinkFixed) chalega.
+			link := fbExtractPermalink(r.Link)
+			if link == "" {
+				link = fbLatestVideoLinkFixed(ctx, r.Link)
+			}
+			if link != "" {
+				videoLink = link
+				_ = i
+				break
+			}
+			// pehle fail hone par user ko batao ke ab baqi try ho rahe
+			if i == 0 && len(tryList) > 1 {
+				s.EditMessage(info, waitID, "*SELECTED NOT AVAILABLE — TRYING OTHER RESULTS....*")
+			}
+		}
 		if videoLink == "" {
 			s.DeleteMessage(info, waitID)
 			return

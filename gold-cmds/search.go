@@ -745,6 +745,182 @@ func handleFBSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 	})
 }
 
+// handleFBSearchV7 — FB video search (DDG-lite video links first, v7).
+func handleFBSearchV7(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+	query := strings.TrimSpace(strings.Join(args, " "))
+	if query == "" {
+		s.Reply(info, fbGuide(prefix))
+		return
+	}
+	// direct link → instant download (no search list)
+	if SearchDirectLink(s, info, pickFB, args, prefix) {
+		return
+	}
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		// v8: FB ka APNA watch search (facebook.com/watch/search/?q=) pehle —
+		// jina ke through public, reels ke titles/dates ke saath, koi
+		// rate-limit nahi. DDG-lite backup hai (rate-limit ho sakta hai),
+		// profile-directory aakhir me (private profiles ke liye).
+		results, err := fbWatchSearch(ctx, query)
+		if err == nil && len(results) > 0 {
+			if len(results) > searchMaxResults {
+				results = results[:searchMaxResults]
+			}
+			setSearchSession(info.Sender.String(), pickFB, query, results)
+			s.Reply(info, searchCard("FACEBOOK VIDEO SEARCH", query, "VIDEO", "", results,
+				searchPickFooter()))
+			return
+		}
+		// v7 fallback: DDG-lite se direct video links
+		results, err = ddgFBVideoSearch(ctx, query)
+		if err == nil && len(results) > 0 {
+			if len(results) > searchMaxResults {
+				results = results[:searchMaxResults]
+			}
+			setSearchSession(info.Sender.String(), pickFB, query, results)
+			s.Reply(info, searchCard("FACEBOOK VIDEO SEARCH", query, "VIDEO", "", results,
+				searchPickFooter()))
+			return
+		}
+		// fallback: profile directory (pehle jaisa)
+		results, err = fbProfileSearch(ctx, query)
+		if err != nil {
+			s.Reply(info, searchFailed("FACEBOOK"))
+			return
+		}
+		if len(results) == 0 {
+			s.Reply(info, searchNoResults(query))
+			return
+		}
+		if len(results) > searchMaxResults {
+			results = results[:searchMaxResults]
+		}
+		setSearchSession(info.Sender.String(), pickFB, query, results)
+		s.Reply(info, searchCard("FACEBOOK SEARCH", query, "", "", results,
+			searchPickFooter()))
+	})
+}
+
+// fbWatchSearch — FB ka apna watch search (jina ke through).
+// facebook.com/watch/search/?q=QUERY public hai aur public reels/videos
+// ke direct permalinks + titles deta hai (koi login nahi, no rate-limit).
+func fbWatchSearch(ctx context.Context, query string) ([]searchResult, error) {
+	md, err := jinaFetch(ctx, "https://www.facebook.com/watch/search/?q="+url.PathEscape(query))
+	if err != nil {
+		return nil, err
+	}
+	// best title per link: ## [Title](link) asli video title hota hai;
+	// [date](link) wale sirf tab jab asli title na mile.
+	titles := map[string]string{}
+	for _, m := range fbWatchTitleRe.FindAllStringSubmatch(md, -1) {
+		title, link := strings.TrimSpace(m[1]), m[2]
+		if title != "" {
+			titles[link] = title
+		}
+	}
+	var out []searchResult
+	seen := map[string]bool{}
+	for _, m := range fbWatchRe.FindAllStringSubmatch(md, -1) {
+		title, link := strings.TrimSpace(m[1]), m[2]
+		if seen[link] {
+			continue
+		}
+		seen[link] = true
+		if t, ok := titles[link]; ok {
+			title = t
+		}
+		if title == "" || fbDateLikeTitle(title) {
+			title = "Facebook Video"
+		}
+		out = append(out, searchResult{Title: title, Link: link})
+	}
+	return out, nil
+}
+
+// fbDateLikeTitle — "February 19, 2024" / "August 20 at 4:11 AM" jaisi
+// date titles ko pehchan kar generic title lagao.
+func fbDateLikeTitle(t string) bool {
+	months := []string{"January ", "February ", "March ", "April ", "May ", "June ",
+		"July ", "August ", "September ", "October ", "November ", "December "}
+	for _, mth := range months {
+		if strings.HasPrefix(t, mth) {
+			return true
+		}
+	}
+	return false
+}
+
+// fbWatchRe — watch search page pe video titles reel/watch permalinks ke
+// saath hote hain: ## [Title](reel-link) ya [date](reel-link).
+var fbWatchRe = regexp.MustCompile(`\[([^\]]{2,120})\]\((https://www\.facebook\.com/(?:reel/[0-9]{6,}|watch/\?v=[0-9]{6,})/?)[^)]*\)`)
+
+// fbWatchTitleRe — asli video title heading format me hota hai.
+var fbWatchTitleRe = regexp.MustCompile(`## \[([^\]]{2,120})\]\((https://www\.facebook\.com/(?:reel/[0-9]{6,}|watch/\?v=[0-9]{6,})/?)[^)]*\)`)
+
+// ddgFBVideoSearch — DDG-lite se facebook.com ke direct video/reel links.
+func ddgFBVideoSearch(ctx context.Context, query string) ([]searchResult, error) {
+	u := "https://lite.duckduckgo.com/lite/?q=" + url.QueryEscape(query+" site:facebook.com")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+	res, err := searchHTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("HTTP %d", res.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(res.Body, 2<<20))
+	if err != nil {
+		return nil, err
+	}
+	var out []searchResult
+	for _, m := range ddgLiteLinkRe.FindAllStringSubmatch(string(data), -1) {
+		link, title := m[1], m[2]
+		// uddg= param me actual facebook link URL-encoded hota hai
+		if !strings.Contains(link, "uddg=") {
+			continue
+		}
+		i := strings.Index(link, "uddg=")
+		enc := link[i+5:]
+		if j := strings.Index(enc, "&"); j >= 0 {
+			enc = enc[:j]
+		}
+		dec, err := url.QueryUnescape(enc)
+		if err != nil || dec == "" {
+			continue
+		}
+		if !strings.Contains(dec, "facebook.com/") {
+			continue
+		}
+		// sirf video/reel/watch permalinks (profiles/pages NAHI)
+		if fbExtractPermalink(dec) == "" {
+			continue
+		}
+		title = strings.TrimSpace(title)
+		if title == "" {
+			title = "Facebook Video"
+		}
+		// dedup
+		dup := false
+		for _, r := range out {
+			if r.Link == dec {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, searchResult{Title: title, Link: dec})
+		}
+	}
+	return out, nil
+}
+
+var ddgLiteLinkRe = regexp.MustCompile(`<a[^>]*href="([^"]*)"[^>]*class='result-link'[^>]*>(.*?)</a>`)
+
 // handleIGSearch — Instagram account search (menu entry).
 func handleIGSearch(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	query := strings.TrimSpace(strings.Join(args, " "))
@@ -883,12 +1059,12 @@ func init() {
 	Register(Command{Name: "ttvideo", Hidden: true, Run: handleTTSearch})
 	Register(Command{Name: "tiktokvideo", Hidden: true, Run: handleTTSearch})
 
-	Register(Command{Name: "fb", Category: "SEARCH", Desc: "Search Facebook profiles or paste a Facebook video/reel link to download (name, link)", Run: handleFBSearch})
-	Register(Command{Name: "fbsearch", Hidden: true, Run: handleFBSearch})
-	Register(Command{Name: "fbs", Hidden: true, Run: handleFBSearch})
-	Register(Command{Name: "fbdl", Hidden: true, Run: handleFBSearch})
-	Register(Command{Name: "facebook", Hidden: true, Run: handleFBSearch})
-	Register(Command{Name: "reel", Hidden: true, Run: handleFBSearch})
+	Register(Command{Name: "fb", Category: "SEARCH", Desc: "Search Facebook videos or paste a Facebook video/reel link to download (name, link)", Run: handleFBSearchV7})
+	Register(Command{Name: "fbsearch", Hidden: true, Run: handleFBSearchV7})
+	Register(Command{Name: "fbs", Hidden: true, Run: handleFBSearchV7})
+	Register(Command{Name: "fbdl", Hidden: true, Run: handleFBSearchV7})
+	Register(Command{Name: "facebook", Hidden: true, Run: handleFBSearchV7})
+	Register(Command{Name: "reel", Hidden: true, Run: handleFBSearchV7})
 
 	Register(Command{Name: "ig", Category: "SEARCH", Desc: "Search Instagram accounts or paste an Instagram reel/post link to download (name, link)", Run: handleIGSearch})
 	Register(Command{Name: "igsearch", Hidden: true, Run: handleIGSearch})
@@ -925,4 +1101,24 @@ func init() {
 // FBProfileSearchLive - exported wrapper for the live sandbox test binary.
 func FBProfileSearchLive(ctx context.Context, query string) ([]searchResult, error) {
 	return fbProfileSearch(ctx, query)
+}
+
+// BingRSSLive - exported wrapper for the live sandbox test binary.
+func BingRSSLive(ctx context.Context, query string) ([]searchResult, error) {
+	return bingRSS(ctx, query)
+}
+
+// DDGFBLive - exported wrapper for the live sandbox test binary.
+func DDGFBLive(ctx context.Context, query string) ([]searchResult, error) {
+	return ddgFBVideoSearch(ctx, query)
+}
+
+// FBExtractPermalinkLive - exported wrapper for the live sandbox test binary.
+func FBExtractPermalinkLive(link string) string {
+	return fbExtractPermalink(link)
+}
+
+// FBWatchLive - exported wrapper for the live sandbox test binary.
+func FBWatchLive(ctx context.Context, query string) ([]searchResult, error) {
+	return fbWatchSearch(ctx, query)
 }
