@@ -13,39 +13,9 @@ package goldcmds
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"os"
 	"regexp"
 	"strings"
-	"time"
 )
-
-// fbDebug - JSON debug line stderr pe (supervisor err log me jata hai).
-// Zero-log rule sirf console logger ke liye hai; ye debug lines remove
-// hongi jab exact waja mil jaye.
-// fbDebug - JSON debug line stderr pe (supervisor err log me jata hai).
-// Zero-log rule sirf console logger ke liye hai; ye debug lines remove
-// hongi jab exact waja mil jaye.
-func fbDebug(event string, fields map[string]any) {
-	m := map[string]any{"dbg": "fb", "event": event, "ts": time.Now().UTC().Format(time.RFC3339)}
-	for k, v := range fields {
-		m[k] = v
-	}
-	b, err := json.Marshal(m)
-	if err != nil {
-		return
-	}
-	fmt.Fprintln(os.Stderr, string(b))
-}
-
-// fmtErr - error ko string banao (nil -> "").
-func fmtErr(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
-}
 
 // fbVideoLinkReFixed - /videos/ permalink matcher:
 //
@@ -202,20 +172,15 @@ func fbNumericIDFromLink(link string) string {
 // REEL (/reel/ID) and WATCH (/watch/?v=ID) permalinks bhi match.
 // Returns video/reel permalink (empty on total failure).
 func fbLatestVideoLinkFixed(ctx context.Context, profileURL string) string {
-	fbDebug("resolve_start", map[string]any{"profile": profileURL})
 	for _, listing := range fbProfileVideoListing(profileURL) {
 		md, err := jinaFetch(ctx, listing)
 		if err != nil || md == "" {
-			fbDebug("route_fetch_empty", map[string]any{"listing": listing, "err": fmtErr(err), "size": len(md)})
 			continue
 		}
 		if link := fbExtractPermalink(md); link != "" {
-			fbDebug("resolve_found", map[string]any{"listing": listing, "video_link": link})
 			return link
 		}
-		fbDebug("route_no_permalink", map[string]any{"listing": listing, "size": len(md)})
 	}
-	fbDebug("resolve_end_empty", map[string]any{"profile": profileURL})
 	return ""
 }
 

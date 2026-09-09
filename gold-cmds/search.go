@@ -50,6 +50,9 @@ type searchResult struct {
 // searchMaxResults caps every search list (same as ytsearch).
 const searchMaxResults = 5
 
+// fbMaxResults — FB video search ki cap (owner: 15 results chahiye).
+const fbMaxResults = 15
+
 var searchHTTP = &http.Client{Timeout: 40 * time.Second}
 
 // ── shared fetch helpers ────────────────────────────────────────────────
@@ -757,47 +760,53 @@ func handleFBSearchV7(s SessionBridge, info types.MessageInfo, args []string, pr
 		return
 	}
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		// v8: FB ka APNA watch search (facebook.com/watch/search/?q=) pehle —
-		// jina ke through public, reels ke titles/dates ke saath, koi
-		// rate-limit nahi. DDG-lite backup hai (rate-limit ho sakta hai),
-		// profile-directory aakhir me (private profiles ke liye).
-		results, err := fbWatchSearch(ctx, query)
-		if err == nil && len(results) > 0 {
-			if len(results) > searchMaxResults {
-				results = results[:searchMaxResults]
+		// v9: FB video search — watch search (primary) + DDG-lite (backup)
+		// merge karke 15 tak results. Profile-directory sirf tab jab video
+		// search khaali ho (private/personal profiles ke liye).
+		var merged []searchResult
+		seen := map[string]bool{}
+		add := func(rs []searchResult) {
+			for _, r := range rs {
+				if seen[r.Link] {
+					continue
+				}
+				seen[r.Link] = true
+				merged = append(merged, r)
+				if len(merged) >= fbMaxResults {
+					return
+				}
 			}
-			setSearchSession(info.Sender.String(), pickFB, query, results)
-			s.Reply(info, searchCard("FACEBOOK VIDEO SEARCH", query, "VIDEO", "", results,
-				searchPickFooter()))
-			return
 		}
-		// v7 fallback: DDG-lite se direct video links
-		results, err = ddgFBVideoSearch(ctx, query)
-		if err == nil && len(results) > 0 {
-			if len(results) > searchMaxResults {
-				results = results[:searchMaxResults]
+
+		// 1) FB ka apna watch search (best: public reels, titles, no limit)
+		watch, err := fbWatchSearch(ctx, query)
+		if err == nil {
+			add(watch)
+		}
+		// 2) DDG-lite backup (jab watch khaali / kam results)
+		if len(merged) < fbMaxResults {
+			ddg, err2 := ddgFBVideoSearch(ctx, query)
+			if err2 == nil {
+				add(ddg)
 			}
-			setSearchSession(info.Sender.String(), pickFB, query, results)
-			s.Reply(info, searchCard("FACEBOOK VIDEO SEARCH", query, "VIDEO", "", results,
-				searchPickFooter()))
+		}
+
+		// 3) video list choti ho to profile-directory se bharo (15 tak)
+		if len(merged) < fbMaxResults {
+			prof, errP := fbProfileSearch(ctx, query)
+			if errP == nil {
+				add(prof)
+			}
+		}
+
+		if len(merged) > 0 {
+			setSearchSession(info.Sender.String(), pickFB, query, merged)
+			s.Reply(info, searchCard("FACEBOOK VIDEO SEARCH", query, "VIDEO", "", merged,
+				searchPickFooterN(len(merged))))
 			return
 		}
-		// fallback: profile directory (pehle jaisa)
-		results, err = fbProfileSearch(ctx, query)
-		if err != nil {
-			s.Reply(info, searchFailed("FACEBOOK"))
-			return
-		}
-		if len(results) == 0 {
-			s.Reply(info, searchNoResults(query))
-			return
-		}
-		if len(results) > searchMaxResults {
-			results = results[:searchMaxResults]
-		}
-		setSearchSession(info.Sender.String(), pickFB, query, results)
-		s.Reply(info, searchCard("FACEBOOK SEARCH", query, "", "", results,
-			searchPickFooter()))
+
+		s.Reply(info, searchNoResults(query))
 	})
 }
 

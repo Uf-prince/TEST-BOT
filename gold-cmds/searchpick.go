@@ -39,6 +39,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -118,6 +119,12 @@ func clearSearchSession(jid string) {
 // searchPickFooter is the pick-style footer shown under every search card.
 func searchPickFooter() string {
 	return "*TYPE NUMBER WHICH RESULT YOU WANT TO OPEN OR DOWNLOAD — REPLY WITH ANY NUMBER 1 TO 5*"
+}
+
+// searchPickFooterN - footer with the actual list size (15 wali FB list
+// ke liye "1 TO 15" sahi dikhega).
+func searchPickFooterN(n int) string {
+	return "*TYPE NUMBER WHICH RESULT YOU WANT TO OPEN OR DOWNLOAD — REPLY WITH ANY NUMBER 1 TO " + strconv.Itoa(n) + "*"
 }
 
 // SearchTryHandle — call from the main message handler BEFORE dispatch
