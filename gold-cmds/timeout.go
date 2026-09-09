@@ -26,7 +26,9 @@ import (
 )
 
 // cmdTimeout is the hard limit for any media command pipeline.
-const cmdTimeout = 3 * time.Minute
+// 5 minutes: LONG TikTok videos (3-5 min songs) get download + upload
+// room — the busy-guard keeps the watchdogs off during the pipeline.
+const cmdTimeout = 5 * time.Minute
 
 // timeoutReplyText is sent when a command hits the hard limit.
 const timeoutReplyText = "*TRY AGAIN LATER*"

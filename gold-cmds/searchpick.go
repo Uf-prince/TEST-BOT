@@ -71,7 +71,7 @@ type searchSession struct {
 var (
 	searchSessMu   sync.Mutex
 	searchSessions = map[string]*searchSession{}
-	searchSessTTL  = 2 * time.Minute
+	searchSessTTL  = 3 * time.Minute // 30-result cards need extra reading time
 )
 
 // setSearchSession stores a fresh pick window.
@@ -347,11 +347,14 @@ func runSelfSearch(s SessionBridge, info types.MessageInfo, kind searchPickKind,
 		switch kind {
 		case pickTT:
 			header, handleLabel, statsLabel, failed = "TIKTOK SEARCH", "USER", "STATS", "TIKTOK"
-			// video-first: asli videos (owner rule), user-search fallback
+			// video-first: 15 SHORTS + 15 LONG (owner rule), user-search fallback
 			results, err = ttVideoSearch(ctx, query)
-			if err != nil || len(results) == 0 {
-				results, err = ttUserSearch(ctx, query)
+			if err == nil && len(results) > 0 {
+				setSearchSession(info.Sender.String(), kind, query, results)
+				s.Reply(info, ttVideoCard(query, results))
+				return
 			}
+			results, err = ttUserSearch(ctx, query)
 		case pickFB:
 			header, handleLabel, statsLabel, failed = "FACEBOOK SEARCH", "", "", "FACEBOOK"
 			results, err = fbProfileSearch(ctx, query)

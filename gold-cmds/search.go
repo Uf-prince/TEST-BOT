@@ -42,6 +42,9 @@ type searchResult struct {
 	Stats   string // followers / rating / size...
 	Link    string
 	Snippet string
+	// DurationSec is filled by the TikTok video search (SHORTS <= 60s
+	// vs LONG > 60s split ke liye); other engines leave it zero.
+	DurationSec int64
 }
 
 // searchMaxResults caps every search list (same as ytsearch).
@@ -198,26 +201,73 @@ func searchCard(header, query, handleLabel, statsLabel string, results []searchR
 	b.WriteString("*QUERY :❱ " + strings.ToUpper(query) + "*\n\n")
 	b.WriteString("*TOP " + strconv.Itoa(len(results)) + " RESULTS FOR YOUR SEARCH*\n\n")
 	for i, r := range results {
-		title := r.Title
-		if title == "" {
-			title = "NOT FOUND"
-		}
-		b.WriteString("\n" + searchBorder + "\n")
-		b.WriteString("*TYPE ❰ " + strconv.Itoa(i+1) + " ❱ TO DOWNLOAD THIS FROM " + searchCardPlatform(header) + "*\n")
-		b.WriteString(strings.ToUpper(title) + "\n")
-		if handleLabel != "" && r.Handle != "" {
-			b.WriteString("*" + handleLabel + " :❱ " + r.Handle + "*\n")
-		}
-		if statsLabel != "" && r.Stats != "" {
-			b.WriteString("*" + statsLabel + " :❱ " + r.Stats + "*\n")
-		}
-		if r.Snippet != "" {
-			b.WriteString("*" + r.Snippet + "*\n")
-		}
-		b.WriteString("*LINK :❱ " + r.Link + "*\n")
-		b.WriteString(searchBorder + "\n\n")
+		b.WriteString(searchCardEntry(i, r, header, handleLabel, statsLabel))
 	}
 	b.WriteString(footer)
+	return b.String()
+}
+
+// searchCardEntry renders ONE numbered result block. Refactored out of
+// searchCard so the TikTok SHORTS/LONG card (30 entries, two sections)
+// reuses the exact same entry layout with continuous 1-30 numbering.
+func searchCardEntry(i int, r searchResult, header, handleLabel, statsLabel string) string {
+	var b strings.Builder
+	title := r.Title
+	if title == "" {
+		title = "NOT FOUND"
+	}
+	b.WriteString("\n" + searchBorder + "\n")
+	b.WriteString("*TYPE ❰ " + strconv.Itoa(i+1) + " ❱ TO DOWNLOAD THIS FROM " + searchCardPlatform(header) + "*\n")
+	b.WriteString(strings.ToUpper(title) + "\n")
+	if handleLabel != "" && r.Handle != "" {
+		b.WriteString("*" + handleLabel + " :❱ " + r.Handle + "*\n")
+	}
+	if statsLabel != "" && r.Stats != "" {
+		b.WriteString("*" + statsLabel + " :❱ " + r.Stats + "*\n")
+	}
+	if r.Snippet != "" {
+		b.WriteString("*" + r.Snippet + "*\n")
+	}
+	b.WriteString("*LINK :❱ " + r.Link + "*\n")
+	b.WriteString(searchBorder + "\n\n")
+	return b.String()
+}
+
+// ttVideoCard renders the TikTok video results card: up to 15 SHORTS
+// (<= 60s) then 15 LONG (> 60s) videos in two labeled sections with
+// continuous 1-30 numbering (owner: '15 shorts videos ka link aye 15
+// long videos ka link aye ... list total 30 videos ki bane ge').
+func ttVideoCard(query string, results []searchResult) string {
+	var b strings.Builder
+	b.WriteString("*🔰 TIKTOK VIDEO SEARCH 🔰*\n\n")
+	b.WriteString("*QUERY :❱ " + strings.ToUpper(query) + "*\n\n")
+	b.WriteString("*TOP " + strconv.Itoa(len(results)) + " VIDEO RESULTS FOR YOUR SEARCH*\n")
+	shorts, longs := 0, 0
+	for _, r := range results {
+		if r.DurationSec > 60 {
+			longs++
+		} else {
+			shorts++
+		}
+	}
+	if shorts > 0 {
+		b.WriteString("*⚡ SHORTS ( < 1 MIN ) :❱ " + strconv.Itoa(shorts) + " RESULTS*\n")
+	}
+	if longs > 0 {
+		b.WriteString("*🎬 LONG VIDEOS ( > 1 MIN ) :❱ " + strconv.Itoa(longs) + " RESULTS*\n")
+	}
+	b.WriteString("\n")
+	if shorts > 0 {
+		b.WriteString("*⚡ SHORTS ( < 1 MIN ) ⚡*\n\n")
+	}
+	for i, r := range results {
+		// section switch: SHORTS ke baad LONG section ka header
+		if i > 0 && r.DurationSec > 60 && results[i-1].DurationSec <= 60 {
+			b.WriteString("\n*🎬 LONG VIDEOS ( > 1 MIN ) 🎬*\n\n")
+		}
+		b.WriteString(searchCardEntry(i, r, "TIKTOK SEARCH", "USER", "STATS"))
+	}
+	b.WriteString("*TYPE NUMBER WHICH RESULT YOU WANT TO DOWNLOAD ❰ REPLY WITH ANY NUMBER 1 TO " + strconv.Itoa(len(results)) + " ❱*")
 	return b.String()
 }
 
@@ -567,11 +617,15 @@ func handleTTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		// to error hi bheje ga na bot") — feed/search/ asli videos lauta
 		// hai (tiktok.com/@user/video/ID links), accounts nahi. Purane
 		// user-search results profile links the jo pick pe fail hote the.
+		// video-first: 15 SHORTS + 15 LONG (owner rule); user-search
+		// fallback only when the video engine is down/empty.
 		results, err := ttVideoSearch(ctx, query)
-		if err != nil || len(results) == 0 {
-			// fallback: purana user-search (accounts) — feed/search down ho to
-			results, err = ttUserSearch(ctx, query)
+		if err == nil && len(results) > 0 {
+			setSearchSession(info.Sender.String(), pickTT, query, results)
+			s.Reply(info, ttVideoCard(query, results))
+			return
 		}
+		results, err = ttUserSearch(ctx, query)
 		if err != nil {
 			s.Reply(info, searchFailed("TIKTOK"))
 			return
