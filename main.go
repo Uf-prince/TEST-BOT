@@ -308,6 +308,16 @@ func memoryWatchdog(mgr *Manager, redis *Upstash, dbPath string) {
 		}
 
 		// ── Tier 2: self-restart at 500 MB ──
+		// BUSY GUARD: koi command (download pipeline) in-flight ho to
+		// restart KABHI nahi. cgroup memory.current me file page-cache
+		// bhi ginta hai — media temp-file likhte hi counter 500+ ho
+		// jata tha aur mid-download process restart ho jata tha. Busy
+		// ke dauran sirf GC; agle cycle me dobara check (400 MB+ warning
+		// zone me loop 5s fast hai hi). Busy end ke baad hi restart.
+		if used >= restartThreshold && cmdBusyActive() {
+			runtimeGC() // free what we can without killing the download
+			continue
+		}
 		if used >= restartThreshold {
 			WarnLog("Container memory at %.2f MB — initiating self-restart", float64(used)/(1024*1024))
 			gracefulSelfRestart(mgr, redis, dbPath)

@@ -2488,7 +2488,15 @@ func init() {
 		cmd := command
 		RegisterCommand(cmd.Name, func(s *Session, info types.MessageInfo, args []string, prefix string) {
 			b := &bridge{s: s}
-			cmd.Run(b, info, args, prefix)
+			// BUSY TRACKING: har gold-cmds command (video/play/tiktok/yts
+			// picks - sab download pipelines) in-flight mark hoti hai;
+			// watchdog + memoryWatchdog is dauran restart / fast-reconnect
+			// nahi bhejenge. Panic-safe: defer endCmdBusy.
+			beginCmdBusy()
+			func() {
+				defer endCmdBusy()
+				cmd.Run(b, info, args, prefix)
+			}()
 		})
 	}
 }

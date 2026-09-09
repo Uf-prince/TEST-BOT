@@ -550,7 +550,16 @@ func (s *Session) HandleMessage(evt *events.Message) {
 	// 🔰 SEARCH PICK SESSION (search commands' number → download flow).
 	// Runs BEFORE audio/video sessions and command dispatch so a bare
 	// "1".."5" reply after a search card is consumed here.
-	if goldcmds.SearchTryHandle(brCP, info, body, prefix) {
+	// BUSY TRACKING: search pick (number reply) bhi download pipeline
+	// chalata hai - in-flight mark karo taake watchdog/memWatchdog
+	// mid-pick restart ya fast-reconnect na karein.
+	beginCmdBusy()
+	var pickHandled bool
+	func() {
+		defer endCmdBusy()
+		pickHandled = goldcmds.SearchTryHandle(brCP, info, body, prefix)
+	}()
+	if pickHandled {
 		return
 	}
 
@@ -837,7 +846,13 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		// does NOT block the actual command from running. This shaves
 		// ~200-500ms off every command reply.
 		go s.reactCommand(info, command)
-		cmd(s, info, args, prefix)
+		// BUSY TRACKING: core command dispatch bhi in-flight mark hota
+		// hai (download commands 3 min tak chal sakti hain).
+		beginCmdBusy()
+		func() {
+			defer endCmdBusy()
+			cmd(s, info, args, prefix)
+		}()
 		return
 	}
 

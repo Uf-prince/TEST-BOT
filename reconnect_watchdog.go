@@ -231,7 +231,12 @@ func (m *Manager) doReconnect(s *Session) bool {
 	// full process restart poori state clear kar ke todta hai.
 	// Self-restart session-DB Redis me save karta hai aur fresh process
 	// 2-3s me saari sessions restore kar leta hai.
-	if attempts >= selfRestartThreshold {
+	//
+	// BUSY GUARD: koi command (download pipeline) chal rahi ho to restart
+	// KABHI nahi — mid-download restart hi command ko maar deta tha.
+	// Busy ke dauran attempts ginte raho; busy end hone ke baad watchdog
+	// ke agle pass pe (dead session 5s cycle) restart fire hota hai.
+	if attempts >= selfRestartThreshold && !cmdBusyActive() {
 		m.requestSelfRestart()
 	}
 	// Baaki fail: koi log nahi — session abhi dead hai (return false,
@@ -245,6 +250,14 @@ func (m *Manager) doReconnect(s *Session) bool {
 // hai, user ko farak nahi padta.
 func (m *Manager) handleDisconnectedEvent(s *Session) {
 	if s == nil || s.Client == nil || m.IsShuttingDown() {
+		return
+	}
+	// BUSY GUARD: jab koi download command (RunWithTimeout pipeline) chal
+	// rahi ho to 1s fast-reconnect usi download goroutine ke sath race
+	// karta tha. Busy hone par fast-path skip; whatsmeow ka apna
+	// EnableAutoReconnect asli disconnect par phir bhi reconnect karega,
+	// aur watchdog ka next pass (max 60s) socket ko revive karega.
+	if cmdBusyActive() {
 		return
 	}
 	// Pending pairing sessions skip karo.
@@ -349,6 +362,12 @@ var (
 // goroutine me hota hai. Do baar spawn hone se flag + cooldown dono
 // bachaate hain; panic ho to bhi kuch nahi tootta (recover).
 func (m *Manager) requestSelfRestart() {
+	// BUSY GUARD (final gate): koi bhi command in-flight ho to full
+	// process restart hamesha rokna hai (mid-download restart hi bot ko
+	// "stuck" lagwa raha tha).
+	if cmdBusyActive() {
+		return
+	}
 	selfRestartMu.Lock()
 	if selfRestartTriggered || time.Since(selfRestartLast) < selfRestartCooldown {
 		selfRestartMu.Unlock()
