@@ -407,6 +407,15 @@ func compressBinaryAvailable(bin string) bool {
 	return err == nil
 }
 
+// compressCopyFile copies src to dst (true on success).
+func compressCopyFile(src, dst string) bool {
+	b, err := os.ReadFile(src)
+	if err != nil {
+		return false
+	}
+	return os.WriteFile(dst, b, 0644) == nil
+}
+
 // compressStatusMsg holds the sent "COMPRESSING..." message for edit/delete.
 type compressStatusMsg struct {
 	ID string
@@ -445,6 +454,33 @@ func compressEncodeImageJPEG(ctx context.Context, inPath, outPath string, qualit
 	start := time.Now()
 	// ffmpeg -i in -q:v N out.jpg  — q:v maps inversely to quality:
 	// q2≈quality 95, q5≈80, q10≈50, q15≈30 (same ladder Node sharp uses).
+	// jpegoptim first: 5-10x lighter than ffmpeg (tiny RAM, single pass).
+	// JPEG-only; the ffmpeg fallback below handles PNG/WEBP/BMP inputs.
+	if compressBinaryAvailable("jpegoptim") {
+		jpgCopy := outPath + ".jpg"
+		if compressCopyFile(inPath, jpgCopy) {
+			mval := 85
+			switch {
+			case quality >= 80:
+				mval = 92
+			case quality >= 55:
+				mval = 70
+			default:
+				mval = 50
+			}
+			cmd := exec.CommandContext(ctx, "jpegoptim", "-m"+strconv.Itoa(mval), "--strip-all", jpgCopy)
+			cmd.Stdout = nil
+			cmd.Stderr = nil
+			if err := cmd.Run(); err == nil {
+				if st, serr := os.Stat(jpgCopy); serr == nil && st.Size() > 0 {
+					if rerr := os.Rename(jpgCopy, outPath); rerr == nil {
+						return time.Since(start).Seconds() * 1000, nil
+					}
+				}
+			}
+			os.Remove(jpgCopy) // jpegoptim unusable here -> ffmpeg fallback
+		}
+	}
 	qv := 2
 	switch {
 	case quality >= 80:
@@ -507,34 +543,30 @@ func compressHandleImage(ctx context.Context, s SessionBridge, info types.Messag
 	}
 	keys := []string{"high", "medium", "low"}
 	results := make([]presetResult, len(keys))
-	var wg sync.WaitGroup
+	// Sequential (was 3 parallel encoders): 1/3 RAM peak, same
+	// wall-clock on a 0.5-core container - lighter and safer.
 	for i, k := range keys {
-		wg.Add(1)
-		go func(i int, k string) {
-			defer wg.Done()
-			p := compressImagePresets[k]
-			out, _ := os.CreateTemp("", "goldcmp-img-out-"+k+"-*")
-			if out == nil {
-				results[i] = presetResult{key: k, p: p, err: fmt.Errorf("temp file")}
-				return
-			}
-			outPath := out.Name()
-			out.Close()
-			ms, err := compressEncodeImageJPEG(ctx, tmpIn.Name(), outPath, p.Quality)
-			if err != nil {
-				os.Remove(outPath)
-				results[i] = presetResult{key: k, p: p, err: err}
-				return
-			}
-			st2, _ := os.Stat(outPath)
-			var sz int64
-			if st2 != nil {
-				sz = st2.Size()
-			}
-			results[i] = presetResult{key: k, p: p, size: sz, ms: ms, path: outPath}
-		}(i, k)
+		p := compressImagePresets[k]
+		out, _ := os.CreateTemp("", "goldcmp-img-out-"+k+"-*")
+		if out == nil {
+			results[i] = presetResult{key: k, p: p, err: fmt.Errorf("temp file")}
+			continue
+		}
+		outPath := out.Name()
+		out.Close()
+		ms, err := compressEncodeImageJPEG(ctx, tmpIn.Name(), outPath, p.Quality)
+		if err != nil {
+			os.Remove(outPath)
+			results[i] = presetResult{key: k, p: p, err: err}
+			continue
+		}
+		st2, _ := os.Stat(outPath)
+		var sz int64
+		if st2 != nil {
+			sz = st2.Size()
+		}
+		results[i] = presetResult{key: k, p: p, size: sz, ms: ms, path: outPath}
 	}
-	wg.Wait()
 
 	var chosen *presetResult
 	for i := range results {
@@ -650,34 +682,30 @@ func compressHandleSticker(ctx context.Context, s SessionBridge, info types.Mess
 		err  error
 	}
 	results := make([]presetResult, len(keys))
-	var wg sync.WaitGroup
+	// Sequential (was 3 parallel encoders): 1/3 RAM peak, same
+	// wall-clock on a 0.5-core container - lighter and safer.
 	for i, k := range keys {
-		wg.Add(1)
-		go func(i int, k string) {
-			defer wg.Done()
-			p := compressStickerPresets[k]
-			out, _ := os.CreateTemp("", "goldcmp-stk-out-"+k+"-*")
-			if out == nil {
-				results[i] = presetResult{key: k, p: p, err: fmt.Errorf("temp")}
-				return
-			}
-			outPath := out.Name()
-			out.Close()
-			ms, err := compressEncodeStickerWEBP(ctx, tmpIn.Name(), outPath, p.Quality, true)
-			if err != nil {
-				os.Remove(outPath)
-				results[i] = presetResult{key: k, p: p, err: err}
-				return
-			}
-			st2, _ := os.Stat(outPath)
-			var sz int64
-			if st2 != nil {
-				sz = st2.Size()
-			}
-			results[i] = presetResult{key: k, p: p, size: sz, ms: ms, path: outPath}
-		}(i, k)
+		p := compressStickerPresets[k]
+		out, _ := os.CreateTemp("", "goldcmp-stk-out-"+k+"-*")
+		if out == nil {
+			results[i] = presetResult{key: k, p: p, err: fmt.Errorf("temp")}
+			continue
+		}
+		outPath := out.Name()
+		out.Close()
+		ms, err := compressEncodeStickerWEBP(ctx, tmpIn.Name(), outPath, p.Quality, true)
+		if err != nil {
+			os.Remove(outPath)
+			results[i] = presetResult{key: k, p: p, err: err}
+			continue
+		}
+		st2, _ := os.Stat(outPath)
+		var sz int64
+		if st2 != nil {
+			sz = st2.Size()
+		}
+		results[i] = presetResult{key: k, p: p, size: sz, ms: ms, path: outPath}
 	}
-	wg.Wait()
 
 	var chosen *presetResult
 	for i := range results {
@@ -1064,34 +1092,30 @@ func compressHandleDocument(ctx context.Context, s SessionBridge, info types.Mes
 		err  error
 	}
 	results := make([]presetResult, len(keys))
-	var wg sync.WaitGroup
+	// Sequential (was 3 parallel encoders): 1/3 RAM peak, same
+	// wall-clock on a 0.5-core container - lighter and safer.
 	for i, k := range keys {
-		wg.Add(1)
-		go func(i int, k string) {
-			defer wg.Done()
-			p := compressDocPresets[k]
-			out, _ := os.CreateTemp("", "goldcmp-doc-out-"+k+"-*")
-			if out == nil {
-				results[i] = presetResult{key: k, err: fmt.Errorf("temp")}
-				return
-			}
-			outPath := out.Name()
-			out.Close()
-			ms, err := compressBrotli(ctx, tmpIn.Name(), outPath, p.BrotliQuality)
-			if err != nil {
-				os.Remove(outPath)
-				results[i] = presetResult{key: k, err: err}
-				return
-			}
-			st2, _ := os.Stat(outPath)
-			var sz int64
-			if st2 != nil {
-				sz = st2.Size()
-			}
-			results[i] = presetResult{key: k, size: sz, ms: ms, path: outPath}
-		}(i, k)
+		p := compressDocPresets[k]
+		out, _ := os.CreateTemp("", "goldcmp-doc-out-"+k+"-*")
+		if out == nil {
+			results[i] = presetResult{key: k, err: fmt.Errorf("temp")}
+			continue
+		}
+		outPath := out.Name()
+		out.Close()
+		ms, err := compressBrotli(ctx, tmpIn.Name(), outPath, p.BrotliQuality)
+		if err != nil {
+			os.Remove(outPath)
+			results[i] = presetResult{key: k, err: err}
+			continue
+		}
+		st2, _ := os.Stat(outPath)
+		var sz int64
+		if st2 != nil {
+			sz = st2.Size()
+		}
+		results[i] = presetResult{key: k, size: sz, ms: ms, path: outPath}
 	}
-	wg.Wait()
 
 	var chosen *presetResult
 	for i := range results {
@@ -1267,7 +1291,7 @@ func compressEncodeVideoTier(ctx context.Context, inPath, outPath string, tier c
 		"-bufsize", strconv.Itoa(tier.VideoBitrateKbps*2) + "k",
 		"-preset", "veryfast",
 		"-movflags", "+faststart",
-		"-threads", "0",
+		"-threads", "2",
 	}
 	if sourceHeight > 0 && tier.Height < sourceHeight {
 		args = append(args, "-vf", "scale=-2:"+strconv.Itoa(tier.Height))

@@ -10,6 +10,7 @@ RUN CGO_ENABLED=1 go build -mod=vendor -o gold-md .
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libc6 ffmpeg python3 python3-pil \
+    jpegoptim pngquant \
     libreoffice-writer libreoffice-calc libreoffice-impress \
     poppler-utils && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
