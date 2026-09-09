@@ -540,6 +540,13 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		return
 	}
 
+	// 🔰 YTS CHOICE SESSION (.yts number → thumbnail → 1=AUDIO / 2=VIDEO).
+	// A bare "1"/"2" after a .yts pick sends the audio (play turbo → play2
+	// classic) or the video (video turbo → video2 classic) directly.
+	if goldcmds.YTSTryHandleChoice(brCP, info, body, prefix) {
+		return
+	}
+
 	// 🔰 SEARCH PICK SESSION (search commands' number → download flow).
 	// Runs BEFORE audio/video sessions and command dispatch so a bare
 	// "1".."5" reply after a search card is consumed here.
@@ -1617,10 +1624,11 @@ func (s *Session) applyVoiceTrigger(info types.MessageInfo, body string) {
 // the command runs. Mirrors UMAR-MD's auto-react-on-command behaviour.
 //
 // .cmdreact control (gold-cmds/cmdreact.go):
-//   OFF            → koi react nahi (skip)
-//   single emoji   → har command par wahi emoji
-//   multi emoji    → har command par random alag-alag emoji
-//   per-command    → us command ka apna emoji (general se upar)
+//
+//	OFF            → koi react nahi (skip)
+//	single emoji   → har command par wahi emoji
+//	multi emoji    → har command par random alag-alag emoji
+//	per-command    → us command ka apna emoji (general se upar)
 //
 // command name resolved state me pass hota hai (custom .cmdname rename
 // hua ho to original naam — warna per-command emoji match nahi hota).

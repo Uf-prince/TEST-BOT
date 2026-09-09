@@ -31,9 +31,11 @@ package goldcmds
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -143,9 +145,19 @@ func SearchTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 		searchPickAPK(s, info, selected)
 	case pickTG:
 		searchPickTG(s, info, selected)
+	case pickTWT:
+		// tweet link → direct download (fxtwitter API works on tweet links)
+		if !searchPickTWTDirect(s, info, selected) {
+			searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
+		}
+	case pickIG:
+		// profile → web_profile_info → latest reel direct download
+		if !searchPickIGDirect(s, info, selected) {
+			searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
+		}
 	default:
-		// TT / FB / IG / TWT — profile downloaders are API-blocked, send
-		// the result card with the direct link + downloader hint.
+		// TT / FB — profile media is API-blocked (tikwm 403, cobalt rejects
+		// profiles) → send the result card with the direct link + hint.
 		searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
 	}
 	return true
@@ -728,4 +740,264 @@ func tgLatestPost(ctx context.Context, tgURL string) (string, error) {
 	}
 	last := m[len(m)-1]
 	return "https://t.me/" + last[1] + "/" + last[2], nil
+}
+
+// ── direct download pick actions ───────────────────────────────────────
+
+// searchPickTWTDirect downloads the tweet behind an X/Twitter search result
+// (search results are tweet links from Bing). Photo tweets send up to 4
+// photos. Returns false when the download failed (caller falls back to the
+// link card).
+func searchPickTWTDirect(s SessionBridge, info types.MessageInfo, selected searchResult) bool {
+	ok := false
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		waitID := s.ReplyWithID(info, "*DOWNLOADING X / TWITTER MEDIA....*")
+
+		statusID := twExtractTweetID(selected.Link)
+		if statusID == "" {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+		tweet, err := twFetchTweet(ctx, statusID)
+		if err != nil {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+
+		client := mediaHTTPClient()
+		caption := twBuildCaption(tweet)
+
+		// Photo-only tweets → send up to 4 photos
+		if len(tweet.Media.Videos) == 0 && len(tweet.Media.Photos) > 0 {
+			sent := 0
+			total := len(tweet.Media.Photos)
+			if total > 4 {
+				total = 4
+			}
+			for i := 0; i < total; i++ {
+				data := instaFetchThumbnail(ctx, client, tweet.Media.Photos[i].URL)
+				if len(data) == 0 {
+					continue
+				}
+				cap := caption
+				if len(tweet.Media.Photos) > 1 {
+					cap = fmt.Sprintf("%s\n*(%d/%d)*", cap, i+1, total)
+				}
+				if s.SendImage(info, data, cap) == nil {
+					sent++
+				}
+			}
+			s.DeleteMessage(info, waitID)
+			if sent > 0 {
+				ok = true
+			}
+			return
+		}
+
+		if len(tweet.Media.Videos) == 0 || tweet.Media.Videos[0].URL == "" {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+		vid := tweet.Media.Videos[0]
+
+		s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
+
+		path, err := streamDownloadToFile(ctx, client, vid.URL, nil)
+		if err != nil {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+		defer removeTempFile(path)
+
+		var thumb []byte
+		if vid.ThumbnailURL != "" {
+			thumb = instaFetchThumbnail(ctx, client, vid.ThumbnailURL)
+		}
+		secs, w, h := probeVideoMeta(path)
+		if w == 0 && h == 0 {
+			w, h = uint32(vid.Width), uint32(vid.Height)
+		}
+		if err := s.SendVideoFile(info, path, caption, thumb, secs, w, h); err != nil {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+		s.DeleteMessage(info, waitID)
+		ok = true
+	})
+	return ok
+}
+
+// igProfileLatest is one media item from the Instagram web_profile_info API.
+type igProfileLatest struct {
+	Shortcode  string
+	IsVideo    bool
+	Caption    string
+	LikeCount  int64
+	DisplayURL string
+	VideoURL   string
+}
+
+// igProfileMedia calls the Instagram web_profile_info endpoint for a profile
+// link and returns the latest timeline media with direct CDN URLs.
+func igProfileMedia(ctx context.Context, profileURL string) ([]igProfileLatest, bool) {
+	// extract the username
+	low := strings.ToLower(strings.TrimSpace(profileURL))
+	low = strings.TrimPrefix(strings.TrimPrefix(low, "https://"), "http://")
+	low = strings.TrimPrefix(low, "www.")
+	parts := strings.SplitN(low, "/", 3)
+	if len(parts) < 2 || parts[1] == "" {
+		return nil, false
+	}
+	username := strings.SplitN(parts[1], "?", 2)[0]
+
+	u := "https://www.instagram.com/api/v1/users/web_profile_info/?username=" + url.QueryEscape(username)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, false
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+	req.Header.Set("x-ig-app-id", "936619743392459")
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 40 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, false
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return nil, false
+	}
+
+	var parsed struct {
+		Data struct {
+			User struct {
+				FullName  string `json:"full_name"`
+				IsPrivate bool   `json:"is_private"`
+				Timeline  struct {
+					Edges []struct {
+						Node struct {
+							Shortcode  string `json:"shortcode"`
+							IsVideo    bool   `json:"is_video"`
+							DisplayURL string `json:"display_url"`
+							VideoURL   string `json:"video_url"`
+							LikeCount  int64  `json:"edge_liked_by"`
+							Caption    struct {
+								Edges []struct {
+									Node struct {
+										Text string `json:"text"`
+									} `json:"node"`
+								} `json:"edges"`
+							} `json:"edge_media_to_caption"`
+						} `json:"node"`
+					} `json:"edges"`
+				} `json:"edge_owner_to_timeline_media"`
+			} `json:"user"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(io.LimitReader(res.Body, 16<<20)).Decode(&parsed); err != nil {
+		return nil, false
+	}
+	if parsed.Data.User.IsPrivate {
+		return nil, false
+	}
+	var out []igProfileLatest
+	for _, e := range parsed.Data.User.Timeline.Edges {
+		n := e.Node
+		item := igProfileLatest{
+			Shortcode:  n.Shortcode,
+			IsVideo:    n.IsVideo,
+			Caption:    "",
+			LikeCount:  n.LikeCount,
+			DisplayURL: n.DisplayURL,
+			VideoURL:   n.VideoURL,
+		}
+		if len(n.Caption.Edges) > 0 {
+			item.Caption = n.Caption.Edges[0].Node.Text
+		}
+		out = append(out, item)
+		if len(out) >= 3 {
+			break
+		}
+	}
+	return out, len(out) > 0
+}
+
+// searchPickIGDirect downloads the latest reel/post from an Instagram
+// profile search result (web_profile_info → direct CDN video/image URL).
+// Returns false when it failed (caller falls back to the link card).
+func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected searchResult) bool {
+	ok := false
+	RunWithTimeout(s, info, func(ctx context.Context) {
+		waitID := s.ReplyWithID(info, "*DOWNLOADING INSTAGRAM MEDIA....*")
+
+		media, found := igProfileMedia(ctx, selected.Link)
+		if !found {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+		client := mediaHTTPClient()
+
+		// Prefer the first VIDEO node; otherwise send the first image.
+		var vid *igProfileLatest
+		for i := range media {
+			if media[i].IsVideo && media[i].VideoURL != "" {
+				vid = &media[i]
+				break
+			}
+		}
+		if vid != nil {
+			s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
+			path, err := streamDownloadToFile(ctx, client, vid.VideoURL, nil)
+			if err != nil {
+				s.DeleteMessage(info, waitID)
+				return
+			}
+			defer removeTempFile(path)
+
+			title := vid.Caption
+			if title == "" {
+				title = "Instagram " + vid.Shortcode
+			}
+			if len(title) > 120 {
+				title = title[:117] + "..."
+			}
+			caption := "🏆 *INSTAGRAM VIDEO NAME 🏆*\n" +
+				"*" + title + "*\n\n"
+			if vid.LikeCount > 0 {
+				caption += fmt.Sprintf("🏆 *LIKES :* %d\n", vid.LikeCount)
+			}
+			caption += "\n*INSTAGRAM VIDEO DOWNLOAD*"
+
+			secs, w, h := probeVideoMeta(path)
+			if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
+				s.DeleteMessage(info, waitID)
+				return
+			}
+			s.DeleteMessage(info, waitID)
+			ok = true
+			return
+		}
+
+		// image post
+		img := media[0]
+		data := instaFetchThumbnail(ctx, client, img.DisplayURL)
+		if len(data) == 0 {
+			s.DeleteMessage(info, waitID)
+			return
+		}
+		title := img.Caption
+		if title == "" {
+			title = "Instagram " + img.Shortcode
+		}
+		if len(title) > 120 {
+			title = title[:117] + "..."
+		}
+		caption := "🏆 *INSTAGRAM POST* 🏆\n*" + title + "*"
+		if s.SendImage(info, data, caption) == nil {
+			ok = true
+		}
+		s.DeleteMessage(info, waitID)
+	})
+	return ok
 }

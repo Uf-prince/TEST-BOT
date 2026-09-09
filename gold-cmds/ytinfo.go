@@ -289,7 +289,8 @@ func ytSearchCard(query string, results []ytVideo, prefix string) string {
 		b.WriteString("*LINK :❱ " + v.Link + "*\n")
 		b.WriteString(searchBorder + "\n\n")
 	}
-	b.WriteString("*TYPE NUMBER WHICH VIDEO DO YOU WANT TO DOWNLOAD — REPLY WITH ANY NUMBER 1 TO " + strconv.Itoa(len(results)) + "*")
+	b.WriteString("*TYPE NUMBER WHICH VIDEO DO YOU WANT TO DOWNLOAD — REPLY WITH ANY NUMBER 1 TO " + strconv.Itoa(len(results)) + "*\n\n" +
+		ytPickAskFooter())
 	return b.String()
 }
 
@@ -310,7 +311,7 @@ func ytGuide(prefix string) string {
 	return "*🔰 YOUTUBE SEARCH GUIDE 🔰*\n\n" +
 		"*🔰 SEARCH YOUTUBE :❱*\n*" + prefix + "yts ❮ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "yts lofi mix*\n*SHOWS THE TOP RESULTS WITH TITLE, CHANNEL, LENGTH, VIEWS AND LINK*\n\n" +
 		"*🔰 VIDEO DETAILS :❱*\n*" + prefix + "ytinfo ❮ LINK OR ID ❯*\n*EXAMPLE :❱ " + prefix + "ytinfo https://youtube.com/watch?v=xxxxxxx*\n*SHOWS THE FULL DETAILS OF ONE VIDEO*\n\n" +
-				"*✱ DIRECT YOUTUBE LINK :❱*\n*" + prefix + "yts ❰ YOUTUBE LINK ❯*\n*EXAMPLE :❱ " + prefix + "yts https://www.youtube.com/watch?v=xxxxxxxxxxx*\n*PASTE A YOUTUBE LINK AND THE VIDEO DOWNLOADS INSTANTLY*\n\n" +
+		"*✱ DIRECT YOUTUBE LINK :❱*\n*" + prefix + "yts ❰ YOUTUBE LINK ❯*\n*EXAMPLE :❱ " + prefix + "yts https://www.youtube.com/watch?v=xxxxxxxxxxx*\n*PASTE A YOUTUBE LINK AND THE VIDEO DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 NOTE :❱*\n*COMPLETELY FREE — NO API KEY, NO LOGIN, NO QUOTA*\n*TO DOWNLOAD A VIDEO USE " + prefix + "video*"
 }
 
@@ -362,7 +363,7 @@ func handleYTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		}
 		vids = append(vids, VideoResult{Title: v.Title, URL: v.Link, Thumbnail: thumb, Duration: v.Length})
 	}
-	s.SetVideoSession(info.Sender.String(), vids)
+	s.SetVideoSession2(info.Sender.String(), vids, false)
 	s.Reply(info, ytSearchCard(query, results, prefix))
 }
 
