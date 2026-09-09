@@ -504,7 +504,7 @@ func apkAppSearch(ctx context.Context, query string) ([]searchResult, error) {
 func ttGuide(prefix string) string {
 	return "*🔰 TIKTOK SEARCH GUIDE 🔰*\n\n" +
 		"*🔰 SEARCH TIKTOK USERS :❱*\n*" + prefix + "tt ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "tt carti*\n*SHOWS THE TOP TIKTOK USERS WITH NAME, FOLLOWERS AND LINK*\n\n" +
-				"*❁ DIRECT TIKTOK LINK :❱*\n*" + prefix + "tt ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "tt https://www.tiktok.com/@user/video/1234567890*\n*PASTE A TIKTOK LINK AND THE VIDEO DOWNLOADS INSTANTLY*\n\n" +
+		"*❁ DIRECT TIKTOK LINK :❱*\n*" + prefix + "tt ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "tt https://www.tiktok.com/@user/video/1234567890*\n*PASTE A TIKTOK LINK AND THE VIDEO DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "tts ❰ QUERY ❯*\n\n" +
 		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "tt ❰ LINK ❯*"
 }
@@ -512,7 +512,7 @@ func ttGuide(prefix string) string {
 func fbGuide(prefix string) string {
 	return "*🔰 FACEBOOK SEARCH GUIDE 🔰*\n\n" +
 		"*🔰 SEARCH FACEBOOK PROFILES :❱*\n*" + prefix + "fb ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "fb mark zuckerberg*\n*SHOWS MATCHING FACEBOOK PROFILES WITH NAME AND LINK*\n\n" +
-				"*❁ DIRECT FACEBOOK LINK :❱*\n*" + prefix + "fb ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "fb https://www.facebook.com/watch?v=1234567890*\n*PASTE A FACEBOOK VIDEO / REEL LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
+		"*❁ DIRECT FACEBOOK LINK :❱*\n*" + prefix + "fb ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "fb https://www.facebook.com/watch?v=1234567890*\n*PASTE A FACEBOOK VIDEO / REEL LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "fbs ❰ QUERY ❯*\n\n" +
 		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "fb ❰ LINK ❯*"
 }
@@ -520,7 +520,7 @@ func fbGuide(prefix string) string {
 func igGuide(prefix string) string {
 	return "*🔰 INSTAGRAM SEARCH GUIDE 🔰*\n\n" +
 		"*🔰 SEARCH INSTAGRAM ACCOUNTS :❱*\n*" + prefix + "ig ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "ig ronaldo*\n*SHOWS MATCHING INSTAGRAM ACCOUNTS WITH NAME AND LINK*\n\n" +
-				"*❁ DIRECT INSTAGRAM LINK :❱*\n*" + prefix + "ig ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "ig https://www.instagram.com/reel/Cxxxxxxxx/*\n*PASTE AN INSTAGRAM POST / REEL LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
+		"*❁ DIRECT INSTAGRAM LINK :❱*\n*" + prefix + "ig ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "ig https://www.instagram.com/reel/Cxxxxxxxx/*\n*PASTE AN INSTAGRAM POST / REEL LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "igs ❰ QUERY ❯*\n\n" +
 		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "ig ❰ LINK ❯*"
 }
@@ -528,7 +528,7 @@ func igGuide(prefix string) string {
 func tgGuide(prefix string) string {
 	return "*🔰 TELEGRAM SEARCH GUIDE 🔰*\n\n" +
 		"*🔰 SEARCH TELEGRAM CHANNELS :❱*\n*" + prefix + "tg ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "tg movies*\n*SHOWS CHANNELS AND GROUPS WITH THEIR JOIN LINKS*\n\n" +
-				"*❁ DIRECT TELEGRAM LINK :❱*\n*" + prefix + "tg ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "tg https://t.me/channelname/123*\n*PASTE A T.ME POST LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
+		"*❁ DIRECT TELEGRAM LINK :❱*\n*" + prefix + "tg ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "tg https://t.me/channelname/123*\n*PASTE A T.ME POST LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "tgs ❰ QUERY ❯*\n\n" +
 		"*🔰 TO DOWNLOAD POSTS :❱*\n*" + prefix + "tg ❰ POST LINK ❯*"
 }
@@ -536,7 +536,7 @@ func tgGuide(prefix string) string {
 func twtGuide(prefix string) string {
 	return "*🔰 X / TWITTER SEARCH GUIDE 🔰*\n\n" +
 		"*🔰 SEARCH X ACCOUNTS :❱*\n*" + prefix + "twt ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "twt elon musk*\n*SHOWS MATCHING X / TWITTER ACCOUNTS WITH NAME AND LINK*\n\n" +
-				"*❁ DIRECT X LINK :❱*\n*" + prefix + "twt ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "twt https://x.com/username/status/1234567890*\n*PASTE AN X / TWITTER LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
+		"*❁ DIRECT X LINK :❱*\n*" + prefix + "twt ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "twt https://x.com/username/status/1234567890*\n*PASTE AN X / TWITTER LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "twts ❰ QUERY ❯*\n\n" +
 		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "twt ❰ LINK ❯*"
 }
@@ -544,7 +544,7 @@ func twtGuide(prefix string) string {
 func apkGuide(prefix string) string {
 	return "*🔰 APK SEARCH GUIDE 🔰*\n\n" +
 		"*🔰 SEARCH APK APPS :❱*\n*" + prefix + "apk ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "apk whatsapp*\n*SHOWS APPS WITH NAME, PACKAGE, DOWNLOADS, RATING AND SIZE*\n\n" +
-				"*❁ DIRECT APK LINK :❱*\n*" + prefix + "apk ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "apk https://apkcombo.com/whatsapp/com.whatsapp/*\n*PASTE AN APK LINK AND THE APK DOWNLOADS INSTANTLY*\n\n" +
+		"*❁ DIRECT APK LINK :❱*\n*" + prefix + "apk ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "apk https://apkcombo.com/whatsapp/com.whatsapp/*\n*PASTE AN APK LINK AND THE APK DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "apks ❰ QUERY ❯*\n\n" +
 		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "apk ❰ NUMBER OR NAME ❯*"
 }
@@ -563,7 +563,15 @@ func handleTTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		return
 	}
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		results, err := ttUserSearch(ctx, query)
+		// REAL VIDEO SEARCH (owner: "jab tak asal video ka link nai aye ga
+		// to error hi bheje ga na bot") — feed/search/ asli videos lauta
+		// hai (tiktok.com/@user/video/ID links), accounts nahi. Purane
+		// user-search results profile links the jo pick pe fail hote the.
+		results, err := ttVideoSearch(ctx, query)
+		if err != nil || len(results) == 0 {
+			// fallback: purana user-search (accounts) — feed/search down ho to
+			results, err = ttUserSearch(ctx, query)
+		}
 		if err != nil {
 			s.Reply(info, searchFailed("TIKTOK"))
 			return

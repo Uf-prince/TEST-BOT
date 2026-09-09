@@ -347,7 +347,11 @@ func runSelfSearch(s SessionBridge, info types.MessageInfo, kind searchPickKind,
 		switch kind {
 		case pickTT:
 			header, handleLabel, statsLabel, failed = "TIKTOK SEARCH", "USER", "STATS", "TIKTOK"
-			results, err = ttUserSearch(ctx, query)
+			// video-first: asli videos (owner rule), user-search fallback
+			results, err = ttVideoSearch(ctx, query)
+			if err != nil || len(results) == 0 {
+				results, err = ttUserSearch(ctx, query)
+			}
 		case pickFB:
 			header, handleLabel, statsLabel, failed = "FACEBOOK SEARCH", "", "", "FACEBOOK"
 			results, err = fbProfileSearch(ctx, query)
@@ -603,10 +607,18 @@ func searchPickTTDirect(s SessionBridge, info types.MessageInfo, selected search
 			return
 		}
 
-		videoURL, err := ttProfileLatestVideo(ctx, link)
-		if err != nil || videoURL == "" {
-			fail()
-			return
+		// VIDEO LINK (new search): /video/ID link seedha proven engine pe
+		// jata hai — profile scrape ki zaroorat hi nahi. PROFILE LINK
+		// (fallback user-search ka result): profile se latest video nikalne
+		// ki koshish, fail pe short error card.
+		videoURL := link
+		if !strings.Contains(link, "/video/") {
+			var perr error
+			videoURL, perr = ttProfileLatestVideo(ctx, link)
+			if perr != nil || videoURL == "" {
+				fail()
+				return
+			}
 		}
 
 		res, err := ttSelfFetch(ctx, videoURL)
