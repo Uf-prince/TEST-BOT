@@ -160,9 +160,10 @@ func SearchTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 			searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
 		}
 	case pickFB:
-		// profile → jina /videos tab → latest video permalink → cobalt
+		// profile → multi-route /videos tab → latest video permalink → cobalt
 		if !searchPickFBDirect(s, info, selected) {
-			searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
+			// FB-STYLE SHORT ERROR (TT jaisa — copy-link guidance card NAHI)
+			s.Reply(info, "❌ *FACEBOOK DOWNLOAD ERROR*\nPRIVATE PROFILE VIDEO NOT AVAILABLE\nTRY ANOTHER RESULT OR A PAGE / PUBLIC PROFILE 🤗")
 		}
 	default:
 		// TT — try a direct download of the picked profile’s latest
@@ -1212,7 +1213,7 @@ func searchPickFBDirect(s SessionBridge, info types.MessageInfo, selected search
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "*DOWNLOADING FACEBOOK VIDEO....*")
 
-		videoLink := fbLatestVideoLink(ctx, selected.Link)
+		videoLink := fbLatestVideoLinkFixed(ctx, selected.Link)
 		if videoLink == "" {
 			s.DeleteMessage(info, waitID)
 			return
