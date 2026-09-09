@@ -942,7 +942,9 @@ func handleIGSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		return
 	}
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		results, err := igAccountSearch(ctx, query)
+		waitID := s.ReplyWithID(info, "*SEARCHING INSTAGRAM....*")
+		results, err := igEngineSearch(ctx, query)
+		s.DeleteMessage(info, waitID)
 		if err != nil {
 			s.Reply(info, searchFailed("INSTAGRAM"))
 			return
@@ -951,12 +953,12 @@ func handleIGSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 			s.Reply(info, searchNoResults(query))
 			return
 		}
-		if len(results) > searchMaxResults {
-			results = results[:searchMaxResults]
+		if len(results) > igMaxResults {
+			results = results[:igMaxResults]
 		}
 		setSearchSession(info.Sender.String(), pickIG, query, results)
-		s.Reply(info, searchCard("INSTAGRAM SEARCH", query, "ACCOUNT", "", results,
-			searchPickFooter()))
+		s.Reply(info, searchCard("INSTAGRAM SEARCH", query, "", "", results,
+			searchPickFooterN(len(results))))
 	})
 }
 

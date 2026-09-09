@@ -1,10 +1,10 @@
 {
-  "_comment": "GOLD-MD multi-server panel config. Replace each URL with your deployment URL (no trailing slash). The panel will health-check each one and show live status. maxPerServer caps pairings per instance.",
+  "_comment": "GOLD-MD multi-server panel config. SERVER 1 points to this instance via Cloudflare tunnel.",
   "maxPerServer": 10,
   "servers": [
     {
       "name": "SERVER 1",
-      "url": "https://ufprince1--gold-md-bot-run-bot.modal.run"
+      "url": "https://bloom-church-consisting-looking.trycloudflare.com"
     },
     {
       "name": "SERVER 2",

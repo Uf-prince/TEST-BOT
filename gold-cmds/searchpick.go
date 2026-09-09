@@ -162,9 +162,11 @@ func SearchTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 			searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
 		}
 	case pickIG:
-		// profile → web_profile_info → latest reel direct download
-		if !searchPickIGDirect(s, info, selected) {
-			searchPickLinkCard(s, info, sess.Kind, sess.Query, selected, prefix)
+		// v2: permalink → cobalt direct | profile → web_profile_info;
+		// fail pe baqi results bhi try (FB v6/v7 pattern)
+		if !searchPickIGDirect(s, info, selected, sess.Results) {
+			// IG-STYLE SHORT ERROR (FB jaisa — link card NAHI)
+			s.Reply(info, "❌ *INSTAGRAM DOWNLOAD ERROR*\nMEDIA NOT AVAILABLE\nTRY ANOTHER RESULT OR A DIFFERENT SEARCH \U0001f917")
 		}
 	case pickFB:
 		// profile → multi-route /videos tab → latest video permalink → cobalt
@@ -1082,38 +1084,73 @@ func igProfileMedia(ctx context.Context, profileURL string) ([]igProfileLatest, 
 // searchPickIGDirect downloads the latest reel/post from an Instagram
 // profile search result (web_profile_info → direct CDN video/image URL).
 // Returns false when it failed (caller falls back to the link card).
-func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected searchResult) bool {
+func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected searchResult, all []searchResult) bool {
 	ok := false
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "*DOWNLOADING INSTAGRAM MEDIA....*")
 
-		media, found := igProfileMedia(ctx, selected.Link)
-		if !found {
-			s.DeleteMessage(info, waitID)
-			return
+		// v2 (FB v6/v7 pattern): try-list — selected pehle, phir baqi results.
+		// REEL/POST PERMALINK → seedha cobalt (instant download).
+		// PROFILE → web_profile_info → latest reel direct CDN download.
+		tryList := []searchResult{selected}
+		for _, r := range all {
+			if r.Link != selected.Link {
+				tryList = append(tryList, r)
+			}
 		}
+
 		client := mediaHTTPClient()
 
-		// Prefer the first VIDEO node; otherwise send the first image.
-		var vid *igProfileLatest
-		for i := range media {
-			if media[i].IsVideo && media[i].VideoURL != "" {
-				vid = &media[i]
-				break
+		for i, r := range tryList {
+			link := strings.TrimSpace(r.Link)
+			if link == "" {
+				continue
 			}
-		}
-		if vid != nil {
-			s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
+
+			// A) permalink (reel/p) → cobalt fast path
+			if igIsPermalink(link) {
+				s.EditMessage(info, waitID, "*FETCHING REEL....*")
+				if igSendPermalink(ctx, s, info, waitID, client, link, r) {
+					ok = true
+					return
+				}
+				if i == 0 && len(tryList) > 1 {
+					s.EditMessage(info, waitID, "*SELECTED NOT AVAILABLE — TRYING OTHER RESULTS....*")
+				}
+				continue
+			}
+
+			// B) profile → web_profile_info → latest media
+			media, found := igProfileMedia(ctx, link)
+			if !found {
+				if i == 0 && len(tryList) > 1 {
+					s.EditMessage(info, waitID, "*SELECTED NOT AVAILABLE — TRYING OTHER RESULTS....*")
+				}
+				continue
+			}
+
+			// Prefer the first VIDEO node; otherwise send the first image.
+			var vid *igProfileLatest
+			for j := range media {
+				if media[j].IsVideo && media[j].VideoURL != "" {
+					vid = &media[j]
+					break
+				}
+			}
+			if vid != nil {
+				s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
 			path, err := streamDownloadToFile(ctx, client, vid.VideoURL, nil)
 			if err != nil {
-				s.DeleteMessage(info, waitID)
-				return
-			}
+					if i == 0 && len(tryList) > 1 {
+						s.EditMessage(info, waitID, "*SELECTED NOT AVAILABLE — TRYING OTHER RESULTS....*")
+					}
+					continue
+				}
 			defer removeTempFile(path)
 
 			title := vid.Caption
 			if title == "" {
-				title = "Instagram " + vid.Shortcode
+					title = "Instagram " + vid.Shortcode
 			}
 			if len(title) > 120 {
 				title = title[:117] + "..."
@@ -1121,42 +1158,107 @@ func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected search
 			caption := "🏆 *INSTAGRAM VIDEO NAME 🏆*\n" +
 				"*" + title + "*\n\n"
 			if vid.LikeCount > 0 {
-				caption += fmt.Sprintf("🏆 *LIKES :* %d\n", vid.LikeCount)
+					caption += fmt.Sprintf("🏆 *LIKES :* %d\n", vid.LikeCount)
 			}
 			caption += "\n*INSTAGRAM VIDEO DOWNLOAD*"
 
 			secs, w, h := probeVideoMeta(path)
 			if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
-				s.DeleteMessage(info, waitID)
-				return
+					continue
 			}
 			s.DeleteMessage(info, waitID)
 			ok = true
 			return
 		}
 
-		// image post
-		img := media[0]
-		data := instaFetchThumbnail(ctx, client, img.DisplayURL)
-		if len(data) == 0 {
-			s.DeleteMessage(info, waitID)
-			return
-		}
-		title := img.Caption
-		if title == "" {
-			title = "Instagram " + img.Shortcode
-		}
-		if len(title) > 120 {
+			// image post
+			img := media[0]
+			data := instaFetchThumbnail(ctx, client, img.DisplayURL)
+			if len(data) == 0 {
+				continue
+			}
+			title := img.Caption
+			if title == "" {
+				title = "Instagram " + img.Shortcode
+			}
+			if len(title) > 120 {
 			title = title[:117] + "..."
-		}
-		caption := "🏆 *INSTAGRAM POST* 🏆\n*" + title + "*"
-		if s.SendImage(info, data, caption) == nil {
-			ok = true
+			}
+			caption := "🏆 *INSTAGRAM POST* 🏆\n*" + title + "*"
+			if s.SendImage(info, data, caption) == nil {
+				s.DeleteMessage(info, waitID)
+				ok = true
+				return
+			}
 		}
 		s.DeleteMessage(info, waitID)
 	})
 	return ok
 }
+
+// igIsPermalink — instagram.com/(reel|p|tv)/SHORTCODE/ check.
+func igIsPermalink(link string) bool {
+	low := strings.ToLower(strings.TrimSpace(link))
+	for _, seg := range []string{"instagram.com/reel/", "instagram.com/p/", "instagram.com/tv/"} {
+		if strings.Contains(low, seg) {
+			return true
+		}
+	}
+	return false
+}
+
+// igSendPermalink — permalink → cobalt → video download + caption.
+// Title r.Title (search se aaya) use karta hai, warna filename se.
+func igSendPermalink(ctx context.Context, s SessionBridge, info types.MessageInfo, waitID string, client *http.Client, link string, r searchResult) bool {
+	resp, err := fbCobaltFetch(ctx, link)
+	if err != nil {
+		return false
+	}
+	videoURL, quality := fbResolveVideoURL(resp)
+	if videoURL == "" {
+		return false
+	}
+	s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
+	path, err := streamDownloadToFile(ctx, client, videoURL, nil)
+	if err != nil {
+		return false
+	}
+	defer removeTempFile(path)
+
+	title := igCleanCaption(r.Title)
+	if title == "" || strings.HasPrefix(title, "Instagram Reel") {
+		title = instaTitleFromFilename(resp.Filename)
+	}
+	if len(title) > 120 {
+		title = title[:117] + "..."
+	}
+	caption := "🏆 *INSTAGRAM VIDEO NAME 🏆*\n" +
+		"*" + title + "*\n\n"
+	if r.Stats != "" {
+		caption += "🏆 *LIKES :* " + igStatsLikes(r.Stats) + "\n"
+	}
+	caption += "🏆 *QUALITY :❱ " + quality + "*\n\n" +
+		"*INSTAGRAM VIDEO DOWNLOAD*"
+
+	secs, w, h := probeVideoMeta(path)
+	if secs == 0 && w == 0 {
+		quality = "HD"
+	}
+	if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
+		return false
+	}
+	s.DeleteMessage(info, waitID)
+	return true
+}
+
+// igStatsLikes — "28.8M likes" → "28.8M".
+func igStatsLikes(stats string) string {
+	if i := strings.Index(stats, " likes"); i > 0 {
+		return stats[:i]
+	}
+	return stats
+}
+
 
 // ───────────────────────────────────────────────────────────────────────────
 // FACEBOOK DIRECT PICK (profile → latest video → direct download)
