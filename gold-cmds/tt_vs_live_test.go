@@ -3,10 +3,12 @@
 package goldcmds
 
 // LIVE test (TT_VS_LIVE=1): verifies the .tt VIDEO search chain with the
-// 15 SHORTS + 15 LONG split (owner: "15 shorts videos ka link aye 15 long
-// videos ka link aye ... list total 30 videos ki bane ge"):
+// 15 SHORTS + 15 LONG split (owner round 2: "1 mint ki to already shorts
+// me aa rhe the — LONG me 4/5 mint aur 10 mint ki videos chahiye, aur
+// list me DURATION line ho"):
 //   1. tikwm feed/search/ pages (trailing slash) return REAL videos
-//   2. results split into SHORTS (<=60s) + LONG (>60s), combined <= 30
+//   2. SHORTS <= 60s in relevance order; LONG >= 120s sorted DURATION DESC
+//      (longest video top of LONG section); 61-119s dropped
 //   3. a LONG video link -> ttSelfFetch resolve -> ttStreamDownload bytes
 //
 // Usage:
@@ -35,18 +37,31 @@ func TestTTVideoSearchLive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ttVideoSearch failed: %v", err)
 	}
+	results = filterTTResults(results)
 	if len(results) == 0 {
 		t.Fatalf("no video results")
 	}
 
 	var shorts, longs int
+	lastLong := int64(-1)
 	for i, r := range results {
 		kind := "SHORT"
 		if r.DurationSec > 60 {
 			kind = "LONG "
 			longs++
+			// LONG must be >= 120s and sorted DESC (longest first)
+			if r.DurationSec < 120 {
+				t.Errorf("LONG result %d is only %ds (< 2min): %s", i+1, r.DurationSec, r.Link)
+			}
+			if lastLong >= 0 && r.DurationSec > lastLong {
+				t.Errorf("LONG sort broken: %ds after %ds", r.DurationSec, lastLong)
+			}
+			lastLong = r.DurationSec
 		} else {
 			shorts++
+			if r.DurationSec > 60 {
+				t.Errorf("SHORT result %d is %ds (> 60s): %s", i+1, r.DurationSec, r.Link)
+			}
 		}
 		t.Logf("%2d %s %4ds | %s | %s | %s", i+1, kind, r.DurationSec, r.Handle, r.Stats, r.Link)
 		if !strings.Contains(r.Link, "/video/") {
@@ -55,18 +70,17 @@ func TestTTVideoSearchLive(t *testing.T) {
 	}
 	t.Logf("total=%d shorts=%d longs=%d", len(results), shorts, longs)
 	if longs == 0 {
-		t.Fatalf("no LONG (>60s) videos found for %q — split would be empty", q)
+		t.Fatalf("no LONG (2min+) videos found for %q", q)
 	}
 
-	// pick the FIRST long video — exactly what a user's number-pick hits
-	var pick searchResult
+	// pick the LONGEST long video (top of the LONG section)
+	pick := searchResult{}
 	for _, r := range results {
-		if r.DurationSec > 60 {
+		if r.DurationSec > 60 && r.DurationSec > pick.DurationSec {
 			pick = r
-			break
 		}
 	}
-	t.Logf("picked LONG video: %s (%ds)", pick.Link, pick.DurationSec)
+	t.Logf("picked LONGEST LONG video: %s (%ds)", pick.Link, pick.DurationSec)
 
 	t.Log("resolving via ttSelfFetch (self-scrape) ...")
 	res, err := ttSelfFetch(ctx, pick.Link)
@@ -100,5 +114,5 @@ func TestTTVideoSearchLive(t *testing.T) {
 	if st == nil || st.Size() < 50*1024 {
 		t.Fatalf("downloaded file too small: %v bytes", st)
 	}
-	t.Logf("OK downloaded %d bytes — LONG video chain WORKS", st.Size())
+	t.Logf("OK downloaded %d bytes — LONGEST LONG video chain WORKS", st.Size())
 }

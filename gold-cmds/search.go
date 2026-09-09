@@ -254,7 +254,7 @@ func ttVideoCard(query string, results []searchResult) string {
 		b.WriteString("*⚡ SHORTS ( < 1 MIN ) :❱ " + strconv.Itoa(shorts) + " RESULTS*\n")
 	}
 	if longs > 0 {
-		b.WriteString("*🎬 LONG VIDEOS ( > 1 MIN ) :❱ " + strconv.Itoa(longs) + " RESULTS*\n")
+		b.WriteString("*🎬 LONG VIDEOS ( 2 MIN + ) :❱ " + strconv.Itoa(longs) + " RESULTS*\n")
 	}
 	b.WriteString("\n")
 	if shorts > 0 {
@@ -263,7 +263,7 @@ func ttVideoCard(query string, results []searchResult) string {
 	for i, r := range results {
 		// section switch: SHORTS ke baad LONG section ka header
 		if i > 0 && r.DurationSec > 60 && results[i-1].DurationSec <= 60 {
-			b.WriteString("\n*🎬 LONG VIDEOS ( > 1 MIN ) 🎬*\n\n")
+			b.WriteString("\n*🎬 LONG VIDEOS ( 2 MIN + ) 🎬*\n\n")
 		}
 		b.WriteString(searchCardEntry(i, r, "TIKTOK SEARCH", "USER", "STATS"))
 	}
@@ -617,14 +617,20 @@ func handleTTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		// to error hi bheje ga na bot") — feed/search/ asli videos lauta
 		// hai (tiktok.com/@user/video/ID links), accounts nahi. Purane
 		// user-search results profile links the jo pick pe fail hote the.
-		// video-first: 15 SHORTS + 15 LONG (owner rule); user-search
+		waitID := s.ReplyWithID(info, "*SEARCHING TIKTOK VIDEOS....*")
+		// video-first: 15 SHORTS + 15 LONG (commit 970d0e0); user-search
 		// fallback only when the video engine is down/empty.
 		results, err := ttVideoSearch(ctx, query)
+		if err == nil {
+			results = filterTTResults(results)
+		}
 		if err == nil && len(results) > 0 {
+			s.DeleteMessage(info, waitID)
 			setSearchSession(info.Sender.String(), pickTT, query, results)
 			s.Reply(info, ttVideoCard(query, results))
 			return
 		}
+		s.DeleteMessage(info, waitID)
 		results, err = ttUserSearch(ctx, query)
 		if err != nil {
 			s.Reply(info, searchFailed("TIKTOK"))

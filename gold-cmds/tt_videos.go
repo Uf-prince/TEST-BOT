@@ -4,23 +4,34 @@ package goldcmds
 // GOLD-MD — TikTok VIDEO search engine (feed/search, multi-page)
 // File: tt_videos.go
 // ============================================================================
-// .tt <query> ka search ab asli VIDEOS return karta hai — 15 SHORTS
-// (<= 60s) + 15 LONG (> 60s) = total 30 links, take user apni marzi se
-// koi bhi number pick kar ke download kar sake (owner: "15 shorts videos
+// .tt <query> ka search asli VIDEOS return karta hai — 15 SHORTS
+// (<= 60s) + 15 LONG (2 min+), total 30 links (owner: "15 shorts videos
 // ka link aye 15 long videos ka link aye ... list total 30 videos ki
 // bane ge").
 //
-// Source: tikwm /api/feed/search/ (TRAILING SLASH zaroori hai — bina
-// slash ke Cloudflare challenge lagta hai). Ye 30 videos/page deta hai
-// aur cursor+hasMore se paginate hota hai — 3 pages tak scan kar ke
-// dono buckets (shorts/longs) bhar dete hain; duplicate video links
-// skip. tikwm 1 req/s free limit hai is liye pages ke darmiyan 1.2s
-// gap rakha hai.
+// Owner feedback (round 2): "~1 min ki videos LONG me nahi chahiye — wo
+// to shorts list me already aa rahi thin. LONG me 4/5 min aur 10 min ki
+// videos hon, aur har entry pe alag DURATION line ho take user ko pata
+// chale video kitni lambi hai."
+//
+// Rules:
+//   SHORTS: <= 60s   — search relevance order me pehli 15
+//   LONG:   >= 120s  — 5 pages ke tamam candidates DURATION DESC sort
+//                      hote hain: sab se lambi (10 min) video list ke
+//                      TOP pe, phir 5 min, 4 min ...
+//   61-119s videos: na SHORTS me (header < 1 min galat ho jata) na LONG
+//                      me (owner: wo shorts jaisi hi hain) — drop.
+//
+// Source: tikwm /api/feed/search/ (TRAILING SLASH zaroori — bina slash
+// ke Cloudflare challenge). 30 videos/page, cursor+hasMore pagination,
+// 5 pages tak scan (150 videos); duplicates skip; pages ke darmiyan
+// 1.2s gap (tikwm free 1 req/s).
 //
 // Har result ka link https://www.tiktok.com/@user/video/ID hai — wahi
 // canonical video page jo proven self-scrape engine (ttSelfFetch)
 // direct download karta hai; tikwm /api/?url= fallback bhi chalta hai.
-// DurationSec field SHORTS/LONG split ke liye fill hota hai.
+// DurationSec field card ki DURATION line + SHORTS/LONG split ke liye
+// fill hota hai.
 //
 // Engine ladder:
 //   1. tikwm feed/search/  (primary — real videos with ids + stats)
@@ -35,24 +46,27 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
 // ttVideoSearch finds REAL TikTok videos for a query (not accounts) and
-// returns a combined list: SHORTS (<= 60s) first, then LONG (> 60s),
-// capped at 15 + 15 = 30 entries.
+// returns a combined list: SHORTS (<= 60s) in relevance order first,
+// then LONG (>= 120s) sorted longest-first, capped at 15 + 15 = 30.
 func ttVideoSearch(ctx context.Context, query string) ([]searchResult, error) {
 	const (
 		wantShorts = 15
 		wantLongs  = 15
-		maxPages   = 3 // 30/page -> up to 90 videos scanned for the 30 slots
+		maxPages   = 5   // 30/page -> up to 150 videos scanned
+		longMin    = 120 // LONG = 2 min+ (owner: 4/5/10 min songs, NOT ~1 min)
 	)
 	var (
-		shorts, longs []searchResult
-		seen          = map[string]bool{}
-		cursor        int64
+		shorts    []searchResult
+		longCands []searchResult // uncapped — sort ke BAAD top 15
+		seen      = map[string]bool{}
+		cursor    int64
 	)
 	for page := 0; page < maxPages; page++ {
 		u := "https://www.tikwm.com/api/feed/search/?keywords=" + url.QueryEscape(query) + "&count=30"
@@ -74,15 +88,20 @@ func ttVideoSearch(ctx context.Context, query string) ([]searchResult, error) {
 				continue
 			}
 			seen[r.Link] = true
-			if r.DurationSec > 60 {
-				if len(longs) < wantLongs {
-					longs = append(longs, r)
+			switch {
+			case r.DurationSec >= longMin:
+				longCands = append(longCands, r)
+			case r.DurationSec > 60:
+				// 61-119s: shorts jaisi hi (owner feedback) — dono lists
+				// me nahi jati.
+				continue
+			default:
+				if len(shorts) < wantShorts {
+					shorts = append(shorts, r)
 				}
-			} else if len(shorts) < wantShorts {
-				shorts = append(shorts, r)
 			}
 		}
-		if len(shorts) >= wantShorts && len(longs) >= wantLongs {
+		if len(shorts) >= wantShorts && len(longCands) >= wantLongs {
 			break
 		}
 		if !more || next == 0 {
@@ -95,7 +114,31 @@ func ttVideoSearch(ctx context.Context, query string) ([]searchResult, error) {
 		case <-time.After(1200 * time.Millisecond):
 		}
 	}
-	return append(shorts, longs...), nil
+	// LONG list: sab se lambi video TOP pe (owner: "10 mint ki videos ki
+	// b list me") — duration DESC sort, phir top 15.
+	sort.Slice(longCands, func(i, j int) bool {
+		return longCands[i].DurationSec > longCands[j].DurationSec
+	})
+	if len(longCands) > wantLongs {
+		longCands = longCands[:wantLongs]
+	}
+	return append(shorts, longCands...), nil
+}
+
+// filterTTResults drops junk entries before the card: tikwm kabhi
+// kabhi 23min+ compilation/live-replay videos lauta deta hai jo
+// TikTok k limit se bhar hain (10 min max) aur card me jagah
+// kha jati hain. DurationSec 0 (unknown) skip nahi karte — stats
+// hi miss ho jate, video valid hoti hai.
+func filterTTResults(results []searchResult) []searchResult {
+	out := results[:0]
+	for _, r := range results {
+		if r.DurationSec > 1400 { // > 23min = junk
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // ttVideoSearchPage fetches one feed/search/ page and returns normalized
@@ -135,11 +178,9 @@ func ttVideoSearchPage(ctx context.Context, u string) (results []searchResult, c
 		if v.Author.UniqueId != "" {
 			handle = "@" + v.Author.UniqueId
 		}
+		// duration ab card ki alag DURATION line me hai (owner round 2)
 		stats := searchFmtCount(v.PlayCount) + " PLAYS ❰ " +
 			searchFmtCount(v.DiggCount) + " LIKES ❱"
-		if d := ttFmtDuration(v.Duration); d != "" {
-			stats = d + " ❰ " + stats
-		}
 		results = append(results, searchResult{
 			Title:       title,
 			Handle:      handle,
@@ -151,7 +192,8 @@ func ttVideoSearchPage(ctx context.Context, u string) (results []searchResult, c
 	return results, parsed.Data.Cursor, parsed.Data.HasMore, nil
 }
 
-// ttFmtDuration renders seconds as "45s" / "4m" / "3m45s".
+// ttFmtDuration renders seconds as "45s" / "4m" / "3m45s" (card ki
+// DURATION line is ko ToUpper kar ke "4M05S" render karti hai).
 func ttFmtDuration(sec int64) string {
 	if sec <= 0 {
 		return ""
