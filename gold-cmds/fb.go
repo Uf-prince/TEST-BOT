@@ -89,7 +89,7 @@ func handleFBAsync(	ctx context.Context, s SessionBridge, info types.MessageInfo
 		return
 	}
 
-	s.EditMessage(info, waitID, "⬇️ *Downloading video...*")
+	s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
 
 	client := mediaHTTPClient()
 	path, err := streamDownloadToFile(ctx, client, videoURL, nil)

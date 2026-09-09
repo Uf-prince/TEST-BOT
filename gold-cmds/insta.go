@@ -116,7 +116,7 @@ func handleInstaAsync(	ctx context.Context, s SessionBridge, info types.MessageI
 		return
 	}
 
-	s.EditMessage(info, waitID, "⬇️ *Downloading video...*")
+	s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
 
 	client := mediaHTTPClient()
 	path, err := streamDownloadToFile(ctx, client, bestURL, nil)

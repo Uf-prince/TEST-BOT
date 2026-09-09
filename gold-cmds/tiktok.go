@@ -189,7 +189,7 @@ func handleTikTokAsync(ctx context.Context, s SessionBridge, info types.MessageI
 		return
 	}
 
-	s.EditMessage(info, waitID, "⬇️ *Downloading video...*")
+	s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
 
 	client := res.SrcClient
 	if client == nil {

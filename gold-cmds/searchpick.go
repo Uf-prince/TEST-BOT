@@ -639,7 +639,7 @@ func searchPickTTDirect(s SessionBridge, info types.MessageInfo, selected search
 			return
 		}
 
-		s.EditMessage(info, waitID, "⬇️ *Downloading video...*")
+		s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
 
 		client := res.SrcClient
 		if client == nil {
