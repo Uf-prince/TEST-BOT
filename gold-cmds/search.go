@@ -352,6 +352,10 @@ func ttUserSearch(ctx context.Context, query string) ([]searchResult, error) {
 
 var fbProfileRe = regexp.MustCompile(`\[([^\]]+)\]\((https://www\.facebook\.com/people/[^)\s]+)\s+"[^"]*"\)`)
 
+// fbSeePhotosRe - "See Photos" link numeric profile id carry karta hai
+// (?id=NNN&sk=photos) aur iska format title quotes ke bina hota hai.
+var fbSeePhotosRe = regexp.MustCompile(`\[See Photos\]\((https://www\.facebook\.com/people/[^)\s]+)\)`)
+
 // fbProfileSearch - FB public directory search with AUTO-SHORTEN retry.
 // FB directory lambi queries (5+ words) pe khali page deti hai
 // ("We couldn't find anything for aja ve mahiya song lyrics") jabke
@@ -388,18 +392,38 @@ func fbProfileSearchOnce(ctx context.Context, query string) ([]searchResult, err
 		return nil, err
 	}
 	var out []searchResult
-	seen := map[string]bool{}
+	// v5: search page pe har profile 2 links ke saath aata hai:
+	//   (a) naam wala plain link  -> [New Videos](.../pfbidXXX/ "New Videos")
+	//   (b) [See Photos](.../pfbidXXX/?id=NNN&sk=photos)   (title quotes NAHI)
+	// Purana fbProfileRe sirf (a) match karta tha - (b) me title quotes
+	// nahi hote - is liye numeric ID kabhi save nahi hoti thi aur resolver
+	// ka profile.php timeline route (jahan reels milte hain) try hi nahi
+	// hota tha -> hamesha "PRIVATE PROFILE" error.
+	// FIX: pehle "See Photos" links se base->id map banao, phir naam wale
+	// links se entries banao aur id maujood ho to link me ?id= attach karo.
+	idByBase := map[string]string{}
+	for _, m := range fbSeePhotosRe.FindAllStringSubmatch(md, -1) {
+		link := m[1]
+		base := strings.SplitN(link, "?", 2)[0]
+		if id := fbNumericIDFromLink(link); id != "" {
+			if _, ok := idByBase[base]; !ok {
+				idByBase[base] = id
+			}
+		}
+	}
+	byBase := map[string]bool{}
 	for _, m := range fbProfileRe.FindAllStringSubmatch(md, -1) {
 		name, link := strings.TrimSpace(m[1]), m[2]
-		base := strings.SplitN(link, "?", 2)[0]
-		if name == "" || seen[base] {
+		if name == "" || name == "See Photos" {
 			continue
 		}
-		seen[base] = true
-		// v3: numeric ID (?id=NNNN) zanda rakho - profile.php timeline route
-		// (reels wahan hoti hain) is ID se chalta hai.
+		base := strings.SplitN(link, "?", 2)[0]
+		if byBase[base] {
+			continue
+		}
+		byBase[base] = true
 		final := base
-		if id := fbNumericIDFromLink(link); id != "" {
+		if id, ok := idByBase[base]; ok {
 			final = base + "?id=" + id
 		}
 		out = append(out, searchResult{Title: name, Link: final})

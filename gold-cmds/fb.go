@@ -61,7 +61,7 @@ func handleFB(s SessionBridge, info types.MessageInfo, args []string, prefix str
 	})
 }
 
-func handleFBAsync(	ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+func handleFBAsync(ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	fbURL := strings.TrimSpace(strings.Join(args, " "))
 	if fbURL == "" {
 		s.Reply(info, fbHelpText)
@@ -159,17 +159,26 @@ func fbCobaltFetch(ctx context.Context, fbURL string) (*fbCobaltResponse, error)
 	client := &http.Client{Timeout: 90 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
+		fbDebug("cobalt_fail", map[string]any{"url": fbURL, "error": err.Error()})
 		return nil, fmt.Errorf("API request failed: %v", err)
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
+		fbDebug("cobalt_http_error", map[string]any{"url": fbURL, "status": res.StatusCode})
 		return nil, fmt.Errorf("API returned status %d", res.StatusCode)
 	}
 	var parsed fbCobaltResponse
 	if err := json.NewDecoder(io.LimitReader(res.Body, 8<<20)).Decode(&parsed); err != nil {
+		fbDebug("cobalt_parse_error", map[string]any{"url": fbURL, "error": err.Error()})
 		return nil, fmt.Errorf("failed to parse API response: %v", err)
 	}
+	fbDebug("cobalt_response", map[string]any{
+		"req_url":  fbURL,
+		"status":   parsed.Status,
+		"resp_url": parsed.URL,
+		"error":    parsed.Error,
+	})
 	if parsed.Status == "error" {
 		if parsed.Error != "" {
 			return nil, fmt.Errorf("%s", parsed.Error)
