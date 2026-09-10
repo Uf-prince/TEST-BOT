@@ -37,7 +37,6 @@ package goldcmds
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -230,7 +229,7 @@ func handleGetppAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 		}
 	}
 
-	target, how, ok := getppResolveTarget(s, info, args)
+	target, _, ok := getppResolveTarget(s, info, args)
 	if !ok {
 		s.Reply(info, getppHelpText)
 		return
@@ -244,16 +243,14 @@ func handleGetppAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	// ─── 1) PROFILE PIC ────────────────────────────────────────────────────
 	ppData, ppID, hasPP := getppFetchPP(client, ctx, target)
 
-	// ─── 2) USER INFO (About + LID + Devices) ─────────────────────────────
+	// ─── 2) USER INFO (About + LID) ─────────────────────────────
 	var about string
 	var lid types.JID
-	var devices int
 	userInfo, uiErr := client.GetUserInfo(ctx, []types.JID{target})
 	if uiErr == nil {
 		if ui, found := userInfo[target]; found {
 			about = strings.TrimSpace(ui.Status)
 			lid = ui.LID
-			devices = len(ui.Devices)
 		}
 	}
 
@@ -300,14 +297,12 @@ func handleGetppAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 		"*\U0001F530 USER NUMBER \U0001F530*\n\u276E " + numStr + " \u276F\n\n" +
 		"*\U0001F530 USER ABOUT \U0001F530*\n" + aboutLine
 
-	// extra lines (jo mile)
-	if devices > 0 {
-		card += fmt.Sprintf("\n\n*\U0001F530 LINKED DEVICES \U0001F530*\n%d", devices)
-	}
+	// USING WHATSAPP — business profile mila to BUSINESS, warna MESSENGER
+	usingLine := "WHATSAPP MESSENGER"
 	if bizLine != "NULL" {
-		card += "\n\n*\U0001F530 BUSINESS \U0001F530*\n" + bizLine
+		usingLine = "WHATSAPP BUSINESS"
 	}
-	card += "\n\n*SOURCE :* " + strings.ToUpper(how) + " \u26A1 *GOLD-MD*"
+	card += "\n\n*\U0001F530 USING WHATSAPP \U0001F530*\n" + usingLine
 
 	_ = ppID // ppID fetched, abhi card me nahi jata
 	_ = lid  // LID raw rakha; card me REAL NUMBER jata hai (LID->PN)
