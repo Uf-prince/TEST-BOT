@@ -1169,7 +1169,11 @@ func handleTWTSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 		return
 	}
 	RunWithTimeout(s, info, func(ctx context.Context) {
+		// owner rule: query pe waiting msg — search hote hi auto-delete
+		// (success / error / no-results — sab paths pe).
+		waitID := s.ReplyWithID(info, "*SEARCHING TWITTER....*")
 		results, err := twtAccountSearch(ctx, query)
+		s.DeleteMessage(info, waitID)
 		if err != nil {
 			s.Reply(info, searchFailed("X / TWITTER"))
 			return
