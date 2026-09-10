@@ -1,25 +1,39 @@
-FROM golang:1.26-bookworm AS builder
-WORKDIR /build
-COPY . .
-# Use vendored deps (-mod=vendor) so the PR #1234 passkey patch in
-# vendor/go.mau.fi/whatsmeow/pair-code.go travels with the repo and
-# applies automatically on every fresh deploy. No network module fetch.
-RUN CGO_ENABLED=1 go build -mod=vendor -o gold-md .
-
-# ── runtime ───────────────────────────────────────────────────────
+# ============================================================================
+# GOLD-MD — ROOT Dockerfile (Back4app Containers / koi bhi docker host)
+# SLIM: prebuilt CGO-free binary COPY hota hai — build sirf 1-2 min,
+# weak shared builders (Back4app free 0.25 CPU) pe bhi safe. Go compile nahi.
+#
+# Binary: gold-md-cgofree (Linux amd64, CGO_ENABLED=0, modernc.org/sqlite,
+#         whatsmeow vendor patches included) — repo me committed hai.
+#         Dubara build karna ho (source change ke baad):
+#           CGO_ENABLED=0 go build -mod=vendor -ldflags="-s -w" -o gold-md-cgofree .
+#
+# Full command parity: ffmpeg (play/sticker/tomp3), python3+Pillow (pdf),
+# libreoffice (document->pdf), poppler (pdf text), jpegoptim/pngquant (compress).
+# Bot missing tools ko self-heal karta hai — kuch miss ho to graceful error,
+# crash nahi.
+#
+# PORT: ENV 2081 default; platform env (Back4app app settings / Railway /
+#       Render) hamesha override karega — bot ka dotenv loader real env
+#       vars ko priority deta hai (verified dotenv.go).
+#
+# NOTE: Purana source-build Dockerfile (GHCR golang:1.26 builder wala)
+#       Dockerfile.ghcr me preserved hai.
+# ============================================================================
 FROM debian:bookworm-slim
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libc6 ffmpeg python3 python3-pil \
-    jpegoptim pngquant \
-    libreoffice-writer libreoffice-calc libreoffice-impress \
-    poppler-utils && rm -rf /var/lib/apt/lists/*
+        ca-certificates libc6 ffmpeg python3 python3-pil \
+        jpegoptim pngquant poppler-utils \
+        libreoffice-writer libreoffice-calc libreoffice-impress \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-COPY --from=builder /build/gold-md .
-COPY --from=builder /build/servers.json .
-# .env shipped as a fallback for hosts that skip env injection;
-# creds are ALSO hardcoded in storj.go / config.go / upstash.go.
-COPY --from=builder /build/.env .
-RUN mkdir -p nexstore/pairing
+COPY gold-md-cgofree ./gold-md
+COPY servers.json .
+COPY .env .
+RUN chmod +x ./gold-md && mkdir -p nexstore/pairing
+
+ENV PORT=2081
 EXPOSE 2081
 CMD ["./gold-md"]
-# build-stamp: 20260908-145029 volume auto-commit fix
