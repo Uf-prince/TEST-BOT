@@ -1,0 +1,25 @@
+# ============================================================================
+# GOLD-MD — Back4app Containers / any-docker-host image (SLIM, 256MB RAM plan)
+# Full command parity: ffmpeg (play/sticker/tomp3), python3+Pillow (pdf),
+# libreoffice (document->pdf), poppler (pdf text). Bot self-heals missing
+# tools — kuch bhi miss ho to wo command graceful error deta hai, crash nahi.
+# Build: CGO nahi chahiye — binary pure-Go (modernc.org/sqlite) hai.
+# kisi bhi Go 1.26+ builder pe: CGO_ENABLED=0 go build -mod=vendor
+# ============================================================================
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates libc6 ffmpeg python3 python3-pil \
+        jpegoptim pngquant poppler-utils \
+        libreoffice-writer libreoffice-calc libreoffice-impress \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY gold-md-cgofree ./gold-md
+COPY servers.json .
+COPY .env .
+RUN chmod +x ./gold-md && mkdir -p nexstore/pairing
+
+ENV PORT=2081
+EXPOSE 2081
+CMD ["./gold-md"]

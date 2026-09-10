@@ -360,8 +360,8 @@ func readDiskInfo(path string) diskInfo {
 		return diskInfo{"N/A", "N/A", "N/A", "N/A", 0, 0}
 	}
 	blockSize := uint64(stat.Bsize)
-	total := stat.Blocks * blockSize
-	free := stat.Bavail * blockSize
+	total := uint64(stat.Blocks) * blockSize
+	free := uint64(stat.Bavail) * blockSize
 	used := uint64(0)
 	if total > free {
 		used = total - free

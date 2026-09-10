@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -50,6 +51,35 @@ const storjEndpoint = "gateway.storjshare.io:443"
 // larger is skipped (not stored, not recovered by antidelete).
 const maxStorjBytes = 50 * 1024 * 1024
 
+// egUploadCapBytes — env-gated egress cap (bandwidth jugaad). Render free tier
+// (5GB/month metered egress) pe har message proto upload karna bandwidth kha
+// jata hai. GOLDMD_STORJ_MAX_UPLOAD_KB set karo to us size (KB) se bade proto
+// upload hi nahi honge (skip ho jayenge). Default 512KB — text/chat protos
+// (2-20KB) normally upload hote rahenge, media-heavy protos (MBs) skip.
+// "0" = cap off (purana behaviour, sab kuch upload).
+//
+// NOTE: ye sirf *message-archival* uploads (antidelete/view-once backup) ko
+// gate karta hai — WhatsApp media send (Client.Upload) is se alag path hai.
+var egUploadCapBytes int64 = func() int64 {
+	v := strings.TrimSpace(os.Getenv("GOLDMD_STORJ_MAX_UPLOAD_KB"))
+	if v == "" {
+		// DEFAULT OFF - bilkul purana behaviour (50MiB tak sab upload).
+		// Cap sirf tab jab Render pe bandwidth bachani ho: env me
+		// GOLDMD_STORJ_MAX_UPLOAD_KB=512 set karo. NOTE: cap PROTO size
+		// pe lagta hai (video/photo bytes proto me nahi hote - sirf
+		// URL+keys ~5-15KB) - isliye deleted-media recovery cap ke saath
+		// bhi 100% kaam karta hai.
+		return maxStorjBytes
+	}
+	if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+		if n <= 0 {
+			return maxStorjBytes // "0" ya negative = purana behaviour
+		}
+		return n * 1024
+	}
+	return 512 * 1024
+}()
+
 // ttlDuration: objects older than this are deleted by the guard.
 const ttlDuration = 48 * time.Hour
 
@@ -57,11 +87,11 @@ const ttlDuration = 48 * time.Hour
 const guardInterval = 24 * time.Hour
 
 type storjShard struct {
-	idx     int
-	access  string
-	secret  string
-	bucket  string
-	client  *minio.Client
+	idx    int
+	access string
+	secret string
+	bucket string
+	client *minio.Client
 }
 
 type StorjStore struct {
@@ -94,16 +124,16 @@ var storj = &StorjStore{}
 // .env file is skipped (Modal, ephemeral Docker hosts). Real env vars
 // (STORJ_ACCESS_KEY_1..10 etc.) always win when present.
 var hardcodedStorjShards = [10][3]string{
-        {"jwfjua62w45i5ebrx3t5nex455ma", "j2d2e4gjkc43m5sosfe7bznevm25aq627hgljdfhjofr5ezrsxazk", "umar"},
-        {"jwpiqh2d4ky56hrjrrhrpz7h47cq", "j2n53jczyngsdci5vpr47ni24mlkdhzzrh2deyq2h4qelsst62da6", "umar2"},
-        {"jvkcczaogv7syhlhyss2oot3dliq", "j327kiloo7yhd4x6n6epcvfbzfjuekjrf6bc237cesrv3nohh5kkc", "umar3"},
-        {"jwknkytkfzph7mtonxq6g6d4ze3q", "jz24qglsu5wl34kmbsgchpgt2fzyibbdwyyehvqbe6pxvv4pzkpb2", "umar4"},
-        {"jwjsgr627fnccmxfc4gtllg5bb7q", "jzihzet2ecmyn3inuglzvxldx3d5i6jnsrs4ky35nsr5tenxro7hg", "umar5"},
-        {"jxzvkrhsaebljlko6dv2lin7x4wa", "j3iyzcwnbirmrhup3hc6352gl5n56xfhkna2l4dn3ugm4i7a2gd6s", "umar6"},
-        {"jw6pkivs3vp6rmdty2da36auzimq", "j33i2ybq7kd7ouw6w7ltfmew2dzeg2t3v4ryterop75kdeyjdvvvo", "umar7"},
-        {"ju4a4oqbejb3w7ygbmikkr4vgsna", "jzo2xqmutggpkbwxpgw5fswerf35miykdavdcfimmghqdpkgyqpxe", "umar8"},
-        {"juznozmcpfsbwoqboijqwpus3raa", "j236o3cx4eud3dxraq55lnsnod4aradltsekqsbwk2cv6iebbtwma", "umar9"},
-        {"ju7o5eflwumsaxxhdgdy6y23nbsq", "j3oulw7wfaequvvm5ims7xzjdkr5kfqgwecogozv4v25r72ffysog", "umar10"},
+	{"jwfjua62w45i5ebrx3t5nex455ma", "j2d2e4gjkc43m5sosfe7bznevm25aq627hgljdfhjofr5ezrsxazk", "umar"},
+	{"jwpiqh2d4ky56hrjrrhrpz7h47cq", "j2n53jczyngsdci5vpr47ni24mlkdhzzrh2deyq2h4qelsst62da6", "umar2"},
+	{"jvkcczaogv7syhlhyss2oot3dliq", "j327kiloo7yhd4x6n6epcvfbzfjuekjrf6bc237cesrv3nohh5kkc", "umar3"},
+	{"jwknkytkfzph7mtonxq6g6d4ze3q", "jz24qglsu5wl34kmbsgchpgt2fzyibbdwyyehvqbe6pxvv4pzkpb2", "umar4"},
+	{"jwjsgr627fnccmxfc4gtllg5bb7q", "jzihzet2ecmyn3inuglzvxldx3d5i6jnsrs4ky35nsr5tenxro7hg", "umar5"},
+	{"jxzvkrhsaebljlko6dv2lin7x4wa", "j3iyzcwnbirmrhup3hc6352gl5n56xfhkna2l4dn3ugm4i7a2gd6s", "umar6"},
+	{"jw6pkivs3vp6rmdty2da36auzimq", "j33i2ybq7kd7ouw6w7ltfmew2dzeg2t3v4ryterop75kdeyjdvvvo", "umar7"},
+	{"ju4a4oqbejb3w7ygbmikkr4vgsna", "jzo2xqmutggpkbwxpgw5fswerf35miykdavdcfimmghqdpkgyqpxe", "umar8"},
+	{"juznozmcpfsbwoqboijqwpus3raa", "j236o3cx4eud3dxraq55lnsnod4aradltsekqsbwk2cv6iebbtwma", "umar9"},
+	{"ju7o5eflwumsaxxhdgdy6y23nbsq", "j3oulw7wfaequvvm5ims7xzjdkr5kfqgwecogozv4v25r72ffysog", "umar10"},
 }
 
 // InitStorj loads up to 10 shard credential sets from the environment (with
@@ -138,24 +168,24 @@ func InitStorj() error {
 			Region: "us-east-1", // Storj gateway expects a region string; this is a placeholder.
 		})
 		if err != nil {
-   // storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "ok": false})
+			// storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "ok": false})
 			return fmt.Errorf("storj shard %d: new client: %w", i, err)
 		}
 
 		// Ensure bucket exists (idempotent).
 		exists, err := cli.BucketExists(ctx, bucket)
 		if err != nil {
-   // storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "op": "BucketExists", "ok": false})
+			// storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "op": "BucketExists", "ok": false})
 			return fmt.Errorf("storj shard %d: bucket exists check: %w", i, err)
 		}
 		if !exists {
 			if err := cli.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
-    // storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "op": "MakeBucket", "ok": false})
+				// storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "op": "MakeBucket", "ok": false})
 				return fmt.Errorf("storj shard %d: make bucket: %w", i, err)
 			}
-   // storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "ok": true, "op": "MakeBucket", "created": true})
+			// storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "ok": true, "op": "MakeBucket", "created": true})
 		} else {
-   // storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "ok": true, "op": "BucketExists", "created": false})
+			// storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "ok": true, "op": "BucketExists", "created": false})
 		}
 
 		storj.shards = append(storj.shards, &storjShard{
@@ -168,11 +198,11 @@ func InitStorj() error {
 	}
 
 	if len(storj.shards) == 0 {
-  // storjDebug("STORJ_INIT", map[string]any{"ok": false, "reason": "no STORJ_* env credentials found", "shardCount": 0})
+		// storjDebug("STORJ_INIT", map[string]any{"ok": false, "reason": "no STORJ_* env credentials found", "shardCount": 0})
 		return errors.New("storj: no credential sets configured (STORJ_ACCESS_KEY_1..10 / STORJ_SECRET_KEY_1..10 / STORJ_BUCKET_1..10)")
 	}
 	storj.ready = true
- // storjDebug("STORJ_INIT", map[string]any{"ok": true, "shardCount": len(storj.shards), "buckets": storjBucketList(), "maxBytes": maxStorjBytes, "ttlHours": int(ttlDuration.Hours()), "guardIntervalHours": int(guardInterval.Hours())})
+	// storjDebug("STORJ_INIT", map[string]any{"ok": true, "shardCount": len(storj.shards), "buckets": storjBucketList(), "maxBytes": maxStorjBytes, "ttlHours": int(ttlDuration.Hours()), "guardIntervalHours": int(guardInterval.Hours())})
 	return nil
 }
 
@@ -217,15 +247,15 @@ func storjObjectKey(msgID string, ts time.Time) string {
 // and as a JSON prefix inside the object body (so the guard can inspect it
 // without a full GET).
 type storjMeta struct {
-	MsgID      string `json:"msg_id"`
-	Chat       string `json:"chat"`
-	Sender     string `json:"sender"`
-	PushName   string `json:"pushName,omitempty"`
-	Timestamp  int64  `json:"ts_ms"`
-	MediaType  string `json:"mediaType"`
-	SizeBytes  int    `json:"sizeBytes"`
-	ShardIdx   int    `json:"shardIdx"`
-	Bucket     string `json:"bucket"`
+	MsgID     string `json:"msg_id"`
+	Chat      string `json:"chat"`
+	Sender    string `json:"sender"`
+	PushName  string `json:"pushName,omitempty"`
+	Timestamp int64  `json:"ts_ms"`
+	MediaType string `json:"mediaType"`
+	SizeBytes int    `json:"sizeBytes"`
+	ShardIdx  int    `json:"shardIdx"`
+	Bucket    string `json:"bucket"`
 }
 
 // PutMessage serialises the message proto and uploads it to Storj. Returns the
@@ -241,15 +271,22 @@ func (ss *StorjStore) PutMessage(ctx context.Context, msgID, chat, sender, pushN
 
 	raw, mErr := proto.Marshal(msg)
 	if mErr != nil {
-  // storjDebug("STORJ_PUT", map[string]any{"msgID": msgID, "chat": chat, "error": mErr.Error(), "ok": false, "stage_detail": "proto_marshal"})
+		// storjDebug("STORJ_PUT", map[string]any{"msgID": msgID, "chat": chat, "error": mErr.Error(), "ok": false, "stage_detail": "proto_marshal"})
 		return "", "", false, fmt.Errorf("proto marshal: %w", mErr)
 	}
 
 	if len(raw) > maxStorjBytes {
-  // storjDebug("STORJ_PUT", map[string]any{
-			// "msgID": msgID, "chat": chat, "ok": false, "skip": true,
-			// "reason": "size > 50MiB", "sizeBytes": len(raw), "maxBytes": maxStorjBytes,
+		// storjDebug("STORJ_PUT", map[string]any{
+		// "msgID": msgID, "chat": chat, "ok": false, "skip": true,
+		// "reason": "size > 50MiB", "sizeBytes": len(raw), "maxBytes": maxStorjBytes,
 		// })
+		return "", "", true, nil
+	}
+	// Bandwidth jugaad - egress cap (GOLDMD_STORJ_MAX_UPLOAD_KB). Bade proto
+	// Storj pe upload nahi honge (metered egress bachao), chhote text protos
+	// (2-20KB) normally chalte rahenge. skip=true antidelete recover is msg
+	// pe kaam nahi karega - free-tier hosting pe acceptable tradeoff.
+	if len(raw) > int(egUploadCapBytes) {
 		return "", "", true, nil
 	}
 
@@ -287,20 +324,20 @@ func (ss *StorjStore) PutMessage(ctx context.Context, msgID, chat, sender, pushN
 	}
 
 	_, err = shard.client.PutObject(ctx, shard.bucket, key, &body, int64(body.Len()), minio.PutObjectOptions{
-		ContentType:   "application/octet-stream",
-		UserMetadata:  userMeta,
+		ContentType:    "application/octet-stream",
+		UserMetadata:   userMeta,
 		SendContentMd5: false,
 	})
 	if err != nil {
-  // storjDebug("STORJ_PUT", map[string]any{"msgID": msgID, "chat": chat, "shard": shard.idx, "bucket": shard.bucket, "key": key, "error": err.Error(), "ok": false, "sizeBytes": len(raw)})
+		// storjDebug("STORJ_PUT", map[string]any{"msgID": msgID, "chat": chat, "shard": shard.idx, "bucket": shard.bucket, "key": key, "error": err.Error(), "ok": false, "sizeBytes": len(raw)})
 		return shard.bucket, key, false, fmt.Errorf("put object: %w", err)
 	}
 
 	atomic.AddUint64(&ss.rr, 1)
- // storjDebug("STORJ_PUT", map[string]any{
-		// "msgID": msgID, "chat": chat, "sender": sender, "mediaType": mediaType,
-		// "shard": shard.idx, "bucket": shard.bucket, "key": key, "sizeBytes": len(raw),
-		// "ok": true, "ts": ts.Format(time.RFC3339),
+	// storjDebug("STORJ_PUT", map[string]any{
+	// "msgID": msgID, "chat": chat, "sender": sender, "mediaType": mediaType,
+	// "shard": shard.idx, "bucket": shard.bucket, "key": key, "sizeBytes": len(raw),
+	// "ok": true, "ts": ts.Format(time.RFC3339),
 	// })
 	return shard.bucket, key, false, nil
 }
@@ -347,7 +384,7 @@ func (ss *StorjStore) GetMessage(ctx context.Context, msgID string) (*waProto.Me
 	})
 	for obj := range objCh {
 		if obj.Err != nil {
-   // storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "error": obj.Err.Error(), "ok": false, "stage_detail": "list"})
+			// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "error": obj.Err.Error(), "ok": false, "stage_detail": "list"})
 			return nil, storjMeta{}, fmt.Errorf("list: %w", obj.Err)
 		}
 		if strings.HasSuffix(obj.Key, suffix) {
@@ -356,38 +393,38 @@ func (ss *StorjStore) GetMessage(ctx context.Context, msgID string) (*waProto.Me
 		}
 	}
 	if foundKey == "" {
-  // storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "ok": false, "reason": "not_found"})
+		// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "ok": false, "reason": "not_found"})
 		return nil, storjMeta{}, errors.New("not found in storj")
 	}
 
 	obj, err := shard.client.GetObject(ctx, shard.bucket, foundKey, minio.GetObjectOptions{})
 	if err != nil {
-  // storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false})
+		// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false})
 		return nil, storjMeta{}, fmt.Errorf("get object: %w", err)
 	}
 	defer obj.Close()
 
 	var body bytes.Buffer
 	if _, err := body.ReadFrom(obj); err != nil {
-  // storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false, "stage_detail": "read"})
+		// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false, "stage_detail": "read"})
 		return nil, storjMeta{}, fmt.Errorf("read body: %w", err)
 	}
 
 	meta, protoOff, perr := parseMetaFromBody(body.Bytes())
 	if perr != nil {
-  // storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": perr.Error(), "ok": false, "stage_detail": "parse_meta"})
+		// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": perr.Error(), "ok": false, "stage_detail": "parse_meta"})
 		return nil, storjMeta{}, perr
 	}
 
 	var msg waProto.Message
 	if err := proto.Unmarshal(body.Bytes()[protoOff:], &msg); err != nil {
-  // storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false, "stage_detail": "proto_unmarshal"})
+		// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false, "stage_detail": "proto_unmarshal"})
 		return nil, storjMeta{}, fmt.Errorf("proto unmarshal: %w", err)
 	}
 
- // storjDebug("STORJ_GET", map[string]any{
-		// "msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey,
-		// "ok": true, "mediaType": meta.MediaType, "sizeBytes": meta.SizeBytes, "chat": meta.Chat, "sender": meta.Sender, "ts": time.UnixMilli(meta.Timestamp).Format(time.RFC3339),
+	// storjDebug("STORJ_GET", map[string]any{
+	// "msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey,
+	// "ok": true, "mediaType": meta.MediaType, "sizeBytes": meta.SizeBytes, "chat": meta.Chat, "sender": meta.Sender, "ts": time.UnixMilli(meta.Timestamp).Format(time.RFC3339),
 	// })
 	return &msg, meta, nil
 }
@@ -410,7 +447,7 @@ func (ss *StorjStore) DeleteMessage(ctx context.Context, msgID, reason string) e
 	objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{Prefix: "msgs/", Recursive: true})
 	for obj := range objCh {
 		if obj.Err != nil {
-   // storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "error": obj.Err.Error(), "ok": false, "stage_detail": "list"})
+			// storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "error": obj.Err.Error(), "ok": false, "stage_detail": "list"})
 			return obj.Err
 		}
 		if strings.HasSuffix(obj.Key, suffix) {
@@ -419,14 +456,14 @@ func (ss *StorjStore) DeleteMessage(ctx context.Context, msgID, reason string) e
 		}
 	}
 	if foundKey == "" {
-  // storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "ok": false, "reason": "not_found", "detail": reason})
+		// storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "ok": false, "reason": "not_found", "detail": reason})
 		return nil // already gone — treat as success
 	}
 	if err := shard.client.RemoveObject(ctx, shard.bucket, foundKey, minio.RemoveObjectOptions{}); err != nil {
-  // storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false, "detail": reason})
+		// storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false, "detail": reason})
 		return err
 	}
- // storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "ok": true, "detail": reason})
+	// storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "ok": true, "detail": reason})
 	return nil
 }
 
@@ -435,7 +472,7 @@ func (ss *StorjStore) DeleteMessage(ctx context.Context, msgID, reason string) e
 // This is the "guard" — it wakes every 24h, sweeps expired (48h+) messages.
 func (ss *StorjStore) StartTTLGuard() {
 	if !ss.Ready() {
-  // storjDebug("GUARD_TTL", map[string]any{"ok": false, "reason": "storj not ready"})
+		// storjDebug("GUARD_TTL", map[string]any{"ok": false, "reason": "storj not ready"})
 		return
 	}
 	go func() {
@@ -447,7 +484,7 @@ func (ss *StorjStore) StartTTLGuard() {
 			ss.runTTLSweep()
 		}
 	}()
- // storjDebug("GUARD_TTL", map[string]any{"ok": true, "started": true, "intervalHours": int(guardInterval.Hours()), "ttlHours": int(ttlDuration.Hours())})
+	// storjDebug("GUARD_TTL", map[string]any{"ok": true, "started": true, "intervalHours": int(guardInterval.Hours()), "ttlHours": int(ttlDuration.Hours())})
 }
 
 func (ss *StorjStore) runTTLSweep() {
@@ -469,7 +506,7 @@ func (ss *StorjStore) runTTLSweep() {
 		objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{Prefix: "msgs/", Recursive: true})
 		for obj := range objCh {
 			if obj.Err != nil {
-    // storjDebug("GUARD_TTL", map[string]any{"shard": shard.idx, "bucket": shard.bucket, "error": obj.Err.Error(), "ok": false, "stage_detail": "list"})
+				// storjDebug("GUARD_TTL", map[string]any{"shard": shard.idx, "bucket": shard.bucket, "error": obj.Err.Error(), "ok": false, "stage_detail": "list"})
 				continue
 			}
 			totalChecked++
@@ -486,7 +523,7 @@ func (ss *StorjStore) runTTLSweep() {
 			if tsMs < cutoff {
 				// Expired — delete.
 				if err := shard.client.RemoveObject(ctx, shard.bucket, obj.Key, minio.RemoveObjectOptions{}); err != nil {
-     // storjDebug("GUARD_TTL", map[string]any{"shard": shard.idx, "bucket": shard.bucket, "key": obj.Key, "error": err.Error(), "ok": false, "stage_detail": "delete"})
+					// storjDebug("GUARD_TTL", map[string]any{"shard": shard.idx, "bucket": shard.bucket, "key": obj.Key, "error": err.Error(), "ok": false, "stage_detail": "delete"})
 					continue
 				}
 				totalDeleted++
@@ -497,10 +534,10 @@ func (ss *StorjStore) runTTLSweep() {
 		}
 	}
 
- // storjDebug("GUARD_TTL", map[string]any{
-		// "ok": true, "stage": "sweep_done", "cutoffMs": cutoff,
-		// "checked": totalChecked, "deleted": totalDeleted,
-		// "deletedIDs": deletedIDs,
+	// storjDebug("GUARD_TTL", map[string]any{
+	// "ok": true, "stage": "sweep_done", "cutoffMs": cutoff,
+	// "checked": totalChecked, "deleted": totalDeleted,
+	// "deletedIDs": deletedIDs,
 	// })
 }
 

@@ -61,9 +61,11 @@ def run_bot():
     os.environ["GOLDMD_CPU_LIMIT"] = "0.5 core (GOLD billing limit)"
     os.environ["GOLDMD_PLATFORM"] = "GOLD"
     # Bot ka binary (Dockerfile me /app/gold-md pe build hota hai).
-    # CRITICAL: Popen (non-blocking) — subprocess.run pe web_server 300s me
+    # CRITICAL 1: Popen (non-blocking) — subprocess.run pe web_server 300s me
     # timeout maar deta hai. Bot stdout+stderr inherit karta hai.
-    subprocess.Popen(["./gold-md"])
+    # CRITICAL 2: ABSOLUTE path + cwd="/app" — Modal function ka cwd default
+    # /root hota hai, "./gold-md" relative path FileNotFoundError de deta.
+    subprocess.Popen(["/app/gold-md"], cwd="/app")
 
     # Modal Volume writes function k return pe commit hote hain — web_server
     # kabhi return nahi karta, to container marne pe (redeploy/preempt/stop)

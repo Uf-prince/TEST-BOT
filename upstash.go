@@ -1144,7 +1144,7 @@ func checkpointSQLite(path string) error {
 	if err != nil {
 		return err
 	}
-	db, err := sql.Open("sqlite3", "file:"+absPath+"?mode=rwc&_busy_timeout=10000&_txlock=immediate")
+	db, err := sql.Open("sqlite", "file:"+absPath+"?mode=rwc&_busy_timeout=10000&_txlock=immediate")
 	if err != nil {
 		return err
 	}

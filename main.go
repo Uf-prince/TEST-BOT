@@ -20,7 +20,7 @@ import (
 
 	goldcmds "gold-md/gold-cmds"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite" // pure-Go driver — CGO-free, cross-compile (FreeBSD/ARM) possible
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
 
@@ -49,7 +49,7 @@ func hasUsableWhatsAppDevice(path string) bool {
 		return false
 	}
 	// Open read-only so the probe cannot mutate or lock the auth database.
-	db, err := sql.Open("sqlite3", "file:"+path+"?mode=ro")
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
 	if err != nil {
 		return false
 	}
@@ -143,7 +143,7 @@ func main() {
 	ctx := context.Background()
 	container, err := sqlstore.New(
 		ctx,
-		"sqlite3",
+		"sqlite", // modernc.org/sqlite (pure-Go, CGO-free)
 		fmt.Sprintf("file:%s?_foreign_keys=on&_busy_timeout=5000", dbPath),
 		waLog.Noop,
 	)
