@@ -24,6 +24,8 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -145,11 +147,12 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 
 	waitID := s.ReplyWithID(info, "*DOWNLOADING TWITTER VIDEO....*")
 
-	// owner fix: profile link (x.com/NASA) -> jina se latest tweet resolve
+	// owner fix: profile link (x.com/NASA) -> jina se latest VIDEO tweet
+	// resolve (video-first — photos sirf fallback)
 	statusID := kvalue
 	if kind == "profile" {
 		var rerr error
-		statusID, rerr = twProfileLatestStatusID(ctx, kvalue)
+		statusID, rerr = twProfileLatestVideoStatusID(ctx, kvalue)
 		if rerr != nil {
 			s.DeleteMessage(info, waitID)
 			s.Reply(info, "🔰 *TWITTER DOWNLOAD ERROR*\nProfile could not be resolved - paste a direct tweet link.")
@@ -296,30 +299,80 @@ func twClassifyLink(raw string) (kind, value string) {
 	return "", ""
 }
 
-// twProfileLatestStatusID fetches the profile page through the jina reader
-// proxy and returns the newest status ID (first status link in the
-// markdown = newest post; safe side pe bhi IDs dedupe ho jati hain).
-func twProfileLatestStatusID(ctx context.Context, handle string) (string, error) {
+// twProfileStatusIDs fetches the profile page through the jina reader proxy
+// and returns ALL status IDs newest-first. Twitter snowflake IDs time ke
+// sath grow karte hain -> numeric sort = chronological order (pinned PURANE
+// tweets document me top pe hote hain, sort unhe sahi jagah rakh deta hai).
+func twProfileStatusIDs(ctx context.Context, handle string) ([]string, error) {
 	handle = strings.TrimPrefix(strings.TrimSpace(handle), "@")
 	if handle == "" {
-		return "", fmt.Errorf("empty handle")
+		return nil, fmt.Errorf("empty handle")
 	}
 	md, err := jinaFetch(ctx, "https://twitter.com/"+handle)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	ids := map[string]bool{}
-	var order []string
+	seen := map[string]bool{}
+	var ids []string
 	for _, m := range twJinaStatusRe.FindAllStringSubmatch(md, -1) {
-		if !ids[m[2]] {
-			ids[m[2]] = true
-			order = append(order, m[2])
+		if !seen[m[2]] {
+			seen[m[2]] = true
+			ids = append(ids, m[2])
 		}
 	}
-	if len(order) == 0 {
-		return "", fmt.Errorf("no tweets found")
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no tweets found")
 	}
-	return order[0], nil
+	sort.Slice(ids, func(i, j int) bool {
+		a, ea := strconv.ParseInt(ids[i], 10, 64)
+		b, eb := strconv.ParseInt(ids[j], 10, 64)
+		if ea == nil && eb == nil {
+			return a > b
+		}
+		return ids[i] > ids[j]
+	})
+	return ids, nil
+}
+
+// twProfileLatestStatusID returns the newest tweet ID (any media type).
+func twProfileLatestStatusID(ctx context.Context, handle string) (string, error) {
+	ids, err := twProfileStatusIDs(ctx, handle)
+	if err != nil {
+		return "", err
+	}
+	return ids[0], nil
+}
+
+// twProfileLatestVideoStatusID — OWNER RULE (video-first): profile ke recent
+// tweets newest-first scan karke pehla VIDEO tweet return karta hai (photos
+// nahi — user ne bola tha bot sirf photos de raha tha). Agar recent me koi
+// video nahi hai to latest PHOTO tweet, warna latest tweet — taake photo-only
+// accounts bhi kaam karte rahein.
+func twProfileLatestVideoStatusID(ctx context.Context, handle string) (string, error) {
+	ids, err := twProfileStatusIDs(ctx, handle)
+	if err != nil {
+		return "", err
+	}
+	if len(ids) > 8 {
+		ids = ids[:8]
+	}
+	photoFallback := ""
+	for _, id := range ids {
+		tw, ferr := twFetchTweet(ctx, id)
+		if ferr != nil || tw == nil {
+			continue
+		}
+		if len(tw.Media.Videos) > 0 && tw.Media.Videos[0].URL != "" {
+			return id, nil
+		}
+		if photoFallback == "" && len(tw.Media.Photos) > 0 {
+			photoFallback = id
+		}
+	}
+	if photoFallback != "" {
+		return photoFallback, nil
+	}
+	return ids[0], nil
 }
 
 // twResolveLinkAny converts ANY x/twitter link (tweet OR profile) into a
@@ -330,7 +383,7 @@ func twResolveLinkAny(ctx context.Context, raw string) (string, error) {
 	case "status":
 		return value, nil
 	case "profile":
-		return twProfileLatestStatusID(ctx, value)
+		return twProfileLatestVideoStatusID(ctx, value)
 	}
 	return "", fmt.Errorf("not an x.com / twitter.com link")
 }

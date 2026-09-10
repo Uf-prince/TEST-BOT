@@ -46,3 +46,25 @@ func TestTWTEngine(t *testing.T) {
 	}
 	t.Errorf("no profile result to test resolver with")
 }
+
+// TestTWTVideoFirst — OWNER RULE (video-first): profile resolver ko pehla
+// VIDEO tweet dena chahiye (photos nahi).
+func TestTWTVideoFirst(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+	defer cancel()
+
+	// MrBeast — recent timeline me video tweets hote hain
+	vid, err := twProfileLatestVideoStatusID(ctx, "MrBeast")
+	if err != nil || vid == "" {
+		t.Fatalf("twProfileLatestVideoStatusID(MrBeast): %v", err)
+	}
+	tw, ferr := twFetchTweet(ctx, vid)
+	if ferr != nil || tw == nil {
+		t.Fatalf("twFetchTweet(%s): %v", vid, ferr)
+	}
+	if len(tw.Media.Videos) == 0 {
+		t.Errorf("video-first resolver returned a NON-VIDEO tweet (photos=%d) - id %s", len(tw.Media.Photos), vid)
+		return
+	}
+	t.Logf("VIDEO-FIRST OK - MrBeast -> status %s (videos=%d photos=%d)", vid, len(tw.Media.Videos), len(tw.Media.Photos))
+}
