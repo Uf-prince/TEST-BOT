@@ -255,7 +255,7 @@ func twBuildCaption(tweet *twTweet) string {
 	if tweet.Views > 0 {
 		cap += fmt.Sprintf("*🔰 VIEWS :* %d\n", tweet.Views)
 	}
-	cap += "\n*TWITTER VIDEO DOWNLOADED*"
+	cap += "\n*TWITTER VIDEO DOWNLOADING*\n*PLEASE WAIT....*"
 	return cap
 }
 

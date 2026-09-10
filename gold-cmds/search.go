@@ -53,6 +53,12 @@ const searchMaxResults = 5
 // fbMaxResults — FB video search ki cap (owner: 15 results chahiye).
 const fbMaxResults = 15
 
+// twtMaxResults — X/Twitter search ki cap (owner: 15 results chahiye).
+const twtMaxResults = 15
+
+// apkMaxResults — APK search ki cap (owner: 15 results chahiye).
+const apkMaxResults = 15
+
 var searchHTTP = &http.Client{Timeout: 40 * time.Second}
 
 // ── shared fetch helpers ────────────────────────────────────────────────
@@ -573,14 +579,73 @@ func tgChannelSearch(ctx context.Context, query string) ([]searchResult, error) 
 var twtHandleRe = regexp.MustCompile(`(?:twitter|x)\.com/([A-Za-z0-9_]+)(?:/[a-z]+)?/?$`)
 
 func twtAccountSearch(ctx context.Context, query string) ([]searchResult, error) {
-	// ENGINE v2 (owner fix): Bing RSS aksar 0 twitter results deta tha
-	// (ronaldo twitter -> 0). Primary ab DuckDuckGo (jina reader proxy ke
-	// through — DDG direct bot clients ko 202 challenge deta hai),
-	// fallback Bing RSS (famous accounts ke liye kaafi hai).
-	if out, err := twtDDGSearch(ctx, query); err == nil && len(out) > 0 {
+	// ENGINE v3 (owner rule: 15 results): ek hi DDG query sirf 5-6 unique
+	// twitter links deti thi (isliye list me sirf 2 dikhte the) — ab 6
+	// query variants PARALLEL fetch + merge hote hain (ronaldo: 16+
+	// unique), aur 15 se kam pade to Bing RSS se top-up.
+	if out := twtDDGSearchMulti(ctx, query); len(out) > 0 {
+		if len(out) < twtMaxResults {
+			if extra, err := twtBingSearch(ctx, query); err == nil {
+				seen := map[string]bool{}
+				for _, r := range out {
+					seen[strings.ToLower(r.Link)] = true
+				}
+				for _, r := range extra {
+					lk := strings.ToLower(r.Link)
+					if seen[lk] {
+						continue
+					}
+					seen[lk] = true
+					out = append(out, r)
+					if len(out) >= twtMaxResults {
+						break
+					}
+				}
+			}
+		}
 		return out, nil
 	}
 	return twtBingSearch(ctx, query)
+}
+
+// twtDDGSearchMulti — 6 DDG query variants (jina reader proxy ke through)
+// parallel fetch karke ek merged, case-insensitive deduped list banata
+// hai. Ek DDG page ~6 twitter links deta hai; mukhtalif variants mukhtalif
+// accounts surface karte hain (ronaldo: 16+ unique).
+func twtDDGSearchMulti(ctx context.Context, query string) []searchResult {
+	variants := []string{
+		query + " twitter",
+		query + " x.com",
+		query + " x.com profile",
+		query + " twitter account",
+		query + " official twitter",
+		"\"" + query + "\" x.com",
+	}
+	pages := make([][]searchResult, len(variants))
+	var wg sync.WaitGroup
+	for i, v := range variants {
+		wg.Add(1)
+		go func(i int, v string) {
+			defer wg.Done()
+			if r, err := twtDDGSearch(ctx, v); err == nil {
+				pages[i] = r
+			}
+		}(i, v)
+	}
+	wg.Wait()
+	var out []searchResult
+	seen := map[string]bool{}
+	for _, rs := range pages {
+		for _, r := range rs {
+			lk := strings.ToLower(r.Link)
+			if seen[lk] {
+				continue
+			}
+			seen[lk] = true
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 var (
@@ -607,7 +672,7 @@ func twHandleFromLink(link string) string {
 //   - query/fragment stripped
 //   - non-x/twitter links (facebook, wiki ...) skipped
 func twtDDGSearch(ctx context.Context, query string) ([]searchResult, error) {
-	md, err := jinaFetch(ctx, "https://html.duckduckgo.com/html/?q="+url.QueryEscape(query+" twitter"))
+	md, err := jinaFetch(ctx, "https://html.duckduckgo.com/html/?q="+url.QueryEscape(query))
 	if err != nil {
 		return nil, err
 	}
@@ -1113,12 +1178,12 @@ func handleTWTSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 			s.Reply(info, searchNoResults(query))
 			return
 		}
-		if len(results) > searchMaxResults {
-			results = results[:searchMaxResults]
+		if len(results) > twtMaxResults {
+			results = results[:twtMaxResults]
 		}
 		setSearchSession(info.Sender.String(), pickTWT, query, results)
 		s.Reply(info, searchCard("X / TWITTER SEARCH", query, "ACCOUNT", "", results,
-			searchPickFooter()))
+			searchPickFooterN(len(results))))
 	})
 }
 
@@ -1150,12 +1215,12 @@ func handleAPKSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 			s.Reply(info, searchNoResults(query))
 			return
 		}
-		if len(results) > searchMaxResults {
-			results = results[:searchMaxResults]
+		if len(results) > apkMaxResults {
+			results = results[:apkMaxResults]
 		}
 		setSearchSession(info.Sender.String(), pickAPK, query, results)
 		s.Reply(info, searchCard("APK SEARCH", query, "PACKAGE", "DETAILS", results,
-			searchPickFooter()))
+			searchPickFooterN(len(results))))
 	})
 }
 

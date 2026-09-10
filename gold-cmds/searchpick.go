@@ -391,11 +391,18 @@ func runSelfSearch(s SessionBridge, info types.MessageInfo, kind searchPickKind,
 			s.Reply(info, searchNoResults(query))
 			return
 		}
-		if len(results) > searchMaxResults {
-			results = results[:searchMaxResults]
+		// owner rule: TWT + APK lists 15 results dikhati hain (baqi 5)
+		maxN := searchMaxResults
+		if kind == pickTWT {
+			maxN = twtMaxResults
+		} else if kind == pickAPK {
+			maxN = apkMaxResults
+		}
+		if len(results) > maxN {
+			results = results[:maxN]
 		}
 		setSearchSession(info.Sender.String(), kind, query, results)
-		s.Reply(info, searchCard(header, query, handleLabel, statsLabel, results, searchPickFooter()))
+		s.Reply(info, searchCard(header, query, handleLabel, statsLabel, results, searchPickFooterN(len(results))))
 	})
 }
 

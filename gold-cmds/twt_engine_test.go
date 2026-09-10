@@ -21,6 +21,9 @@ func TestTWTEngine(t *testing.T) {
 		t.Fatalf("twtAccountSearch: %v / %d", err, len(res))
 	}
 	t.Logf("SEARCH OK - %d results, first: %s %s", len(res), res[0].Handle, res[0].Link)
+	if len(res) < 10 {
+		t.Logf("WARN: only %d results — 15-target engine merge thin gaya", len(res))
+	}
 
 	// 2) profile resolver — pehla profile result -> latest tweet ID
 	for _, r := range res {
