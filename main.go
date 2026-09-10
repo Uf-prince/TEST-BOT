@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -285,7 +286,13 @@ func memoryWatchdog(mgr *Manager, redis *Upstash, dbPath string) {
 		}
 
 		used := goldcmds.CurrentContainerMemoryBytes()
-		if used == 0 {
+		if os.Getenv("SUPERVISOR_ENABLED") == "1" {
+			// Supervisor/sandbox (owner rule): cgroup counter POORE sandbox ka
+			// hai (browser/vnc/nginx siblings ~700MB+) — 500MB threshold hamesha
+			// cross dikhta tha aur bot bar bar self-restart karta tha. Yahan
+			// sirf apna RSS gino — siblings ka RAM bot ki zimmedari nahi.
+			used = selfRSSBytes()
+		} else if used == 0 {
 			// cgroup not exposed (local dev / non-Linux) — fall back to Go heap
 			used = goHeapBytes()
 		}
@@ -357,7 +364,19 @@ func gracefulSelfRestart(mgr *Manager, redis *Upstash, dbPath string) {
 	mgr.Shutdown(ctx)
 	InfoLog("Self-restart: all sessions disconnected")
 
-	// 3. Resolve our own executable path.
+	// 3. SUPERVISOR-AWARE EXIT (owner rule — duplicate-process fix):
+	// Supervisor ke under (SUPERVISOR_ENABLED=1) fork+exec KABHI nahi —
+	// Setsid-detached child + supervisor respawn = 2 processes same
+	// WhatsApp session pe lar rahe the (kick-kick reconnect loop).
+	// Supervisor ke liye sirf clean exit — autorestart khud single
+	// fresh process utha lega. Fork+exec sirf standalone (Render/VPS)
+	// hosting pe, jahan supervisor nahi hai.
+	if os.Getenv("SUPERVISOR_ENABLED") == "1" {
+		InfoLog("Self-restart: supervisor detected — clean exit (supervisor will respawn single process)")
+		os.Exit(0)
+	}
+
+	// 3b. Standalone mode: resolve our own executable path.
 	exe, err := os.Executable()
 	if err != nil {
 		// ErrLog("Self-restart: cannot find executable: %v — falling back to os.Exit", err)
@@ -380,6 +399,27 @@ func gracefulSelfRestart(mgr *Manager, redis *Upstash, dbPath string) {
 
 	InfoLog("Self-restart: fresh process spawned (PID %d), exiting old process", cmd.Process.Pid)
 	os.Exit(0)
+}
+
+// selfRSSBytes returns this process's own resident set size (VmRSS) from
+// /proc/self/status — zero when unavailable. Supervisor/sandbox deployments
+// me memory watchdog isi pe chalta hai: poore sandbox ka cgroup counter
+// siblings (browser, vnc, nginx…) ko bhi ginta hai jo bot ki memory nahi.
+func selfRSSBytes() uint64 {
+	data, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == "VmRSS:" {
+			value, err := strconv.ParseUint(fields[1], 10, 64)
+			if err == nil {
+				return value * 1024
+			}
+		}
+	}
+	return 0
 }
 
 // goHeapBytes returns the current Go heap allocation as a fallback when
