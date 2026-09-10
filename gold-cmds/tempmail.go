@@ -284,6 +284,15 @@ func gmSenderKey(info types.MessageInfo) string {
 	return info.Chat.ToNonAD().String()
 }
 
+// gmMailCommandsInfo — SAME info card HAR mail command ke sath jata hai
+// (tempmail/newmail/checkmail/delmail — 4ono ka naam + English description).
+const gmMailCommandsInfo = "*ALL MAIL COMMANDS:*\n" +
+	"➤ *TEMPMAIL* — get your temp mail address. A throwaway inbox for site signups and OTP codes — your real email stays private.\n" +
+	"➤ *CHEKMAIL* — open this inbox and see everything that arrived: OTP codes, verification links, full message bodies.\n" +
+	"➤ *NEWMAIL* — throw this address away and instantly get a fresh new one.\n" +
+	"➤ *DELMAIL* — delete this temp mail for good. All mail inside is lost and the address can't be reused.\n\n" +
+	"⚠️ _If nobody checks this mail for 60 minutes straight, it expires on its own and everything inside is lost. Running CHEKMAIL keeps it alive._"
+
 // ── command handlers ────────────────────────────────────────────────────────
 
 func handleTempMail(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -311,18 +320,13 @@ func handleTempMailAsync(s SessionBridge, info types.MessageInfo, args []string,
 	gmSendThenStripFooter(s, info, account.Address)
 
 	if isNew {
-		s.Reply(info, "🔰 *YOUR TEMP MAIL IS READY*\n`"+account.Address+"`\n\n"+
-			"*What this is:* a throwaway inbox. Any email sent to this address can be read here in this chat — you don't need Gmail, Outlook, etc.\n\n"+
-			"*What it's good for:* signing up on random sites, getting one-time OTP/verification codes, avoiding spam on your real email.\n\n"+
-			"*What it's NOT for:* banking, social media recovery, anything important or long-term — this address can disappear (see below), so don't rely on it for accounts you actually care about.\n\n"+
-			"*Commands:*\n"+
-			"➤ *checkmail* — see what's arrived in the inbox\n"+
-			"➤ *newmail* — throw this one away, get a fresh address\n"+
-			"➤ *delmail* — delete this address for good\n\n"+
-			"🔰 _If nobody checks mail on this address for 60 minutes straight, it expires automatically and any mail in it is lost. Just running *checkmail* keeps it alive._")
+		s.Reply(info, "🔰 *YOUR TEMP MAIL IS READY* 🔰\n`"+account.Address+"`\n\n"+
+			"A throwaway inbox — use this address for site signups and OTP codes, your real email stays private.\n\n"+
+			gmMailCommandsInfo)
 	} else {
-		s.Reply(info, "🔰 *THIS IS ALREADY YOUR ACTIVE TEMP MAIL*\n`"+account.Address+"`\n\n"+
-			"You already had one, so it wasn't recreated. Type *newmail* if you want to throw this away and get a different address instead.")
+		s.Reply(info, "🔰 *THIS IS ALREADY YOUR ACTIVE TEMP MAIL* 🔰\n`"+account.Address+"`\n\n"+
+			"You already had one, so it wasn't recreated — no new address was made.\n\n"+
+			gmMailCommandsInfo)
 	}
 }
 
@@ -355,9 +359,9 @@ func handleNewMailAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	if hadOld {
 		replacedLine = "Your old address is now dead — any mail sent to it is gone and can't be recovered."
 	}
-	s.Reply(info, "🔰 *NEW TEMP MAIL GENERATED*\n`"+account.Address+"`\n\n"+
+	s.Reply(info, "🔰 *NEW TEMP MAIL GENERATED* 🔰\n`"+account.Address+"`\n\n"+
 		replacedLine+"\n\n"+
-		"Use *checkmail* to see what arrives here, or *newmail* again anytime for another fresh one.")
+		gmMailCommandsInfo)
 }
 
 func handleCheckMail(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -369,8 +373,9 @@ func handleCheckMailAsync(s SessionBridge, info types.MessageInfo, args []string
 	db := gmLoadDB()
 	account, ok := db[sender]
 	if !ok {
-		s.Reply(info, "🔰 *NO TEMP MAIL YET*\n\n"+
-			"You haven't generated an address for yourself. Type *tempmail* first to get one, then come back and run *checkmail* to see what's arrived.")
+		s.Reply(info, "🔰 *NO TEMP MAIL YET* 🔰\n\n"+
+			"You haven't generated an address for yourself — run TEMPMAIL first to get one.\n\n"+
+			gmMailCommandsInfo)
 		return
 	}
 
@@ -382,7 +387,8 @@ func handleCheckMailAsync(s SessionBridge, info types.MessageInfo, args []string
 
 	if len(messages) == 0 {
 		s.Reply(info, "🔰 *No mail yet* for:\n`"+account.Address+"`\n\n"+
-			"Nothing's arrived at this address so far. This is normal right after signing up somewhere — it can take a minute or two for the email to come through. Go sign up/verify with this address if you haven't yet, then run *checkmail* again in a bit.")
+			"Nothing's arrived at this address so far. This is normal right after signing up somewhere — it can take a minute or two for the email to come through. Go sign up/verify with this address if you haven't yet, then run *checkmail* again in a bit.\n\n"+
+			gmMailCommandsInfo)
 		return
 	}
 
@@ -424,6 +430,9 @@ func handleCheckMailAsync(s SessionBridge, info types.MessageInfo, args []string
 	if len(messages) > len(toShow) {
 		s.Reply(info, "…and "+itoa(len(messages)-len(toShow))+" more. Type *checkmail* again later to see them as older ones clear.")
 	}
+
+	// same info card — har mail command ke sath
+	s.Reply(info, gmMailCommandsInfo)
 }
 
 func handleDelMail(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -444,8 +453,9 @@ func handleDelMailAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	delete(db, sender)
 	gmSaveDB(db)
 
-	s.Reply(info, "🔰 *DELETED*\n`"+account.Address+"`\n\n"+
-		"This address is gone for good — any mail still sitting in it is lost, and it can't be reused. Type *tempmail* whenever you want a new one.")
+	s.Reply(info, "🔰 *DELETED* 🔰\n`"+account.Address+"`\n\n"+
+		"This address is gone for good — everything inside it is lost and it can't be reused.\n\n"+
+		gmMailCommandsInfo)
 }
 
 // ── small helpers ───────────────────────────────────────────────────────────

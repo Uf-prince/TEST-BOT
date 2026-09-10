@@ -59,6 +59,14 @@ func handleSystem(s SessionBridge, info types.MessageInfo, args []string, prefix
 	dataDisk := directorySize(dataDir)
 	cpu := readContainerCPU()
 
+	// avg memory view — cgroup peak + current side by side
+	var avgMem string
+	if memory.peak != "N/A" && memory.used != "N/A" {
+		avgMem = memory.peak + " / " + memory.used
+	} else {
+		avgMem = formatBytes(mem.HeapAlloc) + " (heap)"
+	}
+
 	// On overlay/ephemeral filesystems (Modal, some PaaS) statfs reports the
 	// host disk (multi-TB) — show an honest "no fixed quota" instead of
 	// nonsense like "8388608 TB free".
@@ -89,17 +97,64 @@ func handleSystem(s SessionBridge, info types.MessageInfo, args []string, prefix
 		"*DATA VOLUME* :❯ %s (%s)\n"+
 		"*CONTAINER FS VIEW* :❯ %s\n"+
 		"*GPU* :❯ %s\n"+
-		"*CONTAINER UPTIME* :❯ %s\n"+
-		"*GO RUNTIME* :❯ %s\n"+
-		"*BOT IS RUNNING* 🔰",
+		"*CONTAINER UPTIME* :❯ %s\n\n"+
+		"*MEMORY / DISK DETAILS*\n"+
+		"*RAM PEAK/CURR* :❯ %s / %s\n"+
+		"*HEAP ALLOCS/FREES* :❯ %s / %s\n"+
+		"*GC CYCLES* :❯ %d total / %d forced\n"+
+		"*TOTAL ALLOCATED* :❯ %s\n"+
+		"*DISK READ/WRITE* :❯ %s / %s",
 		platform, cpu.limit, cpu.usage, readLoadAverage(), memory.limit, memory.used,
 		memory.usedPct, memory.available, memory.peak, memory.swapLimit, memory.swapUsed, processRSS, formatBytes(mem.Alloc),
 		formatBytes(mem.HeapAlloc), formatBytes(mem.Sys), runtime.NumGoroutine(),
 		diskQuotaText(platform), formatBytes(appDisk), formatBytes(tmpDisk),
 		dataDir, formatBytes(dataDisk), fsView,
-		detectGPU(), readContainerUptime(), runtime.Version())
+		detectGPU(), readContainerUptime(),
+		memory.peak, avgMem, fmtUintWithComma(mem.Mallocs), fmtUintWithComma(mem.Frees),
+		mem.NumGC, mem.NumForcedGC,
+		formatBytes(mem.TotalAlloc),
+		readProcIOStat("read_bytes"), readProcIOStat("write_bytes"))
 
 	s.Reply(info, text)
+}
+
+// readProcIOStat reads /proc/self/io field (read_bytes / write_bytes).
+func readProcIOStat(field string) string {
+	data, err := os.ReadFile("/proc/self/io")
+	if err != nil {
+		return "N/A"
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[0] == field {
+			value, err := strconv.ParseUint(fields[1], 10, 64)
+			if err != nil {
+				return "N/A"
+			}
+			return fmtUintWithComma(value)
+		}
+	}
+	return "N/A"
+}
+
+// fmtUintWithComma formats n with thousand separators (1,234,567).
+func fmtUintWithComma(n uint64) string {
+	if n == 0 {
+		return "0"
+	}
+	digits := strconv.FormatUint(n, 10)
+	var b strings.Builder
+	pre := len(digits) % 3
+	if pre > 0 {
+		b.WriteString(digits[:pre])
+	}
+	for i := pre; i < len(digits); i += 3 {
+		if b.Len() > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(digits[i : i+3])
+	}
+	return b.String()
 }
 
 // detectPlatform names the hosting platform for the status card.
