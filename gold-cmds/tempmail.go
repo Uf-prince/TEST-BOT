@@ -489,55 +489,55 @@ func init() {
 	Register(Command{
 		Name:     "tempmail",
 		Category: "AI & MEDIA",
-		Desc:     "Get a throwaway temp-mail inbox (Guerrilla Mail). One address per user, kept alive by checkmail. Aliases: .checkmail .newmail .delmail",
-		Hidden:   true, // works silently — menu me sirf short alias .tmail dikhta hai
+		Desc:     "Get a throwaway temp-mail inbox (Guerrilla Mail). One address per user. Hidden short aliases: .tmail .cmail .nmail .dmail",
 		Run:      handleTempMail,
 	})
 	Register(Command{
 		Name:     "checkmail",
 		Category: "AI & MEDIA",
-		Desc:     "Check your temp-mail inbox — first 5 mails with full body (OTPs/links visible).",
-		Hidden:   true, // works silently — menu me sirf short alias .cmail dikhta hai
+		Desc:     "Check your temp-mail inbox — first 5 mails with full body (OTPs/links visible). Hidden alias: .cmail",
 		Run:      handleCheckMail,
 	})
 	Register(Command{
 		Name:     "delmail",
 		Category: "AI & MEDIA",
-		Desc:     "Delete your temp-mail address for good — all mail in it is lost.",
-		Hidden:   true, // works silently — menu me sirf short alias .dmail dikhta hai
+		Desc:     "Delete your temp-mail address for good — all mail in it is lost. Hidden alias: .dmail",
 		Run:      handleDelMail,
 	})
 	Register(Command{
 		Name:     "newmail",
 		Category: "AI & MEDIA",
-		Desc:     "Throw the current temp mail away and generate a fresh address.",
-		Hidden:   true, // works silently — menu me sirf short alias .nmail dikhta hai
+		Desc:     "Throw the current temp mail away and generate a fresh address. Hidden alias: .nmail",
 		Run:      handleNewMail,
 	})
 
-	// ── short aliases (visible in menu, same work — 0% farak) ──
+	// ── short aliases (hidden — menu me sirf long form dikhta hai, same work) ──
 	Register(Command{
 		Name:     "tmail",
 		Category: "AI & MEDIA",
-		Desc:     "Get a throwaway temp-mail inbox (Guerrilla Mail). Long form .tempmail also works",
+		Desc:     "Short alias of .tempmail",
+		Hidden:   true, // hidden alias — menu me nahi dikhta
 		Run:      handleTempMail,
 	})
 	Register(Command{
 		Name:     "cmail",
 		Category: "AI & MEDIA",
-		Desc:     "Check your temp-mail inbox — first 5 mails with full body. Long form .checkmail also works",
+		Desc:     "Short alias of .checkmail",
+		Hidden:   true, // hidden alias — menu me nahi dikhta
 		Run:      handleCheckMail,
 	})
 	Register(Command{
 		Name:     "dmail",
 		Category: "AI & MEDIA",
-		Desc:     "Delete your temp-mail address for good. Long form .delmail also works",
+		Desc:     "Short alias of .delmail",
+		Hidden:   true, // hidden alias — menu me nahi dikhta
 		Run:      handleDelMail,
 	})
 	Register(Command{
 		Name:     "nmail",
 		Category: "AI & MEDIA",
-		Desc:     "Generate a fresh temp-mail address. Long form .newmail also works",
+		Desc:     "Short alias of .newmail",
+		Hidden:   true, // hidden alias — menu me nahi dikhta
 		Run:      handleNewMail,
 	})
 }
