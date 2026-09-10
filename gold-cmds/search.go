@@ -19,6 +19,7 @@ package goldcmds
 // ============================================================================
 
 import (
+	"unicode/utf8"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -700,9 +701,7 @@ func twtDDGSearch(ctx context.Context, query string) ([]searchResult, error) {
 			continue
 		}
 		seen[link] = true
-		if len(title) > 80 {
-			title = title[:77] + "..."
-		}
+		title = utf8Safe(title)
 		out = append(out, searchResult{Title: title, Handle: twHandleFromLink(link), Link: link})
 	}
 	return out, nil
@@ -924,6 +923,9 @@ func handleFBSearchV7(s SessionBridge, info types.MessageInfo, args []string, pr
 		return
 	}
 	RunWithTimeout(s, info, func(ctx context.Context) {
+		// owner rule: query pe waiting msg — search hote hi auto-delete
+		// (success card / no-results — sab paths pe).
+		waitID := s.ReplyWithID(info, "*SEARCHING FACEBOOK....*")
 		// v9: FB video search — watch search (primary) + DDG-lite (backup)
 		// merge karke 15 tak results. Profile-directory sirf tab jab video
 		// search khaali ho (private/personal profiles ke liye).
@@ -963,6 +965,10 @@ func handleFBSearchV7(s SessionBridge, info types.MessageInfo, args []string, pr
 			}
 		}
 
+		// owner rule: junk-title video entries ke naam reel pages se bharo
+		fbEnrichVideoTitles(ctx, merged)
+
+		s.DeleteMessage(info, waitID)
 		if len(merged) > 0 {
 			setSearchSession(info.Sender.String(), pickFB, query, merged)
 			s.Reply(info, searchCard("FACEBOOK VIDEO SEARCH", query, "VIDEO", "", merged,
@@ -1089,12 +1095,83 @@ func fbWatchParse(md string) []searchResult {
 		if title == "" || fbDateLikeTitle(title) || fbRelAgeRe.MatchString(title) {
 			title = "Facebook Video"
 		}
-		if len(title) > 80 {
-			title = title[:77] + "..."
-		}
+		title = utf8Safe(title)
 		out = append(out, searchResult{Title: title, Link: r.link, DurationSec: durs[r.link]})
 	}
 	return out
+}
+
+// fbReelIDRe — video permalink (reel / watch?v=) pe ID match.
+var fbReelIDRe = regexp.MustCompile(`facebook\.com/(?:reel/|watch/\?v=)(\d{6,})`)
+
+// fbEnrichVideoTitles — junk-title video entries (watch page date-only
+// ya DDG fallback) ke liye reel page ka jina title fetch karke asli video
+// naam nikaalta hai: "<stats> | <NAME> | <AUTHOR>". Parallel goroutines
+// (har entry ~1s), sirf video permalinks pe, max fbMaxResults.
+func fbEnrichVideoTitles(ctx context.Context, rs []searchResult) {
+	type job struct {
+		idx  int
+		link string
+	}
+	var jobs []job
+	for i, r := range rs {
+		if r.Title != "" && r.Title != "Facebook" && r.Title != "Facebook Video" {
+			continue // asli naam already hai
+		}
+		if !fbReelIDRe.MatchString(r.Link) {
+			continue // profile links enrich nahi hote
+		}
+		jobs = append(jobs, job{i, r.Link})
+		if len(jobs) >= fbMaxResults {
+			break
+		}
+	}
+	if len(jobs) == 0 {
+		return
+	}
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	for _, j := range jobs {
+		wg.Add(1)
+		go func(idx int, link string) {
+			defer wg.Done()
+			md, err := jinaFetch(ctx, link)
+			if err != nil {
+				return
+			}
+			line := ""
+			for _, l := range strings.Split(md, "\n") {
+				if strings.HasPrefix(l, "Title: ") {
+					line = strings.TrimSpace(strings.TrimPrefix(l, "Title: "))
+					break
+				}
+			}
+			if line == "" {
+				return
+			}
+			// "<stats> | <NAME> | <AUTHOR>" — middle segment asli naam.
+			parts := strings.Split(line, " | ")
+			name := ""
+			if len(parts) >= 3 {
+				name = strings.TrimSpace(parts[1])
+			} else if len(parts) == 2 {
+				name = strings.TrimSpace(parts[1])
+			}
+			if name == "" {
+				name = strings.TrimSpace(line)
+			}
+			if name == "" || len(name) < 3 {
+				return
+			}
+			name = utf8Safe(name)
+			mu.Lock()
+			rs[idx].Title = name
+			mu.Unlock()
+		}(j.idx, j.link)
+	}
+	wg.Wait()
 }
 
 // fbNormLink — m.facebook link ko www form me (resolver/cobalt www
@@ -1108,6 +1185,25 @@ func fbParseMMSS(mm, ss string) int64 {
 	m, _ := strconv.ParseInt(mm, 10, 64)
 	s, _ := strconv.ParseInt(ss, 10, 64)
 	return m*60 + s
+}
+// utf8Safe — 80 chars se lambe titles emoji ke beech se kaatne ke
+// bajaye rune-aware truncate (broken UTF-8/WhatsApp render issue se bachata hai).
+func utf8Safe(s string) string {
+	if len(s) <= 80 {
+		return s
+	}
+	t := s[:80]
+	// 3 rune max — emoji boundary tak peeche jao
+	for len(t) > 0 && !utf8.ValidString(t) {
+		t = t[:len(t)-1]
+	}
+	if len(t) < 77 {
+		t = s[:77]
+		for len(t) > 0 && !utf8.ValidString(t) {
+			t = t[:len(t)-1]
+		}
+	}
+	return t + "..."
 }
 
 // fbDateLikeTitle — "February 19, 2024" / "August 20 at 4:11 AM" jaisi
@@ -1178,6 +1274,10 @@ func ddgFBVideoSearch(ctx context.Context, query string) ([]searchResult, error)
 		}
 		if !strings.Contains(dec, "facebook.com/") {
 			continue
+		}
+		// mibextid jaise tracking params strip — clean permalink list me.
+		if i := strings.IndexAny(dec, "?#"); i >= 0 {
+			dec = dec[:i]
 		}
 		// sirf video/reel/watch permalinks (profiles/pages NAHI)
 		if fbExtractPermalink(dec) == "" {
