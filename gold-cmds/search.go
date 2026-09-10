@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -977,36 +978,136 @@ func handleFBSearchV7(s SessionBridge, info types.MessageInfo, args []string, pr
 // facebook.com/watch/search/?q=QUERY public hai aur public reels/videos
 // ke direct permalinks + titles deta hai (koi login nahi, no rate-limit).
 func fbWatchSearch(ctx context.Context, query string) ([]searchResult, error) {
-	md, err := jinaFetch(ctx, "https://www.facebook.com/watch/search/?q="+url.PathEscape(query))
+	// ENGINE v2 (owner rule: name + duration + valid links): m.facebook
+	// watch search PRIMARY — www wala kuch queries pe login wall de deta
+	// tha (funny/nasheed -> 0 results), m har tested query pe reels deta
+	// hai. m kam de to www se merge. Purana www-only fetch REMOVE (naya
+	// endpoint kaam kar gaya).
+	q := url.PathEscape(query)
+	out, mErr := fbWatchFetch(ctx, "https://m.facebook.com/watch/search/?q="+q)
+	if mErr == nil && len(out) >= 4 {
+		return out, nil
+	}
+	if extra, wErr := fbWatchFetch(ctx, "https://www.facebook.com/watch/search/?q="+q); wErr == nil {
+		seen := map[string]bool{}
+		for _, r := range out {
+			seen[r.Link] = true
+		}
+		for _, r := range extra {
+			if seen[r.Link] {
+				continue
+			}
+			seen[r.Link] = true
+			out = append(out, r)
+		}
+	}
+	if len(out) > 0 {
+		return out, nil
+	}
+	if mErr != nil {
+		return nil, mErr
+	}
+	return nil, fmt.Errorf("watch search empty")
+}
+
+// fbWatchFetch — ek watch-search page fetch + parse.
+func fbWatchFetch(ctx context.Context, u string) ([]searchResult, error) {
+	md, err := jinaFetch(ctx, u)
 	if err != nil {
 		return nil, err
 	}
-	// best title per link: ## [Title](link) asli video title hota hai;
-	// [date](link) wale sirf tab jab asli title na mile.
-	titles := map[string]string{}
-	for _, m := range fbWatchTitleRe.FindAllStringSubmatch(md, -1) {
-		title, link := strings.TrimSpace(m[1]), m[2]
-		if title != "" {
-			titles[link] = title
+	return fbWatchParse(md), nil
+}
+
+// fbWatchParse — watch-search markdown se name + duration + link entries.
+func fbWatchParse(md string) []searchResult {
+	// duration badges: [M:SS ![Image N](thumb)](reel-link)
+	durs := map[string]int64{}
+	for _, m := range fbWatchDurRe.FindAllStringSubmatch(md, -1) {
+		link := fbNormLink(m[3])
+		if _, ok := durs[link]; !ok {
+			durs[link] = fbParseMMSS(m[1], m[2])
 		}
 	}
-	var out []searchResult
+	// ## [Title](link) — asli video title (lambi captions bhi).
+	titles := map[string]string{}
+	for _, m := range fbWatchTitleRe.FindAllStringSubmatch(md, -1) {
+		if t := strings.TrimSpace(m[1]); t != "" {
+			titles[fbNormLink(m[2])] = t
+		}
+	}
+	// entries: [text](reel-link) + badge-only links (unke nested image
+	// brackets ki wajah se fbWatchRe me nahi aate — alag se add).
+	type fbRawEnt struct {
+		pos         int
+		title, link string
+	}
+	var raws []fbRawEnt
 	seen := map[string]bool{}
-	for _, m := range fbWatchRe.FindAllStringSubmatch(md, -1) {
-		title, link := strings.TrimSpace(m[1]), m[2]
+	for _, m := range fbWatchRe.FindAllStringSubmatchIndex(md, -1) {
+		title, link := strings.TrimSpace(md[m[2]:m[3]]), fbNormLink(md[m[4]:m[5]])
 		if seen[link] {
 			continue
 		}
 		seen[link] = true
-		if t, ok := titles[link]; ok {
+		raws = append(raws, fbRawEnt{m[0], title, link})
+	}
+	for _, m := range fbWatchDurRe.FindAllStringSubmatchIndex(md, -1) {
+		link := fbNormLink(md[m[6]:m[7]])
+		if seen[link] {
+			continue
+		}
+		seen[link] = true
+		raws = append(raws, fbRawEnt{m[0], "", link})
+	}
+	// page order me sort
+	sort.Slice(raws, func(i, j int) bool { return raws[i].pos < raws[j].pos })
+	// player duration (0:00 / M:SS) — jis entry ka badge nahi mila.
+	for i := range raws {
+		if durs[raws[i].link] > 0 {
+			continue
+		}
+		end := len(md)
+		if i+1 < len(raws) {
+			end = raws[i+1].pos
+		}
+		for _, pl := range fbWatchPlayerRe.FindAllStringSubmatch(md[raws[i].pos:end], -1) {
+			if pl[1] == "0" && pl[2] == "00" {
+				if tot := fbParseMMSS(pl[3], pl[4]); tot > 0 {
+					durs[raws[i].link] = tot
+					break
+				}
+			}
+		}
+	}
+	out := make([]searchResult, 0, len(raws))
+	for _, r := range raws {
+		title := r.title
+		if t, ok := titles[r.link]; ok {
 			title = t
 		}
-		if title == "" || fbDateLikeTitle(title) {
+		if title == "" || fbDateLikeTitle(title) || fbRelAgeRe.MatchString(title) {
 			title = "Facebook Video"
 		}
-		out = append(out, searchResult{Title: title, Link: link})
+		if len(title) > 80 {
+			title = title[:77] + "..."
+		}
+		out = append(out, searchResult{Title: title, Link: r.link, DurationSec: durs[r.link]})
 	}
-	return out, nil
+	return out
+}
+
+// fbNormLink — m.facebook link ko www form me (resolver/cobalt www
+// permalinks se khelte hain).
+func fbNormLink(l string) string {
+	return strings.Replace(l, "https://m.facebook.com/", "https://www.facebook.com/", 1)
+}
+
+// fbParseMMSS — "M:SS" ko seconds me.
+func fbParseMMSS(mm, ss string) int64 {
+	m, _ := strconv.ParseInt(mm, 10, 64)
+	s, _ := strconv.ParseInt(ss, 10, 64)
+	return m*60 + s
 }
 
 // fbDateLikeTitle — "February 19, 2024" / "August 20 at 4:11 AM" jaisi
@@ -1024,10 +1125,20 @@ func fbDateLikeTitle(t string) bool {
 
 // fbWatchRe — watch search page pe video titles reel/watch permalinks ke
 // saath hote hain: ## [Title](reel-link) ya [date](reel-link).
-var fbWatchRe = regexp.MustCompile(`\[([^\]]{2,120})\]\((https://www\.facebook\.com/(?:reel/[0-9]{6,}|watch/\?v=[0-9]{6,})/?)[^)]*\)`)
+var fbWatchRe = regexp.MustCompile(`\[([^\]]{2,200})\]\((https://(?:www|m)\.facebook\.com/(?:reel/[0-9]{6,}|watch/\?v=[0-9]{6,})/?)[^)]*\)`)
 
 // fbWatchTitleRe — asli video title heading format me hota hai.
-var fbWatchTitleRe = regexp.MustCompile(`## \[([^\]]{2,120})\]\((https://www\.facebook\.com/(?:reel/[0-9]{6,}|watch/\?v=[0-9]{6,})/?)[^)]*\)`)
+var fbWatchTitleRe = regexp.MustCompile(`## \[([^\]]+)\]\((https://(?:www|m)\.facebook\.com/(?:reel/[0-9]{6,}|watch/\?v=[0-9]{6,})/?)[^)]*\)`)
+
+// fbWatchDurRe — duration badge: [M:SS ![Image N](thumb)](reel-link).
+var fbWatchDurRe = regexp.MustCompile(`\[(\d{1,2}):(\d{2})\s+!\[Image[^\]]*\]\([^)]+\)\]\((https://(?:www|m)\.facebook\.com/(?:reel/[0-9]{6,}|watch/\?v=[0-9]{6,})/?)[^)]*\)`)
+
+// fbWatchPlayerRe — video player bar "0:00 / M:SS" ("0:00 / 0:00"
+// loading state skip hota hai — total 0 wale nahi lete).
+var fbWatchPlayerRe = regexp.MustCompile(`(\d{1,2}):(\d{2})\s*/\s*(\d{1,2}):(\d{2})`)
+
+// fbRelAgeRe — "2d" / "20h" jaise relative-age junk titles.
+var fbRelAgeRe = regexp.MustCompile(`^[0-9]+[smhdwy]$`)
 
 // ddgFBVideoSearch — DDG-lite se facebook.com ke direct video/reel links.
 func ddgFBVideoSearch(ctx context.Context, query string) ([]searchResult, error) {
