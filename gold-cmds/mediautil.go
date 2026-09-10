@@ -35,14 +35,25 @@ func mediaHTTPClient() *http.Client {
 	return &http.Client{Timeout: 5 * time.Minute}
 }
 
-// isFfmpegAvailable reports whether the ffmpeg binary is on PATH.
+// isFfmpegAvailable reports whether the ffmpeg binary is callable.
+// OWNER RULE (any-platform deploy): ffmpeg system pe nahi bhi ho to
+// ensureFfmpeg() static build download karke PATH me daal deta hai —
+// commands kabhi "ffmpeg not found" error na dein.
 func isFfmpegAvailable() bool {
+	if ensureFfmpeg() {
+		return true
+	}
 	_, err := exec.LookPath("ffmpeg")
 	return err == nil
 }
 
-// isFfprobeAvailable reports whether the ffprobe binary is on PATH.
+// isFfprobeAvailable reports whether the ffprobe binary is callable.
+// (ensureFfmpeg() static build me ffprobe bhi included hai.)
 func isFfprobeAvailable() bool {
+	if ensureFfmpeg() {
+		_, err := exec.LookPath("ffprobe")
+		return err == nil
+	}
 	_, err := exec.LookPath("ffprobe")
 	return err == nil
 }

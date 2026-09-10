@@ -203,6 +203,15 @@ func main() {
 		InfoLog("Pairing panel → http://0.0.0.0:%d (POST /pair , GET /sessions)", cfg.PanelPort)
 	}
 
+	// ── ffmpeg self-installer (owner rule: jaha b deploy kro ho jaye) ──
+	// Background goroutine — boot speed pe 0% asar. Static ffmpeg download
+	// karke PATH me daal deta hai agar system pe na mile (Render/Docker/VPS
+	// jahan ffmpeg pre-installed nahi). tomp3/sticker/tg-audio/play sab
+	// isFfmpegAvailable() se self-heal ho jate hain.
+	go func() {
+		_ = goldcmds.EnsureFfmpegPublic()
+	}()
+
 	// ── auto-load every saved session (batched, like autoload.js) ──
 	mgr.AutoLoad()
 
