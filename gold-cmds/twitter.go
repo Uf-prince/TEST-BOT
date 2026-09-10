@@ -145,8 +145,6 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 		return
 	}
 
-	waitID := s.ReplyWithID(info, "*DOWNLOADING TWITTER VIDEO....*")
-
 	// owner fix: profile link (x.com/NASA) -> jina se latest VIDEO tweet
 	// resolve (video-first — photos sirf fallback)
 	statusID := kvalue
@@ -154,23 +152,24 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 		var rerr error
 		statusID, rerr = twProfileLatestVideoStatusID(ctx, kvalue)
 		if rerr != nil {
-			s.DeleteMessage(info, waitID)
 			s.Reply(info, "🔰 *TWITTER DOWNLOAD ERROR*\nProfile could not be resolved - paste a direct tweet link.")
 			return
 		}
 	}
 
-
 	tweet, err := twFetchTweet(ctx, statusID)
 	if err != nil {
-		s.DeleteMessage(info, waitID)
 		s.Reply(info, "🔰 *TWITTER DOWNLOAD ERROR*\n"+err.Error())
 		return
 	}
 
+	// OWNER RULE v3 (thumbnail card): rich preview card — title/creator/
+	// likes ke sath "TWITTER VIDEO DOWNLOADING / PLEASE WAIT....". Ye
+	// card video/photo send hone ke baad bhi DELETE NAHI hota.
+	waitID := s.ReplyWithID(info, twPreviewCard(tweet))
+
 	// Photo-only tweets: download & send up to 4 photos as images.
 	if len(tweet.Media.Videos) == 0 && len(tweet.Media.Photos) > 0 {
-		s.EditMessage(info, waitID, "🔰 *Sending photo...*")
 		client := mediaHTTPClient()
 		caption := twBuildCaption(tweet)
 		sent := 0
@@ -191,33 +190,27 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 				sent++
 			}
 		}
-		s.DeleteMessage(info, waitID)
 		if sent == 0 {
-			s.Reply(info, "🔰 COULD NOT SEND PHOTO 🔰")
+			s.EditMessage(info, waitID, "🔰 *TWITTER DOWNLOAD ERROR*\nCould not send photo - please try again.")
 		}
 		return
 	}
 
 	if len(tweet.Media.Videos) == 0 {
-		s.DeleteMessage(info, waitID)
-		s.Reply(info, "🔰 NO VIDEO OR PHOTO IN THIS TWEET 🔰")
+		s.EditMessage(info, waitID, "🔰 NO VIDEO OR PHOTO IN THIS TWEET 🔰")
 		return
 	}
 
 	vid := tweet.Media.Videos[0]
 	if vid.URL == "" {
-		s.DeleteMessage(info, waitID)
-		s.Reply(info, "🔰 VIDEO URL NOT FOUND. PLEASE TRY AGAIN 🔰")
+		s.EditMessage(info, waitID, "🔰 VIDEO URL NOT FOUND. PLEASE TRY AGAIN 🔰")
 		return
 	}
-
-	s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
 
 	client := mediaHTTPClient()
 	path, err := streamDownloadToFile(ctx, client, vid.URL, nil)
 	if err != nil {
-		s.DeleteMessage(info, waitID)
-		s.Reply(info, "🔰 PLEASE TRY AGAIN 🔰")
+		s.EditMessage(info, waitID, "🔰 *TWITTER DOWNLOAD ERROR*\nVideo could not be downloaded - please try again.")
 		return
 	}
 	defer removeTempFile(path)
@@ -234,11 +227,11 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 
 	caption := twBuildCaption(tweet)
 	if err := s.SendVideoFile(info, path, caption, thumb, secs, w, h); err != nil {
-		s.DeleteMessage(info, waitID)
-		s.Reply(info, "🔰 *TWITTER DOWNLOAD ERROR*\nVideo could not be sent.")
+		s.EditMessage(info, waitID, "🔰 *TWITTER DOWNLOAD ERROR*\nVideo could not be sent.")
 		return
 	}
-	s.DeleteMessage(info, waitID)
+	// OWNER RULE: preview/thumbnail card DELETE NAHI hota — video ke
+	// baad bhi chat me rehta hai.
 }
 
 // twBuildCaption builds the standard caption for tweet media.
@@ -263,6 +256,35 @@ func twBuildCaption(tweet *twTweet) string {
 		cap += fmt.Sprintf("*🔰 VIEWS :* %d\n", tweet.Views)
 	}
 	cap += "\n*TWITTER VIDEO DOWNLOADED*"
+	return cap
+}
+
+// twPreviewCard builds the DOWNLOADING preview card (OWNER RULE v3):
+// caption card jaisa hi structure (title / creator / likes / views) lekin
+// ending "TWITTER VIDEO DOWNLOADING" + ek line niche "PLEASE WAIT....".
+// Ye card download start hone pe chala jata hai aur video/photo aane ke
+// baad bhi DELETE NAHI hota — thumbnail card chat me rehta hai.
+func twPreviewCard(tweet *twTweet) string {
+	title := tweet.Text
+	if len(title) > 120 {
+		title = title[:117] + "..."
+	}
+	if title == "" {
+		title = "Twitter Video"
+	}
+	cap := "🔰 *TWITTER VIDEO* 🔰\n*" + title + "*\n\n"
+	if tweet.Author.ScreenName != "" {
+		cap += "*🔰 CREATOR :* @" + tweet.Author.ScreenName + "\n"
+	} else if tweet.Author.Name != "" {
+		cap += "*🔰 CREATOR :* " + tweet.Author.Name + "\n"
+	}
+	if tweet.Likes > 0 {
+		cap += fmt.Sprintf("*🔰 LIKES :* %d\n", tweet.Likes)
+	}
+	if tweet.Views > 0 {
+		cap += fmt.Sprintf("*🔰 VIEWS :* %d\n", tweet.Views)
+	}
+	cap += "\n*TWITTER VIDEO DOWNLOADING*\n*PLEASE WAIT....*"
 	return cap
 }
 

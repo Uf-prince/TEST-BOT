@@ -850,20 +850,20 @@ func tgLatestPost(ctx context.Context, tgURL string) (string, error) {
 func searchPickTWTDirect(s SessionBridge, info types.MessageInfo, selected searchResult) bool {
 	ok := false
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "*DOWNLOADING X / TWITTER MEDIA....*")
-
 		// owner fix: ACCOUNT link pick -> jina se latest tweet resolve
 		// (pehle yahan silent fail hota tha — ID nahi milti thi)
 		statusID, rerr := twResolveLinkAny(ctx, selected.Link)
 		if rerr != nil {
-			s.DeleteMessage(info, waitID)
 			return
 		}
 		tweet, err := twFetchTweet(ctx, statusID)
 		if err != nil {
-			s.DeleteMessage(info, waitID)
 			return
 		}
+
+		// OWNER RULE v3 (thumbnail card): rich preview card — download
+		// start pe chala jata hai, media aane ke baad DELETE NAHI hota.
+		waitID := s.ReplyWithID(info, twPreviewCard(tweet))
 
 		client := mediaHTTPClient()
 		caption := twBuildCaption(tweet)
@@ -888,7 +888,6 @@ func searchPickTWTDirect(s SessionBridge, info types.MessageInfo, selected searc
 					sent++
 				}
 			}
-			s.DeleteMessage(info, waitID)
 			if sent > 0 {
 				ok = true
 			}
@@ -896,16 +895,14 @@ func searchPickTWTDirect(s SessionBridge, info types.MessageInfo, selected searc
 		}
 
 		if len(tweet.Media.Videos) == 0 || tweet.Media.Videos[0].URL == "" {
-			s.DeleteMessage(info, waitID)
+			s.EditMessage(info, waitID, "🔰 NO VIDEO OR PHOTO FOUND 🔰")
 			return
 		}
 		vid := tweet.Media.Videos[0]
 
-		s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
-
 		path, err := streamDownloadToFile(ctx, client, vid.URL, nil)
 		if err != nil {
-			s.DeleteMessage(info, waitID)
+			s.EditMessage(info, waitID, "🔰 *X / TWITTER DOWNLOAD ERROR*\nVideo could not be downloaded - please try again.")
 			return
 		}
 		defer removeTempFile(path)
@@ -919,10 +916,10 @@ func searchPickTWTDirect(s SessionBridge, info types.MessageInfo, selected searc
 			w, h = uint32(vid.Width), uint32(vid.Height)
 		}
 		if err := s.SendVideoFile(info, path, caption, thumb, secs, w, h); err != nil {
-			s.DeleteMessage(info, waitID)
+			s.EditMessage(info, waitID, "🔰 *X / TWITTER DOWNLOAD ERROR*\nVideo could not be sent.")
 			return
 		}
-		s.DeleteMessage(info, waitID)
+		// OWNER RULE: preview card DELETE NAHI hota — media ke baad bhi rahe.
 		ok = true
 	})
 	return ok
