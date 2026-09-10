@@ -113,13 +113,6 @@ func tgChannelScan(ctx context.Context, chanURL string) (*tgChannelInventory, er
 			break // all three found
 		}
 	}
-	tgDebug("menu_scan", map[string]any{
-		"channel": channel, "blocks": len(blocks),
-		"text":  inv.textMedia != nil,
-		"photo": inv.photoMedia != nil,
-		"video": inv.videoMedia != nil,
-		"audio": inv.audioAvailable(),
-	})
 	return inv, nil
 }
 
@@ -146,7 +139,7 @@ func tgTypeMenuCard(inv *tgChannelInventory, pickedTitle string) string {
 	if inv.audioAvailable() {
 		b.WriteString("*TYPE ❮ 4 ❯ TO GET AUDIO*\n")
 	}
-	b.WriteString("\n*REPLY WITH THE NUMBER OF WHAT YOU WANT*")
+	b.WriteString("\n*REPLY WITH THE NUMBER OF WHAT YOU WANT*\n\n*SESSION STAYS OPEN 30s — YOU CAN ASK AGAIN & AGAIN*")
 	return b.String()
 }
 
@@ -167,7 +160,7 @@ type tgTypeSession struct {
 var (
 	tgTypeMu   sync.Mutex
 	tgTypeSess = map[string]*tgTypeSession{}
-	tgTypeTTL  = 3 * time.Minute // pick window ke barabar
+	tgTypeTTL  = 30 * time.Second // owner rule: har pick ke baad 30s fresh window
 )
 
 func setTGTypeChoice(jid string, inv *tgChannelInventory, title string) {
@@ -196,6 +189,16 @@ func clearTGTypeChoice(jid string) {
 	delete(tgTypeSess, jid)
 }
 
+// rearmTGTypeChoice — delivery ke baad 30s fresh window (owner rule).
+// Zero-cost: sirf mutex + timestamp, koi goroutine/spawn nahi.
+func rearmTGTypeChoice(jid string) {
+	tgTypeMu.Lock()
+	defer tgTypeMu.Unlock()
+	if sess, ok := tgTypeSess[jid]; ok {
+		sess.expiry = time.Now().Add(tgTypeTTL)
+	}
+}
+
 // ── choice handler (call from handler.go BEFORE SearchTryHandle) ────────────
 
 // TGTypeTryHandle — consumes a bare 1-4 reply while a TYPE menu window is
@@ -213,11 +216,14 @@ func TGTypeTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 	if _, err := fmt.Sscanf(trimmed, "%d", &choice); err != nil || choice < 1 || choice > 4 {
 		return false // not a TYPE pick — message flows on
 	}
-	clearTGTypeChoice(info.Sender.String())
-	tgDebug("type_pick", map[string]any{
-		"choice": choice, "channel": sess.inv.channel,
-		"sender": info.Sender.String(),
-	})
+	if sess.inv == nil || sess.inv.empty() {
+		clearTGTypeChoice(info.Sender.String())
+		return false
+	}
+	// 30s persistent window (owner rule): session band NAHI hota — har pick
+	// ke baad 30s fresh re-arm, taki user 1 → 2 → 3 → 4 sab kuch ek hi menu
+	// se mangwa sake. 30s tak koi number na aaye to window khud mar jata hai.
+	rearmTGTypeChoice(info.Sender.String())
 	switch choice {
 	case 1:
 		if sess.inv.textMedia == nil || strings.TrimSpace(sess.inv.textMedia.text) == "" {
@@ -282,18 +288,9 @@ func tgDeliverAudio(ctx context.Context, s SessionBridge, info types.MessageInfo
 	media := inv.videoMedia
 	waitID := s.ReplyWithID(info, "⬇️ *DOWNLOADING AUDIO....*")
 
-	tgDebug("send_media_start", map[string]any{
-		"kind": "audio-from-video", "cdn_url": media.url,
-		"channel": media.channel, "title": media.text, "views": media.views,
-	})
-	dlStart := time.Now()
 	client := mediaHTTPClient()
 	path, err := streamDownloadToFile(ctx, client, media.url, nil)
 	if err != nil {
-		tgDebugErr("dl_error", err, map[string]any{
-			"cdn_url": media.url, "kind": "audio",
-			"waited_ms": time.Since(dlStart).Milliseconds(),
-		})
 		s.DeleteMessage(info, waitID)
 		s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nAUDIO COULD NOT BE DOWNLOADED 🤧")
 		return
@@ -303,7 +300,6 @@ func tgDeliverAudio(ctx context.Context, s SessionBridge, info types.MessageInfo
 	s.EditMessage(info, waitID, "🎵 *EXTRACTING MP3....*")
 	mp3Path, err := ffmpegToMP3(ctx, path)
 	if err != nil {
-		tgDebugErr("mp3_error", err, map[string]any{"src": path})
 		s.DeleteMessage(info, waitID)
 		s.Reply(info, "❌ *TELEGRAM AUDIO ERROR*\nMP3 CONVERSION FAILED 🤧")
 		return
@@ -334,17 +330,10 @@ func tgDeliverAudio(ctx context.Context, s SessionBridge, info types.MessageInfo
 	}
 	caption += "\n*TELEGRAM AUDIO DOWNLOAD*"
 
-	sendStart := time.Now()
 	if err := s.SendAudioFile(info, mp3Path, caption, seconds); err != nil {
-		tgDebugErr("send_audio_failed", err, map[string]any{
-			"seconds": seconds, "dur_ms": time.Since(sendStart).Milliseconds(),
-		})
 		s.DeleteMessage(info, waitID)
 		s.Reply(info, "❌ *TELEGRAM AUDIO ERROR*\nAUDIO COULD NOT BE SENT 🤧")
 		return
 	}
-	tgDebug("send_audio_ok", map[string]any{
-		"seconds": seconds, "dur_ms": time.Since(sendStart).Milliseconds(),
-	})
 	s.DeleteMessage(info, waitID)
 }

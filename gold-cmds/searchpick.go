@@ -533,18 +533,10 @@ func searchPickAPK(s SessionBridge, info types.MessageInfo, selected searchResul
 // lock ho chuka tha, is liye tgLatestPost/tgFetchPost-embed route dead tha).
 func searchPickTG(s SessionBridge, info types.MessageInfo, selected searchResult) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		tgDebug("cmd_start", map[string]any{
-			"cmd": "tg-search-pick", "title": selected.Title,
-			"link": selected.Link, "handle": selected.Handle,
-			"chat": info.Chat.String(), "sender": info.Sender.String(),
-		})
 		waitID := s.ReplyWithID(info, "⏳ *CHECKING TELEGRAM CHANNEL....*")
 
 		inv, err := tgChannelScan(ctx, selected.Link)
 		if err != nil || inv.empty() {
-			tgDebugErr("fetch_failed", err, map[string]any{
-				"link": selected.Link, "empty": inv.empty(),
-			})
 			s.DeleteMessage(info, waitID)
 			s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nNo public media post found for this channel. 🤔")
 			return
@@ -1223,7 +1215,6 @@ func igStatsLikes(stats string) string {
 	}
 	return stats
 }
-
 
 // ───────────────────────────────────────────────────────────────────────────
 // FACEBOOK DIRECT PICK (profile → latest video → direct download)

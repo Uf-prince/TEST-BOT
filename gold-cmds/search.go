@@ -491,16 +491,13 @@ var (
 )
 
 func tgChannelSearch(ctx context.Context, query string) ([]searchResult, error) {
-	tgDebug("search_start", map[string]any{"query": query})
 	// EN site route: results/labels English me hote hain + stable layout.
 	// (Hebrew default site pe layout same hai, EN preferred.)
 	md, err := jinaFetch(ctx, "https://telegram-group.com/en/search/"+url.PathEscape(query))
 	if err != nil {
-		tgDebugErr("search_page_failed", err, map[string]any{"query": query})
 		return nil, err
 	}
 	if n := len(tgEntryRe.FindAllStringSubmatch(md, -1)); n == 0 {
-		tgDebug("search_no_results", map[string]any{"query": query, "hint": "no ## heading entries on page"})
 	}
 	// collect channel/group entries from the search page
 	type tgEntry struct {
@@ -545,13 +542,11 @@ func tgChannelSearch(ctx context.Context, query string) ([]searchResult, error) 
 					link = strings.Replace(m, "http://t.me/", "https://t.me/", 1)
 				}
 			} else {
-				tgDebugErr("search_detail_failed", derr, map[string]any{"page": e.page})
 			}
 			mu.Lock()
 			if link == "" {
 				// t.me resolve nahi hua -> result SKIP (pehle telegram-group.com
 				// link as-is jata tha -> download "not a channel link" error).
-				tgDebug("search_skip_unresolved", map[string]any{"page": e.page, "title": e.title})
 			} else {
 				out = append(out, searchResult{Title: e.title, Link: link})
 			}
@@ -566,7 +561,6 @@ func tgChannelSearch(ctx context.Context, query string) ([]searchResult, error) 
 		if len(words) > 1 {
 			first := strings.ToLower(words[0])
 			if first != "and" && first != "or" && first != "the" {
-				tgDebug("search_retry_first_word", map[string]any{"orig": query, "retry": first})
 				return tgChannelSearch(ctx, first)
 			}
 		}
@@ -1167,7 +1161,6 @@ func FBExtractPermalinkLive(link string) string {
 func FBWatchLive(ctx context.Context, query string) ([]searchResult, error) {
 	return fbWatchSearch(ctx, query)
 }
-
 
 // tgIsDetailPage — telegram-group.com URL ek real channel/group detail page
 // hai ya nav/category/lang page. Detail pattern: /<lang>/<category>/<slug>/

@@ -79,10 +79,6 @@ func handleTG(s SessionBridge, info types.MessageInfo, args []string, prefix str
 
 func handleTGAsync(ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	tgURL := strings.TrimSpace(strings.Join(args, " "))
-	tgDebug("cmd_start", map[string]any{
-		"cmd": "tg", "raw_arg": tgURL,
-		"chat": info.Chat.String(), "sender": info.Sender.String(),
-	})
 	if tgURL == "" {
 		s.Reply(info, tgHelpText)
 		return
@@ -109,17 +105,11 @@ func handleTGAsync(ctx context.Context, s SessionBridge, info types.MessageInfo,
 	var media *tgMedia
 	var err error
 	if tgPostLinkRe.MatchString(tgURL) {
-		tgDebug("fetch_route", map[string]any{"route": "post_link"})
 		media, err = tgFetchPost(ctx, tgURL)
 	} else {
-		tgDebug("fetch_route", map[string]any{"route": "channel_link"})
 		media, err = tgLatestMedia(ctx, tgURL)
 	}
 	if err != nil || media == nil || media.url == "" {
-		tgDebugErr("fetch_failed", err, map[string]any{
-			"url": tgURL, "media_nil": media == nil,
-			"media_url": func() string { if media != nil { return media.url }; return "" }(),
-		})
 		s.DeleteMessage(info, waitID)
 		s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nMedia not found — is the post public? 🤔")
 		return
@@ -143,39 +133,16 @@ func tgSendMedia(ctx context.Context, s SessionBridge, info types.MessageInfo, w
 
 	s.EditMessage(info, waitID, "⬇️ *DOWNLOADING "+strings.ToUpper(media.kind)+"....*")
 
-	tgDebug("send_media_start", map[string]any{
-		"kind": media.kind, "cdn_url": media.url,
-		"channel": media.channel, "title": media.text, "views": media.views,
-	})
-	dlStart := time.Now()
 	client := mediaHTTPClient()
 	path, err := streamDownloadToFile(ctx, client, media.url, nil)
 	if err != nil {
-		tgDebugErr("dl_error", err, map[string]any{
-			"cdn_url": media.url, "kind": media.kind,
-			"client_timeout": "5m", "waited_ms": time.Since(dlStart).Milliseconds(),
-		})
 		s.DeleteMessage(info, waitID)
 		s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nPLEASE TRY AGAIN 🤗")
 		return false
 	}
-	if fi, ferr := os.Stat(path); ferr == nil {
-		tgDebug("dl_done", map[string]any{
-			"path": path, "bytes": fi.Size(), "dur_ms": time.Since(dlStart).Milliseconds(),
-		})
-	} else {
-		tgDebugErr("dl_stat_fail", ferr, map[string]any{"path": path})
-	}
-
 	// WhatsApp-compat guard: HEVC/mjpeg ko h264+faststart me convert
 	if media.kind == "video" {
-		waStart := time.Now()
 		waPath, werr := whatsappifyVideo(ctx, path)
-		tgDebug("whatsappify", map[string]any{
-			"in_path": path, "out_path": waPath, "err": func() string { if werr != nil { return werr.Error() }; return "" }(),
-			"converted": werr == nil && waPath != path, "dur_ms": time.Since(waStart).Milliseconds(),
-			"ffmpeg_available": isFfmpegAvailable(),
-		})
 		if werr == nil && waPath != path {
 			removeTempFile(path)
 			path = waPath
@@ -214,33 +181,20 @@ func tgSendMedia(ctx context.Context, s SessionBridge, info types.MessageInfo, w
 			return false
 		}
 		if err := s.SendImage(info, data, caption); err != nil {
-			tgDebugErr("send_photo_failed", err, map[string]any{"bytes": len(data)})
 			s.DeleteMessage(info, waitID)
 			s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nPhoto could not be sent.")
 			return false
 		}
-		tgDebug("send_photo_ok", map[string]any{"bytes": len(data)})
 		s.DeleteMessage(info, waitID)
 		return true
 	}
 
 	secs, w, h := probeVideoMeta(path)
-	tgDebug("probe_meta", map[string]any{
-		"secs": secs, "w": w, "h": h, "path": path,
-		"ffprobe_available": isFfprobeAvailable(),
-	})
-	sendStart := time.Now()
 	if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
-		tgDebugErr("send_video_failed", err, map[string]any{
-			"path": path, "secs": secs, "w": w, "h": h, "dur_ms": time.Since(sendStart).Milliseconds(),
-		})
 		s.DeleteMessage(info, waitID)
 		s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nVideo could not be sent.")
 		return false
 	}
-	tgDebug("send_video_ok", map[string]any{
-		"path": path, "dur_ms": time.Since(sendStart).Milliseconds(),
-	})
 	s.DeleteMessage(info, waitID)
 	return true
 }
@@ -413,17 +367,12 @@ func tgGetPage(ctx context.Context, pageURL string) (string, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		tgDebugErr("page_fetch_err", err, map[string]any{"url": pageURL})
 		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		tgDebug("page_fetch_bad_status", map[string]any{
-			"url": pageURL, "status": resp.StatusCode,
-		})
 		return "", fmt.Errorf("page status %d", resp.StatusCode)
 	}
-	tgDebug("page_fetch", map[string]any{"url": pageURL, "status": resp.StatusCode})
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
 		return "", err
