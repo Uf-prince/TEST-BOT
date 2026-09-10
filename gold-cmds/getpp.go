@@ -9,17 +9,18 @@ package goldcmds
 //   .getpp 923xxxxxxxxx                   -> number ka profile
 //   .getpp (mention @user ke saath)       -> mentioned user ka profile
 //
-// KYA BHEJTA HAI (jo mile bhejo, jo na mile NULL):
-//   1. PROFILE PIC  — full-res image (GetProfilePictureInfo -> HTTP GET)
-//                     na mile -> "NULL" (preview try, phir bhi na mile NULL)
-//   2. NUMBER       — JID (user: xxx@s.whatsapp.net / LID @lid)
-//   3. ABOUT        — GetUserInfo -> Status field (About text)
-//                     khali/na mile -> NULL
-//   4. STORY        — honest NULL: whatsmeow me story GET API nahi hai
-//                     (sirf Set/Privacy hai). User ne bola tha "jo na mile
-//                     NULL aa jaye" — isliye field hai, value NULL.
-//   5. EXTRA        — LID, linked devices count, business profile,
-//                     verified name (jo mile)
+// KYA BHEJTA HAI (naya format — owner request):
+//   HEADER  : *🔰 PROFILE PIC FETCHED 🔰*
+//   1. USER NAME   — pushName (contact cache / quoted msg / SenderAlt)
+//   2. USER NUMBER — REAL phone number (LID -> ResolveLIDToPN chain,
+//                    same 3-layer logic as .block cmd lidresolve.go)
+//   3. USER ABOUT  — GetUserInfo -> Status (khali -> NULL)
+//   PP image ke sath card jata hai. STORY LINE REMOVED (owner: nahi chahiye).
+//
+// TARGET MODES:
+//   - INBOX (DM): .getpp likhte hi SENDER (to banda) ka profile foran
+//   - GROUP: reply/mention/@mention/number — jo bhi target ho
+//   - fallback: sender khud
 //
 // whatsmeow APIs (vendored latest, 2026 protocol):
 //   - cli.GetProfilePictureInfo(ctx, jid, &whatsmeow.GetProfilePictureParams{})
@@ -50,12 +51,10 @@ import (
 // HELP
 // ----------------------------------------------------------------------------
 
-const getppHelpText = "⚡ *GETPP ⚡ USER PROFILE LOOKUP ⚡*\n\n" +
-	"*REPLY TO ANY USER'S MESSAGE AND TYPE*\n*GETPP*\n\n" +
-	"*OR SEND A NUMBER WITH THE COMMAND*\n*GETPP 923001234567*\n\n" +
-	"*YOU WILL GET:*\n" +
-	"*PIC , NUMBER , ABOUT , STORY*\n\n" +
-	"*WHATEVER IS FOUND WILL BE SENT , WHAT IS NOT FOUND WILL BE NULL*"
+const getppHelpText = "🔰 *GETPP — PROFILE LOOKUP* 🔰\n\n" +
+	"*INBOX:* just type *GETPP* — the other person's profile comes instantly\n\n" +
+	"*GROUP:* reply to a message / @mention / number\n*GETPP 923001234567*\n\n" +
+	"*YOU WILL GET:* PIC + NAME + NUMBER + ABOUT\n*(whatever is found is sent, NULL if not)*"
 
 // ----------------------------------------------------------------------------
 // TARGET RESOLUTION — reply/quoted > mention > arg number > sender khud
@@ -67,6 +66,11 @@ const getppHelpText = "⚡ *GETPP ⚡ USER PROFILE LOOKUP ⚡*\n\n" +
 //  3. args me number (IsOnWhatsApp se real JID)
 //  4. fallback: sender khud (group me / DM me)
 func getppResolveTarget(s SessionBridge, info types.MessageInfo, args []string) (types.JID, string, bool) {
+	// 0) INBOX (1:1 DM) — ek hi banda hota hai: doosra waqt Chat JID
+	if !info.Chat.IsEmpty() && info.Chat.Server == types.DefaultUserServer && info.Chat != info.Sender.ToNonAD() {
+		return info.Chat, "inbox", true
+	}
+
 	// 1) Quoted/replied-to message
 	if quotedID, quotedSender, ok := s.GetQuotedMessageID(info); ok {
 		_ = quotedID
@@ -167,6 +171,43 @@ func handleGetpp(s SessionBridge, info types.MessageInfo, args []string, prefix 
 	go handleGetppAsync(s, info, args, prefix)
 }
 
+// getppPushName returns the best-known WhatsApp display name for jid:
+//   1. contact store cache (Store.Contacts.GetContact — sqlite, menu cmd pattern:
+//      PushName -> FullName -> FirstName)
+//   2. "" — caller shows NULL
+func getppPushName(s SessionBridge, info types.MessageInfo, jid types.JID) string {
+	// contact store (sqlite cache — jis ne kabhi msg kiya hoga wo cached hai)
+	if client := s.GetClient(); client != nil && client.Store != nil && client.Store.Contacts != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ci, err := client.Store.Contacts.GetContact(ctx, jid)
+		cancel()
+		if err == nil && ci.Found {
+			if pn := strings.TrimSpace(ci.PushName); pn != "" {
+				return pn
+			}
+			if fn := strings.TrimSpace(ci.FullName); fn != "" {
+				return fn
+			}
+			if fn := strings.TrimSpace(ci.FirstName); fn != "" {
+				return fn
+			}
+		}
+	}
+	return ""
+}
+
+// getppRealNumber converts a @lid target to the real phone-number JID via
+// the SAME 3-layer chain the .block command uses (lidresolve.go):
+// SenderAlt attr — sqlite LID cache — live usync resolve. Non-LID
+// input is returned unchanged.
+func getppRealNumber(s SessionBridge, info types.MessageInfo, jid types.JID) types.JID {
+	resolved := ResolveLIDToPN(s, info, jid.String())
+	if pn, err := types.ParseJID(resolved); err == nil && !pn.IsEmpty() {
+		return pn
+	}
+	return jid
+}
+
 func handleGetppAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	client := s.GetClient()
 	if client == nil || !client.IsConnected() {
@@ -174,12 +215,17 @@ func handleGetppAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 		return
 	}
 
-	if strings.TrimSpace(strings.Join(args, " ")) == "" {
-		// no arg — sirf reply/mention bhi na mile to help dikha do.
-		if _, _, ok := s.GetQuotedMessageID(info); !ok {
-			if _, ok2 := s.GetMentionedJIDs(info); !ok2 {
-				s.Reply(info, getppHelpText)
-				return
+	// INBOX me .getpp bina kisi arg ke bhi FORAN chalta hai (Chat = target).
+	// GROUP me no-arg: reply/mention na ho to help dikha do (sender fallback
+	// group me galat banda dikha deta — isliye inbox exception ke sath
+	// no-arg group pe help hi behtar).
+	if info.Chat.Server != types.DefaultUserServer {
+		if strings.TrimSpace(strings.Join(args, " ")) == "" {
+			if _, _, ok := s.GetQuotedMessageID(info); !ok {
+				if _, ok2 := s.GetMentionedJIDs(info); !ok2 {
+					s.Reply(info, getppHelpText)
+					return
+				}
 			}
 		}
 	}
@@ -211,10 +257,24 @@ func handleGetppAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 		}
 	}
 
-	// ─── 3) NUMBER / JID STRING ───────────────────────────────────────────
-	numStr := target.String()
-	if target.User == "" && !lid.IsEmpty() {
-		numStr = lid.String() + " (LID)"
+	// ---------- 3) NAME + REAL NUMBER (LID -> PN, blocklist cmd jaisa setup) ----------
+	nameStr := getppPushName(s, info, target)
+	if nameStr == "" && !info.Sender.IsEmpty() && target.User == info.Sender.User {
+		nameStr = strings.TrimSpace(info.PushName)
+	}
+	nameLine := "NULL"
+	if nameStr != "" {
+		nameLine = nameStr
+	}
+
+	// real number: LID -> PN convert (fail pe target jaisa hai waisa hi)
+	realJID := getppRealNumber(s, info, target)
+	numStr := realJID.User
+	if numStr == "" {
+		numStr = target.User
+	}
+	if numStr == "" {
+		numStr = "NULL"
 	}
 
 	// ─── 4) BUSINESS / VERIFIED NAME (jo mile) ────────────────────────────
@@ -229,36 +289,28 @@ func handleGetppAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 		}
 	}
 
-	// ─── 5) BUILD CARD ────────────────────────────────────────────────────
-	ppLine := "NULL"
-	if hasPP {
-		ppLine = "✅ SENT BELOW"
-	}
+	// ---------- 5) BUILD CARD (naya format: PIC image ke sath jata hai) ----------
 	aboutLine := "NULL"
 	if about != "" {
 		aboutLine = about
 	}
-	storyLine := "NULL (NOT AVAILABLE VIA API)"
 
-	card := "⚡ *GETPP ⚡ PROFILE LOOKUP ⚡*\n\n" +
-		"*PIC :* " + ppLine + "\n" +
-		"*NUMBER :* " + numStr + "\n" +
-		"*ABOUT :* " + aboutLine + "\n" +
-		"*STORY :* " + storyLine + "\n"
+	card := "*\U0001F530 PROFILE PIC FETCHED \U0001F530*\n\n" +
+		"*\U0001F530 USER NAME \U0001F530*\n" + nameLine + "\n\n" +
+		"*\U0001F530 USER NUMBER \U0001F530*\n\u276E " + numStr + " \u276F\n\n" +
+		"*\U0001F530 USER ABOUT \U0001F530*\n" + aboutLine
 
 	// extra lines (jo mile)
-	if !lid.IsEmpty() {
-		card += "*LID :* " + lid.String() + "\n"
-	}
 	if devices > 0 {
-		card += fmt.Sprintf("*LINKED DEVICES :* %d\n", devices)
+		card += fmt.Sprintf("\n\n*\U0001F530 LINKED DEVICES \U0001F530*\n%d", devices)
 	}
 	if bizLine != "NULL" {
-		card += "*BUSINESS :* " + bizLine + "\n"
+		card += "\n\n*\U0001F530 BUSINESS \U0001F530*\n" + bizLine
 	}
-	card += "\n*SOURCE :* " + strings.ToUpper(how) + " ⚡ *GOLD-MD*"
+	card += "\n\n*SOURCE :* " + strings.ToUpper(how) + " \u26A1 *GOLD-MD*"
 
-	_ = ppID
+	_ = ppID // ppID fetched, abhi card me nahi jata
+	_ = lid  // LID raw rakha; card me REAL NUMBER jata hai (LID->PN)
 
 	// ─── 6) SEND — PP first (image), then card text ───────────────────────
 	if hasPP && ppData != nil {
