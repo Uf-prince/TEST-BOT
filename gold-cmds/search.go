@@ -187,7 +187,7 @@ func searchFmtCount(n int64) string {
 
 // searchCard renders the results reply (ytsearch card style).
 // searchBorder is the fancy result border (same as .video / .play lists).
-const searchBorder = "🔰═══════════•❁❀❁•═══════════🔰"
+const searchBorder = "🔰════════•❁❀❁•════════🔰"
 
 // searchCardPlatform maps a card header to the short platform name used in
 // the "TYPE ❰ N ❯ TO DOWNLOAD THIS FROM <PLATFORM>" line.
