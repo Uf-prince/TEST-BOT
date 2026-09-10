@@ -79,19 +79,19 @@ var defaultServers = []serverEntry{
 
 func loadServersConfig() {
 	serversCfgOnce.Do(func() {
-		serversCfg = serversConfig{MaxPerServer: 10}
+		serversCfg = serversConfig{MaxPerServer: 3}
 		raw, err := os.ReadFile("servers.json")
 		if err != nil {
 			// FALLBACK: file missing (e.g. not copied in Docker image) -> use
 			// built-in defaults so the panel still shows all servers.
 			serversCfg.Servers = defaultServers
-			serversCfg.MaxPerServer = 10
+			serversCfg.MaxPerServer = 3
 			return
 		}
 		if err := json.Unmarshal(raw, &serversCfg); err != nil {
 			// FALLBACK: file present but invalid JSON -> use defaults.
 			serversCfg.Servers = defaultServers
-			serversCfg.MaxPerServer = 10
+			serversCfg.MaxPerServer = 3
 			return
 		}
 		if len(serversCfg.Servers) == 0 {
@@ -99,7 +99,7 @@ func loadServersConfig() {
 			serversCfg.Servers = defaultServers
 		}
 		if serversCfg.MaxPerServer <= 0 {
-			serversCfg.MaxPerServer = 10
+			serversCfg.MaxPerServer = 3
 		}
 	})
 }

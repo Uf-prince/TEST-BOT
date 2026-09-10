@@ -37,10 +37,10 @@ import (
 // maxPairedSessions caps how many WhatsApp numbers can be paired through
 // the control panel. Once this limit is hit the panel rejects new pairing
 // requests so a single Render instance does not get overwhelmed.
-// Configurable via GOLDMD_MAX_SESSIONS env var (default 50).
+// Configurable via GOLDMD_MAX_SESSIONS env var (default 3).
 
 func maxPairedSessions() int {
-	def := 50
+	def := 3
 	if v := os.Getenv("GOLDMD_MAX_SESSIONS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			return n

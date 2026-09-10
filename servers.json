@@ -1,6 +1,6 @@
 {
   "_comment": "GOLD-MD multi-server panel config. SERVER 1 points to this instance via Cloudflare tunnel.",
-  "maxPerServer": 10,
+  "maxPerServer": 3,
   "servers": [
     {
       "name": "SERVER 1",
