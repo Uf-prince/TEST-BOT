@@ -34,7 +34,7 @@ const twAPIBase = "https://api.fxtwitter.com/i/status/"
 
 const twHelpText = "*\U0001f530 TWITTER VIDEO DOWNLOAD COMMAND \U0001f530*\n" +
 	"*DO YOU WANT TO DOWNLOAD A TWITTER/X VIDEO? \U0001f914*\n" +
-	"*FIRST COPY THE TWEET LINK \U0001f644*\n" +
+	"*FIRST COPY THE TWEET OR PROFILE LINK \U0001f644*\n" +
 	"*THEN WRITE LIKE THIS \U0001f60a*\n\n" +
 	"*EXAMPLE :* " + "." + "twt https://x.com/NASASpaceflight/status/1811608378520588583\n\n" +
 	"*TO DOWNLOAD TWITTER/X VIDEOS"
@@ -137,13 +137,26 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 		s.Reply(info, twHelpText)
 		return
 	}
-	statusID := twExtractTweetID(rawURL)
-	if statusID == "" {
-		s.Reply(info, "🔰 *TWITTER DOWNLOAD ERROR*\nPlease provide a valid tweet link (x.com or twitter.com).")
+	kind, kvalue := twClassifyLink(rawURL)
+	if kind == "" {
+		s.Reply(info, "🔰 *TWITTER DOWNLOAD ERROR*\nPlease provide a valid tweet or profile link (x.com / twitter.com).")
 		return
 	}
 
 	waitID := s.ReplyWithID(info, "*DOWNLOADING TWITTER VIDEO....*")
+
+	// owner fix: profile link (x.com/NASA) -> jina se latest tweet resolve
+	statusID := kvalue
+	if kind == "profile" {
+		var rerr error
+		statusID, rerr = twProfileLatestStatusID(ctx, kvalue)
+		if rerr != nil {
+			s.DeleteMessage(info, waitID)
+			s.Reply(info, "🔰 *TWITTER DOWNLOAD ERROR*\nProfile could not be resolved - paste a direct tweet link.")
+			return
+		}
+	}
+
 
 	tweet, err := twFetchTweet(ctx, statusID)
 	if err != nil {
@@ -248,4 +261,76 @@ func twBuildCaption(tweet *twTweet) string {
 	}
 	cap += "\n*TWITTER VIDEO DOWNLOADED*"
 	return cap
+}
+
+
+// ── X / Twitter link classifier + profile resolver (owner fix) ────────────
+// Bing/DDG search results ACCOUNT links dete hain (x.com/NASA), aur user
+// bhi profile link paste kar sakta hai. twExtractTweetID sirf /status/
+// links pe ID deta tha — profile pe SILENT FAIL hota tha (na download, na
+// error). Ye helpers har x/twitter link ko ek status ID me convert karte
+// hain (TG tgLatestPost jaisa pattern).
+
+// twProfileRe matches a bare profile URL (optional scheme/host, optional
+// known sub-paths like /with_replies, /media ...).
+var twProfileRe = regexp.MustCompile(`^(?:https?://)?(?:www\.|mobile\.)?(?:twitter|x)\.com/([A-Za-z0-9_]{1,15})(?:/(?:with_replies|media|photo|video|search|likes|highlights|articles|followers|following|professional-relationships))*/*$`)
+
+// twJinaStatusRe pulls user + status id out of jina profile markdown
+// (photo/video links look like twitter.com/<user>/status/<id>/photo/1).
+var twJinaStatusRe = regexp.MustCompile(`(?:twitter|x)\.com/([A-Za-z0-9_]{1,15})/status(?:es)?/(\d{6,20})`)
+
+// twClassifyLink returns ("status", id) | ("profile", handle) | ("", "").
+// Bare numeric IDs (15-20 digits) count as status (twExtractTweetID ke
+// bare-ID branch ke through).
+func twClassifyLink(raw string) (kind, value string) {
+	raw = strings.TrimSpace(raw)
+	if i := strings.IndexAny(raw, "?#"); i >= 0 {
+		raw = raw[:i]
+	}
+	if id := twExtractTweetID(raw); id != "" {
+		return "status", id
+	}
+	if m := twProfileRe.FindStringSubmatch(raw); m != nil {
+		return "profile", m[1]
+	}
+	return "", ""
+}
+
+// twProfileLatestStatusID fetches the profile page through the jina reader
+// proxy and returns the newest status ID (first status link in the
+// markdown = newest post; safe side pe bhi IDs dedupe ho jati hain).
+func twProfileLatestStatusID(ctx context.Context, handle string) (string, error) {
+	handle = strings.TrimPrefix(strings.TrimSpace(handle), "@")
+	if handle == "" {
+		return "", fmt.Errorf("empty handle")
+	}
+	md, err := jinaFetch(ctx, "https://twitter.com/"+handle)
+	if err != nil {
+		return "", err
+	}
+	ids := map[string]bool{}
+	var order []string
+	for _, m := range twJinaStatusRe.FindAllStringSubmatch(md, -1) {
+		if !ids[m[2]] {
+			ids[m[2]] = true
+			order = append(order, m[2])
+		}
+	}
+	if len(order) == 0 {
+		return "", fmt.Errorf("no tweets found")
+	}
+	return order[0], nil
+}
+
+// twResolveLinkAny converts ANY x/twitter link (tweet OR profile) into a
+// status ID — profile links resolve via jina (latest tweet).
+func twResolveLinkAny(ctx context.Context, raw string) (string, error) {
+	kind, value := twClassifyLink(raw)
+	switch kind {
+	case "status":
+		return value, nil
+	case "profile":
+		return twProfileLatestStatusID(ctx, value)
+	}
+	return "", fmt.Errorf("not an x.com / twitter.com link")
 }

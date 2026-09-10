@@ -852,8 +852,10 @@ func searchPickTWTDirect(s SessionBridge, info types.MessageInfo, selected searc
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "*DOWNLOADING X / TWITTER MEDIA....*")
 
-		statusID := twExtractTweetID(selected.Link)
-		if statusID == "" {
+		// owner fix: ACCOUNT link pick -> jina se latest tweet resolve
+		// (pehle yahan silent fail hota tha — ID nahi milti thi)
+		statusID, rerr := twResolveLinkAny(ctx, selected.Link)
+		if rerr != nil {
 			s.DeleteMessage(info, waitID)
 			return
 		}

@@ -573,6 +573,76 @@ func tgChannelSearch(ctx context.Context, query string) ([]searchResult, error) 
 var twtHandleRe = regexp.MustCompile(`(?:twitter|x)\.com/([A-Za-z0-9_]+)(?:/[a-z]+)?/?$`)
 
 func twtAccountSearch(ctx context.Context, query string) ([]searchResult, error) {
+	// ENGINE v2 (owner fix): Bing RSS aksar 0 twitter results deta tha
+	// (ronaldo twitter -> 0). Primary ab DuckDuckGo (jina reader proxy ke
+	// through — DDG direct bot clients ko 202 challenge deta hai),
+	// fallback Bing RSS (famous accounts ke liye kaafi hai).
+	if out, err := twtDDGSearch(ctx, query); err == nil && len(out) > 0 {
+		return out, nil
+	}
+	return twtBingSearch(ctx, query)
+}
+
+var (
+	// DDG-jina markdown heading: "## [Title](https://duckduckgo.com/l/?uddg=<enc>&rut=...)"
+	twDDGHeadRe = regexp.MustCompile(`(?m)^#{1,3}\s*\[([^\]]+)\]\((https://duckduckgo\.com/l/\?uddg=[^)\s]+)\)`)
+	twDDGUddgRe = regexp.MustCompile(`uddg=([^&\s)]+)`)
+	// profile sub-paths jo clean profile link me trim hone chahiye
+	twPathTrimRe = regexp.MustCompile(`^(https?://(?:[a-z]+\.)?(?:twitter|x)\.com/[A-Za-z0-9_]{1,15})(?:/(?:with_replies|media|photo|video|search|likes|highlights|articles|followers|following))+/?$`)
+	twHandlePathRe = regexp.MustCompile(`(?:twitter|x)\.com/([A-Za-z0-9_]{1,15})(?:/status(?:es)?/\d+)?/?$`)
+)
+
+// twHandleFromLink pulls @handle out of any x/twitter link (profile or
+// status — status links pe twtHandleRe khali return karta tha).
+func twHandleFromLink(link string) string {
+	if m := twHandlePathRe.FindStringSubmatch(strings.TrimRight(strings.TrimSpace(link), "/")); m != nil {
+		return "@" + m[1]
+	}
+	return ""
+}
+
+// twtDDGSearch searches DuckDuckGo (via the jina reader proxy) for X /
+// Twitter accounts and tweets. Every result link is normalized:
+//   - /with_replies /media ... suffixes trimmed -> clean profile link
+//   - query/fragment stripped
+//   - non-x/twitter links (facebook, wiki ...) skipped
+func twtDDGSearch(ctx context.Context, query string) ([]searchResult, error) {
+	md, err := jinaFetch(ctx, "https://html.duckduckgo.com/html/?q="+url.QueryEscape(query+" twitter"))
+	if err != nil {
+		return nil, err
+	}
+	var out []searchResult
+	seen := map[string]bool{}
+	for _, m := range twDDGHeadRe.FindAllStringSubmatch(md, -1) {
+		title := strings.TrimSpace(m[1])
+		link := ""
+		if u := twDDGUddgRe.FindStringSubmatch(m[2]); u != nil {
+			if dec, derr := url.QueryUnescape(u[1]); derr == nil {
+				link = strings.TrimSpace(dec)
+			}
+		}
+		if link == "" || (twExtractTweetID(link) == "" && twHandleFromLink(link) == "") {
+			continue
+		}
+		if i := strings.IndexAny(link, "?#"); i >= 0 {
+			link = link[:i]
+		}
+		if t := twPathTrimRe.FindStringSubmatch(link); t != nil {
+			link = t[1]
+		}
+		if seen[link] {
+			continue
+		}
+		seen[link] = true
+		if len(title) > 80 {
+			title = title[:77] + "..."
+		}
+		out = append(out, searchResult{Title: title, Handle: twHandleFromLink(link), Link: link})
+	}
+	return out, nil
+}
+
+func twtBingSearch(ctx context.Context, query string) ([]searchResult, error) {
 	res, err := bingRSS(ctx, query+" site:twitter.com OR site:x.com")
 	if err != nil {
 		return nil, err
@@ -681,7 +751,7 @@ func tgGuide(prefix string) string {
 func twtGuide(prefix string) string {
 	return "*🔰 X / TWITTER SEARCH GUIDE 🔰*\n\n" +
 		"*🔰 SEARCH X ACCOUNTS :❱*\n*" + prefix + "twt ❰ QUERY ❯*\n*EXAMPLE :❱ " + prefix + "twt elon musk*\n*SHOWS MATCHING X / TWITTER ACCOUNTS WITH NAME AND LINK*\n\n" +
-		"*❁ DIRECT X LINK :❱*\n*" + prefix + "twt ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "twt https://x.com/username/status/1234567890*\n*PASTE AN X / TWITTER LINK AND IT DOWNLOADS INSTANTLY*\n\n" +
+		"*❁ DIRECT X LINK :❱*\n*" + prefix + "twt ❰ LINK ❱*\n*EXAMPLE :❱ " + prefix + "twt https://x.com/username/status/1234567890*\n*PASTE AN X / TWITTER LINK (TWEET OR PROFILE) AND IT DOWNLOADS INSTANTLY*\n\n" +
 		"*🔰 HIDDEN ALIAS :❱*\n*" + prefix + "twts ❰ QUERY ❯*\n\n" +
 		"*🔰 TO DOWNLOAD :❱*\n*" + prefix + "twt ❰ LINK ❯*"
 }
