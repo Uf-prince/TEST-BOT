@@ -68,16 +68,16 @@ func handleFBAsync(ctx context.Context, s SessionBridge, info types.MessageInfo,
 		return
 	}
 	if !strings.Contains(fbURL, "facebook.com") && !strings.Contains(fbURL, "fb.watch") && !strings.Contains(fbURL, "fb.com") {
-		s.Reply(info, "❌ *FACEBOOK DOWNLOAD ERROR*\nPlease provide a valid Facebook link.")
+		s.Reply(info, "🔰 *FACEBOOK DOWNLOAD ERROR*\nPlease provide a valid Facebook link.")
 		return
 	}
 
-	waitID := s.ReplyWithID(info, "⏳ *Fetching Facebook video...*")
+	waitID := s.ReplyWithID(info, "🔰 *Fetching Facebook video...*")
 
 	resp, err := fbCobaltFetch(ctx, fbURL)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *FACEBOOK DOWNLOAD ERROR*\n"+err.Error())
+		s.Reply(info, "🔰 *FACEBOOK DOWNLOAD ERROR*\n"+err.Error())
 		return
 	}
 
@@ -85,7 +85,7 @@ func handleFBAsync(ctx context.Context, s SessionBridge, info types.MessageInfo,
 	videoURL, quality := fbResolveVideoURL(resp)
 	if videoURL == "" {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ YOUR FACEBOOK VIDEO WAS NOT FOUND 😓")
+		s.Reply(info, "🔰 YOUR FACEBOOK VIDEO WAS NOT FOUND 🔰")
 		return
 	}
 
@@ -95,7 +95,7 @@ func handleFBAsync(ctx context.Context, s SessionBridge, info types.MessageInfo,
 	path, err := streamDownloadToFile(ctx, client, videoURL, nil)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ PLEASE TRY AGAIN 🤗")
+		s.Reply(info, "🔰 PLEASE TRY AGAIN 🔰")
 		return
 	}
 	defer removeTempFile(path)
@@ -108,14 +108,14 @@ func handleFBAsync(ctx context.Context, s SessionBridge, info types.MessageInfo,
 	if secs == 0 && w == 0 {
 		quality = "HD"
 	}
-	caption := "*🏅 FACEBOOK VIDEO NAME 🏅*\n" +
+	caption := "*🔰 FACEBOOK VIDEO NAME 🔰*\n" +
 		"*" + title + "*\n\n" +
-		"*🏅 QUALITY :* " + quality + "\n\n" +
+		"*🔰 QUALITY :* " + quality + "\n\n" +
 		"*FACEBOOK VIDEO DOWNLOAD*"
 
 	if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *FACEBOOK DOWNLOAD ERROR*\nVideo could not be sent.")
+		s.Reply(info, "🔰 *FACEBOOK DOWNLOAD ERROR*\nVideo could not be sent.")
 		return
 	}
 	s.DeleteMessage(info, waitID)

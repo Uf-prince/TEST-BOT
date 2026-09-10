@@ -40,26 +40,26 @@ const jidHelpText = `*🔰 JID FINDER — HELP 🔰*` + "\n\n" +
 	`*THIS COMMAND FINDS THE REAL WHATSAPP JID (ID) OF 3 THINGS:*` + "\n" +
 	`*A NUMBER, A GROUP LINK, OR A CHANNEL LINK — JUST ATTACH IT TO THE COMMAND.*` + "\n\n" +
 
-	`*⚠️ NOTE: ONLY PUT A NUMBER OR LINK WITH THE COMMAND, NOTHING ELSE ⚠️*` + "\n" +
+	`*🔰 NOTE: ONLY PUT A NUMBER OR LINK WITH THE COMMAND, NOTHING ELSE 🔰*` + "\n" +
 	`*1. GET A NUMBER'S JID*` + "\n" +
 	`*COMMAND: .JID 923001234567*` + "\n" +
 	`*WORK: CHECKS THE NUMBER — IF IT'S ON WHATSAPP, RETURNS ITS REAL JID (@S.WHATSAPP.NET)*` + "\n" +
 	`*EXAMPLE: .JID 923001234567*` + "\n\n" +
 
-	`*⚠️ NOTE: PASTE THE FULL GROUP INVITE LINK ⚠️*` + "\n" +
+	`*🔰 NOTE: PASTE THE FULL GROUP INVITE LINK 🔰*` + "\n" +
 	`*2. GET A GROUP'S JID*` + "\n" +
 	`*COMMAND: .JID https://chat.whatsapp.com/CODE*` + "\n" +
 	`*WORK: WITHOUT JOINING THE GROUP, PULLS THE GROUP'S REAL JID (@G.US) FROM THE LINK*` + "\n" +
 	`*EXAMPLE: .JID https://chat.whatsapp.com/ABCDEFGH12*` + "\n\n" +
 
-	`*⚠️ NOTE: PASTE THE FULL CHANNEL LINK ⚠️*` + "\n" +
+	`*🔰 NOTE: PASTE THE FULL CHANNEL LINK 🔰*` + "\n" +
 	`*3. GET A CHANNEL (NEWSLETTER) JID*` + "\n" +
 	`*COMMAND: .JID https://whatsapp.com/channel/CODE*` + "\n" +
 	`*WORK: PULLS THE CHANNEL'S REAL JID (@NEWSLETTER) FROM THE LINK*` + "\n" +
 	`*EXAMPLE: .JID https://whatsapp.com/channel/0029VaXXXXXX*` + "\n\n" +
 
 	`*━━━━━━━━━━━━*` + "\n" +
-	`*⚠️ IMPORTANT RULES ⚠️*` + "\n" +
+	`*🔰 IMPORTANT RULES 🔰*` + "\n" +
 	`*1. ALWAYS INCLUDE THE COUNTRY CODE WITH THE NUMBER (NO "+" SIGN)*` + "\n" +
 	`*2. PASTE THE FULL LINK, OR JUST ITS CODE (THE LAST PART) — BOTH WORK*` + "\n" +
 	`*3. ONLY ONE NUMBER OR ONE LINK CAN BE CHECKED AT A TIME*`

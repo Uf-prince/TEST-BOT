@@ -101,7 +101,7 @@ func handleAPKAsync(	ctx context.Context, s SessionBridge, info types.MessageInf
 	app, err := apkResolve(ctx, query)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *APK NOT FOUND*\n"+err.Error())
+		s.Reply(info, "🔰 *APK NOT FOUND*\n"+err.Error())
 		return
 	}
 
@@ -111,7 +111,7 @@ func handleAPKAsync(	ctx context.Context, s SessionBridge, info types.MessageInf
 	path, err := streamDownloadToFile(ctx, client, app.FileURL, nil)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *APK DOWNLOAD ERROR*\nPlease try again.")
+		s.Reply(info, "🔰 *APK DOWNLOAD ERROR*\nPlease try again.")
 		return
 	}
 	defer removeTempFile(path)
@@ -129,7 +129,7 @@ func handleAPKAsync(	ctx context.Context, s SessionBridge, info types.MessageInf
 
 	if err := s.SendDocumentFile(info, path, name, app.MimeType, caption); err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *APK SEND ERROR*\nFile could not be sent.")
+		s.Reply(info, "🔰 *APK SEND ERROR*\nFile could not be sent.")
 		return
 	}
 	s.DeleteMessage(info, waitID)

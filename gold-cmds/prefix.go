@@ -50,9 +50,9 @@ func handlePrefix(s SessionBridge, info types.MessageInfo, args []string, prefix
 				"*PREFIX !*\n"+
 				"*ALL KEYBOARD SYMBOLS ARE WORK FOR PREFIX*\n\n"+
 				"*ALL EMOJIES CAN ACCESS PREFIX*\n\n"+
-				"*PREFIX 😘*\n"+
-				"*PREFIX ❤️*\n"+
-				"*PREFIX 😂*\n"+
+				"*PREFIX 🔰*\n"+
+				"*PREFIX 🔰*\n"+
+				"*PREFIX 🔰*\n"+
 				"*SET ANY EMOJIE FOR PREFIX*\n"+
 				"*PREFIX NULL*\n"+
 				"*WITHOUT PREFIX COMMANDS WORK*\n"+

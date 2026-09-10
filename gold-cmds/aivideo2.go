@@ -76,7 +76,7 @@ const (
 	av2SessionMaxMs     = 2 * 60 * 1000
 	av2ImgbbTimeoutMs   = 30 * 1000
 	av2PollMaxMs        = 2 * 60 * 1000 // hard ceiling: 2-minute timeout (user request)
-	av2TimeoutMsg       = "YOUR PROMOT IS VERY BIG TRY TO GIVE THE SMALL PROMOT TO CREATE AI VIDEO SORRY ☺️"
+	av2TimeoutMsg       = "YOUR PROMOT IS VERY BIG TRY TO GIVE THE SMALL PROMOT TO CREATE AI VIDEO SORRY 🔰"
 	av2BodyLimit        = 64 * 1024 * 1024 // cap any single HTTP response read (64 MB)
 )
 
@@ -629,7 +629,7 @@ func av2RunGenerationFlow(s SessionBridge, info types.MessageInfo, prompt string
 	// whole bot process (which is what causes the "safe restart" the user sees).
 	defer func() {
 		if r := recover(); r != nil {
-			s.Reply(info, "👑 *"+av2CmdLabel+" COMMAND ERROR* 👑\nSomething went wrong while creating the video. Please try again.")
+			s.Reply(info, "🔰 *"+av2CmdLabel+" COMMAND ERROR* 🔰\nSomething went wrong while creating the video. Please try again.")
 		}
 	}()
 	label := "AI CREATING VIDEO......"
@@ -653,7 +653,7 @@ func av2RunGenerationFlow(s SessionBridge, info types.MessageInfo, prompt string
 				// av2Debug("AIVIDEO2_TIMEOUT", map[string]any{"sender": info.Sender.String(), "err": av2ErrToStr(err)})
 				s.Reply(info, av2TimeoutMsg)
 			} else {
-				s.Reply(info, "👑 *"+av2CmdLabel+" COMMAND ERROR* 👑\n*"+strings.ToUpper(err.Error())+"*")
+				s.Reply(info, "🔰 *"+av2CmdLabel+" COMMAND ERROR* 🔰\n*"+strings.ToUpper(err.Error())+"*")
 			}
 			return
 		}
@@ -669,16 +669,16 @@ func av2RunGenerationFlow(s SessionBridge, info types.MessageInfo, prompt string
 			} else if len(imageUrls) == 1 {
 				modeTag = "*MODE:* IMAGE TO VIDEO\n"
 			}
-			caption := "*AI CREATED VIDEO*\n" + modeTag + "*YOUR PROMPT TEXT IS* 👇\n\n" + strings.ToUpper(prompt)
+			caption := "*AI CREATED VIDEO*\n" + modeTag + "*YOUR PROMPT TEXT IS* 🔰\n\n" + strings.ToUpper(prompt)
 			if _, statErr := os.Stat(tmpPath); statErr == nil {
 				// av2Debug("AIVIDEO2_SEND_FILE", map[string]any{"sender": info.Sender.String(), "tmpPath": tmpPath, "captionLen": len(caption)})
 				sendErr := s.SendVideoFile(info, tmpPath, caption, nil, 0, 0, 0)
 				os.Remove(tmpPath)
 				if sendErr != nil {
-					s.Reply(info, "👑 *"+av2CmdLabel+" COMMAND ERROR* 👑\nFailed to upload the video. Please try again.")
+					s.Reply(info, "🔰 *"+av2CmdLabel+" COMMAND ERROR* 🔰\nFailed to upload the video. Please try again.")
 				}
 			} else {
-				s.Reply(info, "👑 *"+av2CmdLabel+" COMMAND ERROR* 👑\nVideo file was lost. Please try again.")
+				s.Reply(info, "🔰 *"+av2CmdLabel+" COMMAND ERROR* 🔰\nVideo file was lost. Please try again.")
 			}
 			return
 		}
@@ -800,7 +800,7 @@ func av2StartCountAskSession(s SessionBridge, info types.MessageInfo, key, extra
 	sess.expireTimer = time.AfterFunc(time.Duration(av2SessionMaxMs)*time.Millisecond, func() {
 		av2ExpireSession(s, info, key)
 	})
-	s.Reply(info, "*WELCOME! LET'S MAKE A VIDEO*\n\n*HOW MANY IMAGES DO YOU WANT TO USE?*\n\n*TYPE ❮ 2 ❯ AND SEND HERE AI MAKE VIDEO FROM ❮ 2 ❯ IMAGES*\n\n*TYPE ❮ 3 ❯ AND SEND HERE AI MAKE VIDEO FROM ❮ 3 ❯ IMAGES*\n\n*TYPE ❮ 4 ❯ AND SEND HERE AI MAKE VIDEO FROM ❮ 4 ❯ IMAGES*\n\n*JUST TYPE NUMBER AND SEND HERE*\n\n*MAX ALLOWED ❮ "+strconv.Itoa(av2MaxCombineImages)+" ❯ IMAGES*\n\n*OPTIONS:*\n*1 IMAGE = MAKE VIDEO FROM 1 PHOTO*\n*2 TO "+strconv.Itoa(av2MaxCombineImages)+" IMAGES = COMBINE MULTIPLE PHOTOS INTO 1 VIDEO*\n\n*HOW TO REPLY:*\n*JUST TYPE A NUMBER LIKE 2*\n*OR TYPE A WORD LIKE TWO*\n\n⏱ *YOU HAVE ONLY 2 MINUTES ⏱*\n*SEND YOUR REPLY FAST. IF 2 MINUTES PASS, THE SYSTEM WILL STOP.*\n*THEN YOU WILL HAVE TO TYPE*\n*"+av2CmdLabel+" ❮ IMG COMBINING PROMPT ❯*\n*AGAIN TO START THE PROCESS*")
+	s.Reply(info, "*WELCOME! LET'S MAKE A VIDEO*\n\n*HOW MANY IMAGES DO YOU WANT TO USE?*\n\n*TYPE ❮ 2 ❯ AND SEND HERE AI MAKE VIDEO FROM ❮ 2 ❯ IMAGES*\n\n*TYPE ❮ 3 ❯ AND SEND HERE AI MAKE VIDEO FROM ❮ 3 ❯ IMAGES*\n\n*TYPE ❮ 4 ❯ AND SEND HERE AI MAKE VIDEO FROM ❮ 4 ❯ IMAGES*\n\n*JUST TYPE NUMBER AND SEND HERE*\n\n*MAX ALLOWED ❮ "+strconv.Itoa(av2MaxCombineImages)+" ❯ IMAGES*\n\n*OPTIONS:*\n*1 IMAGE = MAKE VIDEO FROM 1 PHOTO*\n*2 TO "+strconv.Itoa(av2MaxCombineImages)+" IMAGES = COMBINE MULTIPLE PHOTOS INTO 1 VIDEO*\n\n*HOW TO REPLY:*\n*JUST TYPE A NUMBER LIKE 2*\n*OR TYPE A WORD LIKE TWO*\n\n🔰 *YOU HAVE ONLY 2 MINUTES 🔰*\n*SEND YOUR REPLY FAST. IF 2 MINUTES PASS, THE SYSTEM WILL STOP.*\n*THEN YOU WILL HAVE TO TYPE*\n*"+av2CmdLabel+" ❮ IMG COMBINING PROMPT ❯*\n*AGAIN TO START THE PROCESS*")
 }
 
 func av2StartCollectingSession(s SessionBridge, info types.MessageInfo, key string, count int, extraText string) {
@@ -817,7 +817,7 @@ func av2StartCollectingSession(s SessionBridge, info types.MessageInfo, key stri
 	if count == 1 {
 		plural = "IMAGE"
 	}
-	s.Reply(info, "*OK! PLEASE SEND "+strconv.Itoa(count)+" "+plural+" NOW*\n*AI WILL MAKE A VIDEO FOR YOU AFTER RECEIVE THEM ALL THE IMAGES*\n\n*PENDING :❯ "+strconv.Itoa(count)+" "+plural+"*\n\n⏱ *YOU HAVE ONLY 2 MINUTES ⏱*\n*PLEASE SEND THE IMAGES WITHIN 2 MINUTES.*\n*IF YOU DON'T SEND IN TIME, THE SYSTEM WILL STOP.*\n*THEN YOU WILL TYPE*\n*"+av2CmdLabel+" ❮ IMG COMBINING PROMPT ❯*\n*TO START THE IMAGE TO VIDEO CREATION PROCESS AGAIN*")
+	s.Reply(info, "*OK! PLEASE SEND "+strconv.Itoa(count)+" "+plural+" NOW*\n*AI WILL MAKE A VIDEO FOR YOU AFTER RECEIVE THEM ALL THE IMAGES*\n\n*PENDING :❯ "+strconv.Itoa(count)+" "+plural+"*\n\n🔰 *YOU HAVE ONLY 2 MINUTES 🔰*\n*PLEASE SEND THE IMAGES WITHIN 2 MINUTES.*\n*IF YOU DON'T SEND IN TIME, THE SYSTEM WILL STOP.*\n*THEN YOU WILL TYPE*\n*"+av2CmdLabel+" ❮ IMG COMBINING PROMPT ❯*\n*TO START THE IMAGE TO VIDEO CREATION PROCESS AGAIN*")
 }
 
 func av2ExpireSession(s SessionBridge, info types.MessageInfo, key string) {
@@ -887,13 +887,13 @@ func av2HandleSessionImage(s SessionBridge, info types.MessageInfo, key string) 
 	imgData, found := s.DownloadImage(info)
 	// av2Debug("AIVIDEO2_IMG_DOWNLOAD", map[string]any{"sender": info.Sender.String(), "found": found, "bytes": len(imgData)})
 	if !found || len(imgData) == 0 {
-		s.Reply(info, "👑 *"+av2CmdLabel+" COMMAND ERROR* 👑\nCould not download the image. Please send it again.")
+		s.Reply(info, "🔰 *"+av2CmdLabel+" COMMAND ERROR* 🔰\nCould not download the image. Please send it again.")
 		return true
 	}
 
 	url, err := av2UploadImageToURL(imgData)
 	if err != nil {
-		s.Reply(info, "👑 *"+av2CmdLabel+" COMMAND ERROR* 👑\nImage upload failed. Please try again.")
+		s.Reply(info, "🔰 *"+av2CmdLabel+" COMMAND ERROR* 🔰\nImage upload failed. Please try again.")
 		return true
 	}
 
@@ -911,7 +911,7 @@ func av2HandleSessionImage(s SessionBridge, info types.MessageInfo, key string) 
 		return true
 	}
 
-	s.Reply(info, "*IMAGE "+strconv.Itoa(received)+" BY "+strconv.Itoa(sess.expectedCount)+" RECIEVED ✅*\n*REMAINING ❮ "+strconv.Itoa(remaining)+" ❯ MORE*\n*SEND ALL THE IMAGES TO START THE COMBINING IMAGES AND START THE CREATING VIDEO PROCESS*\n\n*OR TYPE ❮ YES ❯ AND SEND HERE IF YOU WANT TO MAKE VIDEO WITH ❮ "+strconv.Itoa(received)+" ❯ IMAGES*")
+	s.Reply(info, "*IMAGE "+strconv.Itoa(received)+" BY "+strconv.Itoa(sess.expectedCount)+" RECIEVED 🔰*\n*REMAINING ❮ "+strconv.Itoa(remaining)+" ❯ MORE*\n*SEND ALL THE IMAGES TO START THE COMBINING IMAGES AND START THE CREATING VIDEO PROCESS*\n\n*OR TYPE ❮ YES ❯ AND SEND HERE IF YOU WANT TO MAKE VIDEO WITH ❮ "+strconv.Itoa(received)+" ❯ IMAGES*")
 	return true
 }
 
@@ -930,7 +930,7 @@ func av2HandleSessionText(s SessionBridge, info types.MessageInfo, key, text str
 
 	if av2CancelRegex.MatchString(trimmed) {
 		av2DestroySession(key)
-		s.Reply(info, "❌ Ok, cancelled. Send *."+strings.ToLower(av2CmdLabel)+"* again whenever you want to make a video.")
+		s.Reply(info, "🔰 Ok, cancelled. Send *."+strings.ToLower(av2CmdLabel)+"* again whenever you want to make a video.")
 		return true
 	}
 
@@ -1008,7 +1008,7 @@ func handleAIVideo2Async(s SessionBridge, info types.MessageInfo, args []string,
 	prompt := strings.TrimSpace(strings.Join(args, " "))
 
 	if prompt == "" {
-		s.Reply(info, "👑 *AIVIDEO2 AI COMMAND INFO* 👑\n\n*🔥 HOW TO USE - FULL STEPS 🔥*\n\n*STEP 1: WRITE .AIVIDEO2*\n*STEP 2: AFTER IT WRITE YOUR PROMPT (WHAT VIDEO YOU WANT)*\n*STEP 3: SEND THE COMMAND AND WAIT*\n\n*EXAMPLE LIKE THIS*\n*AIVIDEO2 CAT WAS EATING FISH*\n*AIVIDEO2 AEROPLANE WAS FLYING SKY*\n*AIVIDEO2 A MAN WAS DRINKING*\n*AIVIDEO2 ❮ VIDEO NAME ❯*\n*TYPE YOUR VIDEO NAME AND AI WILL CREATE A VIDEO*\n\n*NOTE: FOR PURE TEXT PROMPT NO NEED TO SEND ANY PHOTO*\n*YOU HAVE 3/4 IMAGES AND YOU WANT TO CREATE THE VIDEO*\n*PHOTOS -> VIDEO (IMAGE-TO-VIDEO / COMBINE MULTIPLE PHOTOS)*\n*COMMAND: .AIVIDEO2 I HAVE 2/3 PHOTOS PLEASE MAKE IT VIDEO*\n*COMMAND (WITHOUT COUNT) :❯ .AIVIDEO2 I HAVE PHOTOS PLEASE MAKE VIDEO*\n\n*⚠️ IMPORTANT RULES ⚠️*\n*1. WRITE YOUR PROMPT CLEARLY AFTER .AIVIDEO2*\n*2. YOU CAN WRITE COMMAND IN ENGLISH OR URDU*\n*3. USE ONLY 1 COMMAND AT A TIME*\n*4. VIDEO GENERATION HAS NO FIXED TIME LIMIT, PLEASE WAIT PATIENTLY*")
+		s.Reply(info, "🔰 *AIVIDEO2 AI COMMAND INFO* 🔰\n\n*🔰 HOW TO USE - FULL STEPS 🔰*\n\n*STEP 1: WRITE .AIVIDEO2*\n*STEP 2: AFTER IT WRITE YOUR PROMPT (WHAT VIDEO YOU WANT)*\n*STEP 3: SEND THE COMMAND AND WAIT*\n\n*EXAMPLE LIKE THIS*\n*AIVIDEO2 CAT WAS EATING FISH*\n*AIVIDEO2 AEROPLANE WAS FLYING SKY*\n*AIVIDEO2 A MAN WAS DRINKING*\n*AIVIDEO2 ❮ VIDEO NAME ❯*\n*TYPE YOUR VIDEO NAME AND AI WILL CREATE A VIDEO*\n\n*NOTE: FOR PURE TEXT PROMPT NO NEED TO SEND ANY PHOTO*\n*YOU HAVE 3/4 IMAGES AND YOU WANT TO CREATE THE VIDEO*\n*PHOTOS -> VIDEO (IMAGE-TO-VIDEO / COMBINE MULTIPLE PHOTOS)*\n*COMMAND: .AIVIDEO2 I HAVE 2/3 PHOTOS PLEASE MAKE IT VIDEO*\n*COMMAND (WITHOUT COUNT) :❯ .AIVIDEO2 I HAVE PHOTOS PLEASE MAKE VIDEO*\n\n*🔰 IMPORTANT RULES 🔰*\n*1. WRITE YOUR PROMPT CLEARLY AFTER .AIVIDEO2*\n*2. YOU CAN WRITE COMMAND IN ENGLISH OR URDU*\n*3. USE ONLY 1 COMMAND AT A TIME*\n*4. VIDEO GENERATION HAS NO FIXED TIME LIMIT, PLEASE WAIT PATIENTLY*")
 		return
 	}
 

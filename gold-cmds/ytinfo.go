@@ -336,10 +336,10 @@ func handleYTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 			return
 		}
 		// wrong-platform link → error card with a valid example
-		s.Reply(info, "❌ *YOUTUBE SEARCH ERROR* 🔰\n\n"+
-			"*GIVE ME THE VALID YOUTUBE LINK* ❗\n\n"+
+		s.Reply(info, "🔰 *YOUTUBE SEARCH ERROR* 🔰\n\n"+
+			"*GIVE ME THE VALID YOUTUBE LINK* 🔰\n\n"+
 			"*THIS LINK IS FROM :❱ "+strings.ToUpper(host)+"*\n"+
-			"*IT IS NOT A YOUTUBE LINK* 🙅\n\n"+
+			"*IT IS NOT A YOUTUBE LINK* 🔰\n\n"+
 			"*EXAMPLE SAME LIKE THAT :❱*\n"+
 			"*"+prefix+"yts https://www.youtube.com/watch?v=xxxxxxxxxxx*\n\n"+
 			"*SEARCHED BY GOLD-MD* 🔰")

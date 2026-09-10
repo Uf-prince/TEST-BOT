@@ -219,7 +219,7 @@ func handleAutomsg(s SessionBridge, info types.MessageInfo, args []string, prefi
 func handleAutomsgAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	// owner-only
 	if !s.IsOwner(info) {
-		s.Reply(info, "🚫 *THIS COMMAND IS ONLY FOR ME 😎*")
+		s.Reply(info, "🔰 *THIS COMMAND IS ONLY FOR ME 😎*")
 		return
 	}
 
@@ -285,7 +285,7 @@ func handleAutomsgAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	// Token 1 = duration (XXhXXmXXs), token 2 = mode (repeat/once), rest = msg
 	parts := strings.Fields(argStr)
 	if len(parts) < 3 {
-		s.Reply(info, "❌ *Invalid format.*\n\n*Usage:* ```"+prefix+"automsg XXhXXmXXs repeat/once {your message}```\n\n*Example:* ```"+prefix+"automsg 00h30m00s repeat Assalamualaikum!```")
+		s.Reply(info, "🔰 *Invalid format.*\n\n*Usage:* ```"+prefix+"automsg XXhXXmXXs repeat/once {your message}```\n\n*Example:* ```"+prefix+"automsg 00h30m00s repeat Assalamualaikum!```")
 		return
 	}
 
@@ -295,22 +295,22 @@ func handleAutomsgAsync(s SessionBridge, info types.MessageInfo, args []string, 
 
 	dur, ok := parseAutomsgDuration(durToken)
 	if !ok {
-		s.Reply(info, "❌ *Invalid time format.*\n\n*Time must be like:* ```XXhXXmXXs```\n*Example:* ```02h30m00s``` (= 2 hours 30 min)\n*Example:* ```00h00m45s``` (= 45 seconds)")
+		s.Reply(info, "🔰 *Invalid time format.*\n\n*Time must be like:* ```XXhXXmXXs```\n*Example:* ```02h30m00s``` (= 2 hours 30 min)\n*Example:* ```00h00m45s``` (= 45 seconds)")
 		return
 	}
 	if modeToken != "repeat" && modeToken != "once" {
-		s.Reply(info, "❌ *Invalid mode.*\n\n*Mode must be:* ```repeat``` *or* ```once```\n• *repeat* = sends again & again, timer resets every cycle, schedule STAYS in bot memory\n• *once* = sends one time only, schedule DELETED from bot memory after send")
+		s.Reply(info, "🔰 *Invalid mode.*\n\n*Mode must be:* ```repeat``` *or* ```once```\n• *repeat* = sends again & again, timer resets every cycle, schedule STAYS in bot memory\n• *once* = sends one time only, schedule DELETED from bot memory after send")
 		return
 	}
 	if msgText == "" {
-		s.Reply(info, "❌ *No message text provided.*\n\n*Usage:* ```"+prefix+"automsg XXhXXmXXs repeat/once {your message}```")
+		s.Reply(info, "🔰 *No message text provided.*\n\n*Usage:* ```"+prefix+"automsg XXhXXmXXs repeat/once {your message}```")
 		return
 	}
 
 	// The bot must have its memory ready (it keeps the schedule in the same
 	// secure place it keeps antidelete / antiedit messages).
 	if !s.MemoryReady() {
-		s.Reply(info, "❌ *Bot memory is not ready yet.*\n\n*The bot saves your schedule in its own memory (the same secure place it keeps antidelete & antiedit messages).*\n*Please make sure the bot is fully connected and try again.*")
+		s.Reply(info, "🔰 *Bot memory is not ready yet.*\n\n*The bot saves your schedule in its own memory (the same secure place it keeps antidelete & antiedit messages).*\n*Please make sure the bot is fully connected and try again.*")
 		return
 	}
 
@@ -331,7 +331,7 @@ func handleAutomsgAsync(s SessionBridge, info types.MessageInfo, args []string, 
 
 	data, _ := json.Marshal(cfg)
 	if err := s.MemorySave(key, data); err != nil {
-		s.Reply(info, "❌ *AUTOMSG Error*\n\n*Bot could not save the schedule to its memory:*\n"+err.Error())
+		s.Reply(info, "🔰 *AUTOMSG Error*\n\n*Bot could not save the schedule to its memory:*\n"+err.Error())
 		return
 	}
 
@@ -339,7 +339,7 @@ func handleAutomsgAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	armAutomsgTimer(s, info, key, cfg, dur)
 
 	// styled confirmation
-	modeEmoji := "🔁"
+	modeEmoji := "🔰"
 	modeLabel := "REPEAT"
 	modeNote := "*TIMER WILL RESET & COUNT AGAIN AFTER EVERY SEND*\n*SCHEDULE STAYS SAFE IN BOT MEMORY (PERSISTS ACROSS RESTART)*"
 	if modeToken == "once" {
@@ -350,12 +350,12 @@ func handleAutomsgAsync(s SessionBridge, info types.MessageInfo, args []string, 
 
 	s.Reply(info, fmt.Sprintf(
 		"🔰 *AUTOMSG SCHEDULED* 🔰\n\n"+
-			"⏱️ *TIME     :❰ %s ❱*\n"+
+			"🔰 *TIME     :❰ %s ❱*\n"+
 			"%s *MODE     :❰ %s ❱*\n"+
-			"💬 *MESSAGE  :❰ %s ❱*\n"+
-			"🎯 *CHAT     :❰ %s ❱*\n"+
-			"⏳ *FIRST FIRE IN :❰ %s ❱*\n"+
-			"🧠 *SAVED IN :❰ %s ❱*\n\n"+
+			"🔰 *MESSAGE  :❰ %s ❱*\n"+
+			"🔰 *CHAT     :❰ %s ❱*\n"+
+			"🔰 *FIRST FIRE IN :❰ %s ❱*\n"+
+			"🔰 *SAVED IN :❰ %s ❱*\n\n"+
 			"%s\n\n"+
 			"*TO TURN OFF TYPE:* ```%sautomsg off```\n"+
 			"*TO SEE ALL TYPE:* ```%sautomsg list```",
@@ -364,7 +364,7 @@ func handleAutomsgAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		msgText,
 		chatStr,
 		formatHMS(dur),
-		"BOT MEMORY ✅",
+		"BOT MEMORY 🔰",
 		modeNote,
 		prefix, prefix, prefix,
 	))
@@ -374,27 +374,27 @@ func handleAutomsgAsync(s SessionBridge, info types.MessageInfo, args []string, 
 // Shows every saved schedule across all chats, numbered 1, 2, 3 …
 func handleAutomsgList(s SessionBridge, info types.MessageInfo, prefix string) {
 	if !s.MemoryReady() {
-		s.Reply(info, "❌ *Bot memory is not ready yet.*\n\n*The bot saves schedules in its own memory.*\n*Please make sure the bot is fully connected and try again.*")
+		s.Reply(info, "🔰 *Bot memory is not ready yet.*\n\n*The bot saves schedules in its own memory.*\n*Please make sure the bot is fully connected and try again.*")
 		return
 	}
 	entries, err := s.MemoryList()
 	if err != nil {
-		s.Reply(info, "❌ *AUTOMSG LIST ERROR*\n\n*Bot could not read its memory:*\n"+err.Error())
+		s.Reply(info, "🔰 *AUTOMSG LIST ERROR*\n\n*Bot could not read its memory:*\n"+err.Error())
 		return
 	}
 	if len(entries) == 0 {
-		s.Reply(info, "🔰 *AUTOMSG LIST* 🔰\n\n⚪ *No saved auto-message schedules found in bot memory.*\n\n*To create one type:* ```"+prefix+"automsg 00h30m00s repeat <msg>```")
+		s.Reply(info, "🔰 *AUTOMSG LIST* 🔰\n\n🔰 *No saved auto-message schedules found in bot memory.*\n\n*To create one type:* ```"+prefix+"automsg 00h30m00s repeat <msg>```")
 		return
 	}
 	var sb strings.Builder
 	sb.WriteString("🔰 *AUTOMSG LIST* 🔰\n")
-	sb.WriteString("🧠 *ALL SAVED SCHEDULES IN BOT MEMORY*\n\n")
+	sb.WriteString("🔰 *ALL SAVED SCHEDULES IN BOT MEMORY*\n\n")
 	for i, e := range entries {
 		var cfg automsgConfig
 		if err := json.Unmarshal(e.Data, &cfg); err != nil {
 			continue
 		}
-		modeEmoji := "🔁"
+		modeEmoji := "🔰"
 		if cfg.Mode == "once" {
 			modeEmoji = "1️⃣"
 		}
@@ -412,16 +412,16 @@ func handleAutomsgList(s SessionBridge, info types.MessageInfo, prefix string) {
 			msgPreview = msgPreview[:37] + "..."
 		}
 		sb.WriteString(fmt.Sprintf("*%d.* %s *%s* %s\n", i+1, modeEmoji, strings.ToUpper(cfg.Mode), statusIcon))
-		sb.WriteString(fmt.Sprintf("   ⏱️ *TIME :* `%s`\n", formatHMS(time.Duration(cfg.DurationSec)*time.Second)))
-		sb.WriteString(fmt.Sprintf("   💬 *MSG  :* %s\n", msgPreview))
-		sb.WriteString(fmt.Sprintf("   🎯 *CHAT :* `%s`\n", cfg.Chat))
+		sb.WriteString(fmt.Sprintf("   🔰 *TIME :* `%s`\n", formatHMS(time.Duration(cfg.DurationSec)*time.Second)))
+		sb.WriteString(fmt.Sprintf("   🔰 *MSG  :* %s\n", msgPreview))
+		sb.WriteString(fmt.Sprintf("   🔰 *CHAT :* `%s`\n", cfg.Chat))
 		if i < len(entries)-1 {
 			sb.WriteString("\n")
 		}
 	}
 	sb.WriteString("\n───────────────────\n")
-	sb.WriteString("📊 *TOTAL :* " + strconv.Itoa(len(entries)) + " schedule(s)\n")
-	sb.WriteString("🧠 *SAVED IN :* BOT MEMORY ✅\n")
+	sb.WriteString("🔰 *TOTAL :* " + strconv.Itoa(len(entries)) + " schedule(s)\n")
+	sb.WriteString("🔰 *SAVED IN :* BOT MEMORY 🔰\n")
 	sb.WriteString("*TO DELETE TYPE:* ```" + prefix + "automsg delete```\n")
 	sb.WriteString("*TO TURN ON/OFF TYPE:* ```" + prefix + "automsg on``` / ```" + prefix + "automsg off```")
 	s.Reply(info, sb.String())
@@ -431,16 +431,16 @@ func handleAutomsgList(s SessionBridge, info types.MessageInfo, prefix string) {
 // Shows the numbered list and asks the owner to reply a number to delete.
 func handleAutomsgDeletePrompt(s SessionBridge, info types.MessageInfo, prefix string) {
 	if !s.MemoryReady() {
-		s.Reply(info, "❌ *Bot memory is not ready yet.*\n\n*The bot saves schedules in its own memory.*\n*Please make sure the bot is fully connected and try again.*")
+		s.Reply(info, "🔰 *Bot memory is not ready yet.*\n\n*The bot saves schedules in its own memory.*\n*Please make sure the bot is fully connected and try again.*")
 		return
 	}
 	entries, err := s.MemoryList()
 	if err != nil {
-		s.Reply(info, "❌ *AUTOMSG DELETE ERROR*\n\n*Bot could not read its memory:*\n"+err.Error())
+		s.Reply(info, "🔰 *AUTOMSG DELETE ERROR*\n\n*Bot could not read its memory:*\n"+err.Error())
 		return
 	}
 	if len(entries) == 0 {
-		s.Reply(info, "🔰 *AUTOMSG DELETE* 🔰\n\n⚪ *No saved auto-message schedules found in bot memory.*\n\n*To create one type:* ```"+prefix+"automsg 00h30m00s repeat <msg>```")
+		s.Reply(info, "🔰 *AUTOMSG DELETE* 🔰\n\n🔰 *No saved auto-message schedules found in bot memory.*\n\n*To create one type:* ```"+prefix+"automsg 00h30m00s repeat <msg>```")
 		return
 	}
 	// store the pending list so a number reply can delete
@@ -455,13 +455,13 @@ func handleAutomsgDeletePrompt(s SessionBridge, info types.MessageInfo, prefix s
 
 	var sb strings.Builder
 	sb.WriteString("🔰 *AUTOMSG DELETE* 🔰\n")
-	sb.WriteString("🧠 *ALL SAVED SCHEDULES IN BOT MEMORY*\n\n")
+	sb.WriteString("🔰 *ALL SAVED SCHEDULES IN BOT MEMORY*\n\n")
 	for i, e := range entries {
 		var cfg automsgConfig
 		if err := json.Unmarshal(e.Data, &cfg); err != nil {
 			continue
 		}
-		modeEmoji := "🔁"
+		modeEmoji := "🔰"
 		if cfg.Mode == "once" {
 			modeEmoji = "1️⃣"
 		}
@@ -477,16 +477,16 @@ func handleAutomsgDeletePrompt(s SessionBridge, info types.MessageInfo, prefix s
 			msgPreview = msgPreview[:37] + "..."
 		}
 		sb.WriteString(fmt.Sprintf("*%d.* %s *%s* %s\n", i+1, modeEmoji, strings.ToUpper(cfg.Mode), statusIcon))
-		sb.WriteString(fmt.Sprintf("   ⏱️ *TIME :* `%s`\n", formatHMS(time.Duration(cfg.DurationSec)*time.Second)))
-		sb.WriteString(fmt.Sprintf("   💬 *MSG  :* %s\n", msgPreview))
-		sb.WriteString(fmt.Sprintf("   🎯 *CHAT :* `%s`\n", cfg.Chat))
+		sb.WriteString(fmt.Sprintf("   🔰 *TIME :* `%s`\n", formatHMS(time.Duration(cfg.DurationSec)*time.Second)))
+		sb.WriteString(fmt.Sprintf("   🔰 *MSG  :* %s\n", msgPreview))
+		sb.WriteString(fmt.Sprintf("   🔰 *CHAT :* `%s`\n", cfg.Chat))
 		sb.WriteString("\n")
 	}
 	sb.WriteString("───────────────────\n")
-	sb.WriteString("⚠️ *MENTION REPLY A NUMBER TO DELETE MESSAGE* ⚠️\n")
-	sb.WriteString("❌ *Example:* reply `1` to delete schedule #1\n")
-	sb.WriteString("🕐 *(reply within 2 minutes)*\n")
-	sb.WriteString("🧠 *SAVED IN :* BOT MEMORY ✅")
+	sb.WriteString("🔰 *MENTION REPLY A NUMBER TO DELETE MESSAGE* 🔰\n")
+	sb.WriteString("🔰 *Example:* reply `1` to delete schedule #1\n")
+	sb.WriteString("🔰 *(reply within 2 minutes)*\n")
+	sb.WriteString("🔰 *SAVED IN :* BOT MEMORY 🔰")
 	s.Reply(info, sb.String())
 }
 
@@ -495,7 +495,7 @@ func handleAutomsgDeletePrompt(s SessionBridge, info types.MessageInfo, prefix s
 func handleAutomsgDeleteByNumber(s SessionBridge, info types.MessageInfo, prefix string, pending *automsgPendingDelete, numStr string) {
 	n, err := strconv.Atoi(strings.TrimSpace(numStr))
 	if err != nil || n < 1 || n > len(pending.keys) {
-		s.Reply(info, "❌ *Invalid number.*\n\n*Please reply a number between 1 and "+strconv.Itoa(len(pending.keys))+".*\n*Or type* ```"+prefix+"automsg delete``` *to see the list again.*")
+		s.Reply(info, "🔰 *Invalid number.*\n\n*Please reply a number between 1 and "+strconv.Itoa(len(pending.keys))+".*\n*Or type* ```"+prefix+"automsg delete``` *to see the list again.*")
 		return
 	}
 	key := pending.keys[n-1]
@@ -516,15 +516,15 @@ func handleAutomsgDeleteByNumber(s SessionBridge, info types.MessageInfo, prefix
 	automsgDelMu.Unlock()
 
 	if delErr != nil {
-		s.Reply(info, "❌ *DELETE FAILED*\n\n*Timer cancelled but memory cleanup failed:*\n"+delErr.Error())
+		s.Reply(info, "🔰 *DELETE FAILED*\n\n*Timer cancelled but memory cleanup failed:*\n"+delErr.Error())
 		return
 	}
 	s.Reply(info, fmt.Sprintf(
 		"🔰 *AUTOMSG DELETED* 🔰\n\n"+
-			"✅ *Schedule #%d deleted successfully*\n"+
-			"🗑️ *Removed from bot memory*\n"+
-			"🛑 *Timer cancelled*\n\n"+
-			"🧠 *SAVED IN :* BOT MEMORY ✅\n"+
+			"🔰 *Schedule #%d deleted successfully*\n"+
+			"🔰 *Removed from bot memory*\n"+
+			"🔰 *Timer cancelled*\n\n"+
+			"🔰 *SAVED IN :* BOT MEMORY 🔰\n"+
 			"*To see remaining schedules type:* ```%sautomsg list```",
 		n, prefix,
 	))
@@ -534,7 +534,7 @@ func handleAutomsgDeleteByNumber(s SessionBridge, info types.MessageInfo, prefix
 // Re-arms the current chat's saved schedule. If none saved → guidance.
 func handleAutomsgOn(s SessionBridge, info types.MessageInfo, prefix string, key string) {
 	if !s.MemoryReady() {
-		s.Reply(info, "❌ *Bot memory is not ready yet.*\n\n*The bot saves schedules in its own memory.*\n*Please make sure the bot is fully connected and try again.*")
+		s.Reply(info, "🔰 *Bot memory is not ready yet.*\n\n*The bot saves schedules in its own memory.*\n*Please make sure the bot is fully connected and try again.*")
 		return
 	}
 	// already active?
@@ -549,10 +549,10 @@ func handleAutomsgOn(s SessionBridge, info types.MessageInfo, prefix string, key
 		s.Reply(info, fmt.Sprintf(
 			"🔰 *AUTOMSG ALREADY ON* 🔰\n\n"+
 				"🟢 *This chat's schedule is already active.*\n\n"+
-				"⏱️ *DURATION :❰ %s ❱*\n"+
-				"🔁 *MODE     :❰ %s ❱*\n"+
-				"💬 *MESSAGE  :❰ %s ❱*\n"+
-				"⏳ *NEXT FIRE IN :❰ %s ❱*\n\n"+
+				"🔰 *DURATION :❰ %s ❱*\n"+
+				"🔰 *MODE     :❰ %s ❱*\n"+
+				"🔰 *MESSAGE  :❰ %s ❱*\n"+
+				"🔰 *NEXT FIRE IN :❰ %s ❱*\n\n"+
 				"*TO TURN OFF TYPE:* ```%sautomsg off```",
 			formatHMS(time.Duration(t.cfg.DurationSec)*time.Second),
 			strings.ToUpper(t.cfg.Mode),
@@ -565,7 +565,7 @@ func handleAutomsgOn(s SessionBridge, info types.MessageInfo, prefix string, key
 	// load saved config from memory
 	data, ok, err := s.MemoryLoad(key)
 	if err != nil {
-		s.Reply(info, "❌ *AUTOMSG ON ERROR*\n\n*Bot could not read its memory:*\n"+err.Error())
+		s.Reply(info, "🔰 *AUTOMSG ON ERROR*\n\n*Bot could not read its memory:*\n"+err.Error())
 		return
 	}
 	if !ok || len(data) == 0 {
@@ -575,18 +575,18 @@ func handleAutomsgOn(s SessionBridge, info types.MessageInfo, prefix string, key
 	}
 	var cfg automsgConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		s.Reply(info, "❌ *AUTOMSG ON ERROR*\n\n*Saved schedule is corrupted:*\n"+err.Error())
+		s.Reply(info, "🔰 *AUTOMSG ON ERROR*\n\n*Saved schedule is corrupted:*\n"+err.Error())
 		return
 	}
 	dur := time.Duration(cfg.DurationSec) * time.Second
 	if dur <= 0 {
-		s.Reply(info, "❌ *AUTOMSG ON ERROR*\n\n*Saved schedule has an invalid duration.*\n*Please set a new one:* ```"+prefix+"automsg XXhXXmXXs repeat/once {msg}```")
+		s.Reply(info, "🔰 *AUTOMSG ON ERROR*\n\n*Saved schedule has an invalid duration.*\n*Please set a new one:* ```"+prefix+"automsg XXhXXmXXs repeat/once {msg}```")
 		return
 	}
 	// re-arm
 	armAutomsgTimer(s, info, key, cfg, dur)
 
-	modeEmoji := "🔁"
+	modeEmoji := "🔰"
 	modeLabel := "REPEAT"
 	if cfg.Mode == "once" {
 		modeEmoji = "1️⃣"
@@ -595,18 +595,18 @@ func handleAutomsgOn(s SessionBridge, info types.MessageInfo, prefix string, key
 	s.Reply(info, fmt.Sprintf(
 		"🔰 *AUTOMSG TURNED ON* 🔰\n\n"+
 			"🟢 *Schedule resumed successfully*\n\n"+
-			"⏱️ *TIME     :❰ %s ❱*\n"+
+			"🔰 *TIME     :❰ %s ❱*\n"+
 			"%s *MODE     :❰ %s ❱*\n"+
-			"💬 *MESSAGE  :❰ %s ❱*\n"+
-			"⏳ *FIRST FIRE IN :❰ %s ❱*\n"+
-			"🧠 *SAVED IN :❰ %s ❱*\n\n"+
+			"🔰 *MESSAGE  :❰ %s ❱*\n"+
+			"🔰 *FIRST FIRE IN :❰ %s ❱*\n"+
+			"🔰 *SAVED IN :❰ %s ❱*\n\n"+
 			"*TO TURN OFF TYPE:* ```%sautomsg off```\n"+
 			"*TO SEE ALL TYPE:* ```%sautomsg list```",
 		formatHMS(dur),
 		modeEmoji, modeLabel,
 		cfg.Message,
 		formatHMS(dur),
-		"BOT MEMORY ✅",
+		"BOT MEMORY 🔰",
 		prefix, prefix,
 	))
 }
@@ -618,18 +618,18 @@ func handleAutomsgOff(s SessionBridge, info types.MessageInfo, prefix string, ke
 	t, ok := automsgTimers[key]
 	automsgMu.Unlock()
 	if !ok || t == nil {
-		s.Reply(info, "🔰 *AUTOMSG OFF* 🔰\n\n⚪ *No active auto-message schedule in this chat.*\n\n*To set one type:* ```"+prefix+"automsg XXhXXmXXs repeat/once {msg}```\n*To turn on a saved one type:* ```"+prefix+"automsg on```")
+		s.Reply(info, "🔰 *AUTOMSG OFF* 🔰\n\n🔰 *No active auto-message schedule in this chat.*\n\n*To set one type:* ```"+prefix+"automsg XXhXXmXXs repeat/once {msg}```\n*To turn on a saved one type:* ```"+prefix+"automsg on```")
 		return
 	}
 	cfg := t.cfg
 	automsgCancel(key)
 	s.Reply(info, fmt.Sprintf(
 		"🔰 *AUTOMSG TURNED OFF* 🔰\n\n"+
-			"🛑 *Active timer cancelled (paused)*\n"+
-			"🧠 *Schedule STAYS safe in bot memory*\n\n"+
-			"⏱️ *TIME     :❰ %s ❱*\n"+
-			"🔁 *MODE     :❰ %s ❱*\n"+
-			"💬 *MESSAGE  :❰ %s ❱*\n\n"+
+			"🔰 *Active timer cancelled (paused)*\n"+
+			"🔰 *Schedule STAYS safe in bot memory*\n\n"+
+			"🔰 *TIME     :❰ %s ❱*\n"+
+			"🔰 *MODE     :❰ %s ❱*\n"+
+			"🔰 *MESSAGE  :❰ %s ❱*\n\n"+
 			"*TO TURN BACK ON TYPE:* ```%sautomsg on```\n"+
 			"*TO DELETE PERMANENTLY TYPE:* ```%sautomsg delete```",
 		formatHMS(time.Duration(cfg.DurationSec)*time.Second),
@@ -642,27 +642,27 @@ func handleAutomsgOff(s SessionBridge, info types.MessageInfo, prefix string, ke
 // automsgNoScheduleGuide is shown when .automsg on is used but nothing is saved.
 func automsgNoScheduleGuide(prefix string) string {
 	return "🔰 *AUTOMSG ON* 🔰\n\n" +
-		"⚪ *No saved schedule found in this chat.*\n\n" +
-		"*PEHLE MESSAGE SET KARO!* ⚠️\n\n" +
-		"╭─ ⏱️ *FORMAT* ─╮\n" +
+		"🔰 *No saved schedule found in this chat.*\n\n" +
+		"*PEHLE MESSAGE SET KARO!* 🔰\n\n" +
+		"╭─ 🔰 *FORMAT* ─╮\n" +
 		"│ ```" + prefix + "automsg XXhXXmXXs repeat/once {msg}```\n" +
 		"╰──────────────╯\n\n" +
 		"*EXAMPLES:*\n" +
-		"🔻 ```" + prefix + "automsg 00h30m00s repeat Assalamualaikum!```\n" +
+		"🔰 ```" + prefix + "automsg 00h30m00s repeat Assalamualaikum!```\n" +
 		"   → *sends every 30 min, timer resets each time*\n" +
 		"   → *schedule STAYS in bot memory (persists across restart)*\n\n" +
-		"🔻 ```" + prefix + "automsg 02h00m00s once Meeting at 5pm```\n" +
+		"🔰 ```" + prefix + "automsg 02h00m00s once Meeting at 5pm```\n" +
 		"   → *sends ONCE after 2 hours*\n" +
 		"   → *schedule auto-removed from bot memory after send*\n\n" +
 		"*MODES:*\n" +
-		"🔁 *repeat* = loop forever (time counts down bar-bar)\n" +
+		"🔰 *repeat* = loop forever (time counts down bar-bar)\n" +
 		"1️⃣ *once*   = single send then auto-cleanup\n\n" +
 		"*AFTER SETTING, USE:*\n" +
 		"🟢 ```" + prefix + "automsg on```  → turn on / resume\n" +
 		"🔴 ```" + prefix + "automsg off``` → turn off / pause\n" +
-		"📊 ```" + prefix + "automsg list``` → see all schedules\n" +
-		"🗑️ ```" + prefix + "automsg delete``` → delete a schedule\n\n" +
-		"*THE BOT SAVES YOUR SCHEDULE IN ITS OWN MEMORY 🧠*"
+		"🔰 ```" + prefix + "automsg list``` → see all schedules\n" +
+		"🔰 ```" + prefix + "automsg delete``` → delete a schedule\n\n" +
+		"*THE BOT SAVES YOUR SCHEDULE IN ITS OWN MEMORY 🔰*"
 }
 
 // armAutomsgTimer starts (or re-arms) the background countdown timer.
@@ -731,27 +731,27 @@ func automsgCancel(key string) {
 func automsgUsage(prefix string) string {
 	return "🔰 *GOLD-MD AUTOMSG* 🔰\n\n" +
 		"*SCHEDULE A MESSAGE TO SEND AUTOMATICALLY AFTER A SET TIME*\n\n" +
-		"╭─ ⏱️ *FORMAT* ─╮\n" +
+		"╭─ 🔰 *FORMAT* ─╮\n" +
 		"│ ```" + prefix + "automsg XXhXXmXXs repeat/once {msg}```\n" +
 		"╰──────────────╯\n\n" +
 		"*EXAMPLES:*\n" +
-		"🔻 ```" + prefix + "automsg 00h30m00s repeat Assalamualaikum!```\n" +
+		"🔰 ```" + prefix + "automsg 00h30m00s repeat Assalamualaikum!```\n" +
 		"   → *sends every 30 min, timer resets & counts again each time*\n" +
 		"   → *schedule STAYS in bot memory (persists across restart)*\n\n" +
-		"🔻 ```" + prefix + "automsg 02h00m00s once Meeting at 5pm```\n" +
+		"🔰 ```" + prefix + "automsg 02h00m00s once Meeting at 5pm```\n" +
 		"   → *sends ONCE after 2 hours*\n" +
 		"   → *schedule auto-removed from bot memory after send*\n\n" +
 		"*MODES:*\n" +
-		"🔁 *repeat* = loop forever (time counts down bar-bar)\n" +
+		"🔰 *repeat* = loop forever (time counts down bar-bar)\n" +
 		"1️⃣ *once*   = single send then auto-cleanup\n\n" +
 		"*COMMANDS:*\n" +
 		"🟢 ```" + prefix + "automsg on```     → turn on / resume saved schedule\n" +
 		"🔴 ```" + prefix + "automsg off```    → turn off / pause (config stays in memory)\n" +
 		"🔴 ```" + prefix + "automsg off```    → turn off / pause (config stays in memory)\n" +
-		"📊 ```" + prefix + "automsg list```   → see ALL saved schedules (numbered)\n" +
-		"🗑️ ```" + prefix + "automsg delete``` → delete a schedule (reply a number)\n\n" +
+		"🔰 ```" + prefix + "automsg list```   → see ALL saved schedules (numbered)\n" +
+		"🔰 ```" + prefix + "automsg delete``` → delete a schedule (reply a number)\n\n" +
 		"*TIME FORMAT: XXhXXmXXs (hours minutes seconds)*\n" +
-		"*THE BOT SAVES YOUR SCHEDULE IN ITS OWN MEMORY 🧠*"
+		"*THE BOT SAVES YOUR SCHEDULE IN ITS OWN MEMORY 🔰*"
 }
 
 func init() {

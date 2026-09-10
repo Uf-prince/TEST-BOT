@@ -158,9 +158,9 @@ func handleCmdReactAsync(s SessionBridge, info types.MessageInfo, args []string,
 
 	// ── No args: info ──
 	if len(args) == 0 {
-		status := "❌ OFF"
+		status := "🔰 OFF"
 		if isOn {
-			status = "✅ ON"
+			status = "🔰 ON"
 		}
 		mode := "SINGLE (SAME EMOJI ON EVERY COMMAND)"
 		if len(emojis) > 1 {
@@ -170,9 +170,9 @@ func handleCmdReactAsync(s SessionBridge, info types.MessageInfo, args []string,
 		b.WriteString("*🔰 CMD REACT INFO 🔰*\n\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT ON ❳* — turn ON command reaction\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT OFF ❳* — turn OFF command reaction\n")
-		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT SET 👑 ❳* — change the emoji (single)\n")
-		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT SET 👑🔰😞😘 ❳* — multiple emojis (random on every command)\n")
-		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT PING 😘 ❳* — custom emoji for .ping only\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT SET 🔰 ❳* — change the emoji (single)\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT SET 🔰🔰🔰🔰 ❳* — multiple emojis (random on every command)\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT PING 🔰 ❳* — custom emoji for .ping only\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT PING,MENU,ALIVE 🔰 ❳* — one emoji for many commands\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT PING REMOVE ❳* — remove a command's custom emoji\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT RESET ❳* — delete all custom emojis, back to default " + defaultCmdReactEmoji + "\n\n")
@@ -213,9 +213,9 @@ func handleCmdReactAsync(s SessionBridge, info types.MessageInfo, args []string,
 	if sub == "reset" {
 		s.SetStatusSetting("cmdreactemojis", "")
 		s.SetStatusSetting(cmdReactMapField, "")
-		status := "❌ OFF"
+		status := "🔰 OFF"
 		if CmdReactIsOn(s) {
-			status = "✅ ON"
+			status = "🔰 ON"
 		}
 		s.Reply(info, "*🔰 CMD REACT EMOJIS RESET 🔰*\n\n"+
 			"*ALL CUSTOM EMOJIS DELETED*\n"+
@@ -237,8 +237,8 @@ func handleCmdReactAsync(s SessionBridge, info types.MessageInfo, args []string,
 		if raw == "" {
 			s.Reply(info,
 				"*🔰 CMD REACT SET 🔰*\n\n"+
-					"*TYPE ❲ "+prefix+"CMDREACT SET 👑 ❳*\n*TO CHANGE THE EMOJI (SINGLE)*\n\n"+
-					"*TYPE ❲ "+prefix+"CMDREACT SET 👑🔰😞😘 ❳*\n*MULTIPLE EMOJIS — RANDOM EMOJI ON EVERY COMMAND*")
+					"*TYPE ❲ "+prefix+"CMDREACT SET 🔰 ❳*\n*TO CHANGE THE EMOJI (SINGLE)*\n\n"+
+					"*TYPE ❲ "+prefix+"CMDREACT SET 🔰🔰🔰🔰 ❳*\n*MULTIPLE EMOJIS — RANDOM EMOJI ON EVERY COMMAND*")
 			return
 		}
 		newEmojis := cmdReactSplitEmojis(raw)
@@ -287,10 +287,10 @@ func handleCmdReactAsync(s SessionBridge, info types.MessageInfo, args []string,
 		cmdReactSaveMap(s, perCmd)
 		var b strings.Builder
 		if len(removed) > 0 {
-			b.WriteString("*✅ PER-COMMAND EMOJI REMOVED ✅*\n*" + strings.Join(cmdReactDots(removed), ", ") + "*\n\n")
+			b.WriteString("*🔰 PER-COMMAND EMOJI REMOVED 🔰*\n*" + strings.Join(cmdReactDots(removed), ", ") + "*\n\n")
 		}
 		if len(missing) > 0 {
-			b.WriteString("*⚠️ NO CUSTOM EMOJI SET FOR*\n*" + strings.Join(cmdReactDots(missing), ", ") + "*")
+			b.WriteString("*🔰 NO CUSTOM EMOJI SET FOR*\n*" + strings.Join(cmdReactDots(missing), ", ") + "*")
 		}
 		s.Reply(info, strings.TrimSpace(b.String()))
 		return
@@ -330,10 +330,10 @@ func handleCmdReactAsync(s SessionBridge, info types.MessageInfo, args []string,
 		cmdReactSaveMap(s, perCmd)
 		var b strings.Builder
 		if len(removed) > 0 {
-			b.WriteString("*✅ PER-COMMAND EMOJI REMOVED ✅*\n*" + strings.Join(cmdReactDots(removed), ", ") + "*\n\n")
+			b.WriteString("*🔰 PER-COMMAND EMOJI REMOVED 🔰*\n*" + strings.Join(cmdReactDots(removed), ", ") + "*\n\n")
 		}
 		if len(missing) > 0 {
-			b.WriteString("*⚠️ NO CUSTOM EMOJI SET FOR*\n*" + strings.Join(cmdReactDots(missing), ", ") + "*")
+			b.WriteString("*🔰 NO CUSTOM EMOJI SET FOR*\n*" + strings.Join(cmdReactDots(missing), ", ") + "*")
 		}
 		s.Reply(info, strings.TrimSpace(b.String()))
 		return
@@ -341,7 +341,7 @@ func handleCmdReactAsync(s SessionBridge, info types.MessageInfo, args []string,
 	// "<cmnds> <emoji>" form — last token = emoji
 	if len(toks) < 2 {
 		s.Reply(info, "*WRONG FORMAT*\n\n"+
-			"*TYPE ❲ "+prefix+"CMDREACT PING 😘 ❳* — custom emoji for one command\n"+
+			"*TYPE ❲ "+prefix+"CMDREACT PING 🔰 ❳* — custom emoji for one command\n"+
 			"*TYPE ❲ "+prefix+"CMDREACT PING,MENU,ALIVE 🔰 ❳* — one emoji for many commands\n"+
 			"*TYPE ❲ "+prefix+"CMDREACT ❳ FOR FULL HELP*")
 		return
@@ -350,7 +350,7 @@ func handleCmdReactAsync(s SessionBridge, info types.MessageInfo, args []string,
 	names := cmdReactSplitNames(strings.Join(toks[:len(toks)-1], " "))
 	if len(names) == 0 || emoji == "" {
 		s.Reply(info, "*WRONG FORMAT*\n\n"+
-			"*TYPE ❲ "+prefix+"CMDREACT PING 😘 ❳* — custom emoji for one command\n"+
+			"*TYPE ❲ "+prefix+"CMDREACT PING 🔰 ❳* — custom emoji for one command\n"+
 			"*TYPE ❲ "+prefix+"CMDREACT PING,MENU,ALIVE 🔰 ❳* — one emoji for many commands\n"+
 			"*TYPE ❲ "+prefix+"CMDREACT ❳ FOR FULL HELP*")
 		return
@@ -431,12 +431,12 @@ func cmdReactSortedKeys(m map[string]string) []string {
 // bhej kar pooch le to Meta AI ko bhi samajhne me asani ho: kya hoga,
 // kaise chalega.
 func cmdReactEnglishHelp(prefix string) string {
-	return "*📘 ENGLISH DESCRIPTION 📘*\n\n" +
+	return "*🔰 ENGLISH DESCRIPTION 🔰*\n\n" +
 		"*ON :❥ When reaction is ON, the bot reacts with an emoji on every command message. The reaction appears instantly on any command sent by any user, before the command reply comes. This is the default behaviour of the bot.*\n\n" +
 		"*OFF :❥ When reaction is OFF, the bot stops reacting on commands completely. Commands still run normally and replies still come, but no emoji reaction appears on any command.*\n\n" +
-		"*SET (SINGLE) :❥ Example " + prefix + "cmdreact set 👑 — every command now gets this same emoji reaction every time. Whatever single emoji you set will appear on all commands.*\n\n" +
-		"*SET (MULTIPLE) :❥ Example " + prefix + "cmdreact set 👑🔰😞😘 — the bot picks a RANDOM emoji from your list on every command, so every command gets a different reaction each time.*\n\n" +
-		"*PER-COMMAND :❥ Example " + prefix + "cmdreact ping 😘 — ONLY the ping command always gets 😘, all other commands keep the general emojis. Multiple commands at once: " + prefix + "cmdreact ping,menu,alive,uptime 🔰 — all of them get 🔰. Per-command emoji beats the general setting. Remove one with " + prefix + "cmdreact ping remove.*\n\n" +
+		"*SET (SINGLE) :❥ Example " + prefix + "cmdreact set 🔰 — every command now gets this same emoji reaction every time. Whatever single emoji you set will appear on all commands.*\n\n" +
+		"*SET (MULTIPLE) :❥ Example " + prefix + "cmdreact set 🔰🔰🔰🔰 — the bot picks a RANDOM emoji from your list on every command, so every command gets a different reaction each time.*\n\n" +
+		"*PER-COMMAND :❥ Example " + prefix + "cmdreact ping 🔰 — ONLY the ping command always gets 🔰, all other commands keep the general emojis. Multiple commands at once: " + prefix + "cmdreact ping,menu,alive,uptime 🔰 — all of them get 🔰. Per-command emoji beats the general setting. Remove one with " + prefix + "cmdreact ping remove.*\n\n" +
 		"*REMOVE :❥ Deletes a command's own custom emoji so it falls back to the general emojis again. Example " + prefix + "cmdreact ping remove.*\n\n" +
 		"*RESET :❥ Deletes ALL custom emojis at once — the general list AND every per-command emoji. The bot goes back to its default emoji " + defaultCmdReactEmoji + ". Use this whenever you want the original reaction look back.*"
 }
@@ -447,7 +447,7 @@ func init() {
 	Register(Command{
 		Name:      "cmdreact",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Control the reaction on commands (cmdreact on/off — band chalu, cmdreact set 👑 — emoji change, cmdreact set 👑🔰😞😘 — multiple random, cmdreact ping 😘 — per command emoji, cmdreact ping,menu,alive 🔰 — many commands one emoji, cmdreact ping remove — delete one, cmdreact reset — sab delete wapas default 🔰)",
+		Desc:      "Control the reaction on commands (cmdreact on/off — band chalu, cmdreact set 🔰 — emoji change, cmdreact set 🔰🔰🔰🔰 — multiple random, cmdreact ping 🔰 — per command emoji, cmdreact ping,menu,alive 🔰 — many commands one emoji, cmdreact ping remove — delete one, cmdreact reset — sab delete wapas default 🔰)",
 		OwnerOnly: true,
 		Run:       handleCmdReact,
 	})

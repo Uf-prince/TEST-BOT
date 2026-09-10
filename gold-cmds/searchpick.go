@@ -167,20 +167,20 @@ func SearchTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 		// fail pe baqi results bhi try (FB v6/v7 pattern)
 		if !searchPickIGDirect(s, info, selected, sess.Results) {
 			// IG-STYLE SHORT ERROR (FB jaisa — link card NAHI)
-			s.Reply(info, "❌ *INSTAGRAM DOWNLOAD ERROR*\nMEDIA NOT AVAILABLE\nTRY ANOTHER RESULT OR A DIFFERENT SEARCH \U0001f917")
+			s.Reply(info, "🔰 *INSTAGRAM DOWNLOAD ERROR*\nMEDIA NOT AVAILABLE\nTRY ANOTHER RESULT OR A DIFFERENT SEARCH \U0001f917")
 		}
 	case pickFB:
 		// profile → multi-route /videos tab → latest video permalink → cobalt
 		// (private profile pe baqi results bhi try hote hain)
 		if !searchPickFBDirect(s, info, selected, sess.Results) {
 			// FB-STYLE SHORT ERROR (TT jaisa — copy-link guidance card NAHI)
-			s.Reply(info, "❌ *FACEBOOK DOWNLOAD ERROR*\nPRIVATE PROFILE VIDEO NOT AVAILABLE\nTRY ANOTHER RESULT OR A PAGE / PUBLIC PROFILE 🤗")
+			s.Reply(info, "🔰 *FACEBOOK DOWNLOAD ERROR*\nPRIVATE PROFILE VIDEO NOT AVAILABLE\nTRY ANOTHER RESULT OR A PAGE / PUBLIC PROFILE 🔰")
 		}
 	default:
 		// TT — try a direct download of the picked profile’s latest
 		// video; on failure send a short error card (no copy-link guidance).
 		if !searchPickTTDirect(s, info, selected) {
-			s.Reply(info, "❌ *TIKTOK DOWNLOAD ERROR*\nTRY AGAIN LATER 🤗")
+			s.Reply(info, "🔰 *TIKTOK DOWNLOAD ERROR*\nTRY AGAIN LATER 🔰")
 		}
 	}
 	return true
@@ -272,10 +272,10 @@ func searchPlatformExample(kind searchPickKind, prefix string) string {
 //	.apk <facebook link>  →  "GIVE ME THE VALID APK LINK" + EXAMPLE
 func searchWrongLinkCard(kind searchPickKind, pastedDomain string, prefix string) string {
 	name := searchPlatformName(kind)
-	return "❌ *" + name + " SEARCH ERROR* 🔰\n\n" +
-		"*GIVE ME THE VALID " + name + " LINK* ❗\n\n" +
+	return "🔰 *" + name + " SEARCH ERROR* 🔰\n\n" +
+		"*GIVE ME THE VALID " + name + " LINK* 🔰\n\n" +
 		"*THIS LINK IS FROM :❱ " + strings.ToUpper(pastedDomain) + "*\n" +
-		"*IT IS NOT A " + name + " LINK* 🙅\n\n" +
+		"*IT IS NOT A " + name + " LINK* 🔰\n\n" +
 		"*EXAMPLE SAME LIKE THAT :❱*\n" +
 		"*" + searchPlatformExample(kind, prefix) + "*\n\n" +
 		"*SEARCHED BY GOLD-MD* 🔰"
@@ -493,7 +493,7 @@ func searchPickAPK(s SessionBridge, info types.MessageInfo, selected searchResul
 		app, err := apkSearchResolve(ctx, selected)
 		if err != nil || app == nil {
 			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *APK NOT FOUND*\nPlease try again later. 🤔")
+			s.Reply(info, "🔰 *APK NOT FOUND*\nPlease try again later. 🔰")
 			return
 		}
 
@@ -503,7 +503,7 @@ func searchPickAPK(s SessionBridge, info types.MessageInfo, selected searchResul
 		path, err := streamDownloadToFile(ctx, client, app.FileURL, nil)
 		if err != nil {
 			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *APK DOWNLOAD ERROR*\nPlease try again. 🤔")
+			s.Reply(info, "🔰 *APK DOWNLOAD ERROR*\nPlease try again. 🔰")
 			return
 		}
 		defer removeTempFile(path)
@@ -521,7 +521,7 @@ func searchPickAPK(s SessionBridge, info types.MessageInfo, selected searchResul
 
 		if err := s.SendDocumentFile(info, path, name, app.MimeType, caption); err != nil {
 			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *APK SEND ERROR*\nFile could not be sent.")
+			s.Reply(info, "🔰 *APK SEND ERROR*\nFile could not be sent.")
 			return
 		}
 		s.DeleteMessage(info, waitID)
@@ -533,12 +533,12 @@ func searchPickAPK(s SessionBridge, info types.MessageInfo, selected searchResul
 // lock ho chuka tha, is liye tgLatestPost/tgFetchPost-embed route dead tha).
 func searchPickTG(s SessionBridge, info types.MessageInfo, selected searchResult) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "⏳ *CHECKING TELEGRAM CHANNEL....*")
+		waitID := s.ReplyWithID(info, "🔰 *CHECKING TELEGRAM CHANNEL....*")
 
 		inv, err := tgChannelScan(ctx, selected.Link)
 		if err != nil || inv.empty() {
 			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nNo public media post found for this channel. 🤔")
+			s.Reply(info, "🔰 *TELEGRAM DOWNLOAD ERROR*\nNo public media post found for this channel. 🔰")
 			return
 		}
 		setTGTypeChoice(info.Sender.String(), inv, selected.Title)
@@ -551,11 +551,11 @@ func searchPickTG(s SessionBridge, info types.MessageInfo, selected searchResult
 // sends a short error card — NO link-copy guidance).
 func searchPickTTDirect(s SessionBridge, info types.MessageInfo, selected searchResult) bool {
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "⏳ *DOWNLOADING TIKTOK VIDEO....*")
+		waitID := s.ReplyWithID(info, "🔰 *DOWNLOADING TIKTOK VIDEO....*")
 
 		fail := func() {
 			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *TIKTOK DOWNLOAD ERROR*\nTRY AGAIN LATER 🤗")
+			s.Reply(info, "🔰 *TIKTOK DOWNLOAD ERROR*\nTRY AGAIN LATER 🔰")
 		}
 
 		link := strings.TrimSpace(selected.Link)
@@ -619,13 +619,13 @@ func searchPickTTDirect(s SessionBridge, info types.MessageInfo, selected search
 		if creator == "" {
 			creator = selected.Handle
 		}
-		caption := "🏆 TIKTOK VIDEO NAME 🏆\n" +
+		caption := "🔰 TIKTOK VIDEO NAME 🔰\n" +
 			"*" + title + "*\n\n" +
-			"🏆 *CREATOR :* " + creator + "\n" +
-			fmt.Sprintf("🏆 *TIME :* %ds\n", res.Duration) +
-			fmt.Sprintf("🏆 *LIKES :* %d\n", res.DiggCount) +
-			fmt.Sprintf("🏆 *COMMENTS :* %d\n", res.CommentCount) +
-			fmt.Sprintf("🏆 *VIEWS :* %d\n\n", res.PlayCount) +
+			"🔰 *CREATOR :* " + creator + "\n" +
+			fmt.Sprintf("🔰 *TIME :* %ds\n", res.Duration) +
+			fmt.Sprintf("🔰 *LIKES :* %d\n", res.DiggCount) +
+			fmt.Sprintf("🔰 *COMMENTS :* %d\n", res.CommentCount) +
+			fmt.Sprintf("🔰 *VIEWS :* %d\n\n", res.PlayCount) +
 			"*TIKTOK VIDEO DOWNLOAD*"
 
 		if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
@@ -1105,10 +1105,10 @@ func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected search
 			if len(title) > 120 {
 				title = title[:117] + "..."
 			}
-			caption := "🏆 *INSTAGRAM VIDEO NAME 🏆*\n" +
+			caption := "🔰 *INSTAGRAM VIDEO NAME 🔰*\n" +
 				"*" + title + "*\n\n"
 			if vid.LikeCount > 0 {
-					caption += fmt.Sprintf("🏆 *LIKES :* %d\n", vid.LikeCount)
+					caption += fmt.Sprintf("🔰 *LIKES :* %d\n", vid.LikeCount)
 			}
 			caption += "\n*INSTAGRAM VIDEO DOWNLOAD*"
 
@@ -1134,7 +1134,7 @@ func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected search
 			if len(title) > 120 {
 			title = title[:117] + "..."
 			}
-			caption := "🏆 *INSTAGRAM POST* 🏆\n*" + title + "*"
+			caption := "🔰 *INSTAGRAM POST* 🔰\n*" + title + "*"
 			if s.SendImage(info, data, caption) == nil {
 				s.DeleteMessage(info, waitID)
 				ok = true
@@ -1189,12 +1189,12 @@ func igSendPermalink(ctx context.Context, s SessionBridge, info types.MessageInf
 	if len(title) > 120 {
 		title = title[:117] + "..."
 	}
-	caption := "🏆 *INSTAGRAM VIDEO NAME 🏆*\n" +
+	caption := "🔰 *INSTAGRAM VIDEO NAME 🔰*\n" +
 		"*" + title + "*\n\n"
 	if r.Stats != "" {
-		caption += "🏆 *LIKES :* " + igStatsLikes(r.Stats) + "\n"
+		caption += "🔰 *LIKES :* " + igStatsLikes(r.Stats) + "\n"
 	}
-	caption += "🏆 *QUALITY :❱ " + quality + "*\n\n" +
+	caption += "🔰 *QUALITY :❱ " + quality + "*\n\n" +
 		"*INSTAGRAM VIDEO DOWNLOAD*"
 
 	secs, w, h := probeVideoMeta(path)
@@ -1345,9 +1345,9 @@ func searchPickFBDirect(s SessionBridge, info types.MessageInfo, selected search
 		if secs == 0 && w == 0 {
 			quality = "HD"
 		}
-		caption := "🏅 *FACEBOOK VIDEO NAME 🏅*\n" +
+		caption := "🔰 *FACEBOOK VIDEO NAME 🔰*\n" +
 			"*" + title + "*\n\n" +
-			"🏅 *QUALITY :❱ " + quality + "*\n\n" +
+			"🔰 *QUALITY :❱ " + quality + "*\n\n" +
 			"*FACEBOOK VIDEO DOWNLOAD*"
 
 		if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {

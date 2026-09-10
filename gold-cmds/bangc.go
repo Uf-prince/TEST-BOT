@@ -96,13 +96,13 @@ func handleUnbangcAsync(s SessionBridge, info types.MessageInfo, args []string, 
 
 	// Check if already unbanned (unlocked)
 	if !bangcIsOn(s, groupJID) {
-		s.Reply(info, "*THIS GROUP IS ALREADY TURNED ON 😇*")
+		s.Reply(info, "*THIS GROUP IS ALREADY TURNED ON 🔰*")
 		return
 	}
 
 	// Unlock the group
 	bangcSetOff(s, groupJID)
-	s.Reply(info, "*🔰 GROUP TURNED ON SUCCESS 🔰*\n\n*NOW IN THIS GROUP EVERYONE (ADMINS + MEMBERS)*\n*CAN USE MY BOT COMMANDS 😊*")
+	s.Reply(info, "*🔰 GROUP TURNED ON SUCCESS 🔰*\n\n*NOW IN THIS GROUP EVERYONE (ADMINS + MEMBERS)*\n*CAN USE MY BOT COMMANDS 🔰*")
 }
 
 // ── exported helper for handler.go ─────────────────────────────────────────

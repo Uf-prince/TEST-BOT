@@ -36,7 +36,7 @@ import (
 const maxMediaBytes = 700 * 1024 * 1024
 
 // mediaTooBigText is the reply for oversized media.
-const mediaTooBigText = "*❌ FILE TOO BIG — MAX 700MB*"
+const mediaTooBigText = "*🔰 FILE TOO BIG — MAX 700MB*"
 
 // mediaTooBigReply sends the oversized-file reply once.
 func mediaTooBigReply(s SessionBridge, info types.MessageInfo) {

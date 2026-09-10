@@ -40,19 +40,19 @@ const (
 	rcNotOwnerText = `*THIS COMMAND IS ONLY FOR ME 😎*`
 
 	rcNoQuoteText = `*REACT ON ANY MESSAGE*` + "\n\n" +
-		`*MENTION THE MESSAGE IMPORTANT ⚠️*` + "\n" +
+		`*MENTION THE MESSAGE IMPORTANT 🔰*` + "\n" +
 		`*AFTER MENTION THE MESSAGE TYPE*` + "\n\n" +
 		`*RC 😎*` + "\n" +
-		`*RC 😊*` + "\n" +
-		`*RC 😍*` + "\n\n" +
+		`*RC 🔰*` + "\n" +
+		`*RC 🔰*` + "\n\n" +
 		`*WHICH EMOJIE YOU SELECT THIS EMOJIE WILL REACT ON OTHER MESSAGE*`
 
 	rcNoEmojiText = `*REACT ON ANY MESSAGE*` + "\n\n" +
-		`*MENTION THE MESSAGE IMPORTANT ⚠️*` + "\n" +
+		`*MENTION THE MESSAGE IMPORTANT 🔰*` + "\n" +
 		`*AFTER MENTION THE MESSAGE TYPE*` + "\n\n" +
 		`*RC 😎*` + "\n" +
-		`*RC 😊*` + "\n" +
-		`*RC 😍*` + "\n\n" +
+		`*RC 🔰*` + "\n" +
+		`*RC 🔰*` + "\n\n" +
 		`*WHICH EMOJIE YOU SELECT THIS EMOJIE WILL REACT ON OTHER MESSAGE*`
 )
 

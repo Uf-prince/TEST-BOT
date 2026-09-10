@@ -40,7 +40,7 @@ func handleBotBlockAsync(s SessionBridge, info types.MessageInfo, args []string,
 	targetJID, targetNumber := resolveBotBanTarget(s, info, args)
 
 	if targetJID == "" || targetNumber == "" {
-		s.Reply(info, "*TO BLOCK SOMEONE WRITE LIKE THIS 😊*\n\n*TYPE ❬ "+prefix+"BOTBLOCK 923xxxxx ❭* ❬FOR INBOX❭\n*TYPE ❬ "+prefix+"BOTBLOCK @MENTION ❭* ❬FOR GROUP❭\n\n*WHEN YOU TYPE LIKE THIS THEN THAT WHATSAPP USER WILL BE BLOCKED THEN HE CANNOT USE ANY COMMANDS OF YOUR BOT*")
+		s.Reply(info, "*TO BLOCK SOMEONE WRITE LIKE THIS 🔰*\n\n*TYPE ❬ "+prefix+"BOTBLOCK 923xxxxx ❭* ❬FOR INBOX❭\n*TYPE ❬ "+prefix+"BOTBLOCK @MENTION ❭* ❬FOR GROUP❭\n\n*WHEN YOU TYPE LIKE THIS THEN THAT WHATSAPP USER WILL BE BLOCKED THEN HE CANNOT USE ANY COMMANDS OF YOUR BOT*")
 		return
 	}
 
@@ -72,7 +72,7 @@ func handleBotBlockAsync(s SessionBridge, info types.MessageInfo, args []string,
 		return
 	}
 	_ = s.BotBanAdd(targetJID, targetNumber, "Owner ne block kiya")
-	s.Reply(info, "*USER BLOCKED SUCCESS*\n\n*NUMBER ❯ +"+targetNumber+"*\n*I HAVE BLOCKED YOU FOM USING MY BOT COMMANDS 😒*")
+	s.Reply(info, "*USER BLOCKED SUCCESS*\n\n*NUMBER ❯ +"+targetNumber+"*\n*I HAVE BLOCKED YOU FOM USING MY BOT COMMANDS 🔰*")
 }
 
 // ── botunblock ────────────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ func handleBotUnblockAsync(s SessionBridge, info types.MessageInfo, args []strin
 	}
 	// Remove using the ACTUAL stored JID (may differ from targetJID format)
 	_ = s.BotBanRemove(bannedJID)
-	s.Reply(info, "*USER UNBLOCKED SUCCESS*\n\n*NUMBER ❯ +"+targetNumber+"*\n*NOW YOU CAN USE ALL MY BOT COMMANDS ENJOY ☺️*")
+	s.Reply(info, "*USER UNBLOCKED SUCCESS*\n\n*NUMBER ❯ +"+targetNumber+"*\n*NOW YOU CAN USE ALL MY BOT COMMANDS ENJOY 🔰*")
 }
 
 // ── banlist ───────────────────────────────────────────────────────────────
@@ -121,24 +121,24 @@ func handleBanListAsync(s SessionBridge, info types.MessageInfo, args []string, 
 
 	allBanned := s.BotBanList()
 	if len(allBanned) == 0 {
-		s.Reply(info, "*✅ Koi Bhi User Blocked Nahi Hai Abhi*")
+		s.Reply(info, "*🔰 Koi Bhi User Blocked Nahi Hai Abhi*")
 		return
 	}
 
 	var sb strings.Builder
-	sb.WriteString("*🚫 BLOCKED USERS LIST 🚫*\n\n")
+	sb.WriteString("*🔰 BLOCKED USERS LIST 🔰*\n\n")
 	for i, u := range allBanned {
 		sb.WriteString("*" + strconv.Itoa(i+1) + ".* +" + u.Number + "\n")
 		blockDate := u.BannedAt
 		if blockDate == "" {
 			blockDate = "Unknown"
 		}
-		sb.WriteString("   *📅 Block Date:* " + blockDate + "\n")
+		sb.WriteString("   *🔰 Block Date:* " + blockDate + "\n")
 		reason := u.Reason
 		if reason == "" {
 			reason = "Owner ne block kiya"
 		}
-		sb.WriteString("   *📝 Reason:* " + reason + "\n\n")
+		sb.WriteString("   *🔰 Reason:* " + reason + "\n\n")
 	}
 	sb.WriteString("*Total: " + strconv.Itoa(len(allBanned)) + " User(s) Blocked*")
 	s.Reply(info, sb.String())

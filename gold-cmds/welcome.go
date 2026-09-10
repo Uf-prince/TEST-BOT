@@ -39,44 +39,44 @@ import (
 
 // ── defaults (same as Node.js pair.js lines 6125-6161) ─────────────────────
 
-const defaultWelcomeMsg = `*MOST WELCOME TO OUR GROUP* 🥳  
+const defaultWelcomeMsg = `*MOST WELCOME TO OUR GROUP* 🔰  
 DEAR @user
 
-*TO OUR FAMILY* 😊  
+*TO OUR FAMILY* 🔰  
 @gname
 
-*WE ARE SO SO GLAD YOU'RE HERE* 🥹❤️  
-*YOU ARE NOW A PART OF OUR FAMILY* 👨‍👩‍👧‍👦  
+*WE ARE SO SO GLAD YOU'RE HERE* 🔰🔰  
+*YOU ARE NOW A PART OF OUR FAMILY* 🔰  
 *YOUR PRESENCE MAKES THIS GROUP EVEN MORE SPECIAL.*  
-*WE ARE REALLY HAPPY FROM THE BOTTOM OF OUR HEART THAT YOU JOINED US* 🙏✨
+*WE ARE REALLY HAPPY FROM THE BOTTOM OF OUR HEART THAT YOU JOINED US* 🔰🔰
 
-*TAKE CARE OF YOURSELF DEAR* 🥳💫  
-*STAY HAPPY AND STAY ACTIVE* 😇🌟
+*TAKE CARE OF YOURSELF DEAR* 🔰🔰  
+*STAY HAPPY AND STAY ACTIVE* 🔰🔰
 
-*IF YOU HAVE ANY PROBLEM OR ANY QUESTION, FEEL FREE TO CONTACT ADMINS ANYTIME* 🤝💬  
-*WE ARE ALWAYS HERE TO HELP YOU* ❤️
+*IF YOU HAVE ANY PROBLEM OR ANY QUESTION, FEEL FREE TO CONTACT ADMINS ANYTIME* 🔰🔰  
+*WE ARE ALWAYS HERE TO HELP YOU* 🔰
 
-*KINDLY READ OUR GROUP RULES CAREFULLY AND FOLLOW THEM* 📌📖  
-*LET'S KEEP THIS GROUP POSITIVE, LOVING AND RESPECTFUL FOR EVERYONE* 🤝😊`
+*KINDLY READ OUR GROUP RULES CAREFULLY AND FOLLOW THEM* 🔰🔰  
+*LET'S KEEP THIS GROUP POSITIVE, LOVING AND RESPECTFUL FOR EVERYONE* 🔰🔰`
 
-const defaultGoodbyeMsg = `*GOOD BYE DEAR 🥺*
+const defaultGoodbyeMsg = `*GOOD BYE DEAR 🔰*
 @user
 
-*TO OUR GROUP 🥺*
+*TO OUR GROUP 🔰*
 @gname
 
 
 
-*SAYING GOODBYE IS NEVER EASY, ESPECIALLY WHEN IT'S SOMEONE WHO MADE THIS GROUP FEEL LIKE HOME. 🥺❤️*
+*SAYING GOODBYE IS NEVER EASY, ESPECIALLY WHEN IT'S SOMEONE WHO MADE THIS GROUP FEEL LIKE HOME. 🔰🔰*
 
-*THANK YOU* FOR ALL THE *LAUGHS* 😂, *EVERYTHING YOU SAID MEANT A LOT TO US* 💬, THE *SUPPORT* 🤝, AND ALL THE *LITTLE MOMENTS* THAT MADE THIS GROUP SPECIAL. YOU BROUGHT YOUR OWN *LIGHT* ✨ HERE, AND WE'RE REALLY GOING TO FEEL THAT ABSENCE.  
+*THANK YOU* FOR ALL THE *LAUGHS* 🔰, *EVERYTHING YOU SAID MEANT A LOT TO US* 🔰, THE *SUPPORT* 🔰, AND ALL THE *LITTLE MOMENTS* THAT MADE THIS GROUP SPECIAL. YOU BROUGHT YOUR OWN *LIGHT* 🔰 HERE, AND WE'RE REALLY GOING TO FEEL THAT ABSENCE.  
 
-YOU'LL BE *MISSED MORE THAN WORDS CAN SAY* 💔. I TRULY HOPE LIFE TAKES YOU TO *AMAZING PLACES* 🌍 AND GIVES YOU EVERYTHING YOU'RE WISHING FOR. 🙏
+YOU'LL BE *MISSED MORE THAN WORDS CAN SAY* 🔰. I TRULY HOPE LIFE TAKES YOU TO *AMAZING PLACES* 🔰 AND GIVES YOU EVERYTHING YOU'RE WISHING FOR. 🔰
 
-THIS GROUP WILL *ALWAYS HAVE A SPACE FOR YOU* 🏠. OUR DOORS ARE OPEN ANYTIME YOU WANT TO COME BACK AND SAY *HI* 👋
+THIS GROUP WILL *ALWAYS HAVE A SPACE FOR YOU* 🔰. OUR DOORS ARE OPEN ANYTIME YOU WANT TO COME BACK AND SAY *HI* 🔰
 
 *GOODBYE FOR NOW, NOT FOREVER.*  
-*TAKE CARE OF YOURSELF AND STAY HAPPY* ❤️✨`
+*TAKE CARE OF YOURSELF AND STAY HAPPY* 🔰🔰`
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -155,7 +155,7 @@ func handleWelcomeAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		if custom {
 			customMsgLabel = "YES"
 		}
-		s.Reply(info, "*🔰 WELCOME COMMAND INFO 🔰*\n\n*TYPE ❰ "+prefix+"WELCOME ON ❱*\n*WHEN WELCOME IS ON THEN AS SOON AS ANY NEW USER JOINS THE GROUP THE BOT WILL SEND A WELCOME MESSAGE WITH THEIR WHATSAPP PROFILE PICTURE AND MENTION*\n\n\n*TYPE ❰ "+prefix+"WELCOME OFF ❱*\n*WHEN WELCOME IS OFF THEN NO WELCOME MESSAGE WILL BE SENT TO NEW MEMBERS IN THIS GROUP*\n\n\n*🔰 WELCOME MESSAGE INFO 🔰*\n\n*TYPE ❰ "+prefix+"WELCOME MSG {Hey @user welcome to @gname family 💖} ❱*\n*SET YOUR OWN CUSTOM WELCOME TEXT*\n*USE @user FOR NEW MEMBER MENTION*\n*USE @gname FOR GROUP NAME*\n\n\n*TYPE ❰ "+prefix+"WELCOME MSG {Assalam o Alaikum @user join hone ka shukriya ❤️} ❱*\n*ANOTHER EXAMPLE — JAISI MARZI TEXT LIKHO CURLY BRACES KE ANDAR*\n\n\n*TYPE ❰ "+prefix+"WELCOME RESET ❱*\n*TO FULLY RESET WELCOME — MESSAGE AND STATUS BOTH GET DELETED FROM DATABASE, DEFAULT WELCOME TEXT DOBARA CHALU HO JATA HAI*\n\n\n*WELCOME NOW :❱ ❰ "+statusNow+" ❱*\n*CUSTOM MSG :❱ ❰ "+customMsgLabel+" ❱*")
+		s.Reply(info, "*🔰 WELCOME COMMAND INFO 🔰*\n\n*TYPE ❰ "+prefix+"WELCOME ON ❱*\n*WHEN WELCOME IS ON THEN AS SOON AS ANY NEW USER JOINS THE GROUP THE BOT WILL SEND A WELCOME MESSAGE WITH THEIR WHATSAPP PROFILE PICTURE AND MENTION*\n\n\n*TYPE ❰ "+prefix+"WELCOME OFF ❱*\n*WHEN WELCOME IS OFF THEN NO WELCOME MESSAGE WILL BE SENT TO NEW MEMBERS IN THIS GROUP*\n\n\n*🔰 WELCOME MESSAGE INFO 🔰*\n\n*TYPE ❰ "+prefix+"WELCOME MSG {Hey @user welcome to @gname family 🔰} ❱*\n*SET YOUR OWN CUSTOM WELCOME TEXT*\n*USE @user FOR NEW MEMBER MENTION*\n*USE @gname FOR GROUP NAME*\n\n\n*TYPE ❰ "+prefix+"WELCOME MSG {Assalam o Alaikum @user join hone ka shukriya 🔰} ❱*\n*ANOTHER EXAMPLE — JAISI MARZI TEXT LIKHO CURLY BRACES KE ANDAR*\n\n\n*TYPE ❰ "+prefix+"WELCOME RESET ❱*\n*TO FULLY RESET WELCOME — MESSAGE AND STATUS BOTH GET DELETED FROM DATABASE, DEFAULT WELCOME TEXT DOBARA CHALU HO JATA HAI*\n\n\n*WELCOME NOW :❱ ❰ "+statusNow+" ❱*\n*CUSTOM MSG :❱ ❰ "+customMsgLabel+" ❱*")
 		return
 	}
 
@@ -184,11 +184,11 @@ func handleWelcomeAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		rawAfterSub = strings.TrimSpace(rawAfterSub)
 		raw := stripBraces(rawAfterSub)
 		if raw == "" {
-			s.Reply(info, "*🔰 WELCOME MSG 🔰*\n\n*TYPE ❰ "+prefix+"WELCOME MSG {Hey @user welcome to @gname 💖} ❱*\n\n*USE @user FOR MEMBER MENTION*\n*USE @gname FOR GROUP NAME*")
+			s.Reply(info, "*🔰 WELCOME MSG 🔰*\n\n*TYPE ❰ "+prefix+"WELCOME MSG {Hey @user welcome to @gname 🔰} ❱*\n\n*USE @user FOR MEMBER MENTION*\n*USE @gname FOR GROUP NAME*")
 			return
 		}
 		s.SetGroupSetting(groupJID.String(), "welcomemsg", raw)
-		s.Reply(info, "*✅ WELCOME MESSAGE SAVED*\n\n*PREVIEW :❱*\n"+raw)
+		s.Reply(info, "*🔰 WELCOME MESSAGE SAVED*\n\n*PREVIEW :❱*\n"+raw)
 		return
 	}
 
@@ -196,7 +196,7 @@ func handleWelcomeAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		// Fully reset: delete message + set status OFF (same as Node.js UmarResetWelcome)
 		s.SetGroupSetting(groupJID.String(), "welcomemsg", "")
 		welcomeSetOn(s, groupJID, "welcome", false)
-		s.Reply(info, "*✅ WELCOME FULLY RESET*\n\n*STATUS :❱ OFF*\n*MESSAGE :❱ DEFAULT*\n*DATABASE ENTRY :❱ SAFE DELETED*")
+		s.Reply(info, "*🔰 WELCOME FULLY RESET*\n\n*STATUS :❱ OFF*\n*MESSAGE :❱ DEFAULT*\n*DATABASE ENTRY :❱ SAFE DELETED*")
 		return
 	}
 
@@ -237,7 +237,7 @@ func handleGoodbyeAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		if custom {
 			customMsgLabel = "YES"
 		}
-		s.Reply(info, "*🔰 GOODBYE COMMAND INFO 🔰*\n\n*TYPE ❰ "+prefix+"GOODBYE ON ❱*\n*WHEN GOODBYE IS ON THEN AS SOON AS ANY MEMBER LEAVES OR IS REMOVED FROM THE GROUP THE BOT WILL SEND A GOODBYE MESSAGE WITH THEIR WHATSAPP PROFILE PICTURE AND MENTION*\n\n\n*TYPE ❰ "+prefix+"GOODBYE OFF ❱*\n*WHEN GOODBYE IS OFF THEN NO GOODBYE MESSAGE WILL BE SENT WHEN MEMBERS LEAVE THIS GROUP*\n\n\n*🔰 GOODBYE MESSAGE INFO 🔰*\n\n*TYPE ❰ "+prefix+"GOODBYE MSG {Bye @user we will miss you from @gname 😢} ❱*\n*SET YOUR OWN CUSTOM GOODBYE TEXT*\n*USE @user FOR LEAVING MEMBER MENTION*\n*USE @gname FOR GROUP NAME*\n\n\n*TYPE ❰ "+prefix+"GOODBYE MSG {Allah hafiz @user tumhari kami mehsoos hogi ❤️} ❱*\n*ANOTHER EXAMPLE — JAISI MARZI TEXT LIKHO CURLY BRACES KE ANDAR*\n\n\n*TYPE ❰ "+prefix+"GOODBYE RESET ❱*\n*TO FULLY RESET GOODBYE — MESSAGE AND STATUS BOTH GET DELETED FROM DATABASE, DEFAULT GOODBYE TEXT DOBARA CHALU HO JATA HAI*\n\n\n*GOODBYE NOW :❱ ❰ "+statusNow+" ❱*\n*CUSTOM MSG :❱ ❰ "+customMsgLabel+" ❱*")
+		s.Reply(info, "*🔰 GOODBYE COMMAND INFO 🔰*\n\n*TYPE ❰ "+prefix+"GOODBYE ON ❱*\n*WHEN GOODBYE IS ON THEN AS SOON AS ANY MEMBER LEAVES OR IS REMOVED FROM THE GROUP THE BOT WILL SEND A GOODBYE MESSAGE WITH THEIR WHATSAPP PROFILE PICTURE AND MENTION*\n\n\n*TYPE ❰ "+prefix+"GOODBYE OFF ❱*\n*WHEN GOODBYE IS OFF THEN NO GOODBYE MESSAGE WILL BE SENT WHEN MEMBERS LEAVE THIS GROUP*\n\n\n*🔰 GOODBYE MESSAGE INFO 🔰*\n\n*TYPE ❰ "+prefix+"GOODBYE MSG {Bye @user we will miss you from @gname 🔰} ❱*\n*SET YOUR OWN CUSTOM GOODBYE TEXT*\n*USE @user FOR LEAVING MEMBER MENTION*\n*USE @gname FOR GROUP NAME*\n\n\n*TYPE ❰ "+prefix+"GOODBYE MSG {Allah hafiz @user tumhari kami mehsoos hogi 🔰} ❱*\n*ANOTHER EXAMPLE — JAISI MARZI TEXT LIKHO CURLY BRACES KE ANDAR*\n\n\n*TYPE ❰ "+prefix+"GOODBYE RESET ❱*\n*TO FULLY RESET GOODBYE — MESSAGE AND STATUS BOTH GET DELETED FROM DATABASE, DEFAULT GOODBYE TEXT DOBARA CHALU HO JATA HAI*\n\n\n*GOODBYE NOW :❱ ❰ "+statusNow+" ❱*\n*CUSTOM MSG :❱ ❰ "+customMsgLabel+" ❱*")
 		return
 	}
 
@@ -245,7 +245,7 @@ func handleGoodbyeAsync(s SessionBridge, info types.MessageInfo, args []string, 
 
 	if subCmd == "on" {
 		welcomeSetOn(s, groupJID, "goodbye", true)
-		s.Reply(info, "*🔰 GOODBYE ACTIVATED 🔰*\n\n*NOW BOT WILL SAY GOODBYE TO EVERY LEAVING MEMBER WITH THEIR PROFILE PICTURE AND MENTION 😢*")
+		s.Reply(info, "*🔰 GOODBYE ACTIVATED 🔰*\n\n*NOW BOT WILL SAY GOODBYE TO EVERY LEAVING MEMBER WITH THEIR PROFILE PICTURE AND MENTION 🔰*")
 		return
 	}
 
@@ -264,18 +264,18 @@ func handleGoodbyeAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		rawAfterSub = strings.TrimSpace(rawAfterSub)
 		raw := stripBraces(rawAfterSub)
 		if raw == "" {
-			s.Reply(info, "*🔰 GOODBYE MSG 🔰*\n\n*TYPE ❰ "+prefix+"GOODBYE MSG {Bye @user from @gname 😢} ❱*\n\n*USE @user FOR MEMBER MENTION*\n*USE @gname FOR GROUP NAME*")
+			s.Reply(info, "*🔰 GOODBYE MSG 🔰*\n\n*TYPE ❰ "+prefix+"GOODBYE MSG {Bye @user from @gname 🔰} ❱*\n\n*USE @user FOR MEMBER MENTION*\n*USE @gname FOR GROUP NAME*")
 			return
 		}
 		s.SetGroupSetting(groupJID.String(), "goodbyemsg", raw)
-		s.Reply(info, "*✅ GOODBYE MESSAGE SAVED*\n\n*PREVIEW :❱*\n"+raw)
+		s.Reply(info, "*🔰 GOODBYE MESSAGE SAVED*\n\n*PREVIEW :❱*\n"+raw)
 		return
 	}
 
 	if subCmd == "reset" {
 		s.SetGroupSetting(groupJID.String(), "goodbyemsg", "")
 		welcomeSetOn(s, groupJID, "goodbye", false)
-		s.Reply(info, "*✅ GOODBYE FULLY RESET*\n\n*STATUS :❱ OFF*\n*MESSAGE :❱ DEFAULT*\n*DATABASE ENTRY :❱ SAFE DELETED*")
+		s.Reply(info, "*🔰 GOODBYE FULLY RESET*\n\n*STATUS :❱ OFF*\n*MESSAGE :❱ DEFAULT*\n*DATABASE ENTRY :❱ SAFE DELETED*")
 		return
 	}
 

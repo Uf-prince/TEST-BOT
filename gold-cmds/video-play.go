@@ -164,10 +164,10 @@ func searchProgress(ctx context.Context, s SessionBridge, info types.MessageInfo
 			linkStr = "NULL"
 		}
 
-		sb.WriteString(fmt.Sprintf("\n*✧═══════════•❁❀❁•═══════════✧*\n*TYPE ❰ %d ❱ TO DOWNLOAD THIS FROM YT*\n", i+1))
+		sb.WriteString(fmt.Sprintf("\n*🔰═══════════•❁❀❁•═══════════🔰*\n*TYPE ❰ %d ❱ TO DOWNLOAD THIS FROM YT*\n", i+1))
 		sb.WriteString(fmt.Sprintf("%s\n", nameStr))
 		sb.WriteString(fmt.Sprintf("%s\n", linkStr))
-		sb.WriteString(fmt.Sprintf("*DURATION :❯ %s*\n*✧═══════════•❁❀❁•═══════════✧*\n\n", durStr))
+		sb.WriteString(fmt.Sprintf("*DURATION :❯ %s*\n*🔰═══════════•❁❀❁•═══════════🔰*\n\n", durStr))
 		sb.WriteString("\n")
 	}
 
@@ -344,10 +344,10 @@ func handlePlayAsync(ctx context.Context, s SessionBridge, info types.MessageInf
 			linkStr = "NULL"
 		}
 
-		b.WriteString(fmt.Sprintf("\n*✧═══════════•❁❀❁•═══════════✧*\n*TYPE ❰ %d ❱ TO DOWNLOAD THIS FROM YT*\n", i+1))
+		b.WriteString(fmt.Sprintf("\n*🔰═══════════•❁❀❁•═══════════🔰*\n*TYPE ❰ %d ❱ TO DOWNLOAD THIS FROM YT*\n", i+1))
 		b.WriteString(fmt.Sprintf("%s\n", strings.ToUpper(nameStr)))
 		b.WriteString(fmt.Sprintf("%s\n", linkStr))
-		b.WriteString(fmt.Sprintf("*DURATION :❯ %s*\n*✧═══════════•❁❀❁•═══════════✧*\n\n", strings.ToUpper(durStr)))
+		b.WriteString(fmt.Sprintf("*DURATION :❯ %s*\n*🔰═══════════•❁❀❁•═══════════🔰*\n\n", strings.ToUpper(durStr)))
 		b.WriteString("\n")
 	}
 	b.WriteString(fmt.Sprintf("*TYPE NUMBER WHICH AUDIO DO YOU WANT TO DOWNLOAD — REPLY WITH ANY NUMBER 1 TO 15*"))

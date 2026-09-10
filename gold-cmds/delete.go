@@ -49,7 +49,7 @@ import (
 const delNotOwnerText = "*THIS COMMAND IS ONLY FOR ME 😎*"
 
 const delNoQuoteText = "*🔰 DELETE MESSAGE INFO* 🔰\n" +
-	"*MENTION TO THE MESSAGE IMPORTANT ⚠️ WHICH MESSAGE DO YOU WANT TO DELETE*\n\n" +
+	"*MENTION TO THE MESSAGE IMPORTANT 🔰 WHICH MESSAGE DO YOU WANT TO DELETE*\n\n" +
 	"*AND TYPE ❮ DL ❯ TO DELETE MSG*"
 
 // isGroupChat reports whether the chat JID is a group.

@@ -121,12 +121,12 @@ func tgChannelScan(ctx context.Context, chanURL string) (*tgChannelInventory, er
 // tgTypeMenuCard — ONLY the available types get a line (fixed numbering).
 func tgTypeMenuCard(inv *tgChannelInventory, pickedTitle string) string {
 	var b strings.Builder
-	b.WriteString("🔵 *GOLD-MD TELEGRAM MEDIA* 🔵\n\n")
+	b.WriteString("🔰 *GOLD-MD TELEGRAM MEDIA* 🔰\n\n")
 	if pickedTitle != "" {
 		b.WriteString("*RESULT :* " + pickedTitle + "\n")
 	}
 	b.WriteString("*CHANNEL :* " + inv.displayName() + "\n\n")
-	b.WriteString("*WHAT DO YOU WANT FROM THIS CHANNEL?* 🤔\n\n")
+	b.WriteString("*WHAT DO YOU WANT FROM THIS CHANNEL?* 🔰\n\n")
 	if inv.textMedia != nil {
 		b.WriteString("*TYPE ❮ 1 ❯ TO GET TEXT ONLY*\n")
 	}
@@ -145,8 +145,8 @@ func tgTypeMenuCard(inv *tgChannelInventory, pickedTitle string) string {
 
 // tgTypeNotAvailCard — user picked a type this channel doesn't have.
 func tgTypeNotAvailCard(kind string) string {
-	return "❌ *TELEGRAM MEDIA ERROR*\n" + kind + " IS NOT AVAILABLE ON THIS CHANNEL\n" +
-		"CHOOSE ANOTHER TYPE FROM THE MENU 🤷"
+	return "🔰 *TELEGRAM MEDIA ERROR*\n" + kind + " IS NOT AVAILABLE ON THIS CHANNEL\n" +
+		"CHOOSE ANOTHER TYPE FROM THE MENU 🔰"
 }
 
 // ── choice session (menu → number reply window) ────────────────────────────
@@ -237,7 +237,7 @@ func TGTypeTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 			return true
 		}
 		RunWithTimeout(s, info, func(ctx context.Context) {
-			waitID := s.ReplyWithID(info, "⏳ *FETCHING TELEGRAM PHOTO...*")
+			waitID := s.ReplyWithID(info, "🔰 *FETCHING TELEGRAM PHOTO...*")
 			tgSendMedia(ctx, s, info, waitID, sess.inv.photoMedia, sess.title)
 		})
 	case 3:
@@ -246,7 +246,7 @@ func TGTypeTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 			return true
 		}
 		RunWithTimeout(s, info, func(ctx context.Context) {
-			waitID := s.ReplyWithID(info, "⏳ *FETCHING TELEGRAM VIDEO...*")
+			waitID := s.ReplyWithID(info, "🔰 *FETCHING TELEGRAM VIDEO...*")
 			tgSendMedia(ctx, s, info, waitID, sess.inv.videoMedia, sess.title)
 		})
 	case 4:
@@ -273,11 +273,11 @@ func tgDeliverText(s SessionBridge, info types.MessageInfo, inv *tgChannelInvent
 	if len(text) > 3500 {
 		text = text[:3497] + "..."
 	}
-	card := "🔵 *TELEGRAM POST TEXT* 🔵\n\n" +
+	card := "🔰 *TELEGRAM POST TEXT* 🔰\n\n" +
 		text + "\n\n" +
-		"🔵 *CHANNEL :* " + inv.displayName() + "\n"
+		"🔰 *CHANNEL :* " + inv.displayName() + "\n"
 	if inv.textMedia.views != "" {
-		card += "🔵 *VIEWS :* " + inv.textMedia.views + "\n"
+		card += "🔰 *VIEWS :* " + inv.textMedia.views + "\n"
 	}
 	card += "\n*TELEGRAM TEXT DOWNLOAD*"
 	s.Reply(info, card)
@@ -286,22 +286,22 @@ func tgDeliverText(s SessionBridge, info types.MessageInfo, inv *tgChannelInvent
 // tgDeliverAudio — newest video post → download → ffmpeg MP3 → SendAudioFile.
 func tgDeliverAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, inv *tgChannelInventory, fallbackTitle string) {
 	media := inv.videoMedia
-	waitID := s.ReplyWithID(info, "⬇️ *DOWNLOADING AUDIO....*")
+	waitID := s.ReplyWithID(info, "🔰 *DOWNLOADING AUDIO....*")
 
 	client := mediaHTTPClient()
 	path, err := streamDownloadToFile(ctx, client, media.url, nil)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nAUDIO COULD NOT BE DOWNLOADED 🤧")
+		s.Reply(info, "🔰 *TELEGRAM DOWNLOAD ERROR*\nAUDIO COULD NOT BE DOWNLOADED 🔰")
 		return
 	}
 	defer removeTempFile(path)
 
-	s.EditMessage(info, waitID, "🎵 *EXTRACTING MP3....*")
+	s.EditMessage(info, waitID, "🔰 *EXTRACTING MP3....*")
 	mp3Path, err := ffmpegToMP3(ctx, path)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TELEGRAM AUDIO ERROR*\nMP3 CONVERSION FAILED 🤧")
+		s.Reply(info, "🔰 *TELEGRAM AUDIO ERROR*\nMP3 CONVERSION FAILED 🔰")
 		return
 	}
 	defer removeTempFile(mp3Path)
@@ -322,17 +322,17 @@ func tgDeliverAudio(ctx context.Context, s SessionBridge, info types.MessageInfo
 	if creator == "" {
 		creator = "@" + media.channel
 	}
-	caption := "🔵 *TELEGRAM AUDIO NAME* 🔵\n" +
+	caption := "🔰 *TELEGRAM AUDIO NAME* 🔰\n" +
 		"*" + title + "*\n\n" +
-		"🔵 *CREATOR :* " + creator + "\n"
+		"🔰 *CREATOR :* " + creator + "\n"
 	if media.views != "" {
-		caption += "🔵 *VIEWS :* " + media.views + "\n"
+		caption += "🔰 *VIEWS :* " + media.views + "\n"
 	}
 	caption += "\n*TELEGRAM AUDIO DOWNLOAD*"
 
 	if err := s.SendAudioFile(info, mp3Path, caption, seconds); err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TELEGRAM AUDIO ERROR*\nAUDIO COULD NOT BE SENT 🤧")
+		s.Reply(info, "🔰 *TELEGRAM AUDIO ERROR*\nAUDIO COULD NOT BE SENT 🔰")
 		return
 	}
 	s.DeleteMessage(info, waitID)

@@ -299,7 +299,7 @@ func handleTempMailAsync(s SessionBridge, info types.MessageInfo, args []string,
 		var err error
 		account, err = gmCreateTempAccount()
 		if err != nil {
-			s.Reply(info, "❌ Couldn't create a temp mail: "+err.Error())
+			s.Reply(info, "🔰 Couldn't create a temp mail: "+err.Error())
 			return
 		}
 		db[sender] = account
@@ -311,7 +311,7 @@ func handleTempMailAsync(s SessionBridge, info types.MessageInfo, args []string,
 	gmSendThenStripFooter(s, info, account.Address)
 
 	if isNew {
-		s.Reply(info, "📧 *YOUR TEMP MAIL IS READY*\n`"+account.Address+"`\n\n"+
+		s.Reply(info, "🔰 *YOUR TEMP MAIL IS READY*\n`"+account.Address+"`\n\n"+
 			"*What this is:* a throwaway inbox. Any email sent to this address can be read here in this chat — you don't need Gmail, Outlook, etc.\n\n"+
 			"*What it's good for:* signing up on random sites, getting one-time OTP/verification codes, avoiding spam on your real email.\n\n"+
 			"*What it's NOT for:* banking, social media recovery, anything important or long-term — this address can disappear (see below), so don't rely on it for accounts you actually care about.\n\n"+
@@ -319,9 +319,9 @@ func handleTempMailAsync(s SessionBridge, info types.MessageInfo, args []string,
 			"➤ *checkmail* — see what's arrived in the inbox\n"+
 			"➤ *newmail* — throw this one away, get a fresh address\n"+
 			"➤ *delmail* — delete this address for good\n\n"+
-			"⚠️ _If nobody checks mail on this address for 60 minutes straight, it expires automatically and any mail in it is lost. Just running *checkmail* keeps it alive._")
+			"🔰 _If nobody checks mail on this address for 60 minutes straight, it expires automatically and any mail in it is lost. Just running *checkmail* keeps it alive._")
 	} else {
-		s.Reply(info, "📧 *THIS IS ALREADY YOUR ACTIVE TEMP MAIL*\n`"+account.Address+"`\n\n"+
+		s.Reply(info, "🔰 *THIS IS ALREADY YOUR ACTIVE TEMP MAIL*\n`"+account.Address+"`\n\n"+
 			"You already had one, so it wasn't recreated. Type *newmail* if you want to throw this away and get a different address instead.")
 	}
 }
@@ -341,7 +341,7 @@ func handleNewMailAsync(s SessionBridge, info types.MessageInfo, args []string, 
 
 	account, err := gmCreateTempAccount()
 	if err != nil {
-		s.Reply(info, "❌ Couldn't create a new temp mail: "+err.Error())
+		s.Reply(info, "🔰 Couldn't create a new temp mail: "+err.Error())
 		return
 	}
 	db[sender] = account
@@ -355,7 +355,7 @@ func handleNewMailAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	if hadOld {
 		replacedLine = "Your old address is now dead — any mail sent to it is gone and can't be recovered."
 	}
-	s.Reply(info, "♻️ *NEW TEMP MAIL GENERATED*\n`"+account.Address+"`\n\n"+
+	s.Reply(info, "🔰 *NEW TEMP MAIL GENERATED*\n`"+account.Address+"`\n\n"+
 		replacedLine+"\n\n"+
 		"Use *checkmail* to see what arrives here, or *newmail* again anytime for another fresh one.")
 }
@@ -369,25 +369,25 @@ func handleCheckMailAsync(s SessionBridge, info types.MessageInfo, args []string
 	db := gmLoadDB()
 	account, ok := db[sender]
 	if !ok {
-		s.Reply(info, "⚠️ *NO TEMP MAIL YET*\n\n"+
+		s.Reply(info, "🔰 *NO TEMP MAIL YET*\n\n"+
 			"You haven't generated an address for yourself. Type *tempmail* first to get one, then come back and run *checkmail* to see what's arrived.")
 		return
 	}
 
 	messages, err := gmFetchInbox(account.SID)
 	if err != nil {
-		s.Reply(info, "❌ Couldn't check inbox: "+err.Error())
+		s.Reply(info, "🔰 Couldn't check inbox: "+err.Error())
 		return
 	}
 
 	if len(messages) == 0 {
-		s.Reply(info, "📭 *No mail yet* for:\n`"+account.Address+"`\n\n"+
+		s.Reply(info, "🔰 *No mail yet* for:\n`"+account.Address+"`\n\n"+
 			"Nothing's arrived at this address so far. This is normal right after signing up somewhere — it can take a minute or two for the email to come through. Go sign up/verify with this address if you haven't yet, then run *checkmail* again in a bit.")
 		return
 	}
 
 	// header message first
-	s.Reply(info, "📬 *INBOX* ("+itoa(len(messages))+" total) — `"+account.Address+"`")
+	s.Reply(info, "🔰 *INBOX* ("+itoa(len(messages))+" total) — `"+account.Address+"`")
 
 	toShow := messages
 	if len(toShow) > 5 {
@@ -435,7 +435,7 @@ func handleDelMailAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	db := gmLoadDB()
 	account, ok := db[sender]
 	if !ok {
-		s.Reply(info, "⚠️ *NOTHING TO DELETE*\n\n"+
+		s.Reply(info, "🔰 *NOTHING TO DELETE*\n\n"+
 			"You don't currently have a temp mail address. Type *tempmail* to create one.")
 		return
 	}
@@ -444,7 +444,7 @@ func handleDelMailAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	delete(db, sender)
 	gmSaveDB(db)
 
-	s.Reply(info, "🗑️ *DELETED*\n`"+account.Address+"`\n\n"+
+	s.Reply(info, "🔰 *DELETED*\n`"+account.Address+"`\n\n"+
 		"This address is gone for good — any mail still sitting in it is lost, and it can't be reused. Type *tempmail* whenever you want a new one.")
 }
 

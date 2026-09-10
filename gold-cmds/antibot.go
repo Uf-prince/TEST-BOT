@@ -144,7 +144,7 @@ func handleAntibotAsync(s SessionBridge, info types.MessageInfo, args []string, 
 			return
 		}
 		_ = s.GroupSetAdd(groupJID, antibotAllowedSet, jidArg)
-		s.Reply(info, "*✅ BOT JID ALLOWED :❱ "+jidArg+"*\n\n*Is bot JID pe ab antibot action nahi hoga.*")
+		s.Reply(info, "*🔰 BOT JID ALLOWED :❱ "+jidArg+"*\n\n*Is bot JID pe ab antibot action nahi hoga.*")
 		return
 	}
 
@@ -165,9 +165,9 @@ func handleAntibotAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		}
 		if found {
 			_ = s.GroupSetRem(groupJID, antibotAllowedSet, jidArg)
-			s.Reply(info, "*✅ BOT JID REMOVED FROM WHITELIST :❱ "+jidArg+"*")
+			s.Reply(info, "*🔰 BOT JID REMOVED FROM WHITELIST :❱ "+jidArg+"*")
 		} else {
-			s.Reply(info, "*❌ BOT JID NOT FOUND IN WHITELIST :❱ "+jidArg+"*")
+			s.Reply(info, "*🔰 BOT JID NOT FOUND IN WHITELIST :❱ "+jidArg+"*")
 		}
 		return
 	}
@@ -176,21 +176,21 @@ func handleAntibotAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	if sub == "allowedlist" {
 		allowed := AntibotAllowedJIDs(s, groupJID)
 		if len(allowed) == 0 {
-			s.Reply(info, "*📋 ALLOWED LIST EMPTY*")
+			s.Reply(info, "*🔰 ALLOWED LIST EMPTY*")
 			return
 		}
 		var sb strings.Builder
 		for i, j := range allowed {
 			sb.WriteString(strconv.Itoa(i+1) + ". " + j + "\n")
 		}
-		s.Reply(info, "*📋 ANTIBOT ALLOWED BOT JIDS 📋*\n\n"+sb.String()+"\n*TOTAL :❱ "+strconv.Itoa(len(allowed))+"*")
+		s.Reply(info, "*🔰 ANTIBOT ALLOWED BOT JIDS 🔰*\n\n"+sb.String()+"\n*TOTAL :❱ "+strconv.Itoa(len(allowed))+"*")
 		return
 	}
 
 	// RESET
 	if sub == "reset" {
 		antiResetSettings(s, groupJID, antibotFeature, antibotAllowedSet)
-		s.Reply(info, "*✅ ANTIBOT FULLY RESET*\n\n*STATUS :❱ OFF*\n*ACTION :❱ WARN*\n*MAX WARNINGS :❱ "+strconv.Itoa(defaultAntiMaxWarnings)+"*\n*ALLOWED LIST :❱ CLEARED*\n*WARNINGS :❱ CLEARED*")
+		s.Reply(info, "*🔰 ANTIBOT FULLY RESET*\n\n*STATUS :❱ OFF*\n*ACTION :❱ WARN*\n*MAX WARNINGS :❱ "+strconv.Itoa(defaultAntiMaxWarnings)+"*\n*ALLOWED LIST :❱ CLEARED*\n*WARNINGS :❱ CLEARED*")
 		return
 	}
 

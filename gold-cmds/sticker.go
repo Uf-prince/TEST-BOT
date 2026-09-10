@@ -39,13 +39,13 @@ import (
 )
 
 const stickerHelpText = "*🔰 STICKER MAKER 🔰*\n\n" +
-	"*MENTION THE IMAGE/VIDEO FIRST ⚠️*\n" +
+	"*MENTION THE IMAGE/VIDEO FIRST 🔰*\n" +
 	"*AFTER MENTION TYPE SAME*\n\n" +
 	"*❰ STICKER ❱*\n\n" +
 	"*TO CONVERT IMAGE/VIDEO TO STICKER*"
 
 const toimgHelpText = "*🔰 STICKER TO IMAGE/VIDEO 🔰*\n\n" +
-	"*MENTION THE STICKER  FORST ⚠️*\n\n" +
+	"*MENTION THE STICKER  FORST 🔰*\n\n" +
 	"*AFTER MENTION TYPE SAME *\n" +
 	"*❰ TOIMG ❱*\n\n" +
 	"*TO CONVERT STICKER TO IMAGE*"
@@ -192,7 +192,7 @@ func handleStickerAsync(ctx context.Context, s SessionBridge, info types.Message
 		return
 	}
 	if !isFfmpegAvailable() {
-		s.Reply(info, "❌ ffmpeg is not available on this server. Sticker conversion requires ffmpeg+libwebp.")
+		s.Reply(info, "🔰 ffmpeg is not available on this server. Sticker conversion requires ffmpeg+libwebp.")
 		return
 	}
 
@@ -203,7 +203,7 @@ func handleStickerAsync(ctx context.Context, s SessionBridge, info types.Message
 	inPath, err := writeTempMedia(data, ext)
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ Failed to write media: "+err.Error())
+			s.Reply(info, "🔰 Failed to write media: "+err.Error())
 		}
 		return
 	}
@@ -217,7 +217,7 @@ func handleStickerAsync(ctx context.Context, s SessionBridge, info types.Message
 	}
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ "+err.Error())
+			s.Reply(info, "🔰 "+err.Error())
 		}
 		return
 	}
@@ -226,13 +226,13 @@ func handleStickerAsync(ctx context.Context, s SessionBridge, info types.Message
 	webpBytes, err := os.ReadFile(outPath)
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ Failed to read sticker output: "+err.Error())
+			s.Reply(info, "🔰 Failed to read sticker output: "+err.Error())
 		}
 		return
 	}
 	if err := s.SendSticker(info, webpBytes); err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ Failed to send sticker: "+err.Error())
+			s.Reply(info, "🔰 Failed to send sticker: "+err.Error())
 		}
 		return
 	}
@@ -259,11 +259,11 @@ func handleTakeAsync(ctx context.Context, s SessionBridge, info types.MessageInf
 		return
 	}
 	if !isFfmpegAvailable() {
-		s.Reply(info, "❌ ffmpeg is not available on this server.")
+		s.Reply(info, "🔰 ffmpeg is not available on this server.")
 		return
 	}
 	if !strings.Contains(mime, "webp") && !strings.Contains(mime, "sticker") {
-		s.Reply(info, "❌ The attached media is not a sticker.")
+		s.Reply(info, "🔰 The attached media is not a sticker.")
 		return
 	}
 
@@ -273,7 +273,7 @@ func handleTakeAsync(ctx context.Context, s SessionBridge, info types.MessageInf
 	inPath, err := writeTempMedia(data, ".webp")
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ Failed to write sticker: "+err.Error())
+			s.Reply(info, "🔰 Failed to write sticker: "+err.Error())
 		}
 		return
 	}
@@ -282,7 +282,7 @@ func handleTakeAsync(ctx context.Context, s SessionBridge, info types.MessageInf
 	outPath, err := ffmpegStickerToImage(ctx, inPath)
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ "+err.Error())
+			s.Reply(info, "🔰 "+err.Error())
 		}
 		return
 	}
@@ -291,13 +291,13 @@ func handleTakeAsync(ctx context.Context, s SessionBridge, info types.MessageInf
 	pngBytes, err := os.ReadFile(outPath)
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ Failed to read image output: "+err.Error())
+			s.Reply(info, "🔰 Failed to read image output: "+err.Error())
 		}
 		return
 	}
 	if err := s.SendImage(info, pngBytes, "*STICKER TO IMAGE CONVERTED*"); err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ Failed to send image: "+err.Error())
+			s.Reply(info, "🔰 Failed to send image: "+err.Error())
 		}
 	}
 }
@@ -323,11 +323,11 @@ func handleTakeVidAsync(ctx context.Context, s SessionBridge, info types.Message
 		return
 	}
 	if !isFfmpegAvailable() {
-		s.Reply(info, "❌ ffmpeg is not available on this server.")
+		s.Reply(info, "🔰 ffmpeg is not available on this server.")
 		return
 	}
 	if !strings.Contains(mime, "webp") && !strings.Contains(mime, "sticker") {
-		s.Reply(info, "❌ The attached media is not a sticker.")
+		s.Reply(info, "🔰 The attached media is not a sticker.")
 		return
 	}
 
@@ -337,7 +337,7 @@ func handleTakeVidAsync(ctx context.Context, s SessionBridge, info types.Message
 	inPath, err := writeTempMedia(data, ".webp")
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ Failed to write sticker: "+err.Error())
+			s.Reply(info, "🔰 Failed to write sticker: "+err.Error())
 		}
 		return
 	}
@@ -346,16 +346,16 @@ func handleTakeVidAsync(ctx context.Context, s SessionBridge, info types.Message
 	outPath, err := ffmpegStickerToVideo(ctx, inPath)
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ "+err.Error())
+			s.Reply(info, "🔰 "+err.Error())
 		}
 		return
 	}
 	defer removeTempFile(outPath)
 
 	seconds, width, height := probeVideoMeta(outPath)
-	if err := s.SendVideoFile(info, outPath, "🎥 *Sticker → Video*", nil, seconds, width, height); err != nil {
+	if err := s.SendVideoFile(info, outPath, "🔰 *Sticker → Video*", nil, seconds, width, height); err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ Failed to send video: "+err.Error())
+			s.Reply(info, "🔰 Failed to send video: "+err.Error())
 		}
 	}
 }

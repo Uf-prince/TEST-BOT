@@ -72,13 +72,13 @@ func handleMode(s SessionBridge, info types.MessageInfo, args []string, prefix s
 	var modeDesc string
 	switch newMode {
 	case "public":
-		modeDesc = "🌍 BOT WORKS EVERYWHERE (GROUP + IB)"
+		modeDesc = "🔰 BOT WORKS EVERYWHERE (GROUP + IB)"
 	case "private":
-		modeDesc = "🔒 BOT WORKS ONLY FOR OWNER"
+		modeDesc = "🔰 BOT WORKS ONLY FOR OWNER"
 	case "groups":
-		modeDesc = "👥 BOT WORKS ONLY IN GROUPS"
+		modeDesc = "🔰 BOT WORKS ONLY IN GROUPS"
 	case "inbox":
-		modeDesc = "💬 BOT WORKS ONLY IN PRIVATE CHATS"
+		modeDesc = "🔰 BOT WORKS ONLY IN PRIVATE CHATS"
 	}
 
 	s.Reply(info, fmt.Sprintf(

@@ -58,7 +58,7 @@ func handleDPRAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 
 	client := s.GetClient()
 	if client == nil || !client.IsConnected() {
-		s.Reply(info, "❌ *Client not connected.*")
+		s.Reply(info, "🔰 *Client not connected.*")
 		return
 	}
 

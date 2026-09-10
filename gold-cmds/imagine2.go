@@ -357,7 +357,7 @@ func handleImagine2Async(s SessionBridge, info types.MessageInfo, args []string,
 	prompt := strings.TrimSpace(strings.Join(args, " "))
 
 	if prompt == "" {
-		s.Reply(info, "👑 *TEXT TO IMAGE GUIDE* 👑\n\n*CREATE IMAGE USING TEXT*\n\n*TYPE LIKE THIS*\n*"+prefix+"IMAGINE2 ❮ TEXT PROMPT ❯*\n\n*EXAMPLE PROMPT TEXT LIKE.....*\n\n*IMAGINE2 A BEAUTIFUL SPORTS CAR ON THE MOUNTAIN ROAD*\n\n*IMAGINE2 A CAT AND THIS EATING THE FISH*\n\n*A BEAUTIFUL JUNGLE OF BEAUTIFUL TREES*\n\n*TYPE LIKE THIS AND AI WILL CREATE AN IMAGE FOR YOU* 👑")
+		s.Reply(info, "🔰 *TEXT TO IMAGE GUIDE* 🔰\n\n*CREATE IMAGE USING TEXT*\n\n*TYPE LIKE THIS*\n*"+prefix+"IMAGINE2 ❮ TEXT PROMPT ❯*\n\n*EXAMPLE PROMPT TEXT LIKE.....*\n\n*IMAGINE2 A BEAUTIFUL SPORTS CAR ON THE MOUNTAIN ROAD*\n\n*IMAGINE2 A CAT AND THIS EATING THE FISH*\n\n*A BEAUTIFUL JUNGLE OF BEAUTIFUL TREES*\n\n*TYPE LIKE THIS AND AI WILL CREATE AN IMAGE FOR YOU* 🔰")
 		return
 	}
 
@@ -368,15 +368,15 @@ func handleImagine2Async(s SessionBridge, info types.MessageInfo, args []string,
 		imgData, soonestMs, totalMs, err := mistralGenerateImage(prompt)
 		if err != nil {
 			s.DeleteMessage(info, waitMsgID)
-			s.Reply(info, "👑 *IMAGINE2 COMMAND ERROR* 👑\n*"+strings.ToUpper(err.Error())+"*")
+			s.Reply(info, "🔰 *IMAGINE2 COMMAND ERROR* 🔰\n*"+strings.ToUpper(err.Error())+"*")
 			return
 		}
 		if imgData != nil {
 			// Done — delete wait message and send the result
 			s.DeleteMessage(info, waitMsgID)
-			caption := "*AI CREATED IMAGE FOR THIS TEXT* 👇\n*" + strings.ToUpper(prompt) + "*"
+			caption := "*AI CREATED IMAGE FOR THIS TEXT* 🔰\n*" + strings.ToUpper(prompt) + "*"
 			if sendErr := s.SendImage(info, imgData, caption); sendErr != nil {
-				s.Reply(info, "👑 *IMAGINE2 COMMAND ERROR* 👑\nFailed to send image: "+sendErr.Error())
+				s.Reply(info, "🔰 *IMAGINE2 COMMAND ERROR* 🔰\nFailed to send image: "+sendErr.Error())
 			}
 			return
 		}

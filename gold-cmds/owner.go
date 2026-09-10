@@ -31,14 +31,14 @@ func handleOwner(s SessionBridge, info types.MessageInfo, args []string, prefix 
 	}
 
 	if ownerNum == "" {
-		s.Reply(info, "*⚠️ OWNER NUMBER NOT SET*\n\n*TYPE ❯ "+prefix+"OWNERNUMBER TO SET YOUR NUMBER*")
+		s.Reply(info, "*🔰 OWNER NUMBER NOT SET*\n\n*TYPE ❯ "+prefix+"OWNERNUMBER TO SET YOUR NUMBER*")
 		return
 	}
 
 	// Send the contact card (vCard) with owner's name + number
 	err := s.SendContact(info, ownerName, ownerNum)
 	if err != nil {
-		s.Reply(info, "*⚠️ FAILED TO SEND OWNER CONTACT*\n\n*Error ❯ "+err.Error()+"*")
+		s.Reply(info, "*🔰 FAILED TO SEND OWNER CONTACT*\n\n*Error ❯ "+err.Error()+"*")
 		return
 	}
 }

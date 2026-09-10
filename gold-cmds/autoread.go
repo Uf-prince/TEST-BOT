@@ -39,14 +39,14 @@ func handleAutoReadAsync(s SessionBridge, info types.MessageInfo, args []string,
 
 	// No args → show info
 	if len(args) == 0 {
-		modeDisplay := "OFF ❌"
+		modeDisplay := "OFF 🔰"
 		switch currentMode {
 		case "inbox":
-			modeDisplay = "INBOX ✅"
+			modeDisplay = "INBOX 🔰"
 		case "groups":
-			modeDisplay = "GROUPS ✅"
+			modeDisplay = "GROUPS 🔰"
 		case "all":
-			modeDisplay = "ALL ✅"
+			modeDisplay = "ALL 🔰"
 		}
 		s.Reply(info, "*🔰 AUTO READ INFO 🔰*\n\n*TYPE ❬ "+prefix+"AUTOREAD ON ❭*\n*TYPE FIRST THEN BOT WILL TELL YOU MODES*\n*AUTOREAD IS CURRENTLY OFF - TURN ON FIRST*\n\n*TYPE ❬ "+prefix+"AUTOREAD INBOX ❭*\n*BOT WILL AUTO READ ONLY PRIVATE/INBOX MESSAGES*\n\n*TYPE ❬ "+prefix+"AUTOREAD GROUPS ❭*\n*BOT WILL AUTO READ ONLY GROUP MESSAGES*\n\n*TYPE ❬ "+prefix+"AUTOREAD ALL ❭*\n*BOT WILL AUTO READ ALL MESSAGES (INBOX + GROUPS)*\n\n*TYPE ❬ "+prefix+"AUTOREAD OFF ❭*\n*STOP AUTO READING ALL MESSAGES*\n\n*CURRENT STATUS ❯ "+modeDisplay+"*")
 		return
@@ -67,28 +67,28 @@ func handleAutoReadAsync(s SessionBridge, info types.MessageInfo, args []string,
 	// .autoread inbox
 	if subCmd == "inbox" {
 		s.SetAutoReadSetting("inbox")
-		s.Reply(info, "*🔰 AUTO READ INBOX ACTIVATED ✅*\n\n*BOT WILL NOW AUTO READ ALL PRIVATE/INBOX MESSAGES*\n*GROUPS MESSAGES WILL NOT BE READ AUTOMATICALLY*")
+		s.Reply(info, "*🔰 AUTO READ INBOX ACTIVATED 🔰*\n\n*BOT WILL NOW AUTO READ ALL PRIVATE/INBOX MESSAGES*\n*GROUPS MESSAGES WILL NOT BE READ AUTOMATICALLY*")
 		return
 	}
 
 	// .autoread groups
 	if subCmd == "groups" {
 		s.SetAutoReadSetting("groups")
-		s.Reply(info, "*🔰 AUTO READ GROUPS ACTIVATED ✅*\n\n*BOT WILL NOW AUTO READ ALL GROUP MESSAGES*\n*INBOX MESSAGES WILL NOT BE READ AUTOMATICALLY*")
+		s.Reply(info, "*🔰 AUTO READ GROUPS ACTIVATED 🔰*\n\n*BOT WILL NOW AUTO READ ALL GROUP MESSAGES*\n*INBOX MESSAGES WILL NOT BE READ AUTOMATICALLY*")
 		return
 	}
 
 	// .autoread all
 	if subCmd == "all" {
 		s.SetAutoReadSetting("all")
-		s.Reply(info, "*🔰 AUTO READ ALL ACTIVATED ✅*\n\n*BOT WILL NOW AUTO READ ALL MESSAGES*\n*(INBOX + GROUPS BOTH)*")
+		s.Reply(info, "*🔰 AUTO READ ALL ACTIVATED 🔰*\n\n*BOT WILL NOW AUTO READ ALL MESSAGES*\n*(INBOX + GROUPS BOTH)*")
 		return
 	}
 
 	// .autoread off
 	if subCmd == "off" {
 		s.SetAutoReadSetting("off")
-		s.Reply(info, "*🔰 AUTO READ DE-ACTIVATED ❌*\n\n*BOT WILL NO LONGER AUTO READ MESSAGES*")
+		s.Reply(info, "*🔰 AUTO READ DE-ACTIVATED 🔰*\n\n*BOT WILL NO LONGER AUTO READ MESSAGES*")
 		return
 	}
 

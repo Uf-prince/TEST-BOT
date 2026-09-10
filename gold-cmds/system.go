@@ -67,7 +67,7 @@ func handleSystem(s SessionBridge, info types.MessageInfo, args []string, prefix
 		fsView = "ephemeral overlay FS (no fixed quota)"
 	}
 
-	text := fmt.Sprintf("🖥️ *GOLD-MD REAL CONTAINER STATUS*\n\n"+
+	text := fmt.Sprintf("🔰 *GOLD-MD REAL CONTAINER STATUS*\n\n"+
 		"*PLATFORM* :❯ %s\n"+
 		"*CPU LIMIT* :❯ %s\n"+
 		"*CPU USAGE* :❯ %s\n"+
@@ -91,7 +91,7 @@ func handleSystem(s SessionBridge, info types.MessageInfo, args []string, prefix
 		"*GPU* :❯ %s\n"+
 		"*CONTAINER UPTIME* :❯ %s\n"+
 		"*GO RUNTIME* :❯ %s\n"+
-		"*BOT IS RUNNING* ✅",
+		"*BOT IS RUNNING* 🔰",
 		platform, cpu.limit, cpu.usage, readLoadAverage(), memory.limit, memory.used,
 		memory.usedPct, memory.available, memory.peak, memory.swapLimit, memory.swapUsed, processRSS, formatBytes(mem.Alloc),
 		formatBytes(mem.HeapAlloc), formatBytes(mem.Sys), runtime.NumGoroutine(),

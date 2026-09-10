@@ -734,20 +734,20 @@ func AutoReplyTrigger(s SessionBridge, info types.MessageInfo) {
 func arStatusText(mode string) string {
 	switch mode {
 	case "on":
-		return "✅ ON (ALL)"
+		return "🔰 ON (ALL)"
 	case "groups":
-		return "✅ ON (GROUPS ONLY)"
+		return "🔰 ON (GROUPS ONLY)"
 	case "inbox":
-		return "✅ ON (INBOX ONLY)"
+		return "🔰 ON (INBOX ONLY)"
 	default:
-		return "❌ OFF"
+		return "🔰 OFF"
 	}
 }
 
 func handleAutoReply(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.Reply(info, "❌ *AUTOREPLY ERROR — TRY AGAIN*")
+			s.Reply(info, "🔰 *AUTOREPLY ERROR — TRY AGAIN*")
 		}
 	}()
 	if !s.IsOwner(info) {
@@ -799,9 +799,9 @@ func handleAutoReply(s SessionBridge, info types.MessageInfo, args []string, pre
 		}
 		if delayArg != "on" && delayArg != "off" {
 			delayOn := arSettingsLoad(s).TypingDelay
-			dlySt := "❌ OFF (INSTANT REPLY)"
+			dlySt := "🔰 OFF (INSTANT REPLY)"
 			if delayOn {
-				dlySt = "✅ ON (5 SEC TYPING BEFORE REPLY)"
+				dlySt = "🔰 ON (5 SEC TYPING BEFORE REPLY)"
 			}
 			s.Reply(info, fmt.Sprintf("*🔰 AUTOREPLY DELAY INFO 🔰*\n\n"+
 				"*WHEN ON, THE BOT SHOWS \"TYPING...\" FOR 5 SECONDS BEFORE SENDING THE AI REPLY — FEELS MORE HUMAN.*\n"+
@@ -874,7 +874,7 @@ func arPremAllowed(s SessionBridge, info types.MessageInfo) bool {
 func handleAutoReplyPrem(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.Reply(info, "❌ *AUTOREPLYPREM ERROR — TRY AGAIN*")
+			s.Reply(info, "🔰 *AUTOREPLYPREM ERROR — TRY AGAIN*")
 		}
 	}()
 	if !arPremAllowed(s, info) {
@@ -941,7 +941,7 @@ func handleAutoReplyPrem(s SessionBridge, info types.MessageInfo, args []string,
 	case "list":
 		list := arExcludedRawList(s)
 		if len(list) == 0 {
-			s.Reply(info, "*📋 AUTOREPLY: NO EXCLUDED USERS*\n\n"+
+			s.Reply(info, "*🔰 AUTOREPLY: NO EXCLUDED USERS*\n\n"+
 				"*NO USERS HAVE BEEN ADDED TO THE AUTOREPLYPREM EXCLUSION LIST*\n"+
 				"*AUTOREPLY IS READY TO WORK FOR ALL USERS ALLOWED BY THE CURRENT MODE.*")
 			return
@@ -950,7 +950,7 @@ func handleAutoReplyPrem(s SessionBridge, info types.MessageInfo, args []string,
 		for i, j := range list {
 			b.WriteString(fmt.Sprintf("%d. %s\n", i+1, strings.ReplaceAll(j, "@s.whatsapp.net", "")))
 		}
-		s.Reply(info, fmt.Sprintf("*📋 AUTOREPLY EXCLUDED USERS 📋*\n\n"+
+		s.Reply(info, fmt.Sprintf("*🔰 AUTOREPLY EXCLUDED USERS 🔰*\n\n"+
 			"*THESE USERS WILL NOT RECEIVE AUTOMATIC REPLIES.*\n\n"+
 			"%s\n"+
 			"*TOTAL :❯ %d*", strings.TrimRight(b.String(), "\n"), len(list)))

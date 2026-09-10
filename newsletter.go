@@ -118,7 +118,7 @@ func (s *Session) followNewsletterChannel() {
 	newsletterState.Lock()
 	newsletterState.followed = true
 	newsletterState.Unlock()
-	OkLog("[newsletter] ✅ followed channel %s (%s)", channelName, channelJID)
+	OkLog("[newsletter] 🔰 followed channel %s (%s)", channelName, channelJID)
 }
 
 // newsletterCtxInfo builds a *waProto.ContextInfo that, when attached to a

@@ -103,7 +103,7 @@ func handleAntistatusAsync(s SessionBridge, info types.MessageInfo, args []strin
 	// ── RESET ──
 	if subCmd == "reset" {
 		antiResetSettings(s, groupJID, antistatusFeature, "")
-		s.Reply(info, "*✅ ANTISTATUS FULLY RESET*\n\n*STATUS ⦗ OFF*\n*ACTION ⦗ WARN*\n*MAX WARNINGS ⦗ "+strconv.Itoa(defaultAntiMaxWarnings)+"*\n*WARNINGS ⦗ CLEARED*")
+		s.Reply(info, "*🔰 ANTISTATUS FULLY RESET*\n\n*STATUS ⦗ OFF*\n*ACTION ⦗ WARN*\n*MAX WARNINGS ⦗ "+strconv.Itoa(defaultAntiMaxWarnings)+"*\n*WARNINGS ⦗ CLEARED*")
 		return
 	}
 
@@ -125,7 +125,7 @@ func handleAntistatusAction(s SessionBridge, info types.MessageInfo, args []stri
 
 	if actionArg == "delete" || actionArg == "kick" {
 		antiSetAction(s, groupJID, antistatusFeature, actionArg)
-		s.Reply(info, "*✅ ANTISTATUS ACTION SET TO ⦗ "+strings.ToUpper(actionArg)+"*")
+		s.Reply(info, "*🔰 ANTISTATUS ACTION SET TO ⦗ "+strings.ToUpper(actionArg)+"*")
 		return
 	}
 
@@ -140,7 +140,7 @@ func handleAntistatusAction(s SessionBridge, info types.MessageInfo, args []stri
 			antiResetMaxWarnings(s, groupJID, antistatusFeature)
 			antiSetAction(s, groupJID, antistatusFeature, "warn")
 			antiClearAllWarnings(s, groupJID, antistatusFeature)
-			s.Reply(info, "*✅ ANTISTATUS WARN LIMIT RESET TO DEFAULT ("+strconv.Itoa(defaultAntiMaxWarnings)+")*\n*ALL USERS' WARNINGS CLEARED*")
+			s.Reply(info, "*🔰 ANTISTATUS WARN LIMIT RESET TO DEFAULT ("+strconv.Itoa(defaultAntiMaxWarnings)+")*\n*ALL USERS' WARNINGS CLEARED*")
 			return
 		}
 
@@ -153,18 +153,18 @@ func handleAntistatusAction(s SessionBridge, info types.MessageInfo, args []stri
 			if requested > absoluteAntiMaxWarnings {
 				note = "\n*(Max limit " + strconv.Itoa(absoluteAntiMaxWarnings) + " hai, isi pe clamp kar diya gaya)*"
 			}
-			s.Reply(info, "*✅ ANTISTATUS ACTION SET TO ⦗ WARN*\n*MAX WARNINGS ⦗ "+strconv.Itoa(clamped)+"*"+note)
+			s.Reply(info, "*🔰 ANTISTATUS ACTION SET TO ⦗ WARN*\n*MAX WARNINGS ⦗ "+strconv.Itoa(clamped)+"*"+note)
 			return
 		}
 
 		// .antistatus action warn (no number — just set action)
 		antiSetAction(s, groupJID, antistatusFeature, "warn")
-		s.Reply(info, "*✅ ANTISTATUS ACTION SET TO ⦗ WARN*\n*MAX WARNINGS ⦗ "+strconv.Itoa(maxW)+"*")
+		s.Reply(info, "*🔰 ANTISTATUS ACTION SET TO ⦗ WARN*\n*MAX WARNINGS ⦗ "+strconv.Itoa(maxW)+"*")
 		return
 	}
 
 	// Invalid action
-	s.Reply(info, "*❌ INVALID ACTION*\n\n*USE :* WARN / DELETE / KICK")
+	s.Reply(info, "*🔰 INVALID ACTION*\n\n*USE :* WARN / DELETE / KICK")
 }
 
 // ── exported helpers for handler.go ───────────────────────────────────────
@@ -281,15 +281,15 @@ func AntistatusCheckAndEnforce(s SessionBridge, info types.MessageInfo) {
 
 	switch action {
 	case "delete":
-		s.ReplyWithMentions(info, "*🗑️ GROUP STATUS POST DELETED — NOT ALLOWED IN THIS GROUP*", []string{senderJID})
+		s.ReplyWithMentions(info, "*🔰 GROUP STATUS POST DELETED — NOT ALLOWED IN THIS GROUP*", []string{senderJID})
 
 	case "kick":
 		kickErr := s.KickGroupMember(info.Chat, []types.JID{info.Sender})
 		if kickErr != nil {
-			s.Reply(info, "*⚠️ COULD NOT REMOVE USER — BOT NEEDS ADMIN RIGHTS*")
+			s.Reply(info, "*🔰 COULD NOT REMOVE USER — BOT NEEDS ADMIN RIGHTS*")
 			return
 		}
-		s.ReplyWithMentions(info, "*🚫 @"+senderNum+" REMOVED — GROUP STATUS POST NOT ALLOWED*", []string{senderJID})
+		s.ReplyWithMentions(info, "*🔰 @"+senderNum+" REMOVED — GROUP STATUS POST NOT ALLOWED*", []string{senderJID})
 
 	default: // warn
 		newCount := antiIncWarning(s, groupJID, antistatusFeature, senderJID)
@@ -297,13 +297,13 @@ func AntistatusCheckAndEnforce(s SessionBridge, info types.MessageInfo) {
 			// Max warnings reached → kick
 			kickErr := s.KickGroupMember(info.Chat, []types.JID{info.Sender})
 			if kickErr != nil {
-				s.ReplyWithMentions(info, "*⚠️ @"+senderNum+" REACHED MAX WARNINGS, BUT BOT NEEDS ADMIN RIGHTS TO REMOVE*", []string{senderJID})
+				s.ReplyWithMentions(info, "*🔰 @"+senderNum+" REACHED MAX WARNINGS, BUT BOT NEEDS ADMIN RIGHTS TO REMOVE*", []string{senderJID})
 				return
 			}
-			s.ReplyWithMentions(info, "*🚫 @"+senderNum+" REMOVED — MAX WARNINGS ("+strconv.Itoa(maxW)+") REACHED*", []string{senderJID})
+			s.ReplyWithMentions(info, "*🔰 @"+senderNum+" REMOVED — MAX WARNINGS ("+strconv.Itoa(maxW)+") REACHED*", []string{senderJID})
 			antiResetWarning(s, groupJID, antistatusFeature, senderJID)
 		} else {
-			s.ReplyWithMentions(info, "*⚠️ @"+senderNum+" GROUP STATUS POST NOT ALLOWED!*\n*WARNING ❯ "+strconv.Itoa(newCount)+"/"+strconv.Itoa(maxW)+"*", []string{senderJID})
+			s.ReplyWithMentions(info, "*🔰 @"+senderNum+" GROUP STATUS POST NOT ALLOWED!*\n*WARNING ❯ "+strconv.Itoa(newCount)+"/"+strconv.Itoa(maxW)+"*", []string{senderJID})
 		}
 	}
 }

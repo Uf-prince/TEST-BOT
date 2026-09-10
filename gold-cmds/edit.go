@@ -55,7 +55,7 @@ func handleEditAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 
 	client := s.GetClient()
 	if client == nil || !client.IsConnected() {
-		s.Reply(info, "❌ *Client not connected.*")
+		s.Reply(info, "🔰 *Client not connected.*")
 		return
 	}
 

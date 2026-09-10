@@ -22,7 +22,7 @@ import (
 )
 
 // gppHelpText is shown when the command is used without a quoted image.
-const gppHelpText = "🖼️ *GROUP PROFILE PICTURE*\n\n*HOW TO USE:*\n*1. SEND ANY IMAGE*\n*2. REPLY WITH .GPP*\n\n*EXAMPLE:*\n*[SEND IMAGE] → REPLY WITH .GPP*"
+const gppHelpText = "🔰 *GROUP PROFILE PICTURE*\n\n*HOW TO USE:*\n*1. SEND ANY IMAGE*\n*2. REPLY WITH .GPP*\n\n*EXAMPLE:*\n*[SEND IMAGE] → REPLY WITH .GPP*"
 
 func handleGpp(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	go handleGppAsync(s, info, args, prefix)
@@ -35,7 +35,7 @@ func handleGppAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 	}
 	// must be a group
 	if !info.IsGroup {
-		s.Reply(info, "❌ *THIS COMMAND ONLY WORKS IN GROUPS*")
+		s.Reply(info, "🔰 *THIS COMMAND ONLY WORKS IN GROUPS*")
 		return
 	}
 
@@ -58,28 +58,28 @@ func handleGppAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 	// download the quoted media (image)
 	data, mime, ok := s.DownloadQuotedMedia(info)
 	if !ok || len(data) == 0 {
-		s.Reply(info, "❌ *REPLY TO AN IMAGE ONLY*")
+		s.Reply(info, "🔰 *REPLY TO AN IMAGE ONLY*")
 		return
 	}
 	// verify it's an image
 	if !strings.HasPrefix(mime, "image/") {
-		s.Reply(info, "❌ *REPLY TO AN IMAGE ONLY*")
+		s.Reply(info, "🔰 *REPLY TO AN IMAGE ONLY*")
 		return
 	}
 
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 
 	// set the group profile picture
 	_, err := client.SetGroupPhoto(context.Background(), info.Chat, data)
 	if err != nil {
-		s.Reply(info, "❌ *FAILED*\n*"+err.Error()+"*")
+		s.Reply(info, "🔰 *FAILED*\n*"+err.Error()+"*")
 		return
 	}
-	s.Reply(info, "✅ *GROUP PROFILE PIC CHANGED SUCCESS*")
+	s.Reply(info, "🔰 *GROUP PROFILE PIC CHANGED SUCCESS*")
 }
 
 func init() {

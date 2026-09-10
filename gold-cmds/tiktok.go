@@ -52,13 +52,13 @@ const (
 var ttDataScriptRe = regexp.MustCompile(
 	`(?s)<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">(.*?)</script>`)
 
-const tiktokHelpText = "🏆 TIKTOK COMMAND INFO 🏆\n" +
+const tiktokHelpText = "🔰 TIKTOK COMMAND INFO 🔰\n" +
 	"*COPY THE TIKTOK VIDEO LINK*\n" +
-	"*PASTE TIKTOK VIDEO LINK LIKE THIS 😊*\n\n" +
+	"*PASTE TIKTOK VIDEO LINK LIKE THIS 🔰*\n\n" +
 	"*.TT ❰TIKTOK LINK❱*\n" +
 	"*EXAMPLE.....*\n" +
 	"*.TT https://vm.tiktok.com/xxxxx*\n\n" +
-	"*YOUR TIKTOK VIDEO WILL BE SENT HERE 🤗*"
+	"*YOUR TIKTOK VIDEO WILL BE SENT HERE 🔰*"
 
 // ── self-scrape JSON models ────────────────────────────────────────────────
 
@@ -163,11 +163,11 @@ func handleTikTokAsync(ctx context.Context, s SessionBridge, info types.MessageI
 		return
 	}
 	if !strings.Contains(ttURL, "tiktok.com") {
-		s.Reply(info, "❌ *TIKTOK DOWNLOAD ERROR*\nPlease provide a valid TikTok link.")
+		s.Reply(info, "🔰 *TIKTOK DOWNLOAD ERROR*\nPlease provide a valid TikTok link.")
 		return
 	}
 
-	waitID := s.ReplyWithID(info, "⏳ *Fetching TikTok video...*")
+	waitID := s.ReplyWithID(info, "🔰 *Fetching TikTok video...*")
 
 	// ENGINE 1 — TikTok self-scrape (no API; immune to API blocks).
 	res, err := ttSelfFetch(ctx, ttURL)
@@ -177,7 +177,7 @@ func handleTikTokAsync(ctx context.Context, s SessionBridge, info types.MessageI
 	}
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ VIDEO NOT FOUND. PLEASE CHECK THE LINK AND TRY AGAIN 🤗")
+		s.Reply(info, "🔰 VIDEO NOT FOUND. PLEASE CHECK THE LINK AND TRY AGAIN 🔰")
 		return
 	}
 
@@ -185,7 +185,7 @@ func handleTikTokAsync(ctx context.Context, s SessionBridge, info types.MessageI
 	videoURL := firstNonEmpty(res.HDPlay, res.Play, res.WMPlay)
 	if videoURL == "" {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ VIDEO URL NOT FOUND. PLEASE TRY AGAIN 😢")
+		s.Reply(info, "🔰 VIDEO URL NOT FOUND. PLEASE TRY AGAIN 🔰")
 		return
 	}
 
@@ -198,7 +198,7 @@ func handleTikTokAsync(ctx context.Context, s SessionBridge, info types.MessageI
 	path, err := ttStreamDownload(ctx, client, videoURL)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TIKTOK DOWNLOAD ERROR*\nPlease try again.")
+		s.Reply(info, "🔰 *TIKTOK DOWNLOAD ERROR*\nPlease try again.")
 		return
 	}
 	defer removeTempFile(path)
@@ -216,18 +216,18 @@ func handleTikTokAsync(ctx context.Context, s SessionBridge, info types.MessageI
 	if creator == "" {
 		creator = "User"
 	}
-	caption := "🏆 TIKTOK VIDEO NAME 🏆\n" +
+	caption := "🔰 TIKTOK VIDEO NAME 🔰\n" +
 		"*" + title + "*\n\n" +
-		"🏆 *CREATOR :* " + creator + "\n" +
-		fmt.Sprintf("🏆 *TIME :* %ds\n", res.Duration) +
-		fmt.Sprintf("🏆 *LIKES :* %d\n", res.DiggCount) +
-		fmt.Sprintf("🏆 *COMMENTS :* %d\n", res.CommentCount) +
-		fmt.Sprintf("🏆 *VIEWS :* %d\n\n", res.PlayCount) +
+		"🔰 *CREATOR :* " + creator + "\n" +
+		fmt.Sprintf("🔰 *TIME :* %ds\n", res.Duration) +
+		fmt.Sprintf("🔰 *LIKES :* %d\n", res.DiggCount) +
+		fmt.Sprintf("🔰 *COMMENTS :* %d\n", res.CommentCount) +
+		fmt.Sprintf("🔰 *VIEWS :* %d\n\n", res.PlayCount) +
 		"*TIKTOK VIDEO DOWNLOAD*"
 
 	if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TIKTOK DOWNLOAD ERROR*\nVideo could not be sent.")
+		s.Reply(info, "🔰 *TIKTOK DOWNLOAD ERROR*\nVideo could not be sent.")
 		return
 	}
 	s.DeleteMessage(info, waitID)

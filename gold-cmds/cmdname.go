@@ -250,7 +250,7 @@ var cnReserved = map[string]bool{
 // bhej kar pooch le to Meta AI ko bhi samajhne me asani ho: kya hoga,
 // kaise chalega.
 func cmdNameEnglishHelp(prefix string) string {
-	return "*📘 ENGLISH DESCRIPTION 📘*\n\n" +
+	return "*🔰 ENGLISH DESCRIPTION 🔰*\n\n" +
 		"*RENAME :❥ Example " + prefix + "cmdname ping to umar — the ping command is now renamed to umar. From now on typing " + prefix + "ping does NOT work anymore, you must type " + prefix + "umar instead and it answers exactly like ping did. The menu also shows the new name " + prefix + "umar instead of " + prefix + "ping. You can rename any command this way.*\n\n" +
 		"*MINE MODE :❥ Example " + prefix + "cmdname mine — ONLY the commands you renamed yourself keep working, the bot goes completely silent on ALL of its own original commands. So if you renamed ping to umar, then " + prefix + "umar works but " + prefix + "ping gets no reply. Safety: " + prefix + "cmdname and " + prefix + "menu always stay alive so you can switch back anytime.*\n\n" +
 		"*ALL MODE :❥ Example " + prefix + "cmdname all — your renamed names AND the bot's original commands both work together. " + prefix + "umar works AND " + prefix + "ping also works. The menu shows your custom names plus all original bot commands. This is the default mode.*\n\n" +
@@ -269,7 +269,7 @@ func cnArrowList(pairs []cnPair, prefix string) string {
 func handleCmdName(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.Reply(info, "❌ *CMDNAME ERROR — TRY AGAIN*")
+			s.Reply(info, "🔰 *CMDNAME ERROR — TRY AGAIN*")
 		}
 	}()
 	if !s.IsOwner(info) {
@@ -313,7 +313,7 @@ func handleCmdName(s SessionBridge, info types.MessageInfo, args []string, prefi
 		s.SetStatusSetting(cnModeField, "mine")
 		cnInvalidate(s.GetJID())
 		if len(st.Pairs) == 0 {
-			s.Reply(info, "*⚠️ YOU HAVE NO CUSTOM NAMES YET*\n\n"+
+			s.Reply(info, "*🔰 YOU HAVE NO CUSTOM NAMES YET*\n\n"+
 				"*IN MINE MODE THE BOT WILL BE SILENT ON ALL ITS OWN COMMANDS*\n\n"+
 				"*FIRST RENAME A COMMAND — TYPE ❲ "+prefix+"CMDNAME PING TO UMAR ❳*\n\n"+
 				"*NOTE :❥ ❲ "+prefix+"CMDNAME ❳ AND ❲ "+prefix+"MENU ❳ ALWAYS STAY WORKING SO YOU CAN SWITCH BACK ANYTIME*")
@@ -350,7 +350,7 @@ func handleCmdName(s SessionBridge, info types.MessageInfo, args []string, prefi
 		s.SetStatusSetting(cnNamesField, "")
 		s.SetStatusSetting(cnModeField, "all")
 		cnInvalidate(s.GetJID())
-		s.Reply(info, "*✅ ALL CUSTOM NAMES DELETED ✅*\n\n"+
+		s.Reply(info, "*🔰 ALL CUSTOM NAMES DELETED 🔰*\n\n"+
 			"*BOT IS BACK TO ITS ORIGINAL COMMAND NAMES*\n\n"+
 			"*TOTAL DELETED :❥ ❰ "+itoa(total)+" ❱*\n"+
 			deleted)
@@ -369,38 +369,38 @@ func handleCmdName(s SessionBridge, info types.MessageInfo, args []string, prefi
 	newName := cnClean(toks[2])
 
 	if !cnNameRe.MatchString(oldName) || !cnNameRe.MatchString(newName) {
-		s.Reply(info, "*❌ INVALID COMMAND NAME*\n\n"+
+		s.Reply(info, "*🔰 INVALID COMMAND NAME*\n\n"+
 			"*NAME CAN ONLY HAVE LETTERS, NUMBERS AND _ (MAX 20)*\n"+
 			"*TYPE ❲ "+prefix+"CMDNAME PING TO UMAR ❳*")
 		return
 	}
 	known := cmdNameKnownSet()
 	if !known[oldName] {
-		s.Reply(info, "*❌ COMMAND NOT FOUND :❥ "+prefix+oldName+"*\n\n"+
+		s.Reply(info, "*🔰 COMMAND NOT FOUND :❥ "+prefix+oldName+"*\n\n"+
 			"*THAT COMMAND DOES NOT EXIST IN MY BOT*\n"+
 			"*TYPE ❲ "+prefix+"CMDNAME ❳ FOR HELP*")
 		return
 	}
 	if oldName == "cmdname" {
-		s.Reply(info, "*❌ YOU CANNOT RENAME THIS COMMAND*\n\n"+
+		s.Reply(info, "*🔰 YOU CANNOT RENAME THIS COMMAND*\n\n"+
 			"*"+prefix+"CMDNAME ALWAYS STAYS WORKING SO YOU CAN NEVER GET LOCKED OUT*")
 		return
 	}
 	if cnReserved[newName] {
-		s.Reply(info, "*❌ YOU CANNOT USE THIS NAME :❥ "+prefix+newName+"*\n\n"+
+		s.Reply(info, "*🔰 YOU CANNOT USE THIS NAME :❥ "+prefix+newName+"*\n\n"+
 			"*IT IS RESERVED FOR THE CMDNAME COMMAND ITSELF*\n"+
 			"*CHOOSE A DIFFERENT NAME*")
 		return
 	}
 	if known[newName] {
-		s.Reply(info, "*❌ NAME ALREADY EXISTS :❥ "+prefix+newName+"*\n\n"+
+		s.Reply(info, "*🔰 NAME ALREADY EXISTS :❥ "+prefix+newName+"*\n\n"+
 			"*IT IS ALREADY ONE OF MY BOT COMMANDS*\n"+
 			"*CHOOSE A DIFFERENT NAME*")
 		return
 	}
 	st := cnLoad(s)
 	if prev, used := st.ByNew[newName]; used && prev != oldName {
-		s.Reply(info, "*❌ NAME ALREADY USED :❥ "+prefix+newName+"*\n\n"+
+		s.Reply(info, "*🔰 NAME ALREADY USED :❥ "+prefix+newName+"*\n\n"+
 			"*IT IS ALREADY SET FOR MY "+prefix+prev+" COMMAND*\n"+
 			"*CHOOSE A DIFFERENT NAME*")
 		return
@@ -415,12 +415,12 @@ func handleCmdName(s SessionBridge, info types.MessageInfo, args []string, prefi
 				}
 			}
 			cnSave(s, kept)
-			s.Reply(info, "*✅ COMMAND NAME RESTORED ✅*\n\n"+
+			s.Reply(info, "*🔰 COMMAND NAME RESTORED 🔰*\n\n"+
 				"*❲ "+prefix+oldName+" ❳ IS BACK TO ITS ORIGINAL NAME*\n"+
 				"*NOW TYPE ❲ "+prefix+oldName+" ❳ TO USE THIS COMMAND*")
 			return
 		}
-		s.Reply(info, "*❌ OLD AND NEW NAME ARE SAME*\n"+
+		s.Reply(info, "*🔰 OLD AND NEW NAME ARE SAME*\n"+
 			"*TYPE ❲ "+prefix+"CMDNAME PING TO UMAR ❳*")
 		return
 	}
@@ -444,7 +444,7 @@ func handleCmdName(s SessionBridge, info types.MessageInfo, args []string, prefi
 	if replaced {
 		extra = "\n\n*PREVIOUS NAME FOR "+prefix+oldName+" WAS REPLACED*"
 	}
-	s.Reply(info, "*✅ COMMAND NAME CHANGED ✅*\n\n"+
+	s.Reply(info, "*🔰 COMMAND NAME CHANGED 🔰*\n\n"+
 		"*❲ "+prefix+oldName+" ❳  →  ❲ "+prefix+newName+" ❳*"+extra+"\n\n"+
 		"*NOW TYPE ❲ "+prefix+newName+" ❳ TO USE THIS COMMAND*\n"+
 		"*THE MENU ALSO SHOWS THE NEW NAME ❲ "+prefix+newName+" ❳*")

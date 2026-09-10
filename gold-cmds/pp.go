@@ -613,7 +613,7 @@ func handlePP(s SessionBridge, info types.MessageInfo, args []string, prefix str
 	// 1) No quoted message -> help text
 	quotedID, _, hasQuote := s.GetQuotedMessageID(info)
 	if !hasQuote || quotedID == "" {
-		s.Reply(info, "🖼️ *SET PROFILE PICTURE*\n\n"+
+		s.Reply(info, "🔰 *SET PROFILE PICTURE*\n\n"+
 			"*HOW TO USE:*\n"+
 			"*1. SEND ANY IMAGE*\n"+
 			"*2. REPLY WITH .PP*\n\n"+
@@ -625,7 +625,7 @@ func handlePP(s SessionBridge, info types.MessageInfo, args []string, prefix str
 	// 2) Image detection
 	q := ppQuotedMessage(s.GetRawMessage(info))
 	if !ppIsImageLike(q) {
-		s.Reply(info, "❌ *REPLY TO AN IMAGE ONLY*")
+		s.Reply(info, "🔰 *REPLY TO AN IMAGE ONLY*")
 		return
 	}
 
@@ -640,19 +640,19 @@ func handlePP(s SessionBridge, info types.MessageInfo, args []string, prefix str
 		}
 	}
 	if len(data) == 0 {
-		s.Reply(info, "❌ *DOWNLOAD FAILED*")
+		s.Reply(info, "🔰 *DOWNLOAD FAILED*")
 		return
 	}
 
 	// 4) Client validation
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ *FAILED*\n*NOT CONNECTED*")
+		s.Reply(info, "🔰 *FAILED*\n*NOT CONNECTED*")
 		return
 	}
 	botJID, err := types.ParseJID(s.GetJID())
 	if err != nil {
-		s.Reply(info, "❌ *FAILED*\n*"+err.Error()+"*")
+		s.Reply(info, "🔰 *FAILED*\n*"+err.Error()+"*")
 		return
 	}
 
@@ -663,10 +663,10 @@ func handlePP(s SessionBridge, info types.MessageInfo, args []string, prefix str
 			strings.Contains(report, "timed out") {
 			report = "WhatsApp did not respond (timeout)"
 		}
-		s.Reply(info, "❌ *FAILED*\n*"+report+"*")
+		s.Reply(info, "🔰 *FAILED*\n*"+report+"*")
 		return
 	}
-	s.Reply(info, "✅ *PROFILE PIC CHANGED SUCCESS*")
+	s.Reply(info, "🔰 *PROFILE PIC CHANGED SUCCESS*")
 }
 
 func init() {

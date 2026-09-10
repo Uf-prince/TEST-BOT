@@ -99,7 +99,7 @@ func handleBangcuserAsync(s SessionBridge, info types.MessageInfo, args []string
 	if len(args) > 0 && strings.ToLower(strings.TrimSpace(args[0])) == "list" {
 		bannedList := s.GroupBanUserList(groupJID)
 		if len(bannedList) == 0 {
-			s.Reply(info, "*🗃️ USERGCBAN LIST*\n\n*NO BANNED USERS IN THIS GROUP 😊*")
+			s.Reply(info, "*🔰 USERGCBAN LIST*\n\n*NO BANNED USERS IN THIS GROUP 🔰*")
 			return
 		}
 		var sb strings.Builder
@@ -135,32 +135,32 @@ func handleBangcuserAsync(s SessionBridge, info types.MessageInfo, args []string
 	if info.SenderAlt.Server != "" {
 		altNum := stripNonDigits(stripJIDSuffix(info.SenderAlt.String()))
 		if targetNum == altNum {
-			s.Reply(info, "*❌ YOU CANNOT BAN YOURSELF 😊*")
+			s.Reply(info, "*🔰 YOU CANNOT BAN YOURSELF 🔰*")
 			return
 		}
 	}
 	if targetNum == senderNum {
-		s.Reply(info, "*❌ YOU CANNOT BAN YOURSELF 😊*")
+		s.Reply(info, "*🔰 YOU CANNOT BAN YOURSELF 🔰*")
 		return
 	}
 
 	// Check if target is the bot owner
 	if isTargetOwner(s, info, targetJID, targetNum) {
-		s.Reply(info, "*❌ I AM THE OWNER — YOU CANNOT BAN ME 😎*")
+		s.Reply(info, "*🔰 I AM THE OWNER — YOU CANNOT BAN ME 😎*")
 		return
 	}
 
 	// ── CHECK IF ALREADY BANNED ──
 	alreadyBanned := s.GroupBanUserIsBanned(groupJID, targetJID)
 	if alreadyBanned {
-		s.ReplyWithMentions(info, "*⚠️ USER ALREADY BANNED*\n\n*@"+targetNum+"*\n*IS ALREADY BANNED IN THIS GROUP 🚫*", []string{targetJID})
+		s.ReplyWithMentions(info, "*🔰 USER ALREADY BANNED*\n\n*@"+targetNum+"*\n*IS ALREADY BANNED IN THIS GROUP 🔰*", []string{targetJID})
 		return
 	}
 
 	// ── BAN THE USER ──
 	bannedBy := info.Sender.String()
 	_ = s.GroupBanUserAdd(groupJID, targetJID, bannedBy)
-	s.ReplyWithMentions(info, "*🔰 USER BANNED SUCCESSFULLY 🔰*\n\n*@"+targetNum+"*\n*HAS BEEN BANNED FROM THIS GROUP 🚫*\n\n*ALL MESSAGES WILL BE AUTO DELETED ❌*\n*CONTACT ADMINS FOR REASON 😒*", []string{targetJID})
+	s.ReplyWithMentions(info, "*🔰 USER BANNED SUCCESSFULLY 🔰*\n\n*@"+targetNum+"*\n*HAS BEEN BANNED FROM THIS GROUP 🔰*\n\n*ALL MESSAGES WILL BE AUTO DELETED 🔰*\n*CONTACT ADMINS FOR REASON 🔰*", []string{targetJID})
 }
 
 // ── unbangcuser (unban user in group) ─────────────────────────────────────
@@ -192,13 +192,13 @@ func handleUnbangcuserAsync(s SessionBridge, info types.MessageInfo, args []stri
 	// ── CHECK IF NOT BANNED ──
 	isBanned := s.GroupBanUserIsBanned(groupJID, targetJID)
 	if !isBanned {
-		s.ReplyWithMentions(info, "*⚠️ USER NOT BANNED*\n\n*@"+targetNumber+"*\n*IS NOT BANNED IN THIS GROUP 😊*", []string{targetJID})
+		s.ReplyWithMentions(info, "*🔰 USER NOT BANNED*\n\n*@"+targetNumber+"*\n*IS NOT BANNED IN THIS GROUP 🔰*", []string{targetJID})
 		return
 	}
 
 	// ── UNBAN THE USER ──
 	_ = s.GroupBanUserRemove(groupJID, targetJID)
-	s.ReplyWithMentions(info, "*🔰 USER UNBANNED SUCCESSFULLY 🔰*\n\n*@"+targetNumber+"*\n*HAS BEEN UNBANNED FROM THIS GROUP ✅*\n\n*NOW CAN SEND MESSAGES FREELY 😊*", []string{targetJID})
+	s.ReplyWithMentions(info, "*🔰 USER UNBANNED SUCCESSFULLY 🔰*\n\n*@"+targetNumber+"*\n*HAS BEEN UNBANNED FROM THIS GROUP 🔰*\n\n*NOW CAN SEND MESSAGES FREELY 🔰*", []string{targetJID})
 }
 
 // ── exported helper for handler.go ─────────────────────────────────────────

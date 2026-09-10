@@ -310,7 +310,7 @@ func handleAntiAction(s SessionBridge, info types.MessageInfo, args []string, pr
 
 	if actionArg == "delete" || actionArg == "kick" {
 		antiSetAction(s, groupJID, feature, actionArg)
-		s.Reply(info, "*✅ "+upperName+" ACTION SET TO :❱ "+strings.ToUpper(actionArg)+"*")
+		s.Reply(info, "*🔰 "+upperName+" ACTION SET TO :❱ "+strings.ToUpper(actionArg)+"*")
 		return
 	}
 
@@ -322,7 +322,7 @@ func handleAntiAction(s SessionBridge, info types.MessageInfo, args []string, pr
 				antiResetMaxWarnings(s, groupJID, feature)
 				antiSetAction(s, groupJID, feature, "warn")
 				antiClearAllWarnings(s, groupJID, feature)
-				s.Reply(info, "*✅ "+upperName+" WARN LIMIT RESET TO DEFAULT ("+strconv.Itoa(defaultAntiMaxWarnings)+")*\n*ALL USERS' WARNINGS CLEARED*")
+				s.Reply(info, "*🔰 "+upperName+" WARN LIMIT RESET TO DEFAULT ("+strconv.Itoa(defaultAntiMaxWarnings)+")*\n*ALL USERS' WARNINGS CLEARED*")
 				return
 			}
 			if isAllDigits(warnSubArg) {
@@ -333,14 +333,14 @@ func handleAntiAction(s SessionBridge, info types.MessageInfo, args []string, pr
 				if requested > absoluteAntiMaxWarnings {
 					note = "\n*(Max limit " + strconv.Itoa(absoluteAntiMaxWarnings) + " hai, isi pe clamp kar diya gaya)*"
 				}
-				s.Reply(info, "*✅ "+upperName+" ACTION SET TO :❱ WARN*\n*MAX WARNINGS :❱ "+strconv.Itoa(clamped)+"*"+note)
+				s.Reply(info, "*🔰 "+upperName+" ACTION SET TO :❱ WARN*\n*MAX WARNINGS :❱ "+strconv.Itoa(clamped)+"*"+note)
 				return
 			}
 		}
 		// ".<feature> action warn" with no number → just set action
 		antiSetAction(s, groupJID, feature, "warn")
 		maxW := antiMaxWarnings(s, groupJID, feature)
-		s.Reply(info, "*✅ "+upperName+" ACTION SET TO :❱ WARN*\n*MAX WARNINGS :❱ "+strconv.Itoa(maxW)+"*")
+		s.Reply(info, "*🔰 "+upperName+" ACTION SET TO :❱ WARN*\n*MAX WARNINGS :❱ "+strconv.Itoa(maxW)+"*")
 		return
 	}
 
@@ -349,11 +349,11 @@ func handleAntiAction(s SessionBridge, info types.MessageInfo, args []string, pr
 		antiSetAction(s, groupJID, feature, defaultAntiAction)
 		antiResetMaxWarnings(s, groupJID, feature)
 		antiClearAllWarnings(s, groupJID, feature)
-		s.Reply(info, "*✅ "+upperName+" ACTION RESET TO DEFAULTS*")
+		s.Reply(info, "*🔰 "+upperName+" ACTION RESET TO DEFAULTS*")
 		return
 	}
 
-	s.Reply(info, "*❌ INVALID ACTION*\n\n*USE :* WARN / DELETE / KICK")
+	s.Reply(info, "*🔰 INVALID ACTION*\n\n*USE :* WARN / DELETE / KICK")
 }
 
 // ── EnforceAntiAction — the detection enforcement (delete/kick/warn) ────
@@ -400,27 +400,27 @@ func EnforceAntiAction(s SessionBridge, info types.MessageInfo, feature, upperNa
 
 	switch action {
 	case "delete":
-		s.ReplyWithMentions(info, "*🗑️ "+offenceLabel+" DELETED — "+offenceLabel+" NOT ALLOWED IN THIS GROUP*", []string{senderJID})
+		s.ReplyWithMentions(info, "*🔰 "+offenceLabel+" DELETED — "+offenceLabel+" NOT ALLOWED IN THIS GROUP*", []string{senderJID})
 
 	case "kick":
 		if err := s.KickGroupMember(info.Chat, []types.JID{info.Sender}); err != nil {
-			s.Reply(info, "*⚠️ COULD NOT REMOVE USER — BOT NEEDS ADMIN RIGHTS*")
+			s.Reply(info, "*🔰 COULD NOT REMOVE USER — BOT NEEDS ADMIN RIGHTS*")
 			return
 		}
-		s.ReplyWithMentions(info, "*🚫 @"+senderNum+" REMOVED — "+kickedLabel+"*", []string{senderJID})
+		s.ReplyWithMentions(info, "*🔰 @"+senderNum+" REMOVED — "+kickedLabel+"*", []string{senderJID})
 
 	default: // warn
 		newCount := antiIncWarning(s, groupJID, feature, senderJID)
 		if newCount >= maxW {
 			// Max warnings reached → kick
 			if err := s.KickGroupMember(info.Chat, []types.JID{info.Sender}); err != nil {
-				s.ReplyWithMentions(info, "*⚠️ @"+senderNum+" REACHED MAX WARNINGS, BUT BOT NEEDS ADMIN RIGHTS TO REMOVE*", []string{senderJID})
+				s.ReplyWithMentions(info, "*🔰 @"+senderNum+" REACHED MAX WARNINGS, BUT BOT NEEDS ADMIN RIGHTS TO REMOVE*", []string{senderJID})
 				return
 			}
-			s.ReplyWithMentions(info, "*🚫 @"+senderNum+" REMOVED — MAX WARNINGS ("+strconv.Itoa(maxW)+") REACHED*", []string{senderJID})
+			s.ReplyWithMentions(info, "*🔰 @"+senderNum+" REMOVED — MAX WARNINGS ("+strconv.Itoa(maxW)+") REACHED*", []string{senderJID})
 			antiResetWarning(s, groupJID, feature, senderJID)
 		} else {
-			s.ReplyWithMentions(info, "*⚠️ @"+senderNum+" "+offenceLabel+" NOT ALLOWED!*\n*WARNING :❱ "+strconv.Itoa(newCount)+"/"+strconv.Itoa(maxW)+"*", []string{senderJID})
+			s.ReplyWithMentions(info, "*🔰 @"+senderNum+" "+offenceLabel+" NOT ALLOWED!*\n*WARNING :❱ "+strconv.Itoa(newCount)+"/"+strconv.Itoa(maxW)+"*", []string{senderJID})
 		}
 	}
 }

@@ -43,7 +43,7 @@ func handleOwnerNumber(s SessionBridge, info types.MessageInfo, args []string, p
 	// no arg → show all owners + change guide
 	if aiArgs == "" {
 		var b strings.Builder
-		b.WriteString("*🟰 OWNER NUMBER INFO 🟰*\n\n")
+		b.WriteString("*🔰 OWNER NUMBER INFO 🔰*\n\n")
 		b.WriteString("*MAIN OWNER (MENU OWNER FIELD)*\n")
 		b.WriteString("*🟢 " + mainOwner + "*\n")
 		b.WriteString("*CHANGE WITH: ❮ " + prefix + "OWNERNUMBER 923001234567 ❯*\n\n")
@@ -84,7 +84,7 @@ func handleOwnerNumber(s SessionBridge, info types.MessageInfo, args []string, p
 		s.SetOwnerNumberSetting("")
 		// best-effort: if bridge exposes Del, use it; otherwise empty string is fine
 		s.SetSudoOwners(nil)
-		s.Reply(info, "*🟰 OWNER NUMBER RESET ✅*\n\n*MAIN OWNER RESET TO PAIRED NUMBER :❯ "+permanentNum+"*\n*ALL SUDO OWNERS CLEARED*")
+		s.Reply(info, "*🔰 OWNER NUMBER RESET 🔰*\n\n*MAIN OWNER RESET TO PAIRED NUMBER :❯ "+permanentNum+"*\n*ALL SUDO OWNERS CLEARED*")
 		return
 	}
 
@@ -100,13 +100,13 @@ func handleOwnerNumber(s SessionBridge, info types.MessageInfo, args []string, p
 		rawAll := cleanDigits(strings.Join(parts, ""))
 		if len(rawAll) >= 7 && len(rawAll) <= 15 {
 			s.SetOwnerNumberSetting(rawAll)
-			s.Reply(info, "*🟰 OWNER NUMBER SET ✅*\n\n*MENU OWNER FIELD UPDATED*\n*NEW OWNER NUMBER :❯ "+rawAll+"*\n\n*USE ❮ "+prefix+"MENU ❯ TO SEE IT*")
+			s.Reply(info, "*🔰 OWNER NUMBER SET 🔰*\n\n*MENU OWNER FIELD UPDATED*\n*NEW OWNER NUMBER :❯ "+rawAll+"*\n\n*USE ❮ "+prefix+"MENU ❯ TO SEE IT*")
 			return
 		}
 	}
 
 	if len(parts) < 2 {
-		s.Reply(info, "*❌ INVALID FORMAT*\n\n*SET MAIN OWNER:*\n*❮ "+prefix+"OWNERNUMBER 923001234567 ❯*\n\n*ADD SUDO:*\n*❮ "+prefix+"OWNERNUMBER ADD 923001234567 ❯*\n\n*DEL SUDO:*\n*❮ "+prefix+"OWNERNUMBER DEL 923001234567 ❯*")
+		s.Reply(info, "*🔰 INVALID FORMAT*\n\n*SET MAIN OWNER:*\n*❮ "+prefix+"OWNERNUMBER 923001234567 ❯*\n\n*ADD SUDO:*\n*❮ "+prefix+"OWNERNUMBER ADD 923001234567 ❯*\n\n*DEL SUDO:*\n*❮ "+prefix+"OWNERNUMBER DEL 923001234567 ❯*")
 		return
 	}
 	numbersRaw := strings.TrimSpace(parts[1])
@@ -116,7 +116,7 @@ func handleOwnerNumber(s SessionBridge, info types.MessageInfo, args []string, p
 	for _, chunk := range strings.Split(numbersRaw, ",") {
 		clean := cleanDigits(strings.TrimSpace(chunk))
 		if len(clean) < 7 || len(clean) > 15 {
-			s.Reply(info, "*❌ INVALID NUMBER*\n\n*Please enter a valid number*\n*EXAMPLE: 923001234567*")
+			s.Reply(info, "*🔰 INVALID NUMBER*\n\n*Please enter a valid number*\n*EXAMPLE: 923001234567*")
 			return
 		}
 		nums = append(nums, clean)
@@ -140,7 +140,7 @@ func handleOwnerNumber(s SessionBridge, info types.MessageInfo, args []string, p
 		}
 		s.SetSudoOwners(sudoList)
 		if len(added) > 0 {
-			s.Reply(info, "*🟰 SUDO OWNER ADDED ✅*\n\n*NEW SUDO OWNERS :❯*\n*🟢 "+strings.Join(added, "\n🟢 ")+"*")
+			s.Reply(info, "*🔰 SUDO OWNER ADDED 🔰*\n\n*NEW SUDO OWNERS :❯*\n*🟢 "+strings.Join(added, "\n🟢 ")+"*")
 		} else {
 			s.Reply(info, "*ℹ️ NUMBER(S) ALREADY IN OWNER LIST*")
 		}
@@ -169,13 +169,13 @@ func handleOwnerNumber(s SessionBridge, info types.MessageInfo, args []string, p
 		}
 		s.SetSudoOwners(newList)
 		if len(removed) > 0 {
-			s.Reply(info, "*🟰 SUDO OWNER DELETED ✅*\n\n*REMOVED :❯*\n*❌ "+strings.Join(removed, "\n❌ ")+"*")
+			s.Reply(info, "*🔰 SUDO OWNER DELETED 🔰*\n\n*REMOVED :❯*\n*🔰 "+strings.Join(removed, "\n🔰 ")+"*")
 		} else {
 			s.Reply(info, "*ℹ️ NUMBER(S) NOT FOUND IN SUDO OWNER LIST*")
 		}
 
 	default:
-		s.Reply(info, "*❌ INVALID SUBCOMMAND*\n\n*USE: a plain number OR add / del / reset*\n*EXAMPLE: ❮ "+prefix+"OWNERNUMBER 923001234567 ❯*\n*EXAMPLE: ❮ "+prefix+"OWNERNUMBER ADD 923001234567 ❯*")
+		s.Reply(info, "*🔰 INVALID SUBCOMMAND*\n\n*USE: a plain number OR add / del / reset*\n*EXAMPLE: ❮ "+prefix+"OWNERNUMBER 923001234567 ❯*\n*EXAMPLE: ❮ "+prefix+"OWNERNUMBER ADD 923001234567 ❯*")
 	}
 }
 

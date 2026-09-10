@@ -59,7 +59,7 @@ var goldSettingsList = []settingsEntry{
 	{t: "ANTICALL ON", c: "anticall on"},
 	{t: "ANTICALL OFF", c: "anticall off"},
 	{t: "ANTICALL REJECT MSG CHANGE", c: "anticall msg", ask: "SEND THE NEW ANTICALL REJECT MESSAGE",
-		ex: "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ PLEASE DO NOT CALL ME, SEND A MESSAGE 😊 ❯*",
+		ex: "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ PLEASE DO NOT CALL ME, SEND A MESSAGE 🔰 ❯*",
 		why: "WHEN ANTICALL REJECTS A CALL, THIS MESSAGE WILL BE SENT TO THAT CALLER."},
 	{t: "ANTICALL PREMIUM ADD", c: "anticallprem add", num: true, ask: "SEND THE NUMBER OR MENTION TO ADD IN ANTICALL PREMIUM",
 		why: "CALLS FROM THAT NUMBER WILL NEVER BE REJECTED."},
@@ -110,13 +110,13 @@ var goldSettingsList = []settingsEntry{
 	{t: "STATUS REACT ON", c: "statusreact on"},
 	{t: "STATUS REACT OFF", c: "statusreact off"},
 	{t: "STATUS REACT EMOJI SET", c: "statusreact emoji", ask: "SEND YOUR EMOJIS IN ONE MESSAGE",
-		ex: "SEPARATE EMOJIS WITH COMMAS.\n*EXAMPLE ❮ 😍,☺️,☺️ ❯*",
+		ex: "SEPARATE EMOJIS WITH COMMAS.\n*EXAMPLE ❮ 🔰,🔰,🔰 ❯*",
 		why: "THE BOT WILL USE THESE EMOJIS TO REACT TO PEOPLE’S STATUSES."},
 	{t: "STATUS REACT RESET", c: "statusreact reset"},
 	{t: "STATUS REPLY ON", c: "statusreply on"},
 	{t: "STATUS REPLY OFF", c: "statusreply off"},
 	{t: "STATUS REPLY MSG SET", c: "statusreply message", ask: "SEND YOUR NEW STATUS REPLY MESSAGE",
-		ex: "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ NICE STATUS 😊 ❯*",
+		ex: "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ NICE STATUS 🔰 ❯*",
 		why: "THE BOT WILL REPLY TO EVERY STATUS WITH THIS TEXT."},
 	{t: "STATUS REPLY RESET", c: "statusreply reset"},
 	{t: "VOICE LIST", c: "voicelist"},
@@ -176,13 +176,13 @@ var goldSettingsList = []settingsEntry{
 	{t: "WELCOME ON", c: "welcome on"},
 	{t: "WELCOME OFF", c: "welcome off"},
 	{t: "WELCOME MSG CHANGE", c: "welcome msg", wrap: true, ask: "SEND YOUR NEW WELCOME MESSAGE",
-		ex: "SEND ONLY YOUR TEXT; BRACKETS WILL BE ADDED AUTOMATICALLY.\n*EXAMPLE ❮ HEY @user, WELCOME TO @gname 💖 ❯*",
+		ex: "SEND ONLY YOUR TEXT; BRACKETS WILL BE ADDED AUTOMATICALLY.\n*EXAMPLE ❮ HEY @user, WELCOME TO @gname 🔰 ❯*",
 		why: "❮ @user ❯ WILL MENTION THE NEW MEMBER AND ❮ @gname ❯ WILL SHOW THE GROUP NAME."},
 	{t: "WELCOME RESET", c: "welcome reset"},
 	{t: "GOODBYE ON", c: "goodbye on"},
 	{t: "GOODBYE OFF", c: "goodbye off"},
 	{t: "GOODBYE MSG CHANGE", c: "goodbye msg", wrap: true, ask: "SEND YOUR NEW GOODBYE MESSAGE",
-		ex: "SEND ONLY YOUR TEXT; BRACKETS WILL BE ADDED AUTOMATICALLY.\n*EXAMPLE ❮ GOODBYE @user FROM @gname 👋 ❯*",
+		ex: "SEND ONLY YOUR TEXT; BRACKETS WILL BE ADDED AUTOMATICALLY.\n*EXAMPLE ❮ GOODBYE @user FROM @gname 🔰 ❯*",
 		why: "❮ @user ❯ WILL MENTION THE LEAVING MEMBER AND ❮ @gname ❯ WILL SHOW THE GROUP NAME."},
 	{t: "GOODBYE RESET", c: "goodbye reset"},
 	{t: "LOCK GROUP (ADMINS ONLY)", c: "gcbotoff"},
@@ -204,13 +204,13 @@ var goldSettingsList = []settingsEntry{
 	{t: "AUTO REACT ON", c: "autoreact on"},
 	{t: "AUTO REACT OFF", c: "autoreact off"},
 	{t: "AUTO REACT EMOJI SET", c: "autoreact emoji", ask: "SEND YOUR EMOJIS IN ONE MESSAGE",
-		ex: "MAXIMUM 20 EMOJIS, SEPARATED BY COMMAS.\n*EXAMPLE ❮ 😍,☺️,☺️ ❯*",
+		ex: "MAXIMUM 20 EMOJIS, SEPARATED BY COMMAS.\n*EXAMPLE ❮ 🔰,🔰,🔰 ❯*",
 		why: "THE BOT WILL USE THESE EMOJIS TO REACT TO INCOMING MESSAGES."},
 	{t: "AUTO REACT RESET", c: "autoreact reset"},
 	{t: "OWNER REACT ON", c: "ownerreact on"},
 	{t: "OWNER REACT OFF", c: "ownerreact off"},
 	{t: "OWNER REACT EMOJI SET", c: "ownerreact emoji", ask: "SEND YOUR EMOJIS IN ONE MESSAGE",
-		ex: "MAXIMUM 20 EMOJIS, SEPARATED BY COMMAS.\n*EXAMPLE ❮ 🔰,🔥,😎 ❯*",
+		ex: "MAXIMUM 20 EMOJIS, SEPARATED BY COMMAS.\n*EXAMPLE ❮ 🔰,🔰,😎 ❯*",
 		why: "THE BOT WILL USE THESE EMOJIS ONLY ON THE OWNER’S MESSAGES."},
 	{t: "OWNER REACT RESET", c: "ownerreact reset"},
 	{t: "CHANGE BOT PIC (MENU + ALIVE)", c: "botpic", url: true, ask: "SEND THE NEW BOT PIC LINK",
@@ -218,7 +218,7 @@ var goldSettingsList = []settingsEntry{
 		why: "YEH IMAGE MENU AUR ALIVE DONO MEIN DIKHEGI."},
 	{t: "BOT PIC RESET", c: "botpic reset"},
 	{t: "CHANGE ALIVE MSG", c: "alivemsg", ask: "SEND YOUR NEW ALIVE MESSAGE",
-		ex: "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ BOT IS ONLINE AND WORKING ✅ ❯*",
+		ex: "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ BOT IS ONLINE AND WORKING 🔰 ❯*",
 		why: "THIS TEXT WILL APPEAR WITH THE ALIVE COMMAND."},
 	{t: "ALIVE MSG RESET", c: "alivemsg reset"},
 	{t: "CHANGE BOT NAME", c: "botname", ask: "SEND YOUR NEW BOT NAME",
@@ -381,7 +381,7 @@ func buildSettingsPages(prefix string) []string {
 		n++
 		hand := ""
 		if e.ask != "" {
-			hand = " ✍️"
+			hand = " 🔰"
 		}
 		body.WriteString(fmt.Sprintf("*❮ %d ❯ %s*%s\n", n, e.t, hand))
 	}
@@ -392,15 +392,15 @@ https://youtu.be/HQfZ8AF6Teg?is=RMQ7pkSVkfOUYR8O
 
 *JUST TYPE ANY NUMBER EG 1 , 2 , 3 , 4 WHICH SETTING DO YOU WANT TO CHANGE WHEN YOU TYPE ANY NUMBER BOT WILL CHANGE SETTINGS*
 
-*⚠️  WARNING WARNING  WARNING ⚠️*
-*MENTION THIS MESSAGE AND THEN AFTER TYPE NUMBER OK ⚠️ MENTION THIS MESSAGE FIRST THEN REPLY NUMBER*
-*⚠️  WARNING WARNING WARNING ⚠️*
+*🔰  WARNING WARNING  WARNING 🔰*
+*MENTION THIS MESSAGE AND THEN AFTER TYPE NUMBER OK 🔰 MENTION THIS MESSAGE FIRST THEN REPLY NUMBER*
+*🔰  WARNING WARNING WARNING 🔰*
 
-*✍️ MEANS THE SETTING NEEDS A VALUE AND WILL NOT CHANGE IMMEDIATELY.*
+*🔰 MEANS THE SETTING NEEDS A VALUE AND WILL NOT CHANGE IMMEDIATELY.*
 *THE BOT WILL FIRST EXPLAIN WHAT TO SEND, HOW TO SEND IT, AND WHAT WILL HAPPEN.*
 *THEN SEND THE VALUE, NUMBER, OR TEXT MESSAGES TO CHANGE THE SETTING.*
 
-*OPTIONS WITHOUT ✍️ ARE ON/OFF OR LIST ACTIONS AND RUN AS SOON AS YOU SEND THEIR NUMBER.*`
+*OPTIONS WITHOUT 🔰 ARE ON/OFF OR LIST ACTIONS AND RUN AS SOON AS YOU SEND THEIR NUMBER.*`
 	return []string{head + strings.TrimRight(body.String(), " \n")}
 }
 
@@ -436,7 +436,7 @@ func buildSettingsAskPrompt(e *settingsEntry, prefix string) string {
 		example = fmt.Sprintf("SEND ONLY THE MODE NAME, NOT THE COMMAND.\n*EXAMPLE ❮ %s ❯*\n*THIS WILL CREATE THE FINAL COMMAND ❮ %s%s %s ❯*",
 			strings.ToUpper(e.choices[0][0]), prefix, command, e.choices[0][0])
 	} else if e.num {
-		example = "SEND THE COMPLETE NUMBER WITH COUNTRY CODE, WITHOUT ➕ OR A LEADING 0.\n*EXAMPLE ❮ 923001234567 ❯*\n*IN A GROUP, YOU CAN ALSO MENTION THE USER ❮ @USER ❯*"
+		example = "SEND THE COMPLETE NUMBER WITH COUNTRY CODE, WITHOUT 🔰 OR A LEADING 0.\n*EXAMPLE ❮ 923001234567 ❯*\n*IN A GROUP, YOU CAN ALSO MENTION THE USER ❮ @USER ❯*"
 	}
 
 	// Example block: har non-empty line ko *…* me wrap karo (same as Node).
@@ -497,26 +497,26 @@ func numCheck(raw string) (ok bool, value, msg string) {
 	if onlyDigits && !startsZero && goodLen {
 		return true, digits, ""
 	}
-	reason := "*YOU DID NOT SEND A VALID WHATSAPP NUMBER 😒*"
+	reason := "*YOU DID NOT SEND A VALID WHATSAPP NUMBER 🔰*"
 	if !onlyDigits {
-		reason = "*YOU SENT SOME LETTERS OR SYMBOLS, ONLY DIGITS ARE ALLOWED 😒*"
+		reason = "*YOU SENT SOME LETTERS OR SYMBOLS, ONLY DIGITS ARE ALLOWED 🔰*"
 	} else if startsZero {
-		reason = "*YOU STARTED THE NUMBER WITH 0 LIKE ❮ 03XXXXXXXXX ❯, THAT IS A LOCAL FORMAT 😒*"
+		reason = "*YOU STARTED THE NUMBER WITH 0 LIKE ❮ 03XXXXXXXXX ❯, THAT IS A LOCAL FORMAT 🔰*"
 	} else if !goodLen {
-		reason = "*YOUR NUMBER IS TOO SHORT OR TOO LONG, SEND THE COMPLETE NUMBER 😒*"
+		reason = "*YOUR NUMBER IS TOO SHORT OR TOO LONG, SEND THE COMPLETE NUMBER 🔰*"
 	}
 	return false, "", fmt.Sprintf(`*🔰 WRONG NUMBER 🔰*
 
 %s
 
-*TYPE NUMBER WITH YOUR COUNTRY CODE WITHOUT TYPING ➕ AND TYPE THE FULL NUMBER SAME LIKE 923XXXXXXXXX*
+*TYPE NUMBER WITH YOUR COUNTRY CODE WITHOUT TYPING 🔰 AND TYPE THE FULL NUMBER SAME LIKE 923XXXXXXXXX*
 
-*❌ WRONG WAY*
+*🔰 WRONG WAY*
 *❮ 03001234567 ❯*
 *❮ 3001234567 ❯*
 *❮ +92 300 1234567 ❯*
 
-*✅ RIGHT WAY*
+*🔰 RIGHT WAY*
 *❮ 923001234567 ❯*
 *❮ 919876543210 ❯*
 *❮ 8801712345678 ❯*
@@ -567,14 +567,14 @@ func checkSettingsInput(e *settingsEntry, raw string) (ok bool, value, msg strin
 		}
 		return false, "", fmt.Sprintf(`*🔰 WRONG MODE NAME 🔰*
 
-*THE VALUE YOU SENT IS NOT A VALID MODE FOR THIS SETTING 😒*
+*THE VALUE YOU SENT IS NOT A VALID MODE FOR THIS SETTING 🔰*
 
 *SEND ONLY ONE OF THESE MODE NAMES:*
 %s
-*❌ WRONG WAY*
+*🔰 WRONG WAY*
 *❮ %s ❯*
 
-*✅ RIGHT WAY*
+*🔰 RIGHT WAY*
 *❮ %s ❯*%s`, list.String(), rawOr(raw, "YES"), strings.ToUpper(e.choices[0][0]), settingsRetryTail())
 	}
 
@@ -586,12 +586,12 @@ func checkSettingsInput(e *settingsEntry, raw string) (ok bool, value, msg strin
 		}
 		return false, "", fmt.Sprintf(`*🔰 WRONG WARN LIMIT 🔰*
 
-*SEND A NUMBER BETWEEN 1 AND %d ONLY 😒*
+*SEND A NUMBER BETWEEN 1 AND %d ONLY 🔰*
 
-*❌ WRONG WAY*
+*🔰 WRONG WAY*
 *❮ %s ❯*
 
-*✅ RIGHT WAY*
+*🔰 RIGHT WAY*
 *❮ 5 ❯*%s`, e.limit, rawOr(raw, "FIVE"), settingsRetryTail())
 	}
 
@@ -606,13 +606,13 @@ func checkSettingsInput(e *settingsEntry, raw string) (ok bool, value, msg strin
 		}
 		return false, "", fmt.Sprintf(`*🔰 WRONG IMAGE LINK 🔰*
 
-*THE BOT NEEDS A DIRECT IMAGE LINK ENDING IN .jpg, .jpeg, .png, .gif, OR .webp 😒*
+*THE BOT NEEDS A DIRECT IMAGE LINK ENDING IN .jpg, .jpeg, .png, .gif, OR .webp 🔰*
 *AN ATTACHED PHOTO WILL NOT WORK; SEND THE LINK ITSELF.*
 
-*❌ WRONG WAY*
+*🔰 WRONG WAY*
 *❮ %s ❯*
 
-*✅ RIGHT WAY*
+*🔰 RIGHT WAY*
 *❮ https://example.com/photo.jpg ❯*%s`, shown, settingsRetryTail())
 	}
 
@@ -628,12 +628,12 @@ func checkSettingsInput(e *settingsEntry, raw string) (ok bool, value, msg strin
 		}
 		return false, "", fmt.Sprintf(`*🔰 WRONG TIME FORMAT 🔰*
 
-*SEND TIME AS ❮ HOUR MINUTE AM/PM ❯ 😒*
+*SEND TIME AS ❮ HOUR MINUTE AM/PM ❯ 🔰*
 
-*❌ WRONG WAY*
+*🔰 WRONG WAY*
 *❮ %s ❯*
 
-*✅ RIGHT WAY*
+*🔰 RIGHT WAY*
 *❮ 7 30 PM ❯*
 *❮ 8 00 AM ❯*%s`, rawOr(raw, "19:30"), settingsRetryTail())
 	}
@@ -641,7 +641,7 @@ func checkSettingsInput(e *settingsEntry, raw string) (ok bool, value, msg strin
 	// ── 5) WELCOME / GOODBYE JAISE BRACE WALE MESSAGES ──
 	if e.wrap {
 		if raw == "" {
-			return false, "", "*🔰 EMPTY MESSAGE 🔰*\n\n*YOU DID NOT SEND ANY TEXT 😒*" + settingsRetryTail()
+			return false, "", "*🔰 EMPTY MESSAGE 🔰*\n\n*YOU DID NOT SEND ANY TEXT 🔰*" + settingsRetryTail()
 		}
 		inner := strings.TrimSpace(strings.TrimRight(strings.TrimLeft(raw, "{"), "}"))
 		return true, "{" + inner + "}", ""
@@ -650,7 +650,7 @@ func checkSettingsInput(e *settingsEntry, raw string) (ok bool, value, msg strin
 	// ── 6) NUMBER WALE COMMANDS ──
 	if !isNumberAskSetting(e) {
 		if raw == "" {
-			return false, "", "*🔰 EMPTY VALUE 🔰*\n\n*YOU DID NOT SEND A VALUE 😒*" + settingsRetryTail()
+			return false, "", "*🔰 EMPTY VALUE 🔰*\n\n*YOU DID NOT SEND A VALUE 🔰*" + settingsRetryTail()
 		}
 		return true, raw, ""
 	}
@@ -748,7 +748,7 @@ func SettingsTryHandle(s SessionBridge, info types.MessageInfo, body string, pre
 		b := strings.TrimSpace(strings.ToLower(body))
 		if b == "0" || b == "exit" || b == "close" || b == "cancel" || b == "band" || b == "khatam" {
 			deleteSettingsSession(key)
-			s.Reply(info, "*🔰 SETTINGS PANEL CLOSED 🔰*\n\n*OPEN IT AGAIN WHENEVER YOU WANT 😊*")
+			s.Reply(info, "*🔰 SETTINGS PANEL CLOSED 🔰*\n\n*OPEN IT AGAIN WHENEVER YOU WANT 🔰*")
 			return true, ""
 		}
 
@@ -790,7 +790,7 @@ func SettingsTryHandle(s SessionBridge, info types.MessageInfo, body string, pre
 			}
 			ent := goldSettingsMap[strings.TrimSpace(body)]
 			if ent == nil {
-				s.Reply(info, "*🔰 WRONG NUMBER 🔰*\n\n*THIS NUMBER IS NOT IN THE SETTINGS LIST 😒*\n\n*TYPE ❮ "+prefix+"SETTINGS ❯ TO SEE THE LIST AGAIN*")
+				s.Reply(info, "*🔰 WRONG NUMBER 🔰*\n\n*THIS NUMBER IS NOT IN THE SETTINGS LIST 🔰*\n\n*TYPE ❮ "+prefix+"SETTINGS ❯ TO SEE THE LIST AGAIN*")
 				return true, ""
 			}
 			if ent.ask != "" {

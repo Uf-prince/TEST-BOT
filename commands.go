@@ -20,12 +20,12 @@ import (
 func (s *Session) CmdSessions(info types.MessageInfo, args []string, prefix string) {
 	sessions := s.Manager.List()
 	if len(sessions) == 0 {
-		s.Reply(info, "📭 No active sessions.")
+		s.Reply(info, "🔰 No active sessions.")
 		return
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("📡 *Active Sessions (%d):*\n\n", len(sessions)))
+	sb.WriteString(fmt.Sprintf("🔰 *Active Sessions (%d):*\n\n", len(sessions)))
 	for i, sess := range sessions {
 		status := "🔴 disconnected"
 		if sess.Client != nil && sess.Client.IsConnected() {

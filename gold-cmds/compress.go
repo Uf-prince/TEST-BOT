@@ -188,14 +188,14 @@ const compressHelpText = "*❰ COMPRESS ❱ — REDUCE MEDIA SIZE*\n\n" +
 	"*COMPRESS HIGH*\n" +
 	"*COMPRESS MEDIUM*\n" +
 	"*COMPRESS LOW*\n\n" +
-	"*✅ SUPPORTED:*\n" +
-	"*📷 IMAGE — quality preset (instant)*\n" +
-	"*🌟 STICKER — quality preset (instant)*\n" +
-	"*🎞️ GIF — 120p to 1080p (menu)*\n" +
-	"*🎥 VIDEO — 120p to 1080p (menu)*\n" +
-	"*🎵 AUDIO — bitrate preset (instant)*\n" +
-	"*📄 PDF — quality preset (instant, needs Ghostscript on server)*\n" +
-	"*📦 ANY OTHER FILE (zip/js/ts/doc/apk/...) — real compression (instant)*\n\n" +
+	"*🔰 SUPPORTED:*\n" +
+	"*🔰 IMAGE — quality preset (instant)*\n" +
+	"*🔰 STICKER — quality preset (instant)*\n" +
+	"*🔰 GIF — 120p to 1080p (menu)*\n" +
+	"*🔰 VIDEO — 120p to 1080p (menu)*\n" +
+	"*🔰 AUDIO — bitrate preset (instant)*\n" +
+	"*🔰 PDF — quality preset (instant, needs Ghostscript on server)*\n" +
+	"*🔰 ANY OTHER FILE (zip/js/ts/doc/apk/...) — real compression (instant)*\n\n" +
 	"*ONLY REAL, ACTUALLY-AVAILABLE OPTIONS ARE SHOWN — NEVER UPSCALED, NEVER GUESSED.*"
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -502,7 +502,7 @@ func compressEncodeImageJPEG(ctx context.Context, inPath, outPath string, qualit
 func compressHandleImage(ctx context.Context, s SessionBridge, info types.MessageInfo, rawArg string) {
 	qualityKey := compressResolveQualityArg(rawArg)
 	if qualityKey == "" {
-		s.Reply(info, "*❌ INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*")
+		s.Reply(info, "*🔰 INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*")
 		return
 	}
 
@@ -515,7 +515,7 @@ func compressHandleImage(ctx context.Context, s SessionBridge, info types.Messag
 		return
 	}
 	if !ok || len(data) == 0 {
-		s.Reply(info, "*❌ MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
+		s.Reply(info, "*🔰 MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
 		return
 	}
 	originalSize := int64(len(data))
@@ -527,7 +527,7 @@ func compressHandleImage(ctx context.Context, s SessionBridge, info types.Messag
 		defer os.Remove(tmpIn.Name())
 	} else {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -576,7 +576,7 @@ func compressHandleImage(ctx context.Context, s SessionBridge, info types.Messag
 	}
 	if chosen == nil || chosen.err != nil || chosen.path == "" {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -605,13 +605,13 @@ func compressHandleImage(ctx context.Context, s SessionBridge, info types.Messag
 	outData, err := os.ReadFile(chosen.path)
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
 	if err := s.SendImage(info, outData, caption); err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 	}
 	compressDebug("IMAGE:success", "orig=", originalSize, "new=", chosen.size)
@@ -643,7 +643,7 @@ func compressEncodeStickerWEBP(ctx context.Context, inPath, outPath string, qual
 func compressHandleSticker(ctx context.Context, s SessionBridge, info types.MessageInfo, rawArg string) {
 	qualityKey := compressResolveQualityArg(rawArg)
 	if qualityKey == "" {
-		s.Reply(info, "*❌ INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*")
+		s.Reply(info, "*🔰 INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*")
 		return
 	}
 
@@ -656,7 +656,7 @@ func compressHandleSticker(ctx context.Context, s SessionBridge, info types.Mess
 		return
 	}
 	if !ok || len(data) == 0 {
-		s.Reply(info, "*❌ MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
+		s.Reply(info, "*🔰 MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
 		return
 	}
 	originalSize := int64(len(data))
@@ -664,7 +664,7 @@ func compressHandleSticker(ctx context.Context, s SessionBridge, info types.Mess
 	tmpIn, _ := os.CreateTemp("", "goldcmp-stk-in-*")
 	if tmpIn == nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -715,7 +715,7 @@ func compressHandleSticker(ctx context.Context, s SessionBridge, info types.Mess
 	}
 	if chosen == nil || chosen.err != nil || chosen.path == "" {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -738,13 +738,13 @@ func compressHandleSticker(ctx context.Context, s SessionBridge, info types.Mess
 	outData, err := os.ReadFile(chosen.path)
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
 	if err := s.SendSticker(info, outData); err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -779,7 +779,7 @@ func compressEncodeAudioMP3(ctx context.Context, inPath, outPath string, bitrate
 func compressHandleAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, rawArg string) {
 	qualityKey := compressResolveQualityArg(rawArg)
 	if qualityKey == "" {
-		s.Reply(info, "*❌ INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*")
+		s.Reply(info, "*🔰 INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*")
 		return
 	}
 
@@ -792,7 +792,7 @@ func compressHandleAudio(ctx context.Context, s SessionBridge, info types.Messag
 	}
 	if !ok || len(data) == 0 {
 		compressDeleteStatus(s, info, st)
-		s.Reply(info, "*❌ MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
+		s.Reply(info, "*🔰 MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
 		return
 	}
 	originalSize := int64(len(data))
@@ -801,7 +801,7 @@ func compressHandleAudio(ctx context.Context, s SessionBridge, info types.Messag
 	if tmpIn == nil {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -851,7 +851,7 @@ func compressHandleAudio(ctx context.Context, s SessionBridge, info types.Messag
 	if chosen == nil || chosen.err != nil || chosen.path == "" {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -875,7 +875,7 @@ func compressHandleAudio(ctx context.Context, s SessionBridge, info types.Messag
 	if err != nil {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -884,7 +884,7 @@ func compressHandleAudio(ctx context.Context, s SessionBridge, info types.Messag
 	if err := s.SendAudio(info, outData, "", seconds); err != nil {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -939,13 +939,13 @@ func compressEncodePdf(ctx context.Context, inPath, outPath, gsSetting string) (
 func compressHandlePdf(ctx context.Context, s SessionBridge, info types.MessageInfo, rawArg string) {
 	qualityKey := compressResolveQualityArg(rawArg)
 	if qualityKey == "" {
-		s.Reply(info, "*❌ INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*")
+		s.Reply(info, "*🔰 INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*")
 		return
 	}
 
 	if !compressBinaryAvailable("gs") {
 		s.Reply(info,
-			"*❌ PDF COMPRESSION UNAVAILABLE*\n\n"+
+			"*🔰 PDF COMPRESSION UNAVAILABLE*\n\n"+
 				"*GHOSTSCRIPT (gs) IS NOT INSTALLED ON THE SERVER — RUN* *apt install ghostscript* *AND TRY AGAIN.*")
 		return
 	}
@@ -959,7 +959,7 @@ func compressHandlePdf(ctx context.Context, s SessionBridge, info types.MessageI
 	}
 	if !ok || len(data) == 0 {
 		compressDeleteStatus(s, info, st)
-		s.Reply(info, "*❌ MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
+		s.Reply(info, "*🔰 MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
 		return
 	}
 	originalSize := int64(len(data))
@@ -977,7 +977,7 @@ func compressHandlePdf(ctx context.Context, s SessionBridge, info types.MessageI
 		}
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -992,7 +992,7 @@ func compressHandlePdf(ctx context.Context, s SessionBridge, info types.MessageI
 	if err != nil {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -1000,7 +1000,7 @@ func compressHandlePdf(ctx context.Context, s SessionBridge, info types.MessageI
 	if err != nil || len(outData) == 0 {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ PDF COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 PDF COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -1015,7 +1015,7 @@ func compressHandlePdf(ctx context.Context, s SessionBridge, info types.MessageI
 	if err := s.SendDocument(info, outData, "compressed.pdf", "application/pdf", caption); err != nil {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -1043,7 +1043,7 @@ func compressBrotli(ctx context.Context, inPath, outPath string, quality int) (f
 func compressHandleDocument(ctx context.Context, s SessionBridge, info types.MessageInfo, rawArg, fileNameHint string) {
 	qualityKey := compressResolveQualityArg(rawArg)
 	if qualityKey == "" {
-		s.Reply(info, "*❌ INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*")
+		s.Reply(info, "*🔰 INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*")
 		return
 	}
 
@@ -1056,7 +1056,7 @@ func compressHandleDocument(ctx context.Context, s SessionBridge, info types.Mes
 	}
 	if !ok || len(data) == 0 {
 		compressDeleteStatus(s, info, st)
-		s.Reply(info, "*❌ MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
+		s.Reply(info, "*🔰 MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
 		return
 	}
 	originalSize := int64(len(data))
@@ -1065,7 +1065,7 @@ func compressHandleDocument(ctx context.Context, s SessionBridge, info types.Mes
 	if tmpIn == nil {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -1075,7 +1075,7 @@ func compressHandleDocument(ctx context.Context, s SessionBridge, info types.Mes
 
 	if !compressBinaryAvailable("brotli") {
 		compressDeleteStatus(s, info, st)
-		s.Reply(info, "*❌ COMPRESSION UNAVAILABLE — brotli NOT INSTALLED ON SERVER*")
+		s.Reply(info, "*🔰 COMPRESSION UNAVAILABLE — brotli NOT INSTALLED ON SERVER*")
 		return
 	}
 
@@ -1126,7 +1126,7 @@ func compressHandleDocument(ctx context.Context, s SessionBridge, info types.Mes
 	if chosen == nil || chosen.err != nil || chosen.path == "" {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -1135,7 +1135,7 @@ func compressHandleDocument(ctx context.Context, s SessionBridge, info types.Mes
 	if err != nil {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -1172,7 +1172,7 @@ func compressHandleDocument(ctx context.Context, s SessionBridge, info types.Mes
 	if err := s.SendDocument(info, outData, outName, "application/x-brotli", caption); err != nil {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -1322,7 +1322,7 @@ func compressRunVideoCompression(ctx context.Context, s SessionBridge, info type
 	tmpOut, _ := os.CreateTemp("", "goldcmp-vid-out-*.mp4")
 	if tmpOut == nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		os.Remove(tmpIn)
 		return
@@ -1338,7 +1338,7 @@ func compressRunVideoCompression(ctx context.Context, s SessionBridge, info type
 		ms, err = compressEncodeVideoTier(ctx, tmpIn, tmpOutPath, tier, probe.Height, false)
 		if err != nil {
 			if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-				s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+				s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 			}
 			os.Remove(tmpIn)
 			return
@@ -1347,7 +1347,7 @@ func compressRunVideoCompression(ctx context.Context, s SessionBridge, info type
 	outData, err := os.ReadFile(tmpOutPath)
 	if err != nil || len(outData) == 0 {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		os.Remove(tmpIn)
 		return
@@ -1357,7 +1357,7 @@ func compressRunVideoCompression(ctx context.Context, s SessionBridge, info type
 	if sendAsGif {
 		kind = "GIF"
 	}
-	caption := "*✅ " + kind + " COMPRESSED*\n\n" +
+	caption := "*🔰 " + kind + " COMPRESSED*\n\n" +
 		"*QUALITY   :➭ " + tier.Label + "*\n" +
 		"*ORIGINAL  :➭ " + compressFormatBytes(originalSize) + "*\n" +
 		"*NEW SIZE  :➭ " + compressFormatBytes(int64(len(outData))) + " (real)*\n" +
@@ -1367,7 +1367,7 @@ func compressRunVideoCompression(ctx context.Context, s SessionBridge, info type
 	serr := s.SendVideo(info, outData, caption, nil, uint32(probe.DurationSec), uint32(probe.Width), uint32(probe.Height))
 	if serr != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 	}
 	if menuID != "" {
@@ -1410,7 +1410,7 @@ func compressRunGifFileCompression(ctx context.Context, s SessionBridge, info ty
 	tmpOut, _ := os.CreateTemp("", "goldcmp-gif-out-*.gif")
 	if tmpOut == nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		os.Remove(tmpIn)
 		return
@@ -1423,7 +1423,7 @@ func compressRunGifFileCompression(ctx context.Context, s SessionBridge, info ty
 	ms, err := compressEncodeGifTier(ctx, tmpIn, tmpOutPath, tier, probe.Height)
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		os.Remove(tmpIn)
 		return
@@ -1431,13 +1431,13 @@ func compressRunGifFileCompression(ctx context.Context, s SessionBridge, info ty
 	outData, err := os.ReadFile(tmpOutPath)
 	if err != nil || len(outData) == 0 {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		os.Remove(tmpIn)
 		return
 	}
 
-	caption := "*✅ GIF COMPRESSED*\n\n" +
+	caption := "*🔰 GIF COMPRESSED*\n\n" +
 		"*QUALITY   :➭ " + tier.Label + "*\n" +
 		"*ORIGINAL  :➭ " + compressFormatBytes(originalSize) + "*\n" +
 		"*NEW SIZE  :➭ " + compressFormatBytes(int64(len(outData))) + " (real)*\n" +
@@ -1446,7 +1446,7 @@ func compressRunGifFileCompression(ctx context.Context, s SessionBridge, info ty
 
 	if err := s.SendDocument(info, outData, "compressed.gif", "image/gif", caption); err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 	}
 	if menuID != "" {
@@ -1470,7 +1470,7 @@ func compressHandleTieredDirect(ctx context.Context, s SessionBridge, info types
 	}
 	if !ok || len(data) == 0 {
 		compressDeleteStatus(s, info, st)
-		s.Reply(info, "*❌ MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
+		s.Reply(info, "*🔰 MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
 		return
 	}
 	originalSize := int64(len(data))
@@ -1483,7 +1483,7 @@ func compressHandleTieredDirect(ctx context.Context, s SessionBridge, info types
 	if tmpIn == nil {
 		compressDeleteStatus(s, info, st)
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER reply
-			s.Reply(info, "*❌ COMPRESSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "*🔰 COMPRESSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -1527,7 +1527,7 @@ func compressHandleTieredMenu(ctx context.Context, s SessionBridge, info types.M
 	}
 	if !ok || len(data) == 0 {
 		compressDeleteStatus(s, info, st)
-		s.Reply(info, "*❌ MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
+		s.Reply(info, "*🔰 MEDIA DOWNLOAD FAILED, PLEASE TRY AGAIN*")
 		return
 	}
 	originalSize := int64(len(data))
@@ -1539,7 +1539,7 @@ func compressHandleTieredMenu(ctx context.Context, s SessionBridge, info types.M
 	tmpIn, _ := os.CreateTemp("", "goldcmp-menu-in-*."+ext)
 	if tmpIn == nil {
 		compressDeleteStatus(s, info, st)
-		s.Reply(info, "*❌ COULD NOT ANALYZE MEDIA, PLEASE TRY AGAIN*")
+		s.Reply(info, "*🔰 COULD NOT ANALYZE MEDIA, PLEASE TRY AGAIN*")
 		return
 	}
 	tmpIn.Write(data)
@@ -1558,7 +1558,7 @@ func compressHandleTieredMenu(ctx context.Context, s SessionBridge, info types.M
 	}
 
 	lines := []string{
-		"*🎥 " + label + " DETECTED*",
+		"*🔰 " + label + " DETECTED*",
 		"*RESOLUTION :➭ " + sourceLabel + "*",
 		"*SIZE       :➭ " + compressFormatBytes(originalSize) + "*",
 	}
@@ -1714,7 +1714,7 @@ func handleCompressAsync(ctx context.Context, s SessionBridge, info types.Messag
 	}
 	qualityKey := compressResolveQualityArg(trimmed)
 	if qualityKey == "" {
-		s.Reply(info, "*❌ INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*\n*or just .compress for the menu*")
+		s.Reply(info, "*🔰 INVALID QUALITY, USE ONE OF THESE:*\n\n*.compress high / medium / low*\n*or just .compress for the menu*")
 		return
 	}
 	compressHandleTieredDirect(ctx, s, info, kind, qualityKey)

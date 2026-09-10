@@ -38,7 +38,7 @@ func handleClearAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 
 	client := s.GetClient()
 	if client == nil || !client.IsConnected() {
-		s.Reply(info, "❌ *Client not connected.*")
+		s.Reply(info, "🔰 *Client not connected.*")
 		return
 	}
 
@@ -49,14 +49,14 @@ func handleClearAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	// Build a delete-chat app state patch (clears the chat for the bot).
 	patch := appstate.BuildDeleteChat(chat, time.Now(), nil, true)
 	if err := client.SendAppState(ctx, patch); err != nil {
-		s.Reply(info, "❌ *CLEAR Command Error*\nFailed to clear chat: "+err.Error())
+		s.Reply(info, "🔰 *CLEAR Command Error*\nFailed to clear chat: "+err.Error())
 		return
 	}
 
 	if strings.HasSuffix(chat.String(), "@g.us") {
-		s.Reply(info, "✅ *GROUP CHAT CLEARED*")
+		s.Reply(info, "🔰 *GROUP CHAT CLEARED*")
 	} else {
-		s.Reply(info, "✅ *INBOX CHAT CLEARED*")
+		s.Reply(info, "🔰 *INBOX CHAT CLEARED*")
 	}
 }
 

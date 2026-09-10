@@ -168,7 +168,7 @@ func handleBotPic(s SessionBridge, info types.MessageInfo, args []string, prefix
 	// ── RESET ──
 	if strings.ToLower(argRaw) == "reset" {
 		s.SetBotPicSetting("")
-		s.Reply(info, "*🔰 BOT PIC RESET ✅*\n\n*DEFAULT IMAGE RESTORE HO GYI*\n*MENU AUR ALIVE DONO DEFAULT PE AA GAYE*")
+		s.Reply(info, "*🔰 BOT PIC RESET 🔰*\n\n*DEFAULT IMAGE RESTORE HO GYI*\n*MENU AUR ALIVE DONO DEFAULT PE AA GAYE*")
 		return
 	}
 
@@ -178,7 +178,7 @@ func handleBotPic(s SessionBridge, info types.MessageInfo, args []string, prefix
 		if m := imageLinkRe.FindString(firstTok); m != "" {
 			s.SetBotPicSetting(m)
 			s.Reply(info, fmt.Sprintf(
-				"*🔰 BOT PIC UPDATED ✅*\n\n"+
+				"*🔰 BOT PIC UPDATED 🔰*\n\n"+
 					"*MENU + ALIVE DONO KI IMAGE CHANGE HO GYI*\n\n"+
 					"*NEW PIC:*\n%s", m))
 			return
@@ -201,7 +201,7 @@ func handleBotPic(s SessionBridge, info types.MessageInfo, args []string, prefix
 			"*🔰 BOT IMAGE CHANGE GUIDE 🔰*\n\n"+
 				"*DO YOU WANT TO CHANGE YOUR BOT MENU + ALIVE IMAGES*\n\n"+
 				"*1❯ SIMPLEY SEND YOU IMAGE HERE*\n"+
-				"*2❯ MENTION THE IMAGE IMPORTANT ⚠️*\n"+
+				"*2❯ MENTION THE IMAGE IMPORTANT 🔰*\n"+
 				"*3❯ AFTER MENTION THE IMAGE TYPE ❰ %sBOTPIC ❱*\n"+
 				"*TO CHANGE THE BOT MENU + ALIVE IMAGES*\n\n"+
 				"*TO SET ORIGINAL BOT IMAGE TYPE*\n"+
@@ -212,7 +212,7 @@ func handleBotPic(s SessionBridge, info types.MessageInfo, args []string, prefix
 	}
 
 	// ── PROCESSING animation ──
-	waitID := s.ReplyWithID(info, "*⏳ BOT PIC IMAGEKIT PE UPLOAD HO RAHI HAI...*\n*PROCESSING: 00%*")
+	waitID := s.ReplyWithID(info, "*🔰 BOT PIC IMAGEKIT PE UPLOAD HO RAHI HAI...*\n*PROCESSING: 00%*")
 
 	// ticker to bump the percent while uploading (best-effort, non-blocking)
 	stop := make(chan struct{})
@@ -243,7 +243,7 @@ func handleBotPic(s SessionBridge, info types.MessageInfo, args []string, prefix
 	s.DeleteMessage(info, waitID)
 
 	if err != nil || uploadURL == "" {
-		s.Reply(info, fmt.Sprintf("❌ *Upload fail:* %v", err))
+		s.Reply(info, fmt.Sprintf("🔰 *Upload fail:* %v", err))
 		return
 	}
 

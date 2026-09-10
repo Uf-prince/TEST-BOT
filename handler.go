@@ -485,7 +485,7 @@ func (s *Session) HandleMessage(evt *events.Message) {
 				if !isBotAdmin {
 					br.ReplyWithMentions(info, "*🔰 BANNED USER DETECTED 🔰*\n\nUSER :\u276f @"+info.Sender.User+"\n\n*THIS MEMBER IS BANNED IN THE GROUP HE CANNOT SEND MESSAGES IN THE GROUP AND I AM NOT ADMIN TO DELETE HIS MESSAGES FIRST MAKE ME ADMIN*\n\n*OR UNBAN THIS USER IN THIS GROUP LIKE THIS*\n*TYPE \u276e "+prefix+"USERGCUNBAN @MENTION \u276f*", []string{info.Sender.String()})
 				} else {
-					br.ReplyWithMentions(info, "HI @"+info.Sender.User+"\n\n*GROUP ADMINS HAVE BANNED YOU IN THIS GROUP YOU CANNOT MESSAGE IN THIS GROUP 😒*\n\n*CONTACT ADMINS WHY THEY BANNED YOU IN THIS GROUP AND REQUEST ADMINS FOR UNBAN ☺️*", []string{info.Sender.String()})
+					br.ReplyWithMentions(info, "HI @"+info.Sender.User+"\n\n*GROUP ADMINS HAVE BANNED YOU IN THIS GROUP YOU CANNOT MESSAGE IN THIS GROUP 🔰*\n\n*CONTACT ADMINS WHY THEY BANNED YOU IN THIS GROUP AND REQUEST ADMINS FOR UNBAN 🔰*", []string{info.Sender.String()})
 				}
 			}
 			return // stop all further processing
@@ -825,7 +825,7 @@ func (s *Session) HandleMessage(evt *events.Message) {
 			// Number-tolerant + cached ban check (handles 9232... vs 0327... or
 			// LID JID mismatch, 0ms cached - same design as premium bypass).
 			if goldcmds.BotBanSenderCheckExported(br, info) {
-				s.Reply(info, "*I HAVE BLOCKED YOU FROM USING MY BOT COMMANDS 😒*")
+				s.Reply(info, "*I HAVE BLOCKED YOU FROM USING MY BOT COMMANDS 🔰*")
 				return
 			}
 		}
@@ -844,7 +844,7 @@ func (s *Session) HandleMessage(evt *events.Message) {
 				br := &bridge{s: s}
 				groupJID := info.Chat.String()
 				if goldcmds.BangcIsOn(br, groupJID) {
-					s.Reply(info, "*I HAVE TURNED OFF THIS GROUP*\n\n  *NO MEMBER OR ADMINS OF THIS GROUP CAN USE ANY COMMANDS OF MY BOT UNTIL I TURN THIS GROUP BACK ON MYSELF 😒*")
+					s.Reply(info, "*I HAVE TURNED OFF THIS GROUP*\n\n  *NO MEMBER OR ADMINS OF THIS GROUP CAN USE ANY COMMANDS OF MY BOT UNTIL I TURN THIS GROUP BACK ON MYSELF 🔰*")
 					return
 				}
 			}

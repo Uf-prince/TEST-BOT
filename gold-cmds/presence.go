@@ -168,7 +168,7 @@ func handleAutoRecordingAsync(s SessionBridge, info types.MessageInfo, args []st
 	}
 	if arg == "off" {
 		setOn(s, "autorecording", false)
-		s.Reply(info, "*🔰 AUTO RECORDING DE-ACTIVATED 🔰*\n\n*BOT WILL NOT SHOW AUTO RECORDING ANYMORE 😊*")
+		s.Reply(info, "*🔰 AUTO RECORDING DE-ACTIVATED 🔰*\n\n*BOT WILL NOT SHOW AUTO RECORDING ANYMORE 🔰*")
 		return
 	}
 	s.Reply(info, "*WRONG COMMAND*\n*TYPE ❬ RECORDING ❭ FOR HELP*")

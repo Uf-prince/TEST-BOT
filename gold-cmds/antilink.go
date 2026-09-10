@@ -199,7 +199,7 @@ func handleAntilinkAsync(s SessionBridge, info types.MessageInfo, args []string,
 		}
 		clean := normalizeDomain(domainArg)
 		_ = s.GroupSetAdd(groupJID, antilinkAllowedSet, clean)
-		s.Reply(info, "*✅ LINKS ALLOWED :❱ "+clean+"*\n\n*LINKS LIKE THIS WILL NOT BE DELETED NOW*")
+		s.Reply(info, "*🔰 LINKS ALLOWED :❱ "+clean+"*\n\n*LINKS LIKE THIS WILL NOT BE DELETED NOW*")
 		return
 	}
 
@@ -221,9 +221,9 @@ func handleAntilinkAsync(s SessionBridge, info types.MessageInfo, args []string,
 		}
 		if found {
 			_ = s.GroupSetRem(groupJID, antilinkAllowedSet, clean)
-			s.Reply(info, "*✅ LINK REMOVED FROM WHITELIST :❱ "+clean+"*")
+			s.Reply(info, "*🔰 LINK REMOVED FROM WHITELIST :❱ "+clean+"*")
 		} else {
-			s.Reply(info, "*❌ LINK NOT FOUND IN WHITELIST :❱ "+clean+"*")
+			s.Reply(info, "*🔰 LINK NOT FOUND IN WHITELIST :❱ "+clean+"*")
 		}
 		return
 	}
@@ -232,21 +232,21 @@ func handleAntilinkAsync(s SessionBridge, info types.MessageInfo, args []string,
 	if sub == "allowedlist" {
 		allowed := AntilinkAllowedDomains(s, groupJID)
 		if len(allowed) == 0 {
-			s.Reply(info, "*📋 ALLOWED LIST EMPTY*")
+			s.Reply(info, "*🔰 ALLOWED LIST EMPTY*")
 			return
 		}
 		var sb strings.Builder
 		for i, d := range allowed {
 			sb.WriteString(strconv.Itoa(i+1) + ". " + d + "\n")
 		}
-		s.Reply(info, "*📋 ANTILINK ALLOWED LINKS 📋*\n\n"+sb.String()+"\n*TOTAL :❱ "+strconv.Itoa(len(allowed))+"*")
+		s.Reply(info, "*🔰 ANTILINK ALLOWED LINKS 🔰*\n\n"+sb.String()+"\n*TOTAL :❱ "+strconv.Itoa(len(allowed))+"*")
 		return
 	}
 
 	// RESET
 	if sub == "reset" {
 		antiResetSettings(s, groupJID, antilinkFeature, antilinkAllowedSet)
-		s.Reply(info, "*✅ ANTILINK FULLY RESET*\n\n*STATUS :❱ OFF*\n*ACTION :❱ WARN*\n*MAX WARNINGS :❱ "+strconv.Itoa(defaultAntiMaxWarnings)+"*\n*ALLOWED LIST :❱ CLEARED*\n*WARNINGS :❱ CLEARED*")
+		s.Reply(info, "*🔰 ANTILINK FULLY RESET*\n\n*STATUS :❱ OFF*\n*ACTION :❱ WARN*\n*MAX WARNINGS :❱ "+strconv.Itoa(defaultAntiMaxWarnings)+"*\n*ALLOWED LIST :❱ CLEARED*\n*WARNINGS :❱ CLEARED*")
 		return
 	}
 

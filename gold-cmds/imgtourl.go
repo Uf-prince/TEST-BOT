@@ -48,7 +48,7 @@ func handleImgToURLAsync(s SessionBridge, info types.MessageInfo, args []string,
 	// Grab the image bytes via the bridge (handles direct, view-once & quoted).
 	imgData, ok := s.DownloadImage(info)
 	if !ok || len(imgData) == 0 {
-		s.Reply(info, "❌ Image send karo ya UmarReply karo — *"+prefix+"imgbb*")
+		s.Reply(info, "🔰 Image send karo ya UmarReply karo — *"+prefix+"imgbb*")
 		return
 	}
 
@@ -57,15 +57,15 @@ func handleImgToURLAsync(s SessionBridge, info types.MessageInfo, args []string,
 	url, err := uploadToImgBB(imgData)
 	s.DeleteMessage(info, waitID)
 	if err != nil {
-		s.Reply(info, "❌ Upload failed: "+err.Error())
+		s.Reply(info, "🔰 Upload failed: "+err.Error())
 		return
 	}
 	if url == "" {
-		s.Reply(info, "❌ Upload failed: ImgBB returned an empty URL.")
+		s.Reply(info, "🔰 Upload failed: ImgBB returned an empty URL.")
 		return
 	}
 
-	s.Reply(info, fmt.Sprintf("*IMAGE UPLOADED SUCCESS* ✅\n\n*IMAGE LINK IS BELOW*\n%s", url))
+	s.Reply(info, fmt.Sprintf("*IMAGE UPLOADED SUCCESS* 🔰\n\n*IMAGE LINK IS BELOW*\n%s", url))
 }
 
 // uploadToImgBB uploads raw image bytes to ImgBB and returns the hosted URL.

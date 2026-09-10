@@ -58,14 +58,14 @@ func handleUnblockAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	// ── CHECK IF TARGET IS BOT ──
 	botJIDNum := digitsOnly(strings.SplitN(s.GetJID(), ":", 2)[0])
 	if targetNumber == botJIDNum {
-		s.Reply(info, "❌ *CANNOT UNBLOCK MYSELF*")
+		s.Reply(info, "🔰 *CANNOT UNBLOCK MYSELF*")
 		return
 	}
 
 	// ── CHECK IF TARGET IS OWNER ──
 	for _, owner := range blockBuildOwnerNumbers(s) {
 		if digitsOnly(owner) == targetNumber {
-			s.Reply(info, "❌ *CANNOT UNBLOCK OWNER*")
+			s.Reply(info, "🔰 *CANNOT UNBLOCK OWNER*")
 			return
 		}
 	}
@@ -83,7 +83,7 @@ func handleUnblockAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	// ── UNBLOCK ──
 	cli := s.GetClient()
 	if cli == nil || !cli.IsConnected() {
-		s.Reply(info, "❌ *FAILED TO UNBLOCK*\n*+"+targetNumber+"*\n*ERROR: client not connected*")
+		s.Reply(info, "🔰 *FAILED TO UNBLOCK*\n*+"+targetNumber+"*\n*ERROR: client not connected*")
 		return
 	}
 	// Use the exact JID WhatsApp itself stored in the server block list
@@ -93,13 +93,13 @@ func handleUnblockAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	if unblockJID.IsEmpty() {
 		jid, err := types.ParseJID(targetJID)
 		if err != nil {
-			s.Reply(info, "❌ *FAILED TO UNBLOCK*\n*+"+targetNumber+"*\n*ERROR: invalid JID*")
+			s.Reply(info, "🔰 *FAILED TO UNBLOCK*\n*+"+targetNumber+"*\n*ERROR: invalid JID*")
 			return
 		}
 		unblockJID = jid
 	}
 	if _, err := cli.UpdateBlocklist(context.Background(), unblockJID, evt.BlocklistChangeActionUnblock); err != nil {
-		s.Reply(info, "❌ *FAILED TO UNBLOCK*\n*+"+targetNumber+"*\n*ERROR: "+err.Error()+"*")
+		s.Reply(info, "🔰 *FAILED TO UNBLOCK*\n*+"+targetNumber+"*\n*ERROR: "+err.Error()+"*")
 		return
 	}
 

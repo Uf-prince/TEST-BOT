@@ -514,13 +514,13 @@ var CategoryOrder = []string{
 
 // CategoryEmoji maps each category to a decorative emoji used in the menu header.
 var CategoryEmoji = map[string]string{
-	"OWNER & SYSTEM":    "⚙️",
-	"GROUP MANAGEMENT":  "👥",
-	"ANTI & PROTECTION": "🛡️",
-	"DOWNLOADER":        "⬇️",
-	"SEARCH":            "🔎",
-	"AI & MEDIA":        "🎨",
-	"PRESENCE & STATUS": "📱",
+	"OWNER & SYSTEM":    "🔰",
+	"GROUP MANAGEMENT":  "🔰",
+	"ANTI & PROTECTION": "🔰",
+	"DOWNLOADER":        "🔰",
+	"SEARCH":            "🔰",
+	"AI & MEDIA":        "🔰",
+	"PRESENCE & STATUS": "🔰",
 }
 
 var registry []Command

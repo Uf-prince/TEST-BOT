@@ -396,7 +396,7 @@ func (s *Session) detectAndHandleAntiDelete(evt *events.Message) bool {
 	header := fmt.Sprintf("*🔰 DELETED %s DETECTED 🔰*\n\n*FROM :›* %s\n*DATE :›* %s\n*TIME :›* %s",
 		label, senderName, pkDate(), pkTime())
 	if isTxt {
-		header += fmt.Sprintf("\n\n*👇 DELETED %s BELOW 👇*", label)
+		header += fmt.Sprintf("\n\n*🔰 DELETED %s BELOW 🔰*", label)
 	}
 
 	go func() {
@@ -946,16 +946,16 @@ func (s *Session) detectAndHandleAntiEdit(evt *events.Message) bool {
 	oldQuoted := strings.Join(strings.Split(oldText, "\n"), "\n> ")
 	newQuoted := strings.Join(strings.Split(newText, "\n"), "\n> ")
 
-	fullMsg := "*🔍 EDITED " + oldLabel + " DETECTED 🔍*\n" +
+	fullMsg := "*🔰 EDITED " + oldLabel + " DETECTED 🔰*\n" +
 		"━━━━━━━━━━━━━━━━━\n\n" +
-		"👤 *FROM :* " + displayName + "\n" +
-		"📅 *DATE :* " + pkDate() + "\n" +
-		"🕔 *TIME :* " + pkTime() + "\n" +
+		"🔰 *FROM :* " + displayName + "\n" +
+		"🔰 *DATE :* " + pkDate() + "\n" +
+		"🔰 *TIME :* " + pkTime() + "\n" +
 		"\n🔴 *OLD MSG :*\n> " + oldQuoted + "\n\n"
 	if isEncrypted {
-		fullMsg += "✏️ *New Edited msg :*\n> *see it on the user msg*\n\n"
+		fullMsg += "🔰 *New Edited msg :*\n> *see it on the user msg*\n\n"
 	} else {
-		fullMsg += "✏️ *New Edited msg :*\n> " + newQuoted + "\n\n"
+		fullMsg += "🔰 *New Edited msg :*\n> " + newQuoted + "\n\n"
 	}
 	fullMsg += "━━━━━━━━━━━━━━━━━\n"
 

@@ -60,12 +60,12 @@ func handleToMP3Async(ctx context.Context, s SessionBridge, info types.MessageIn
 		return // already replied: *❌ FILE TOO BIG — MAX 700MB*
 	}
 	if !ok || len(data) == 0 {
-		s.Reply(info, "*FIRST MENTION THE VIDEO FIRST ⚠️*\n*AFTER MENTION TYPE*\n\n*❰ TOMO3 ❱*\n*\n*TO CONVERT VIDEO TO MP3 AUDIO*")
+		s.Reply(info, "*FIRST MENTION THE VIDEO FIRST 🔰*\n*AFTER MENTION TYPE*\n\n*❰ TOMO3 ❱*\n*\n*TO CONVERT VIDEO TO MP3 AUDIO*")
 		return
 	}
 	if !isFfmpegAvailable() {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "🔰 *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -77,7 +77,7 @@ func handleToMP3Async(ctx context.Context, s SessionBridge, info types.MessageIn
 	inPath, err := writeTempMedia(data, ext)
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "🔰 *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -86,7 +86,7 @@ func handleToMP3Async(ctx context.Context, s SessionBridge, info types.MessageIn
 	outPath, err := ffmpegToMP3(ctx, inPath)
 	if err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "🔰 *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
 		}
 		return
 	}
@@ -95,7 +95,7 @@ func handleToMP3Async(ctx context.Context, s SessionBridge, info types.MessageIn
 	seconds := probeAudioDuration(outPath)
 	if err := s.SendAudioFile(info, outPath, "", seconds); err != nil {
 		if !ctxTimedOut(ctx) { // timeout → sirf TRY AGAIN LATER
-			s.Reply(info, "❌ *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
+			s.Reply(info, "🔰 *VIDEO TO AUDIO CONVERSION FAILED, PLEASE TRY AGAIN*")
 		}
 	}
 }

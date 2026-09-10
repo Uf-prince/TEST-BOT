@@ -494,7 +494,7 @@ func handleAmuteShared(s SessionBridge, info types.MessageInfo, args []string, p
 	// ── bot number (scheduler isi timezone se chalega) ──
 	cli := s.GetClient()
 	if cli == nil || !cli.IsConnected() {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	botDigits := amuteBotDigits(cli)
@@ -563,7 +563,7 @@ func handleAmuteShared(s SessionBridge, info types.MessageInfo, args []string, p
 			nowEnabled = (isMuteCmd && afterOn.MuteEnabled) || (!isMuteCmd && afterOn.UnmuteEnabled)
 		}
 		if !nowEnabled {
-			s.Reply(info, "*⚠️ "+strings.ToUpper(cmdName)+" ON FAILED TO SAVE*\n*DATABASE STILL SHOWS OFF. Please try again.*")
+			s.Reply(info, "*🔰 "+strings.ToUpper(cmdName)+" ON FAILED TO SAVE*\n*DATABASE STILL SHOWS OFF. Please try again.*")
 			return
 		}
 		// pehle se time set tha to countdown turant dikha do
@@ -658,7 +658,7 @@ func handleAmuteShared(s SessionBridge, info types.MessageInfo, args []string, p
 		if savedHour >= 0 {
 			savedStr = amuteFormatHourMinute(savedHour, savedMinute)
 		}
-		s.Reply(info, "*⚠️ TIME FAILED TO SAVE*\n*YOU TRIED TO SET "+amuteFormatHourMinute(hour, minute)+", BUT THE DATABASE STILL SHOWS "+savedStr+".*\n*This is a storage/DB bug, please try again.*")
+		s.Reply(info, "*🔰 TIME FAILED TO SAVE*\n*YOU TRIED TO SET "+amuteFormatHourMinute(hour, minute)+", BUT THE DATABASE STILL SHOWS "+savedStr+".*\n*This is a storage/DB bug, please try again.*")
 		return
 	}
 

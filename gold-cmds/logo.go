@@ -395,13 +395,13 @@ func handleLogoNAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	text := strings.TrimSpace(strings.Join(args, " "))
 	if text == "" {
 		s.Reply(info, fmt.Sprintf(
-			"*🎨 LOGO %d — %s*\n\n"+
+			"*🔰 LOGO %d — %s*\n\n"+
 				"*IS STYLE ME TEXT LOGO BANANE KE LIYE:*\n"+
 				"*❯ %slogo%d <your text>*\n\n"+
 				"*EXAMPLE:*\n"+
 				"*❯ %slogo%d UMAR*\n"+
 				"*❯ %slogo%d GOLD BOT*\n\n"+
-				"*Jo text likhoge wahi image pe likha aayega is dhamakedar style me! 😎🔥*",
+				"*Jo text likhoge wahi image pe likha aayega is dhamakedar style me! 🔰🔰*",
 			st.Num, st.Name, prefix, st.Num, prefix, st.Num, prefix, st.Num))
 		return
 	}
@@ -412,7 +412,7 @@ func handleLogoNAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	}
 
 	waitID := s.ReplyWithID(info, fmt.Sprintf(
-		"*🎨 LOGO %d — %s*\n*TEXT:* %s\n*DHAMAKEDAR LOGO BAN RAHA HAI... 🖍️✨*",
+		"*🔰 LOGO %d — %s*\n*TEXT:* %s\n*DHAMAKEDAR LOGO BAN RAHA HAI... 🔰🔰*",
 		st.Num, st.Name, strings.ToUpper(text)))
 
 	start := time.Now()
@@ -421,7 +421,7 @@ func handleLogoNAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	bg, err := fetchBackground(st.BgPrompt, st.Seed)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, fmt.Sprintf("❌ *LOGO %d ERROR*\nBackground: %v", st.Num, err))
+		s.Reply(info, fmt.Sprintf("🔰 *LOGO %d ERROR*\nBackground: %v", st.Num, err))
 		return
 	}
 
@@ -429,7 +429,7 @@ func handleLogoNAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	finalBytes, err := compositeLogo(bg, st, text)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, fmt.Sprintf("❌ *LOGO %d ERROR*\nComposite: %v", st.Num, err))
+		s.Reply(info, fmt.Sprintf("🔰 *LOGO %d ERROR*\nComposite: %v", st.Num, err))
 		return
 	}
 
@@ -437,20 +437,20 @@ func handleLogoNAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	s.DeleteMessage(info, waitID)
 
 	caption := fmt.Sprintf(
-		"*🔥 LOGO %d — %s 🔥*\n\n"+
-			"*✍️ TEXT:* %s\n"+
-			"*🎨 STYLE:* %s\n"+
-			"*🔤 FONT:* %s | %.0fpx\n"+
-			"*📍 POSITION:* %s\n"+
-			"*✨ EFFECT:* %s\n"+
-			"*🤖 AI BG:* Pollinations Flux\n"+
-			"*⏱️ TIME:* %.1fs\n"+
-			"*📐 SIZE:* 1024×1024\n\n"+
-			"*❯❯ DHAMAKEDAR LOGO READY ✅😎*",
+		"*🔰 LOGO %d — %s 🔰*\n\n"+
+			"*🔰 TEXT:* %s\n"+
+			"*🔰 STYLE:* %s\n"+
+			"*🔰 FONT:* %s | %.0fpx\n"+
+			"*🔰 POSITION:* %s\n"+
+			"*🔰 EFFECT:* %s\n"+
+			"*🔰 AI BG:* Pollinations Flux\n"+
+			"*🔰 TIME:* %.1fs\n"+
+			"*🔰 SIZE:* 1024×1024\n\n"+
+			"*❯❯ DHAMAKEDAR LOGO READY 🔰🔰*",
 		st.Num, st.Name, strings.ToUpper(text), st.Name, fontName(st.FontPath), st.FontSize, st.PosLabel, effectLabel(st.Effect), elapsed.Seconds())
 
 	if err := s.SendImage(info, finalBytes, caption); err != nil {
-		s.Reply(info, fmt.Sprintf("❌ *LOGO %d SEND ERROR*\n%s", st.Num, err.Error()))
+		s.Reply(info, fmt.Sprintf("🔰 *LOGO %d SEND ERROR*\n%s", st.Num, err.Error()))
 	}
 }
 
@@ -502,17 +502,17 @@ func init() {
 		Desc:     "Show all 2 logo text styles",
 		Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 			var sb strings.Builder
-			sb.WriteString("*🎨 GOLD-MD LOGO STYLES — 2 DHAMAKEDAR DESIGNS 🔥*\n\n")
-			sb.WriteString("*Har style me font, size, position aur effect sab alag hai! 😎*\n\n")
+			sb.WriteString("*🔰 GOLD-MD LOGO STYLES — 2 DHAMAKEDAR DESIGNS 🔰*\n\n")
+			sb.WriteString("*Har style me font, size, position aur effect sab alag hai! 🔰*\n\n")
 			for _, st := range logoStyles {
 				sb.WriteString(fmt.Sprintf(" *❯ %slogo%d* — %s\n", prefix, st.Num, st.Name))
-				sb.WriteString(fmt.Sprintf("    🔤 %s (%.0fpx) | 📍 %s | ✨ %s\n",
+				sb.WriteString(fmt.Sprintf("    🔰 %s (%.0fpx) | 🔰 %s | 🔰 %s\n",
 					fontName(st.FontPath), st.FontSize, st.PosLabel, effectLabel(st.Effect)))
 			}
 			sb.WriteString("\n*EXAMPLE:*\n")
 			sb.WriteString(fmt.Sprintf(" *❯ %slogo1 UMAR*\n", prefix))
 			sb.WriteString(fmt.Sprintf(" *❯ %slogo2 GOLD BOT*\n\n", prefix))
-			sb.WriteString("*Dono logos bilkul alag dikhenge — font, size, jagah, effect sab different! 😎✨*")
+			sb.WriteString("*Dono logos bilkul alag dikhenge — font, size, jagah, effect sab different! 🔰🔰*")
 			s.Reply(info, sb.String())
 		},
 	})

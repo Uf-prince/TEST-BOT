@@ -27,10 +27,10 @@ import (
 const vvHelpText = "*🔰 VIEWONCE COMMAND INFO 🔰*\n\n" +
 	"*OPENS VIEWONCE MEDIA*\n" +
 	"*SUPPORTED TYPES:*\n" +
-	"• IMAGE 📷\n" +
-	"• VIDEO 🎬\n" +
-	"• AUDIO 🎵\n" +
-	"• VOICE NOTE 🎙️\n\n" +
+	"• IMAGE 🔰\n" +
+	"• VIDEO 🔰\n" +
+	"• AUDIO 🔰\n" +
+	"• VOICE NOTE 🔰\n\n" +
 	"*REPLY TO ANY VIEWONCE MEDIA WITH THIS COMMAND*\n\n" +
 	"*EXAMPLE:* .vv\n\n" +
 	"*🔰 OWNER ONLY COMMAND 🔰*"
@@ -61,11 +61,11 @@ func handleVVAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 
 	data, mime, ok := s.DownloadQuotedMedia(info)
 	if !ok || len(data) == 0 {
-		s.Reply(info, "❌ *THIS IS NOT A VIEWONCE MEDIA*\n\n*Reply to a ViewOnce image/video/audio with .vv*")
+		s.Reply(info, "🔰 *THIS IS NOT A VIEWONCE MEDIA*\n\n*Reply to a ViewOnce image/video/audio with .vv*")
 		return
 	}
 
-	waitID := s.ReplyWithID(info, "⏳ *OPENING VIEWONCE MEDIA...*")
+	waitID := s.ReplyWithID(info, "🔰 *OPENING VIEWONCE MEDIA...*")
 
 	low := strings.ToLower(mime)
 	var sentErr error
@@ -88,7 +88,7 @@ func handleVVAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 	s.DeleteMessage(info, waitID)
 
 	if sentErr != nil {
-		s.Reply(info, "❌ *FAILED TO OPEN VIEWONCE MEDIA*\n"+sentErr.Error())
+		s.Reply(info, "🔰 *FAILED TO OPEN VIEWONCE MEDIA*\n"+sentErr.Error())
 		return
 	}
 }

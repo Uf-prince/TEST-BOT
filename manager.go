@@ -817,7 +817,7 @@ func (s *Session) EventHandler(raw interface{}) {
 	}()
 	switch evt := raw.(type) {
 	case *events.Connected:
-		OkLog("✅ Session connected: %s (owner %s)", s.JID, s.Owner)
+		OkLog("🔰 Session connected: %s (owner %s)", s.JID, s.Owner)
 		// 🔖 OFFLINE-QUEUE IGNORE mode OFF: bot ab ONLINE hai. Is reconnect
 		// ke waqt se pehle aaye sab queued messages ignore ho chuke honge
 		// (handler.go ka isOldMessage guard). Ab se naye messages ka hi jawab.
@@ -859,7 +859,7 @@ func (s *Session) EventHandler(raw interface{}) {
 		// whatsmeow ka autoReconnect bhi chalega, lekin hum apna fast-path
 		// handler bhi schedule karte hain (1s me Connect) taake bot kabhi
 		// zyada der offline na rahe.
-		WarnLog("⚡ Socket disconnected for %s — scheduling fast reconnect", s.JID)
+		WarnLog("🔰 Socket disconnected for %s — scheduling fast reconnect", s.JID)
 		s.Manager.handleDisconnectedEvent(s)
 
 	case *events.LoggedOut:
@@ -868,7 +868,7 @@ func (s *Session) EventHandler(raw interface{}) {
 		// session is "connected", WhatsApp is the source of truth here.
 		// Redis is lying — clear it so the next AutoLoad doesn't try
 		// to restore a dead session and fail in a loop.
-		WarnLog("⚠️  WhatsApp logged out %s (reason: %s) — WhatsApp is truth, clearing stale Redis data",
+		WarnLog("🔰  WhatsApp logged out %s (reason: %s) — WhatsApp is truth, clearing stale Redis data",
 			s.JID, evt.Reason.String())
 		s.Manager.cleanupSession(s, "whatsapp logged out")
 
@@ -880,7 +880,7 @@ func (s *Session) EventHandler(raw interface{}) {
 		if reason == events.ConnectFailureLoggedOut ||
 			reason == events.ConnectFailureMainDeviceGone ||
 			reason == events.ConnectFailureUnknownLogout {
-			WarnLog("⚠️  WhatsApp connect failure for %s (reason: %s) — permanent logout, clearing stale data",
+			WarnLog("🔰  WhatsApp connect failure for %s (reason: %s) — permanent logout, clearing stale data",
 				s.JID, reason.String())
 			s.Manager.cleanupSession(s, "whatsapp permanent disconnect: "+reason.String())
 		} else {
@@ -924,13 +924,13 @@ func (s *Session) EventHandler(raw interface{}) {
 		// (new Meta passkey flow, mid-2026). A headless bot cannot complete WebAuthn
 		// interactively, so we log it clearly. The PR #1234 patch in whatsmeow keeps
 		// the connection alive waiting for this event instead of failing hard.
-		WarnLog("🔐 WhatsApp requires passkey/biometric verification for %s — headless bot cannot complete WebAuthn. The user may need to pair via WhatsApp Web in a real browser, or WhatsApp will fall back to legacy flow.", s.JID)
+		WarnLog("🔰 WhatsApp requires passkey/biometric verification for %s — headless bot cannot complete WebAuthn. The user may need to pair via WhatsApp Web in a real browser, or WhatsApp will fall back to legacy flow.", s.JID)
 
 	case *events.PairPasskeyError:
-		ErrLog("❌ Passkey pairing error for %s: %v", s.JID, evt.Error)
+		ErrLog("🔰 Passkey pairing error for %s: %v", s.JID, evt.Error)
 
 	case *events.PairSuccess:
-		OkLog("✅ Pairing succeeded for %s", s.JID)
+		OkLog("🔰 Pairing succeeded for %s", s.JID)
 //		JSONDebug("PAIR_SUCCESS", map[string]any{
 //			"jid":      s.JID,
 //			"id":       evt.ID.String(),
@@ -1075,7 +1075,7 @@ func (s *Session) sendStartupNotification() {
 *🔰 PREFIX :❯ %s*
 *🔰 COMMANDS :❯ ❮ %d ❯*
 
-*⚠️ IMPORTANT NOTE ⚠️*
+*🔰 IMPORTANT NOTE 🔰*
 *IF YOUR BOT NOT REPLYING MEANS YOUR BOT STOPPED SO PLEASE DON'T WORRY ABOUT THIS THINK THIS REAL ISSUE THE GOLD-MD SERVER HAS BEEN RESTARTING AND WHEN THE RESTART COMPLETE THE BOT COME BACK ONLINE YOU CANE WAIT ONLY 30 SECONDS AND YOUR BOT WILL COME BACK ONLINE IN 30 SECONDS*`,
 		s.Owner, ownerName, ownerNumberDisplay, prefix, totalCmds)
 
@@ -1244,7 +1244,7 @@ func (s *Session) CmdAlive(info types.MessageInfo, args []string, prefix string)
 	//   - If empty, use DEFAULT_ALIVE_MSG
 	//   - Replace {PUSHNAME} (case-insensitive) with pushName || "User"
 	//   - Send as image caption (bot pic) with text fallback
-	const defaultAliveMsg = "*ASSALAMUALAIKUM 😊*\nDEAR :❯ {PUSHNAME}\n*I AM ACTIVE NOW 🙂*\n\n*TYPE ❮ BOTPIC ❯ TO CHANGE BOT IMAGE*\n*TYPE ❮ ALIVEMSG ❯ TO CHANGE ALIVE MSG*"
+	const defaultAliveMsg = "*ASSALAMUALAIKUM 🔰*\nDEAR :❯ {PUSHNAME}\n*I AM ACTIVE NOW 🔰*\n\n*TYPE ❮ BOTPIC ❯ TO CHANGE BOT IMAGE*\n*TYPE ❮ ALIVEMSG ❯ TO CHANGE ALIVE MSG*"
 
 	aliveMsgText := ""
 	if s.Manager != nil && s.Manager.Redis != nil {
@@ -1430,7 +1430,7 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 		}
 		emoji := goldcmds.CategoryEmoji[cat]
 		if emoji == "" {
-			emoji = "📦"
+			emoji = "🔰"
 		}
 		b.WriteString(fmt.Sprintf("*╭──❰ %s %s ❱──╮*\n", emoji, cat))
 		for _, c := range list {

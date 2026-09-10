@@ -46,13 +46,13 @@ func handleAliveMsg(s SessionBridge, info types.MessageInfo, args []string, pref
 	// reset → clear custom alive msg (redis-safe delete → default)
 	if strings.ToLower(aiArgs) == "reset" {
 		s.SetAliveMsgSetting("")
-		s.Reply(info, "*🔰 ALIVE MSG RESET TO DEFAULT ✅*\n\n*WAIT 1 MINUTE FOR CHANGES IN BOT*\n*AFTER WAITING 1 MINUTE TYPE ❮ ALIVE ❯ TO CHECK NEW ALIVE MESSAGE*\n")
+		s.Reply(info, "*🔰 ALIVE MSG RESET TO DEFAULT 🔰*\n\n*WAIT 1 MINUTE FOR CHANGES IN BOT*\n*AFTER WAITING 1 MINUTE TYPE ❮ ALIVE ❯ TO CHECK NEW ALIVE MESSAGE*\n")
 		return
 	}
 
 	// set new alive msg
 	s.SetAliveMsgSetting(aiArgs)
-	s.Reply(info, "*🔰 ALIVE MSG CHANGED ✅*\n\n*NEW ALIVE MSG :❯*\n"+aiArgs+"\n\n*WAIT 1 MINUTE FOR CHANGES IN BOT*\n*AFTER WAITING 1 MINUTE TYPE ❮ ALIVE ❯ TO CHECK NEW ALIVE MESSAGE*\n")
+	s.Reply(info, "*🔰 ALIVE MSG CHANGED 🔰*\n\n*NEW ALIVE MSG :❯*\n"+aiArgs+"\n\n*WAIT 1 MINUTE FOR CHANGES IN BOT*\n*AFTER WAITING 1 MINUTE TYPE ❮ ALIVE ❯ TO CHECK NEW ALIVE MESSAGE*\n")
 }
 
 func init() {

@@ -109,12 +109,12 @@ func handleBlocklistAsync(s SessionBridge, info types.MessageInfo, args []string
 
 	bl, err := cli.GetBlocklist(context.Background())
 	if err != nil {
-		s.Reply(info, "*Try Again 🥺*")
+		s.Reply(info, "*Try Again 🔰*")
 		return
 	}
 
 	if bl == nil || len(bl.JIDs) == 0 {
-		s.Reply(info, "*🔰 WHATSAPP BLOCK LIST 🔰*\n\n*No blocked contacts found ✅*")
+		s.Reply(info, "*🔰 WHATSAPP BLOCK LIST 🔰*\n\n*No blocked contacts found 🔰*")
 		return
 	}
 

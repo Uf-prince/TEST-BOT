@@ -67,7 +67,7 @@ func requireGroup(s SessionBridge, info types.MessageInfo) bool {
 	if info.IsGroup {
 		return true
 	}
-	s.Reply(info, "*THIS COMMAND CAN ONLY BE USED IN GROUPS 😊*")
+	s.Reply(info, "*THIS COMMAND CAN ONLY BE USED IN GROUPS 🔰*")
 	return false
 }
 
@@ -122,12 +122,12 @@ func sendMentionText(client *whatsmeow.Client, info types.MessageInfo, text stri
 func fetchGroupInfo(s SessionBridge, info types.MessageInfo) (*types.GroupInfo, bool) {
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return nil, false
 	}
 	gi, err := client.GetGroupInfo(context.Background(), info.Chat)
 	if err != nil {
-		s.Reply(info, "❌ Failed to fetch group info: "+err.Error())
+		s.Reply(info, "🔰 Failed to fetch group info: "+err.Error())
 		return nil, false
 	}
 	return gi, true
@@ -151,14 +151,14 @@ func handleMuteAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	if err := client.SetGroupAnnounce(context.Background(), info.Chat, true); err != nil {
-		s.Reply(info, "❌ *MUTE FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *MUTE FAILED:* "+err.Error())
 		return
 	}
-	s.Reply(info, "🔒 *GROUP CHAT TURNED OFF*\n\n*ONLY ADMINS CAN MESSAGE NOW 😊*")
+	s.Reply(info, "🔰 *GROUP CHAT TURNED OFF*\n\n*ONLY ADMINS CAN MESSAGE NOW 🔰*")
 }
 
 // ---------------------------------------------------------------------------
@@ -179,14 +179,14 @@ func handleUnmuteAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	if err := client.SetGroupAnnounce(context.Background(), info.Chat, false); err != nil {
-		s.Reply(info, "❌ *UNMUTE FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *UNMUTE FAILED:* "+err.Error())
 		return
 	}
-	s.Reply(info, "🔓 *GROUP CHAT TURNED ON*\n\n*ALL MEMBERS CAN MESSAGE AGAIN 😊*")
+	s.Reply(info, "🔰 *GROUP CHAT TURNED ON*\n\n*ALL MEMBERS CAN MESSAGE AGAIN 🔰*")
 }
 
 // ---------------------------------------------------------------------------
@@ -207,39 +207,39 @@ func handleKickAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	targets := targetJIDs(s, info)
 	if len(targets) == 0 {
-		s.Reply(info, "*REPLY OR TAG THE MEMBER YOU WANT TO KICK ❗*")
+		s.Reply(info, "*REPLY OR TAG THE MEMBER YOU WANT TO KICK 🔰*")
 		return
 	}
 	botJID := client.Store.ID
 	// don't kick self
 	for _, t := range targets {
 		if t.String() == botJID.String() {
-			s.Reply(info, "*YOU CAN'T KICK ME 😤*")
+			s.Reply(info, "*YOU CAN'T KICK ME 🔰*")
 			return
 		}
 	}
 	_, err := client.UpdateGroupParticipants(context.Background(), info.Chat, targets, whatsmeow.ParticipantChangeRemove)
 	if err != nil {
-		s.Reply(info, "❌ *KICK FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *KICK FAILED:* "+err.Error())
 		return
 	}
 	var b strings.Builder
-	b.WriteString("👢 *MEMBER KICKED*\n\n")
+	b.WriteString("🔰 *MEMBER KICKED*\n\n")
 	for _, t := range targets {
 		fmt.Fprintf(&b, "@%s ", t.User)
 	}
-	b.WriteString("*HAS BEEN REMOVED FROM THE GROUP* 🚫")
+	b.WriteString("*HAS BEEN REMOVED FROM THE GROUP* 🔰")
 	mentioned := make([]string, 0, len(targets))
 	for _, t := range targets {
 		mentioned = append(mentioned, t.String())
 	}
 	if err := sendMentionText(client, info, b.String(), mentioned); err != nil {
-		s.Reply(info, "❌ *KICK FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *KICK FAILED:* "+err.Error())
 	}
 }
 
@@ -261,29 +261,29 @@ func handlePromoteAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	targets := targetJIDs(s, info)
 	if len(targets) == 0 {
-		s.Reply(info, "*REPLY OR TAG THE MEMBER YOU WANT TO PROMOTE ❗*")
+		s.Reply(info, "*REPLY OR TAG THE MEMBER YOU WANT TO PROMOTE 🔰*")
 		return
 	}
 	_, err := client.UpdateGroupParticipants(context.Background(), info.Chat, targets, whatsmeow.ParticipantChangePromote)
 	if err != nil {
-		s.Reply(info, "❌ *PROMOTE FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *PROMOTE FAILED:* "+err.Error())
 		return
 	}
 	var b strings.Builder
-	b.WriteString("⬆️ *NEW ADMIN* 🔰\n\n")
+	b.WriteString("🔰 *NEW ADMIN* 🔰\n\n")
 	mentioned := make([]string, 0, len(targets))
 	for _, t := range targets {
 		fmt.Fprintf(&b, "@%s ", t.User)
 		mentioned = append(mentioned, t.String())
 	}
-	b.WriteString("*IS NOW AN ADMIN OF THIS GROUP*\n*CONGRATULATIONS! 🎉*")
+	b.WriteString("*IS NOW AN ADMIN OF THIS GROUP*\n*CONGRATULATIONS! 🔰*")
 	if err := sendMentionText(client, info, b.String(), mentioned); err != nil {
-		s.Reply(info, "❌ *PROMOTE FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *PROMOTE FAILED:* "+err.Error())
 	}
 }
 
@@ -305,21 +305,21 @@ func handleDemoteAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	targets := targetJIDs(s, info)
 	if len(targets) == 0 {
-		s.Reply(info, "*REPLY OR TAG THE MEMBER YOU WANT TO DEMOTE ❗*")
+		s.Reply(info, "*REPLY OR TAG THE MEMBER YOU WANT TO DEMOTE 🔰*")
 		return
 	}
 	_, err := client.UpdateGroupParticipants(context.Background(), info.Chat, targets, whatsmeow.ParticipantChangeDemote)
 	if err != nil {
-		s.Reply(info, "❌ *DEMOTE FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *DEMOTE FAILED:* "+err.Error())
 		return
 	}
 	var b strings.Builder
-	b.WriteString("⬇️ *ADMIN REMOVED*\n\n")
+	b.WriteString("🔰 *ADMIN REMOVED*\n\n")
 	mentioned := make([]string, 0, len(targets))
 	for _, t := range targets {
 		fmt.Fprintf(&b, "@%s ", t.User)
@@ -327,7 +327,7 @@ func handleDemoteAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	}
 	b.WriteString("*IS NO LONGER AN ADMIN*\n*NOW A REGULAR MEMBER*")
 	if err := sendMentionText(client, info, b.String(), mentioned); err != nil {
-		s.Reply(info, "❌ *DEMOTE FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *DEMOTE FAILED:* "+err.Error())
 	}
 }
 
@@ -353,27 +353,27 @@ func handleInviteLinkAsync(s SessionBridge, info types.MessageInfo, reset bool) 
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	gi, err := client.GetGroupInfo(context.Background(), info.Chat)
 	if err != nil {
-		s.Reply(info, "❌ Failed to fetch group info: "+err.Error())
+		s.Reply(info, "🔰 Failed to fetch group info: "+err.Error())
 		return
 	}
 	link, err := client.GetGroupInviteLink(context.Background(), info.Chat, reset)
 	if err != nil {
 		if reset {
-			s.Reply(info, "❌ *LINK RESET FAILED:* "+err.Error())
+			s.Reply(info, "🔰 *LINK RESET FAILED:* "+err.Error())
 		} else {
-			s.Reply(info, "❌ *COULDN'T GET THE LINK:* "+err.Error())
+			s.Reply(info, "🔰 *COULDN'T GET THE LINK:* "+err.Error())
 		}
 		return
 	}
 	if reset {
-		s.Reply(info, "🔄 *INVITE LINK RESET*\n\n*NEW LINK:* "+link+"\n\n⚠️ *THE OLD LINK NO LONGER WORKS*")
+		s.Reply(info, "🔰 *INVITE LINK RESET*\n\n*NEW LINK:* "+link+"\n\n🔰 *THE OLD LINK NO LONGER WORKS*")
 	} else {
-		s.Reply(info, "🔗 *GROUP INVITE LINK*\n\n*GROUP:* "+gi.GroupName.Name+"\n*LINK:* "+link+"\n\n⚠️ *ONLY SHARE THIS LINK WITH PEOPLE YOU TRUST*")
+		s.Reply(info, "🔰 *GROUP INVITE LINK*\n\n*GROUP:* "+gi.GroupName.Name+"\n*LINK:* "+link+"\n\n🔰 *ONLY SHARE THIS LINK WITH PEOPLE YOU TRUST*")
 	}
 }
 
@@ -400,14 +400,14 @@ func handleSetGNameAsync(s SessionBridge, info types.MessageInfo, args []string,
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	if err := client.SetGroupName(context.Background(), info.Chat, name); err != nil {
-		s.Reply(info, "❌ *COULDN'T CHANGE THE NAME:* "+err.Error())
+		s.Reply(info, "🔰 *COULDN'T CHANGE THE NAME:* "+err.Error())
 		return
 	}
-	s.Reply(info, "📝 *GROUP NAME CHANGED*\n\n*NEW NAME:* "+name)
+	s.Reply(info, "🔰 *GROUP NAME CHANGED*\n\n*NEW NAME:* "+name)
 }
 
 // ---------------------------------------------------------------------------
@@ -433,21 +433,21 @@ func handleSetGDescAsync(s SessionBridge, info types.MessageInfo, args []string,
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	gi, err := client.GetGroupInfo(context.Background(), info.Chat)
 	if err != nil {
-		s.Reply(info, "❌ Failed to fetch group info: "+err.Error())
+		s.Reply(info, "🔰 Failed to fetch group info: "+err.Error())
 		return
 	}
 	prevID := gi.TopicID
 	newID := strconv.FormatInt(time.Now().UnixNano(), 10)
 	if err := client.SetGroupTopic(context.Background(), info.Chat, prevID, newID, topic); err != nil {
-		s.Reply(info, "❌ *COULDN'T CHANGE THE DESCRIPTION:* "+err.Error())
+		s.Reply(info, "🔰 *COULDN'T CHANGE THE DESCRIPTION:* "+err.Error())
 		return
 	}
-	s.Reply(info, "📋 *GROUP DESCRIPTION CHANGED*\n\n*NEW DESCRIPTION:*\n"+topic)
+	s.Reply(info, "🔰 *GROUP DESCRIPTION CHANGED*\n\n*NEW DESCRIPTION:*\n"+topic)
 }
 
 // ---------------------------------------------------------------------------
@@ -471,7 +471,7 @@ func handleMembersAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		return
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "👥 *%s*\n", gi.GroupName.Name)
+	fmt.Fprintf(&b, "🔰 *%s*\n", gi.GroupName.Name)
 	b.WriteString("━━━━━━━━━━━━━━━━━━━\n")
 	adminCount := 0
 	for _, p := range gi.Participants {
@@ -483,11 +483,11 @@ func handleMembersAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	fmt.Fprintf(&b, "*ADMINS:* %d\n", adminCount)
 	b.WriteString("━━━━━━━━━━━━━━━━━━━\n\n")
 	for i, p := range gi.Participants {
-		role := "👤"
+		role := "🔰"
 		if p.IsSuperAdmin {
 			role = "🔰"
 		} else if p.IsAdmin {
-			role = "⭐"
+			role = "🔰"
 		}
 		fmt.Fprintf(&b, "%d. %s +%s\n", i+1, role, p.JID.User)
 	}
@@ -515,7 +515,7 @@ func handleAdminListAsync(s SessionBridge, info types.MessageInfo, args []string
 		return
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "📊 *ADMIN LIST — %s*\n", gi.GroupName.Name)
+	fmt.Fprintf(&b, "🔰 *ADMIN LIST — %s*\n", gi.GroupName.Name)
 	b.WriteString("━━━━━━━━━━━━━━━━━━━\n")
 	admins := make([]types.GroupParticipant, 0)
 	for _, p := range gi.Participants {
@@ -525,7 +525,7 @@ func handleAdminListAsync(s SessionBridge, info types.MessageInfo, args []string
 	}
 	fmt.Fprintf(&b, "*TOTAL ADMINS:* %d\n\n", len(admins))
 	for i, p := range admins {
-		role := "⭐ ADMIN"
+		role := "🔰 ADMIN"
 		if p.IsSuperAdmin {
 			role = "🔰 OWNER"
 		}
@@ -563,16 +563,16 @@ func handleGroupInfoAsync(s SessionBridge, info types.MessageInfo, args []string
 	var b strings.Builder
 	b.WriteString("ℹ️ *GROUP INFO*\n")
 	b.WriteString("━━━━━━━━━━━━━━━━━━━\n")
-	b.WriteString("📍 *NAME:* " + gi.GroupName.Name + "\n")
-	b.WriteString("🆔 *GROUP ID:* " + info.Chat.String() + "\n")
-	fmt.Fprintf(&b, "👥 *MEMBERS:* %d\n", len(gi.Participants))
-	fmt.Fprintf(&b, "⭐ *ADMINS:* %d\n", adminCount)
-	b.WriteString("📅 *CREATED:* " + gi.GroupCreated.Format("1/2/2006") + "\n")
+	b.WriteString("🔰 *NAME:* " + gi.GroupName.Name + "\n")
+	b.WriteString("🔰 *GROUP ID:* " + info.Chat.String() + "\n")
+	fmt.Fprintf(&b, "🔰 *MEMBERS:* %d\n", len(gi.Participants))
+	fmt.Fprintf(&b, "🔰 *ADMINS:* %d\n", adminCount)
+	b.WriteString("🔰 *CREATED:* " + gi.GroupCreated.Format("1/2/2006") + "\n")
 	desc := gi.GroupTopic.Topic
 	if gi.GroupTopic.TopicDeleted || desc == "" {
 		desc = "NO DESCRIPTION"
 	}
-	b.WriteString("📋 *DESCRIPTION:*\n" + desc + "\n")
+	b.WriteString("🔰 *DESCRIPTION:*\n" + desc + "\n")
 	b.WriteString("━━━━━━━━━━━━━━━━━━━")
 	s.Reply(info, b.String())
 }
@@ -605,12 +605,12 @@ func handleCountAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	}
 	memberCount := len(gi.Participants) - adminCount
 	var b strings.Builder
-	b.WriteString("🔢 *GROUP MEMBER COUNT*\n\n")
+	b.WriteString("🔰 *GROUP MEMBER COUNT*\n\n")
 	fmt.Fprintf(&b, "*GROUP:* %s\n", gi.GroupName.Name)
 	b.WriteString("━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Fprintf(&b, "👥 *TOTAL:* %d\n", len(gi.Participants))
+	fmt.Fprintf(&b, "🔰 *TOTAL:* %d\n", len(gi.Participants))
 	fmt.Fprintf(&b, "🔰 *ADMINS:* %d\n", adminCount)
-	fmt.Fprintf(&b, "👤 *MEMBERS:* %d\n", memberCount)
+	fmt.Fprintf(&b, "🔰 *MEMBERS:* %d\n", memberCount)
 	b.WriteString("━━━━━━━━━━━━━━━━━━━")
 	s.Reply(info, b.String())
 }
@@ -649,9 +649,9 @@ func handleOnlineAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	b.WriteString("🟢 *GROUP LIVE COUNT*\n\n")
 	fmt.Fprintf(&b, "*GROUP:* %s\n", gi.GroupName.Name)
 	b.WriteString("━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Fprintf(&b, "👥 *TOTAL PARTICIPANTS:* %d\n", total)
+	fmt.Fprintf(&b, "🔰 *TOTAL PARTICIPANTS:* %d\n", total)
 	fmt.Fprintf(&b, "🔰 *ADMINS:* %d\n", adminCount)
-	fmt.Fprintf(&b, "👤 *MEMBERS:* %d\n", memberCount)
+	fmt.Fprintf(&b, "🔰 *MEMBERS:* %d\n", memberCount)
 	b.WriteString("━━━━━━━━━━━━━━━━━━━")
 	s.Reply(info, b.String())
 }
@@ -677,15 +677,15 @@ func handleMyRoleAsync(s SessionBridge, info types.MessageInfo, args []string, p
 		return
 	}
 	sender := info.Sender.String()
-	role := "👤 *REGULAR MEMBER*"
+	role := "🔰 *REGULAR MEMBER*"
 	for _, p := range gi.Participants {
 		if p.JID.String() == sender {
 			if p.IsSuperAdmin {
 				role = "🔰 *GROUP OWNER (SUPER ADMIN)*"
 			} else if p.IsAdmin {
-				role = "⭐ *GROUP ADMIN*"
+				role = "🔰 *GROUP ADMIN*"
 			} else {
-				role = "👤 *REGULAR MEMBER*"
+				role = "🔰 *REGULAR MEMBER*"
 			}
 			break
 		}
@@ -693,7 +693,7 @@ func handleMyRoleAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	if sender == gi.OwnerJID.String() {
 		role = "🔰 *GROUP OWNER (SUPER ADMIN)*"
 	}
-	s.Reply(info, "🏷️ *YOUR ROLE*\n\n"+role)
+	s.Reply(info, "🔰 *YOUR ROLE*\n\n"+role)
 }
 
 // ---------------------------------------------------------------------------
@@ -718,15 +718,15 @@ func handleTagAllAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	custom := strings.TrimSpace(strings.Join(args, " "))
 	var b strings.Builder
 	if custom != "" {
-		fmt.Fprintf(&b, "📢 *%s*\n\n", custom)
+		fmt.Fprintf(&b, "🔰 *%s*\n\n", custom)
 	} else {
-		b.WriteString("📢 *ATTENTION EVERYONE!*\n\n")
+		b.WriteString("🔰 *ATTENTION EVERYONE!*\n\n")
 	}
 	mentioned := make([]string, 0, len(gi.Participants))
 	for _, p := range gi.Participants {
@@ -734,7 +734,7 @@ func handleTagAllAsync(s SessionBridge, info types.MessageInfo, args []string, p
 		fmt.Fprintf(&b, "@%s\n", p.JID.User)
 	}
 	if err := sendMentionText(client, info, b.String(), mentioned); err != nil {
-		s.Reply(info, "❌ *TAG FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *TAG FAILED:* "+err.Error())
 	}
 }
 
@@ -760,7 +760,7 @@ func handleTagAdminAsync(s SessionBridge, info types.MessageInfo, args []string,
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	admins := make([]types.GroupParticipant, 0)
@@ -779,14 +779,14 @@ func handleTagAdminAsync(s SessionBridge, info types.MessageInfo, args []string,
 	mentioned := make([]string, 0, len(admins))
 	for _, p := range admins {
 		mentioned = append(mentioned, p.JID.String())
-		role := "⭐"
+		role := "🔰"
 		if p.IsSuperAdmin {
 			role = "🔰"
 		}
 		fmt.Fprintf(&b, "%s @%s\n", role, p.JID.User)
 	}
 	if err := sendMentionText(client, info, b.String(), mentioned); err != nil {
-		s.Reply(info, "❌ *ADMIN TAG FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *ADMIN TAG FAILED:* "+err.Error())
 	}
 }
 
@@ -808,12 +808,12 @@ func handleLeaveAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
-	s.Reply(info, "🚪 *BYE BYE EVERYONE!*\n\n*I'M LEAVING THIS GROUP* 😢\n*TAKE CARE* 🤝")
+	s.Reply(info, "🔰 *BYE BYE EVERYONE!*\n\n*I'M LEAVING THIS GROUP* 🔰\n*TAKE CARE* 🔰")
 	if err := client.LeaveGroup(context.Background(), info.Chat); err != nil {
-		s.Reply(info, "❌ *LEAVE FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *LEAVE FAILED:* "+err.Error())
 		return
 	}
 }
@@ -845,11 +845,11 @@ func handleAnnounceAsync(s SessionBridge, info types.MessageInfo, args []string,
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	var b strings.Builder
-	b.WriteString("📣 *ANNOUNCEMENT*\n")
+	b.WriteString("🔰 *ANNOUNCEMENT*\n")
 	b.WriteString("━━━━━━━━━━━━━━━━━━━\n\n")
 	b.WriteString(q + "\n\n")
 	b.WriteString("━━━━━━━━━━━━━━━━━━━")
@@ -858,7 +858,7 @@ func handleAnnounceAsync(s SessionBridge, info types.MessageInfo, args []string,
 		mentioned = append(mentioned, p.JID.String())
 	}
 	if err := sendMentionText(client, info, b.String(), mentioned); err != nil {
-		s.Reply(info, "❌ *ANNOUNCEMENT FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *ANNOUNCEMENT FAILED:* "+err.Error())
 	}
 }
 
@@ -884,7 +884,7 @@ func handleEditGCAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	// Determine target lock state.
@@ -901,13 +901,13 @@ func handleEditGCAsync(s SessionBridge, info types.MessageInfo, args []string, p
 		newLocked = !gi.GroupLocked.IsLocked
 	}
 	if err := client.SetGroupLocked(context.Background(), info.Chat, newLocked); err != nil {
-		s.Reply(info, "❌ *FAILED TO UPDATE GROUP EDIT SETTING:* "+err.Error())
+		s.Reply(info, "🔰 *FAILED TO UPDATE GROUP EDIT SETTING:* "+err.Error())
 		return
 	}
 	if newLocked {
-		s.Reply(info, "🔒 *GROUP INFO LOCKED.* Only admins can edit the group name / description / photo now.")
+		s.Reply(info, "🔰 *GROUP INFO LOCKED.* Only admins can edit the group name / description / photo now.")
 	} else {
-		s.Reply(info, "🔓 *GROUP INFO UNLOCKED.* All members can edit the group info now.")
+		s.Reply(info, "🔰 *GROUP INFO UNLOCKED.* All members can edit the group info now.")
 	}
 }
 
@@ -929,14 +929,14 @@ func handleLockGCAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	if err := client.SetGroupJoinApprovalMode(context.Background(), info.Chat, true); err != nil {
-		s.Reply(info, "❌ *LOCK GC FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *LOCK GC FAILED:* "+err.Error())
 		return
 	}
-	s.Reply(info, "🔒 *GROUP JOIN APPROVAL ENABLED*\n\n*NEW MEMBERS NOW NEED ADMIN APPROVAL TO JOIN* ✅")
+	s.Reply(info, "🔰 *GROUP JOIN APPROVAL ENABLED*\n\n*NEW MEMBERS NOW NEED ADMIN APPROVAL TO JOIN* 🔰")
 }
 
 // ---------------------------------------------------------------------------
@@ -957,14 +957,14 @@ func handleUnlockGCAsync(s SessionBridge, info types.MessageInfo, args []string,
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 	if err := client.SetGroupJoinApprovalMode(context.Background(), info.Chat, false); err != nil {
-		s.Reply(info, "❌ *UNLOCK GC FAILED:* "+err.Error())
+		s.Reply(info, "🔰 *UNLOCK GC FAILED:* "+err.Error())
 		return
 	}
-	s.Reply(info, "🔓 *GROUP JOIN APPROVAL DISABLED*\n\n*ANYONE CAN NOW JOIN FREELY WITHOUT APPROVAL* ✅")
+	s.Reply(info, "🔰 *GROUP JOIN APPROVAL DISABLED*\n\n*ANYONE CAN NOW JOIN FREELY WITHOUT APPROVAL* 🔰")
 }
 
 // ---------------------------------------------------------------------------

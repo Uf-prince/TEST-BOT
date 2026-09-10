@@ -48,13 +48,13 @@ func handleOwnerName(s SessionBridge, info types.MessageInfo, args []string, pre
 	// reset → default "UMAR"
 	if strings.ToLower(aiArgs) == "reset" {
 		s.SetOwnerNameSetting(defaultOwnerName)
-		s.Reply(info, "*🔰 OWNER NAME RESET ✅*\n\n*OWNER NAME :❯ UMAR*")
+		s.Reply(info, "*🔰 OWNER NAME RESET 🔰*\n\n*OWNER NAME :❯ UMAR*")
 		return
 	}
 
 	// set new owner name
 	s.SetOwnerNameSetting(aiArgs)
-	s.Reply(info, "*🔰 OWNER NAME CHANGED ✅*\n\n*NEW OWNER NAME IS*\n "+aiArgs+"*")
+	s.Reply(info, "*🔰 OWNER NAME CHANGED 🔰*\n\n*NEW OWNER NAME IS*\n "+aiArgs+"*")
 }
 
 func init() {

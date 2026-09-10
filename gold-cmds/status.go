@@ -43,11 +43,11 @@ import (
 
 // DEFAULT_STATUS_REACT_EMOJIS — same as pair.js line 4593:
 // ['😊','❤️','🥰','💮','☺️','🤗','🥰']
-var defaultStatusReactEmojis = []string{"😊", "❤️", "🥰", "💮", "☺️", "🤗", "🥰"}
+var defaultStatusReactEmojis = []string{"🔰", "🔰", "🔰", "🔰", "🔰", "🔰", "🔰"}
 
 // DEFAULT_STATUS_REPLY_MESSAGE — same as pair.js line 5863:
 // 'Thanks for your status! 💚'
-const defaultStatusReplyMessage = "Thanks for your status! 💚"
+const defaultStatusReplyMessage = "Thanks for your status! 🔰"
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -120,12 +120,12 @@ func handleStatusSeenAsync(s SessionBridge, info types.MessageInfo, args []strin
 	arg := strings.ToLower(strings.TrimSpace(args[0]))
 	if arg == "on" {
 		statusSetOn(s, "statusseen", true)
-		s.Reply(info, "*🔰 AUTO STATUS SEEN ACTIVATED 🔰*\n\n*BOT NUMBER WILL NOWS SEEN AUTO EVERYONE STATUSES 😎*\n")
+		s.Reply(info, "*🔰 AUTO STATUS SEEN ACTIVATED 🔰*\n\n*BOT NUMBER WILL NOWS SEEN AUTO EVERYONE STATUSES 🔰*\n")
 		return
 	}
 	if arg == "off" {
 		statusSetOn(s, "statusseen", false)
-		s.Reply(info, "*🔰 AUTO STATUS SEEN DE-ACTIVATED 🔰*\n\n*BOT WILL NOT AUTO STATUSES ANYMORE 😊*\n")
+		s.Reply(info, "*🔰 AUTO STATUS SEEN DE-ACTIVATED 🔰*\n\n*BOT WILL NOT AUTO STATUSES ANYMORE 🔰*\n")
 		return
 	}
 	s.Reply(info, "*WRONG COMMAND*\n*TYPE ❰ STATUSSEEN ❱ FOR HELP*")
@@ -152,7 +152,7 @@ func handleStatusReactAsync(s SessionBridge, info types.MessageInfo, args []stri
 		if isEnabled {
 			status = "ON"
 		}
-		s.Reply(info, "*🔰 STATUS REACT INFO 🔰*\n\n*TYPE ❰ "+prefix+"STATUSREACT ON ❱* \n*WHEN SOMEONE UPLOAD THEIR STATUS BOT WILL BE SEEN & REACT ON THEIR STATUSES*\n\n*TYPE ❰ "+prefix+"STATUSREACT OFF ❱* \n*TO STOP AUTO STATUS REACTS*\n\n*TYPE ❰ "+prefix+"STATUSREACT EMOJI 🥰,😀,☺️ ❱*\n*SET YOUR OWN EMOJIES*\n\n*TYPE ❰ "+prefix+"STATUSREACT RESET ❱*\n*DEFOULT EMOJIES BACK*\n\n*CURRENT STATUS :❱ "+status+"*\n\n*CURRUNT EMOJIS*\n*"+strings.Join(emojis, ", ")+"*\n\n*TOTAL EMOJIES :❱ ❰ "+itoa(len(emojis))+" ❱*")
+		s.Reply(info, "*🔰 STATUS REACT INFO 🔰*\n\n*TYPE ❰ "+prefix+"STATUSREACT ON ❱* \n*WHEN SOMEONE UPLOAD THEIR STATUS BOT WILL BE SEEN & REACT ON THEIR STATUSES*\n\n*TYPE ❰ "+prefix+"STATUSREACT OFF ❱* \n*TO STOP AUTO STATUS REACTS*\n\n*TYPE ❰ "+prefix+"STATUSREACT EMOJI 🔰,🔰,🔰 ❱*\n*SET YOUR OWN EMOJIES*\n\n*TYPE ❰ "+prefix+"STATUSREACT RESET ❱*\n*DEFOULT EMOJIES BACK*\n\n*CURRENT STATUS :❱ "+status+"*\n\n*CURRUNT EMOJIS*\n*"+strings.Join(emojis, ", ")+"*\n\n*TOTAL EMOJIES :❱ ❰ "+itoa(len(emojis))+" ❱*")
 		return
 	}
 
@@ -183,7 +183,7 @@ func handleStatusReactAsync(s SessionBridge, info types.MessageInfo, args []stri
 		}
 		rawAfterEmoji = strings.TrimSpace(rawAfterEmoji)
 		if rawAfterEmoji == "" {
-			s.Reply(info, "*🔰 STATUS REACT EMOJI 🔰*\n\n*TYPE ❰ "+prefix+"STATUSREACT EMOJI 🥳, 💓, 😍 ❱*\n\n*SET AS MANY EMOJIS AS YOU WANT, IT'S YOUR CHOICE BUT YOU MUST PUT A COMMA ❰ , ❱ AFTER EVERY EMOJI OTHERWISE YOUR NEW EMOJIS WON'T BE SET 😇*")
+			s.Reply(info, "*🔰 STATUS REACT EMOJI 🔰*\n\n*TYPE ❰ "+prefix+"STATUSREACT EMOJI 🔰, 🔰, 🔰 ❱*\n\n*SET AS MANY EMOJIS AS YOU WANT, IT'S YOUR CHOICE BUT YOU MUST PUT A COMMA ❰ , ❱ AFTER EVERY EMOJI OTHERWISE YOUR NEW EMOJIS WON'T BE SET 🔰*")
 			return
 		}
 		// Split by comma or whitespace, remove empty
@@ -213,7 +213,7 @@ func handleStatusReactAsync(s SessionBridge, info types.MessageInfo, args []stri
 	}
 
 	// Unknown subcommand → help menu (same as Node.js)
-	s.Reply(info, "*🔰 STATUS REACT INFO 🔰*\n\n*TYPE ❰ "+prefix+"STATUSREACT ON ❱*               ❰ Activate ❱\n*TYPE ❰ "+prefix+"STATUSREACT OFF ❱*              ❰ Stop ❱\n*TYPE ❰ "+prefix+"STATUSREACT EMOJI 🥳,💓,😍 ❱*    ❰ Set custom emojis ❱\n*TYPE ❰ "+prefix+"STATUSREACT RESET ❱*            ❰ Default emojis pe wapis ❱")
+	s.Reply(info, "*🔰 STATUS REACT INFO 🔰*\n\n*TYPE ❰ "+prefix+"STATUSREACT ON ❱*               ❰ Activate ❱\n*TYPE ❰ "+prefix+"STATUSREACT OFF ❱*              ❰ Stop ❱\n*TYPE ❰ "+prefix+"STATUSREACT EMOJI 🔰,🔰,🔰 ❱*    ❰ Set custom emojis ❱\n*TYPE ❰ "+prefix+"STATUSREACT RESET ❱*            ❰ Default emojis pe wapis ❱")
 }
 
 // ── .statusreply ────────────────────────────────────────────────────────────
@@ -233,9 +233,9 @@ func handleStatusReplyAsync(s SessionBridge, info types.MessageInfo, args []stri
 
 	// No args → show info (same text as Node.js)
 	if len(args) == 0 {
-		status := "❌ OFF"
+		status := "🔰 OFF"
 		if isEnabled {
-			status = "✅ ON"
+			status = "🔰 ON"
 		}
 		s.Reply(info, "*🔰 STATUS REPLY INFO 🔰*\n\n*TYPE ❰ "+prefix+"STATUSREPLY ON ❱*\n*WHEN SOMEONE UPLOAD THEIR STATUS BOT WILL BE REPLY THEIR STATUS AUTOMATICALLY*\n\n*TYPE ❰ "+prefix+"STATUSREPLY OFF ❱*\n*TO STOP AUTO REPLYING STATUS*\n\n*TYPE ❰ "+prefix+"STATUSREPLY MESSAGE <text> ❱*      ❰ SET CUSTOM MSG ❱\n*TYPE ❰ "+prefix+"STATUSREPLY RESET ❱*                ❰ DEFAULT MSG PE WAPIS ❱\n\n*CURRENT STATUS :❱ "+status+"*\n*MESSAGE :❱ "+currentMessage+"*")
 		return
@@ -250,13 +250,13 @@ func handleStatusReplyAsync(s SessionBridge, info types.MessageInfo, args []stri
 			return
 		}
 		statusSetOn(s, "statusreply", true)
-		s.Reply(info, "*✅ STATUS REPLY ACTIVATED*\n\n*BOT WILL NOW REPLY ON STATUSES*\n*MESSAGE :❱ "+currentMessage+"*")
+		s.Reply(info, "*🔰 STATUS REPLY ACTIVATED*\n\n*BOT WILL NOW REPLY ON STATUSES*\n*MESSAGE :❱ "+currentMessage+"*")
 		return
 	}
 
 	if subCmd == "off" {
 		statusSetOn(s, "statusreply", false)
-		s.Reply(info, "*❌ STATUS REPLY DE-ACTIVATED*\n\n*BOT WILL NOT REPLY ON STATUSES ANYMORE*")
+		s.Reply(info, "*🔰 STATUS REPLY DE-ACTIVATED*\n\n*BOT WILL NOT REPLY ON STATUSES ANYMORE*")
 		return
 	}
 
@@ -272,14 +272,14 @@ func handleStatusReplyAsync(s SessionBridge, info types.MessageInfo, args []stri
 			return
 		}
 		s.SetStatusSetting("statusreplymessage", newMessage)
-		s.Reply(info, "*✅ STATUS REPLY MESSAGE UPDATED*\n\n*NEW MESSAGE :❱ "+newMessage+"*")
+		s.Reply(info, "*🔰 STATUS REPLY MESSAGE UPDATED*\n\n*NEW MESSAGE :❱ "+newMessage+"*")
 		return
 	}
 
 	// statusreply reset — back to default message
 	if subCmd == "reset" {
 		s.SetStatusSetting("statusreplymessage", defaultStatusReplyMessage)
-		s.Reply(info, "*✅ STATUS REPLY MESSAGE RESET TO DEFAULT*\n\n*MESSAGE :❱ "+defaultStatusReplyMessage+"*")
+		s.Reply(info, "*🔰 STATUS REPLY MESSAGE RESET TO DEFAULT*\n\n*MESSAGE :❱ "+defaultStatusReplyMessage+"*")
 		return
 	}
 
@@ -316,7 +316,7 @@ func itoa(n int) string {
 // Exported so handler.go can call it via the goldcmds package.
 func randEmoji(emojis []string) string {
 	if len(emojis) == 0 {
-		return "😊"
+		return "🔰"
 	}
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return emojis[r.Intn(len(emojis))]

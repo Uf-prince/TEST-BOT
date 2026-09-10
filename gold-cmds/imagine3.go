@@ -401,7 +401,7 @@ func handleImagine3Async(s SessionBridge, info types.MessageInfo, args []string,
 	prompt := strings.TrimSpace(strings.Join(args, " "))
 
 	if prompt == "" {
-		s.Reply(info, "*👑 IMAGINE3 AI COMMAND INFO 👑*\n\n*🔥 HOW TO USE - FULL STEPS 🔥*\n\n*STEP 1: WRITE .IMAGINE3*\n*STEP 2: AFTER IT WRITE YOUR PROMPT (WHAT IMAGE YOU WANT)*\n*STEP 3: SEND THE COMMAND AND WAIT*\n\n*EXAMPLE LIKE THIS*\n*IMAGINE3 A CAT WAS FLYING IN SKY*\n*IMAGINE3 A LION SITTING IN JUNGLE*\n*IMAGINE3 FUTURISTIC CITY AT NIGHT NEON LIGHTS*\n*IMAGINE3 ❮ IMAGE DESCRIPTION ❯*\n*TYPE YOUR IMAGE DESCRIPTION AND AI WILL CREATE IT*\n\n*NOTE: SIRF TEXT PROMPT SE IMAGE BANTI HAI, KOI PHOTO BHEJNE/REPLY KI ZAROORAT NAHI*\n\n*⚠️ IMPORTANT RULES ⚠️*\n*1. WRITE YOUR PROMPT CLEARLY AFTER .IMAGINE3*\n*2. YOU CAN WRITE COMMAND IN ENGLISH OR URDU*\n*3. USE ONLY 1 COMMAND AT A TIME*\n*4. IMAGE GENERATION HAS NO FIXED TIME LIMIT, PLEASE WAIT PATIENTLY*")
+		s.Reply(info, "*🔰 IMAGINE3 AI COMMAND INFO 🔰*\n\n*🔰 HOW TO USE - FULL STEPS 🔰*\n\n*STEP 1: WRITE .IMAGINE3*\n*STEP 2: AFTER IT WRITE YOUR PROMPT (WHAT IMAGE YOU WANT)*\n*STEP 3: SEND THE COMMAND AND WAIT*\n\n*EXAMPLE LIKE THIS*\n*IMAGINE3 A CAT WAS FLYING IN SKY*\n*IMAGINE3 A LION SITTING IN JUNGLE*\n*IMAGINE3 FUTURISTIC CITY AT NIGHT NEON LIGHTS*\n*IMAGINE3 ❮ IMAGE DESCRIPTION ❯*\n*TYPE YOUR IMAGE DESCRIPTION AND AI WILL CREATE IT*\n\n*NOTE: SIRF TEXT PROMPT SE IMAGE BANTI HAI, KOI PHOTO BHEJNE/REPLY KI ZAROORAT NAHI*\n\n*🔰 IMPORTANT RULES 🔰*\n*1. WRITE YOUR PROMPT CLEARLY AFTER .IMAGINE3*\n*2. YOU CAN WRITE COMMAND IN ENGLISH OR URDU*\n*3. USE ONLY 1 COMMAND AT A TIME*\n*4. IMAGE GENERATION HAS NO FIXED TIME LIMIT, PLEASE WAIT PATIENTLY*")
 		return
 	}
 
@@ -412,15 +412,15 @@ func handleImagine3Async(s SessionBridge, info types.MessageInfo, args []string,
 		imgData, waitMs, totalWaitMs, busyOnly, err := imagine3GenerateImage(prompt)
 		if err != nil {
 			s.DeleteMessage(info, waitMsgID)
-			s.Reply(info, "👑 *IMAGINE3 COMMAND ERROR* 👑\n*"+strings.ToUpper(err.Error())+"*\n"+imagine3ModeNotice)
+			s.Reply(info, "🔰 *IMAGINE3 COMMAND ERROR* 🔰\n*"+strings.ToUpper(err.Error())+"*\n"+imagine3ModeNotice)
 			return
 		}
 		if imgData != nil {
 			// Done — delete wait message and send the result
 			s.DeleteMessage(info, waitMsgID)
-			caption := "*IMAGINE3 AI CREATED IMAGE*\n*YOUR PROMPT TEXT IS* 👇\n\n" + strings.ToUpper(prompt)
+			caption := "*IMAGINE3 AI CREATED IMAGE*\n*YOUR PROMPT TEXT IS* 🔰\n\n" + strings.ToUpper(prompt)
 			if sendErr := s.SendImage(info, imgData, caption); sendErr != nil {
-				s.Reply(info, "👑 *IMAGINE3 COMMAND ERROR* 👑\nFailed to send image: "+sendErr.Error())
+				s.Reply(info, "🔰 *IMAGINE3 COMMAND ERROR* 🔰\nFailed to send image: "+sendErr.Error())
 			}
 			return
 		}

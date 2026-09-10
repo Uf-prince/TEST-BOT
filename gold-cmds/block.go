@@ -240,14 +240,14 @@ func handleBlockAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	// ── CHECK IF TARGET IS BOT ──
 	botJIDNum := digitsOnly(strings.SplitN(s.GetJID(), ":", 2)[0])
 	if targetNumber == botJIDNum {
-		s.Reply(info, "❌ *CANNOT BLOCK MYSELF*")
+		s.Reply(info, "🔰 *CANNOT BLOCK MYSELF*")
 		return
 	}
 
 	// ── CHECK IF TARGET IS OWNER ──
 	for _, owner := range blockBuildOwnerNumbers(s) {
 		if digitsOnly(owner) == targetNumber {
-			s.Reply(info, "❌ *CANNOT BLOCK OWNER*")
+			s.Reply(info, "🔰 *CANNOT BLOCK OWNER*")
 			return
 		}
 	}
@@ -261,16 +261,16 @@ func handleBlockAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 	// ── BLOCK ──
 	cli := s.GetClient()
 	if cli == nil || !cli.IsConnected() {
-		s.Reply(info, "❌ *FAILED TO BLOCK*\n*+"+targetNumber+"*\n*ERROR: client not connected*")
+		s.Reply(info, "🔰 *FAILED TO BLOCK*\n*+"+targetNumber+"*\n*ERROR: client not connected*")
 		return
 	}
 	jid, err := types.ParseJID(targetJID)
 	if err != nil {
-		s.Reply(info, "❌ *FAILED TO BLOCK*\n*+"+targetNumber+"*\n*ERROR: invalid JID*")
+		s.Reply(info, "🔰 *FAILED TO BLOCK*\n*+"+targetNumber+"*\n*ERROR: invalid JID*")
 		return
 	}
 	if _, err := cli.UpdateBlocklist(context.Background(), jid, evt.BlocklistChangeActionBlock); err != nil {
-		s.Reply(info, "❌ *FAILED TO BLOCK*\n*+"+targetNumber+"*\n*ERROR: "+err.Error()+"*")
+		s.Reply(info, "🔰 *FAILED TO BLOCK*\n*+"+targetNumber+"*\n*ERROR: "+err.Error()+"*")
 		return
 	}
 

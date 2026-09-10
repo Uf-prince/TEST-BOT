@@ -128,7 +128,7 @@ func handleImagineAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	prompt := strings.TrimSpace(strings.Join(args, " "))
 
 	if prompt == "" {
-		s.Reply(info, "👑 *TEXT TO IMAGE GUIDE* 👑\n*CREATE IMAGE USING TEXT*\n\n*TYPE LIKE THIS*\n*"+prefix+"IMAGINE ❮ TEXT PROMPT ❯*\n\n*EXAMPLE PROMPT TEXT LIKE.....*\n\n*IMAGINE A BEAUTIFUL SPORTS CAR ON THE MOUNTAIN ROAD*\n\n*IMAGINE A CAT AND THIS EATING THE FISH*\n\n*A BEAUTIFUL JUNGLE OF BEAUTIFUL TREES*\n\n*TYPE LIKE THIS AND AI WILL CREATE AN IMAGE FOR YOU 😊*")
+		s.Reply(info, "🔰 *TEXT TO IMAGE GUIDE* 🔰\n*CREATE IMAGE USING TEXT*\n\n*TYPE LIKE THIS*\n*"+prefix+"IMAGINE ❮ TEXT PROMPT ❯*\n\n*EXAMPLE PROMPT TEXT LIKE.....*\n\n*IMAGINE A BEAUTIFUL SPORTS CAR ON THE MOUNTAIN ROAD*\n\n*IMAGINE A CAT AND THIS EATING THE FISH*\n\n*A BEAUTIFUL JUNGLE OF BEAUTIFUL TREES*\n\n*TYPE LIKE THIS AND AI WILL CREATE AN IMAGE FOR YOU 🔰*")
 		return
 	}
 
@@ -193,16 +193,16 @@ func handleImagineAsync(s SessionBridge, info types.MessageInfo, args []string, 
 			errText = lastErr.Error()
 		}
 		s.DeleteMessage(info, waitMsgID)
-		s.Reply(info, "❌ *IMAGINE Command Error*\n"+errText)
+		s.Reply(info, "🔰 *IMAGINE Command Error*\n"+errText)
 		return
 	}
 
 	// Done — delete the wait message and send the result
 	s.DeleteMessage(info, waitMsgID)
 
-	caption := "*AI CREATED IMAGE FOR THIS TEXT 👇*\n " + prompt + "\n"
+	caption := "*AI CREATED IMAGE FOR THIS TEXT 🔰*\n " + prompt + "\n"
 	if err := s.SendImage(info, imageBytes, caption); err != nil {
-		s.Reply(info, "❌ *IMAGINE Command Error*\nFailed to send image: "+err.Error())
+		s.Reply(info, "🔰 *IMAGINE Command Error*\nFailed to send image: "+err.Error())
 	}
 }
 

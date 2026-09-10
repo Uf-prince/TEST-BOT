@@ -186,7 +186,7 @@ func BancmdCheckBlocked(s SessionBridge, command string) bool {
 
 // BancmdStopText is the exact Node.js enforcement reply text (0% farak).
 func BancmdStopText() string {
-	return "*THIS COMMAND HAS BEEN STOPPED BY ME* 😒\n\n" +
+	return "*THIS COMMAND HAS BEEN STOPPED BY ME* 🔰\n\n" +
 		"*ONLY I CAN USE THIS COMMAND*\n" +
 		"*IT'S DISABLED FOR THE PUBLIC*"
 }
@@ -199,7 +199,7 @@ func BancmdStopText() string {
 func handleCmdStopList(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.Reply(info, "❌ *CMDSTOPLIST ERROR — TRY AGAIN*")
+			s.Reply(info, "🔰 *CMDSTOPLIST ERROR — TRY AGAIN*")
 		}
 	}()
 	if !s.IsOwner(info) {
@@ -224,7 +224,7 @@ func handleCmdStopList(s SessionBridge, info types.MessageInfo, args []string, p
 func handleCmdStop(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.Reply(info, "❌ *CMDSTOP ERROR — TRY AGAIN*")
+			s.Reply(info, "🔰 *CMDSTOP ERROR — TRY AGAIN*")
 		}
 	}()
 	if !s.IsOwner(info) {
@@ -283,13 +283,13 @@ func handleCmdStop(s SessionBridge, info types.MessageInfo, args []string, prefi
 	bcInvalidate(s.GetJID())
 	var text strings.Builder
 	if len(newly) > 0 {
-		text.WriteString(fmt.Sprintf("*✅ COMMAND STOPPED SUCCESS*\n*%s*\n"+
-			"*THIS COMMAND IS STOPPED BY ME IN MY BOT. ONLY I CAN USE THIS COMMAND. YOU CANNOT USE THIS COMMAND UNTIL I START IT AGAIN IN MY BOT 😒*\n"+
+		text.WriteString(fmt.Sprintf("*🔰 COMMAND STOPPED SUCCESS*\n*%s*\n"+
+			"*THIS COMMAND IS STOPPED BY ME IN MY BOT. ONLY I CAN USE THIS COMMAND. YOU CANNOT USE THIS COMMAND UNTIL I START IT AGAIN IN MY BOT 🔰*\n"+
 			"*THESE ALL COMMANDS ARE STOPPED 😎*\n\n",
 			strings.Join(prefixDots(newly), ", ")))
 	}
 	if len(already) > 0 {
-		text.WriteString(fmt.Sprintf("*⚠️ ALREADY STOPPED*\n*%s*",
+		text.WriteString(fmt.Sprintf("*🔰 ALREADY STOPPED*\n*%s*",
 			strings.Join(prefixDots(already), ", ")))
 	}
 	s.Reply(info, strings.TrimSpace(text.String()))
@@ -299,7 +299,7 @@ func handleCmdStop(s SessionBridge, info types.MessageInfo, args []string, prefi
 func handleCmdStart(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.Reply(info, "❌ *CMDSTART ERROR — TRY AGAIN*")
+			s.Reply(info, "🔰 *CMDSTART ERROR — TRY AGAIN*")
 		}
 	}()
 	if !s.IsOwner(info) {
@@ -344,12 +344,12 @@ func handleCmdStart(s SessionBridge, info types.MessageInfo, args []string, pref
 	bcInvalidate(s.GetJID())
 	var text strings.Builder
 	if len(unbanned) > 0 {
-		text.WriteString(fmt.Sprintf("*✅ COMMAND STARTED SUCCESS*\n*%s*\n"+
-			"*THIS COMMAND IS NOW STARTED. NOW EVERYONE CAN USE THIS COMMAND 😇*\n\n",
+		text.WriteString(fmt.Sprintf("*🔰 COMMAND STARTED SUCCESS*\n*%s*\n"+
+			"*THIS COMMAND IS NOW STARTED. NOW EVERYONE CAN USE THIS COMMAND 🔰*\n\n",
 			strings.Join(prefixDots(unbanned), ", ")))
 	}
 	if len(notBanned) > 0 {
-		text.WriteString(fmt.Sprintf("*⚠️ ALREADY NOT STOPPED*\n*%s*",
+		text.WriteString(fmt.Sprintf("*🔰 ALREADY NOT STOPPED*\n*%s*",
 			strings.Join(prefixDots(notBanned), ", ")))
 	}
 	s.Reply(info, strings.TrimSpace(text.String()))

@@ -58,13 +58,13 @@ func handleBotName(s SessionBridge, info types.MessageInfo, args []string, prefi
 	if strings.ToLower(aiArgs) == "reset" {
 		s.SetBotNameSetting("")
 		s.DelBotNameSetting()
-		s.Reply(info, "*🔰 BOT NAME RESET ✅*\n\n*BOT NAME RESET TO DEFAULT*\n*GOLD-MD WHASAPP BOT*")
+		s.Reply(info, "*🔰 BOT NAME RESET 🔰*\n\n*BOT NAME RESET TO DEFAULT*\n*GOLD-MD WHASAPP BOT*")
 		return
 	}
 
 	// set new bot name
 	s.SetBotNameSetting(aiArgs)
-	s.Reply(info, "*🔰 BOT NAME CHANGED ✅*\n\n*NEW BOT NAME IS*\n*"+aiArgs+"*")
+	s.Reply(info, "*🔰 BOT NAME CHANGED 🔰*\n\n*NEW BOT NAME IS*\n*"+aiArgs+"*")
 }
 
 func init() {

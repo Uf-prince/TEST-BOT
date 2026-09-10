@@ -76,11 +76,11 @@ func handleInstaAsync(	ctx context.Context, s SessionBridge, info types.MessageI
 		return
 	}
 	if !strings.Contains(instaURL, "instagram.com") && !strings.Contains(instaURL, "instagr.am") {
-		s.Reply(info, "❌ *INSTAGRAM DOWNLOAD ERROR*\nPlease provide a valid Instagram link.")
+		s.Reply(info, "🔰 *INSTAGRAM DOWNLOAD ERROR*\nPlease provide a valid Instagram link.")
 		return
 	}
 
-	waitID := s.ReplyWithID(info, "⏳ *Fetching Instagram media...*")
+	waitID := s.ReplyWithID(info, "🔰 *Fetching Instagram media...*")
 
 	// FAST PATH: try cobalt first (~1-3s). A direct “redirect” CDN URL can
 	// be downloaded straight away; “tunnel” URLs are slow (Render proxy) so
@@ -99,7 +99,7 @@ func handleInstaAsync(	ctx context.Context, s SessionBridge, info types.MessageI
 		meta, err = instaFetchMeta(ctx, instaURL)
 		if err != nil {
 			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *INSTAGRAM DOWNLOAD ERROR*\n"+err.Error())
+			s.Reply(info, "🔰 *INSTAGRAM DOWNLOAD ERROR*\n"+err.Error())
 			return
 		}
 	}
@@ -112,7 +112,7 @@ func handleInstaAsync(	ctx context.Context, s SessionBridge, info types.MessageI
 	}
 	if bestURL == "" {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ VIDEO URL NOT FOUND. PLEASE TRY AGAIN 😓")
+		s.Reply(info, "🔰 VIDEO URL NOT FOUND. PLEASE TRY AGAIN 🔰")
 		return
 	}
 
@@ -122,12 +122,12 @@ func handleInstaAsync(	ctx context.Context, s SessionBridge, info types.MessageI
 	path, err := streamDownloadToFile(ctx, client, bestURL, nil)
 	if err != nil && lowURL != "" && lowURL != bestURL {
 		// Retry once with the lower-quality URL.
-		s.EditMessage(info, waitID, "⬇️ *Retrying with lower quality...*")
+		s.EditMessage(info, waitID, "🔰 *Retrying with lower quality...*")
 		path, err = streamDownloadToFile(ctx, client, lowURL, nil)
 	}
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ PLEASE TRY AGAIN 🤗")
+		s.Reply(info, "🔰 PLEASE TRY AGAIN 🔰")
 		return
 	}
 	// WhatsApp-compat: HEVC/mjpeg reels ko h264+faststart me convert
@@ -154,19 +154,19 @@ func handleInstaAsync(	ctx context.Context, s SessionBridge, info types.MessageI
 	if author == "" {
 		author = meta.Channel
 	}
-	caption := "*🏅 INSTAGRAM VIDEO NAME 🏅*\n" +
+	caption := "*🔰 INSTAGRAM VIDEO NAME 🔰*\n" +
 		"*" + title + "*\n\n"
 	if author != "" {
-		caption += "*🏅 CREATOR :* " + author + "\n"
+		caption += "*🔰 CREATOR :* " + author + "\n"
 	}
 	if meta.LikeCount > 0 {
-		caption += fmt.Sprintf("*🏅 LIKES :* %d\n", meta.LikeCount)
+		caption += fmt.Sprintf("*🔰 LIKES :* %d\n", meta.LikeCount)
 	}
 	caption += "\n*INSTAGRAM VIDEO DOWNLOAD*"
 
 	if err := s.SendVideoFile(info, path, caption, thumb, secs, w, h); err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *INSTAGRAM DOWNLOAD ERROR*\nVideo could not be sent.")
+		s.Reply(info, "🔰 *INSTAGRAM DOWNLOAD ERROR*\nVideo could not be sent.")
 		return
 	}
 	s.DeleteMessage(info, waitID)

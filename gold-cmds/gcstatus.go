@@ -100,9 +100,9 @@ func handleGCStatusAsync(s SessionBridge, info types.MessageInfo, args []string,
 				"THE REPLIED MESSAGE CONTENT BECOMES THE STATUS\n" +
 				"\n" +
 				"*NOTE :*\n" +
-				"🔹 OWNER ONLY COMMAND\n" +
-				"🔹 STATUS IS EPHEMERAL (DISAPPEARS AFTER 24 HOURS)\n" +
-				"🔹 ALL GROUPS ARE MENTIONED AUTOMATICALLY\n" +
+				"🔰 OWNER ONLY COMMAND\n" +
+				"🔰 STATUS IS EPHEMERAL (DISAPPEARS AFTER 24 HOURS)\n" +
+				"🔰 ALL GROUPS ARE MENTIONED AUTOMATICALLY\n" +
 				"\n" +
 				"*🔰 GOLD-MD 🔰*"
 			s.Reply(info, guidance)
@@ -129,7 +129,7 @@ func handleGCStatusAsync(s SessionBridge, info types.MessageInfo, args []string,
 			//			JSONDebug("GCSTATUS_QUOTED_TEXT", map[string]any{"quotedText": text})
 		}
 		if text == "" {
-			text = "📌 Status via GOLD-MD"
+			text = "🔰 Status via GOLD-MD"
 		}
 		// Default background = WhatsApp green (#0E9C6B -> ARGB 0xFF0E9C6B)
 		// and a standard system font.
@@ -145,7 +145,7 @@ func handleGCStatusAsync(s SessionBridge, info types.MessageInfo, args []string,
 
 	if statusMsg == nil {
 		//		JSONDebug("GCSTATUS_BUILD_FAIL", map[string]any{"reason": "status proto nil"})
-		s.Reply(info, "❌ *GCSTATUS: media build failed, could not create status.*")
+		s.Reply(info, "🔰 *GCSTATUS: media build failed, could not create status.*")
 		return
 	}
 
@@ -159,16 +159,16 @@ func handleGCStatusAsync(s SessionBridge, info types.MessageInfo, args []string,
 	groups, err := s.GetJoinedGroupsList()
 	if err != nil {
 		//		JSONDebug("GCSTATUS_GROUPS_FAIL", map[string]any{"error": err.Error()})
-		s.Reply(info, "❌ *GCSTATUS: failed to fetch groups: "+err.Error()+"*")
+		s.Reply(info, "🔰 *GCSTATUS: failed to fetch groups: "+err.Error()+"*")
 		return
 	}
 	if len(groups) == 0 {
 		//		JSONDebug("GCSTATUS_NO_GROUPS", map[string]any{})
-		s.Reply(info, "⚠️ *GCSTATUS: bot is not in any group. Status posted but no groups to mention.*")
+		s.Reply(info, "🔰 *GCSTATUS: bot is not in any group. Status posted but no groups to mention.*")
 		// Still post the status
 		statusID, perr := s.PostStatusToBroadcast(statusMsg, nil)
 		if perr != nil {
-			s.Reply(info, "❌ *GCSTATUS: status post failed: "+perr.Error()+"*")
+			s.Reply(info, "🔰 *GCSTATUS: status post failed: "+perr.Error()+"*")
 			return
 		}
 		s.Reply(info, "🷲 *GCSTATUS status posted (no groups to mention).*\n*Status ID:* "+statusID)
@@ -188,7 +188,7 @@ func handleGCStatusAsync(s SessionBridge, info types.MessageInfo, args []string,
 	statusID, err := s.PostStatusToBroadcast(statusMsg, groups)
 	if err != nil {
 		//		JSONDebug("GCSTATUS_POST_FAIL", map[string]any{"error": err.Error()})
-		s.Reply(info, "❌ *GCSTATUS: status post failed: "+err.Error()+"*")
+		s.Reply(info, "🔰 *GCSTATUS: status post failed: "+err.Error()+"*")
 		return
 	}
 	//	JSONDebug("GCSTATUS_POSTED", map[string]any{
@@ -265,17 +265,17 @@ func handleGCStatusAsync(s SessionBridge, info types.MessageInfo, args []string,
 	//	})
 
 	var sb strings.Builder
-	sb.WriteString("✅ *GCSTATUS COMPLETE*\n")
+	sb.WriteString("🔰 *GCSTATUS COMPLETE*\n")
 	sb.WriteString("\n*Status Type:* " + statusType)
 	sb.WriteString("\n*Status ID:* " + statusID)
 	sb.WriteString("\n*Groups Total:* " + itoa(len(groups)))
-	sb.WriteString("\n*Mentioned:* " + itoa(okCount) + " ✅")
+	sb.WriteString("\n*Mentioned:* " + itoa(okCount) + " 🔰")
 	if failCount > 0 {
-		sb.WriteString("\n*Failed:* " + itoa(failCount) + " ❌")
+		sb.WriteString("\n*Failed:* " + itoa(failCount) + " 🔰")
 	}
-	sb.WriteString("\n*Story Green Ring:* " + itoa(storyOK) + " ✅")
+	sb.WriteString("\n*Story Green Ring:* " + itoa(storyOK) + " 🔰")
 	if storyFail > 0 {
-		sb.WriteString("\n*Story Failed:* " + itoa(storyFail) + " ❌")
+		sb.WriteString("\n*Story Failed:* " + itoa(storyFail) + " 🔰")
 	}
 	s.Reply(info, sb.String())
 }

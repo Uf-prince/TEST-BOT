@@ -91,14 +91,14 @@ func handleTGAsync(ctx context.Context, s SessionBridge, info types.MessageInfo,
 	}
 	tgURL = strings.TrimRight(tgURL, "/")
 	if !strings.Contains(tgURL, "t.me/") {
-		s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nPlease provide a valid Telegram link (t.me).")
+		s.Reply(info, "🔰 *TELEGRAM DOWNLOAD ERROR*\nPlease provide a valid Telegram link (t.me).")
 		return
 	}
 	if !strings.HasPrefix(tgURL, "http") {
 		tgURL = "https://" + tgURL
 	}
 
-	waitID := s.ReplyWithID(info, "⏳ *Fetching Telegram media...*")
+	waitID := s.ReplyWithID(info, "🔰 *Fetching Telegram media...*")
 
 	// post link (t.me/chan/123) → usi post ka media
 	// channel link (t.me/chan) → channel ka latest media post
@@ -111,7 +111,7 @@ func handleTGAsync(ctx context.Context, s SessionBridge, info types.MessageInfo,
 	}
 	if err != nil || media == nil || media.url == "" {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nMedia not found — is the post public? 🤔")
+		s.Reply(info, "🔰 *TELEGRAM DOWNLOAD ERROR*\nMedia not found — is the post public? 🔰")
 		return
 	}
 
@@ -127,17 +127,17 @@ func handleTGAsync(ctx context.Context, s SessionBridge, info types.MessageInfo,
 func tgSendMedia(ctx context.Context, s SessionBridge, info types.MessageInfo, waitID string, media *tgMedia, fallbackTitle string) bool {
 	if media == nil || media.url == "" {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nMEDIA NOT AVAILABLE\nTRY ANOTHER POST 🤗")
+		s.Reply(info, "🔰 *TELEGRAM DOWNLOAD ERROR*\nMEDIA NOT AVAILABLE\nTRY ANOTHER POST 🔰")
 		return false
 	}
 
-	s.EditMessage(info, waitID, "⬇️ *DOWNLOADING "+strings.ToUpper(media.kind)+"....*")
+	s.EditMessage(info, waitID, "🔰 *DOWNLOADING "+strings.ToUpper(media.kind)+"....*")
 
 	client := mediaHTTPClient()
 	path, err := streamDownloadToFile(ctx, client, media.url, nil)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nPLEASE TRY AGAIN 🤗")
+		s.Reply(info, "🔰 *TELEGRAM DOWNLOAD ERROR*\nPLEASE TRY AGAIN 🔰")
 		return false
 	}
 	// WhatsApp-compat guard: HEVC/mjpeg ko h264+faststart me convert
@@ -177,12 +177,12 @@ func tgSendMedia(ctx context.Context, s SessionBridge, info types.MessageInfo, w
 		data, rerr := os.ReadFile(path)
 		if rerr != nil {
 			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nPhoto could not be read.")
+			s.Reply(info, "🔰 *TELEGRAM DOWNLOAD ERROR*\nPhoto could not be read.")
 			return false
 		}
 		if err := s.SendImage(info, data, caption); err != nil {
 			s.DeleteMessage(info, waitID)
-			s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nPhoto could not be sent.")
+			s.Reply(info, "🔰 *TELEGRAM DOWNLOAD ERROR*\nPhoto could not be sent.")
 			return false
 		}
 		s.DeleteMessage(info, waitID)
@@ -192,7 +192,7 @@ func tgSendMedia(ctx context.Context, s SessionBridge, info types.MessageInfo, w
 	secs, w, h := probeVideoMeta(path)
 	if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TELEGRAM DOWNLOAD ERROR*\nVideo could not be sent.")
+		s.Reply(info, "🔰 *TELEGRAM DOWNLOAD ERROR*\nVideo could not be sent.")
 		return false
 	}
 	s.DeleteMessage(info, waitID)

@@ -181,7 +181,7 @@ func searchFmtCount(n int64) string {
 
 // searchCard renders the results reply (ytsearch card style).
 // searchBorder is the fancy result border (same as .video / .play lists).
-const searchBorder = "✧═══════════•❁❀❁•═══════════✧"
+const searchBorder = "🔰═══════════•❁❀❁•═══════════🔰"
 
 // searchCardPlatform maps a card header to the short platform name used in
 // the "TYPE ❰ N ❯ TO DOWNLOAD THIS FROM <PLATFORM>" line.
@@ -258,19 +258,19 @@ func ttVideoCard(query string, results []searchResult) string {
 		}
 	}
 	if shorts > 0 {
-		b.WriteString("*⚡ SHORTS ( < 1 MIN ) :❱ " + strconv.Itoa(shorts) + " RESULTS*\n")
+		b.WriteString("*🔰 SHORTS ( < 1 MIN ) :❱ " + strconv.Itoa(shorts) + " RESULTS*\n")
 	}
 	if longs > 0 {
-		b.WriteString("*🎬 LONG VIDEOS ( 2 MIN + ) :❱ " + strconv.Itoa(longs) + " RESULTS*\n")
+		b.WriteString("*🔰 LONG VIDEOS ( 2 MIN + ) :❱ " + strconv.Itoa(longs) + " RESULTS*\n")
 	}
 	b.WriteString("\n")
 	if shorts > 0 {
-		b.WriteString("*⚡ SHORTS ( < 1 MIN ) ⚡*\n\n")
+		b.WriteString("*🔰 SHORTS ( < 1 MIN ) 🔰*\n\n")
 	}
 	for i, r := range results {
 		// section switch: SHORTS ke baad LONG section ka header
 		if i > 0 && r.DurationSec > 60 && results[i-1].DurationSec <= 60 {
-			b.WriteString("\n*🎬 LONG VIDEOS ( 2 MIN + ) 🎬*\n\n")
+			b.WriteString("\n*🔰 LONG VIDEOS ( 2 MIN + ) 🔰*\n\n")
 		}
 		b.WriteString(searchCardEntry(i, r, "TIKTOK SEARCH", "USER", "STATS"))
 	}
@@ -610,7 +610,7 @@ func twtAccountSearch(ctx context.Context, query string) ([]searchResult, error)
 
 var (
 	apkEntryRe = regexp.MustCompile(`\[!\[Image[^]]*\]\([^)]+\)\s*([^\]]+)\]\((https://apkcombo\.com/[a-z0-9-]+/([a-z0-9._]+))/\s+"([^"]+) APK"\)`)
-	apkRateRe  = regexp.MustCompile(`(N/A|[0-9.]+)\s*★\s*([0-9.]+\s*[KMG]?B)`)
+	apkRateRe  = regexp.MustCompile(`(N/A|[0-9.]+)\s*🔰\s*([0-9.]+\s*[KMG]?B)`)
 	apkDlRe    = regexp.MustCompile(`([0-9][0-9.,]*\s*[BMK])\+`)
 )
 

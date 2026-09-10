@@ -240,7 +240,7 @@ func handleAutoBlock(s SessionBridge, info types.MessageInfo, args []string, pre
 func handleAutoBlockAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.Reply(info, "❌ *AUTOBLOCK ERROR — TRY AGAIN*")
+			s.Reply(info, "🔰 *AUTOBLOCK ERROR — TRY AGAIN*")
 		}
 	}()
 
@@ -259,7 +259,7 @@ func handleAutoBlockAsync(s SessionBridge, info types.MessageInfo, args []string
 	case "":
 		// full guide
 		status := strings.ToUpper(s.GetAutoBlockSetting("off"))
-		s.Reply(info, "🛡 *AUTOBLOCK COMMAND GUIDE* 🛡\n\n"+
+		s.Reply(info, "🔰 *AUTOBLOCK COMMAND GUIDE* 🔰\n\n"+
 			"*WHAT DOES .AUTOBLOCK DO ?*\n"+
 			"IT AUTOMATICALLY BLOCKS ANY NUMBER WHOSE COUNTRY CODE MATCHES THE CODES YOU SET . WHEN SUCH A NUMBER MESSAGES THE BOT IN PRIVATE CHAT , THE BOT INSTANTLY BLOCKS IT ON WHATSAPP .\n\n"+
 			"*SUB-COMMANDS :*\n\n"+
@@ -283,9 +283,9 @@ func handleAutoBlockAsync(s SessionBridge, info types.MessageInfo, args []string
 			"EXAMPLE : "+prefix+"autoblock sync\n"+
 			"(IF OWNER SAVED A NEW CONTACT , RUN SYNC)\n\n"+
 			"*CURRENT STATUS :* "+status+"\n\n"+
-			"❕ OWNER ONLY COMMAND\n"+
-			"❕ OWNER NUMBERS ARE NEVER BLOCKED\n"+
-			"\n🛡 *GOLD-MD* 🛡")
+			"🔰 OWNER ONLY COMMAND\n"+
+			"🔰 OWNER NUMBERS ARE NEVER BLOCKED\n"+
+			"\n🔰 *GOLD-MD* 🔰")
 		return
 
 	case "on":
@@ -293,27 +293,27 @@ func handleAutoBlockAsync(s SessionBridge, info types.MessageInfo, args []string
 		abInvalidate(botJID)
 		codes := s.GetAutoBlockCodes("")
 		if codes == "" {
-			s.Reply(info, "✅ *AUTOBLOCK ENABLED*\n\n⚠️ *NO COUNTRY CODES SET — USE "+prefix+"autoblock add 92,1,44*")
+			s.Reply(info, "🔰 *AUTOBLOCK ENABLED*\n\n🔰 *NO COUNTRY CODES SET — USE "+prefix+"autoblock add 92,1,44*")
 			return
 		}
-		s.Reply(info, "✅ *AUTOBLOCK ENABLED*\n\n*BLOCKED COUNTRY CODES :* +"+strings.Join(abParseCodes(codes), ", +")+"\n\n*ANY NUMBER FROM THESE COUNTRIES WILL BE INSTANTLY BLOCKED ON PRIVATE MESSAGE*")
+		s.Reply(info, "🔰 *AUTOBLOCK ENABLED*\n\n*BLOCKED COUNTRY CODES :* +"+strings.Join(abParseCodes(codes), ", +")+"\n\n*ANY NUMBER FROM THESE COUNTRIES WILL BE INSTANTLY BLOCKED ON PRIVATE MESSAGE*")
 		return
 
 	case "off":
 		s.SetAutoBlockSetting("off")
 		abInvalidate(botJID)
-		s.Reply(info, "✅ *AUTOBLOCK DISABLED*\n\n*NO COUNTRY WILL BE BLOCKED NOW*")
+		s.Reply(info, "🔰 *AUTOBLOCK DISABLED*\n\n*NO COUNTRY WILL BE BLOCKED NOW*")
 		return
 
 	case "add":
 		if len(args) < 2 {
-			s.Reply(info, "❌ *TO ADD COUNTRY CODES WRITE LIKE THIS*\n\n*"+prefix+"autoblock add 92,1,44*")
+			s.Reply(info, "🔰 *TO ADD COUNTRY CODES WRITE LIKE THIS*\n\n*"+prefix+"autoblock add 92,1,44*")
 			return
 		}
 		raw := strings.Join(args[1:], " ")
 		newCodes := abParseCodes(raw)
 		if len(newCodes) == 0 {
-			s.Reply(info, "❌ *NO VALID COUNTRY CODES FOUND — ONLY DIGITS ALLOWED*\n\n*"+prefix+"autoblock add 92,1,44*")
+			s.Reply(info, "🔰 *NO VALID COUNTRY CODES FOUND — ONLY DIGITS ALLOWED*\n\n*"+prefix+"autoblock add 92,1,44*")
 			return
 		}
 		// merge with existing
@@ -337,15 +337,15 @@ func handleAutoBlockAsync(s SessionBridge, info types.MessageInfo, args []string
 		s.SetAutoBlockCodes(strings.Join(all, ","))
 		abInvalidate(botJID)
 		if s.GetAutoBlockSetting("off") != "on" {
-			s.Reply(info, "✅ *COUNTRY CODES ADDED :* +"+strings.Join(added, ", +")+"\n\n*TOTAL CODES :* "+itoa(len(all))+"\n\n⚠️ *AUTOBLOCK IS OFF — TURN ON WITH "+prefix+"autoblock on*")
+			s.Reply(info, "🔰 *COUNTRY CODES ADDED :* +"+strings.Join(added, ", +")+"\n\n*TOTAL CODES :* "+itoa(len(all))+"\n\n🔰 *AUTOBLOCK IS OFF — TURN ON WITH "+prefix+"autoblock on*")
 			return
 		}
-		s.Reply(info, "✅ *COUNTRY CODES ADDED :* +"+strings.Join(added, ", +")+"\n\n*TOTAL CODES :* "+itoa(len(all))+"\n\n*AUTOBLOCK IS ON — THESE COUNTRIES WILL BE BLOCKED INSTANTLY*")
+		s.Reply(info, "🔰 *COUNTRY CODES ADDED :* +"+strings.Join(added, ", +")+"\n\n*TOTAL CODES :* "+itoa(len(all))+"\n\n*AUTOBLOCK IS ON — THESE COUNTRIES WILL BE BLOCKED INSTANTLY*")
 		return
 
 	case "del":
 		if len(args) < 2 {
-			s.Reply(info, "❌ *TO REMOVE COUNTRY CODES WRITE LIKE THIS*\n\n*"+prefix+"autoblock del 92,1*")
+			s.Reply(info, "🔰 *TO REMOVE COUNTRY CODES WRITE LIKE THIS*\n\n*"+prefix+"autoblock del 92,1*")
 			return
 		}
 		raw := strings.Join(args[1:], " ")
@@ -361,12 +361,12 @@ func handleAutoBlockAsync(s SessionBridge, info types.MessageInfo, args []string
 			}
 		}
 		if len(removed) == 0 {
-			s.Reply(info, "❌ *NONE OF THOSE CODES WERE SET*\n\n*CURRENT CODES :* "+abCodesDisplay(existing, "+")+"\n\n*USE "+prefix+"autoblock list TO SEE ALL*")
+			s.Reply(info, "🔰 *NONE OF THOSE CODES WERE SET*\n\n*CURRENT CODES :* "+abCodesDisplay(existing, "+")+"\n\n*USE "+prefix+"autoblock list TO SEE ALL*")
 			return
 		}
 		s.SetAutoBlockCodes(strings.Join(kept, ","))
 		abInvalidate(botJID)
-		s.Reply(info, "✅ *COUNTRY CODES REMOVED :* +"+strings.Join(removed, ", +")+"\n\n*REMAINING CODES :* "+abCodesDisplay(kept, "+")+"\n\n*REMOVED COUNTRIES WILL NO LONGER BE BLOCKED*")
+		s.Reply(info, "🔰 *COUNTRY CODES REMOVED :* +"+strings.Join(removed, ", +")+"\n\n*REMAINING CODES :* "+abCodesDisplay(kept, "+")+"\n\n*REMOVED COUNTRIES WILL NO LONGER BE BLOCKED*")
 		return
 
 	case "reset":
@@ -374,7 +374,7 @@ func handleAutoBlockAsync(s SessionBridge, info types.MessageInfo, args []string
 		s.SetAutoBlockCodes("")
 		s.SetAutoBlockContactSave("off")
 		abInvalidate(botJID)
-		s.Reply(info, "✅ *AUTOBLOCK RESET COMPLETE*\n\n*STATUS :* OFF\n*COUNTRY CODES :* NONE\n*SAVED CONTACTS MODE :* OFF\n\n*ALL SETTINGS ARE BACK TO DEFAULT*")
+		s.Reply(info, "🔰 *AUTOBLOCK RESET COMPLETE*\n\n*STATUS :* OFF\n*COUNTRY CODES :* NONE\n*SAVED CONTACTS MODE :* OFF\n\n*ALL SETTINGS ARE BACK TO DEFAULT*")
 		return
 
 	case "sync":
@@ -396,13 +396,13 @@ func handleAutoBlockAsync(s SessionBridge, info types.MessageInfo, args []string
 	case "contact":
 		s.SetAutoBlockContactSave("on")
 		abInvalidate(botJID)
-		s.Reply(info, "🤝 *SAVED CONTACTS PROTECTION ON*\n\n*NOW ONWARDS ONLY NUMBERS NOT IN THE BOT PHONE CONTACTS WILL BE BLOCKED*\n\n*SAVED CONTACTS CAN NEVER BE BLOCKED BY AUTOBLOCK*")
+		s.Reply(info, "🔰 *SAVED CONTACTS PROTECTION ON*\n\n*NOW ONWARDS ONLY NUMBERS NOT IN THE BOT PHONE CONTACTS WILL BE BLOCKED*\n\n*SAVED CONTACTS CAN NEVER BE BLOCKED BY AUTOBLOCK*")
 		return
 
 	case "nocontact":
 		s.SetAutoBlockContactSave("off")
 		abInvalidate(botJID)
-		s.Reply(info, "⚠️ *SAVED CONTACTS PROTECTION OFF*\n\n*NOW EVERY NUMBER FROM BLOCKED COUNTRY CODES WILL BE BLOCKED*\n\n*EVEN IF IT IS SAVED IN BOT PHONE CONTACTS*")
+		s.Reply(info, "🔰 *SAVED CONTACTS PROTECTION OFF*\n\n*NOW EVERY NUMBER FROM BLOCKED COUNTRY CODES WILL BE BLOCKED*\n\n*EVEN IF IT IS SAVED IN BOT PHONE CONTACTS*")
 		return
 
 	case "list":

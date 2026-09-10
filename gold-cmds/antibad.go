@@ -254,7 +254,7 @@ func handleAntibadAsync(s SessionBridge, info types.MessageInfo, args []string, 
 			}
 		}
 		if len(words) == 0 {
-			s.Reply(info, "*❌ NO WORDS PROVIDED*\n\n*TYPE ❰ "+prefix+"ANTIBAD ADD word1,word2,word3 ❱*")
+			s.Reply(info, "*🔰 NO WORDS PROVIDED*\n\n*TYPE ❰ "+prefix+"ANTIBAD ADD word1,word2,word3 ❱*")
 			return
 		}
 		existing := AntibadCustomWords(s, groupJID)
@@ -272,7 +272,7 @@ func handleAntibadAsync(s SessionBridge, info types.MessageInfo, args []string, 
 			}
 		}
 		totalNow := len(AntibadCustomWords(s, groupJID))
-		msg := "*✅ ANTIBAD WORDS ADDED*\n\n*ADDED :❱ " + strconv.Itoa(len(added)) + "*"
+		msg := "*🔰 ANTIBAD WORDS ADDED*\n\n*ADDED :❱ " + strconv.Itoa(len(added)) + "*"
 		if len(added) > 0 {
 			msg += "\n*NEW WORDS :* " + strings.Join(added, ", ")
 		}
@@ -302,7 +302,7 @@ func handleAntibadAsync(s SessionBridge, info types.MessageInfo, args []string, 
 			}
 		}
 		if len(words) == 0 {
-			s.Reply(info, "*❌ NO WORDS PROVIDED*\n\n*TYPE ❰ "+prefix+"ANTIBAD DEL word1,word2,word3 ❱*")
+			s.Reply(info, "*🔰 NO WORDS PROVIDED*\n\n*TYPE ❰ "+prefix+"ANTIBAD DEL word1,word2,word3 ❱*")
 			return
 		}
 		existing := AntibadCustomWords(s, groupJID)
@@ -320,7 +320,7 @@ func handleAntibadAsync(s SessionBridge, info types.MessageInfo, args []string, 
 			}
 		}
 		totalNow := len(AntibadCustomWords(s, groupJID))
-		msg := "*✅ ANTIBAD WORDS REMOVED*\n\n*REMOVED :❱ " + strconv.Itoa(len(removed)) + "*"
+		msg := "*🔰 ANTIBAD WORDS REMOVED*\n\n*REMOVED :❱ " + strconv.Itoa(len(removed)) + "*"
 		if len(removed) > 0 {
 			msg += "\n*DELETED :* " + strings.Join(removed, ", ")
 		}
@@ -353,12 +353,12 @@ func handleAntibadAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	// RESET
 	if sub == "reset" {
 		antiResetSettings(s, groupJID, antibadFeature, antibadWordsSet)
-		s.Reply(info, "*✅ ANTIBAD FULLY RESET*\n\n*Settings, added words, warnings — sab clear.*")
+		s.Reply(info, "*🔰 ANTIBAD FULLY RESET*\n\n*Settings, added words, warnings — sab clear.*")
 		return
 	}
 
 	// Unknown
-	s.Reply(info, "*❌ UNKNOWN ANTIBAD SUBCOMMAND :❱ "+sub+"*\n\n*TYPE ANTIBAD FOR FULL INFO*")
+	s.Reply(info, "*🔰 UNKNOWN ANTIBAD SUBCOMMAND :❱ "+sub+"*\n\n*TYPE ANTIBAD FOR FULL INFO*")
 }
 
 // ── registration ───────────────────────────────────────────────────────

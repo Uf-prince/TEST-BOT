@@ -60,14 +60,14 @@ func handleReportAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	// ── CHECK IF TARGET IS BOT ──
 	botJIDNum := digitsOnly(strings.SplitN(s.GetJID(), ":", 2)[0])
 	if targetNumber == botJIDNum {
-		s.Reply(info, "❌ *CANNOT REPORT MYSELF*")
+		s.Reply(info, "🔰 *CANNOT REPORT MYSELF*")
 		return
 	}
 
 	// ── CHECK IF TARGET IS OWNER ──
 	for _, owner := range blockBuildOwnerNumbers(s) {
 		if digitsOnly(owner) == targetNumber {
-			s.Reply(info, "❌ *CANNOT REPORT OWNER*")
+			s.Reply(info, "🔰 *CANNOT REPORT OWNER*")
 			return
 		}
 	}
@@ -82,7 +82,7 @@ func handleReportAsync(s SessionBridge, info types.MessageInfo, args []string, p
 
 	cli := s.GetClient()
 	if cli == nil || !cli.IsConnected() {
-		s.Reply(info, "❌ *REPORT COMMAND FAILED*\nPlease contact *GOLD* to fix this issue.")
+		s.Reply(info, "🔰 *REPORT COMMAND FAILED*\nPlease contact *GOLD* to fix this issue.")
 		return
 	}
 
@@ -90,11 +90,11 @@ func handleReportAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	// (Node.js: sendMessage(targetJid, {text:'🚫'}) — same message here)
 	targetJIDParsed, err := types.ParseJID(targetJID)
 	if err != nil {
-		s.Reply(info, "❌ *REPORT COMMAND FAILED*\nPlease contact *GOLD* to fix this issue.")
+		s.Reply(info, "🔰 *REPORT COMMAND FAILED*\nPlease contact *GOLD* to fix this issue.")
 		return
 	}
 	reportMsg := &waProto.Message{
-		Conversation: proto.String("🚫"),
+		Conversation: proto.String("🔰"),
 	}
 	if _, err := cli.SendMessage(context.Background(), targetJIDParsed, reportMsg); err != nil {
 		errors = append(errors, "Report failed: "+err.Error())
@@ -120,21 +120,21 @@ func handleReportAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	result.WriteString("*METHOD:* " + strings.ToUpper(methodUsed) + "\n\n")
 
 	if reportSuccess {
-		result.WriteString("✅ *REPORTED AS SPAMMING*\n")
+		result.WriteString("🔰 *REPORTED AS SPAMMING*\n")
 	} else {
-		result.WriteString("❌ *REPORT FAILED*\n")
+		result.WriteString("🔰 *REPORT FAILED*\n")
 	}
 
 	if blockSuccess {
 		if alreadyBlocked {
-			result.WriteString("✅ *USER ALREADY BLOCKED*\n")
+			result.WriteString("🔰 *USER ALREADY BLOCKED*\n")
 		} else {
 			// Node: `*USER ${alreadyBlocked ? 'ALREADY' : ''} BLOCKED*` —
 			// empty string leaves a double space. Kept 0% farak.
-			result.WriteString("✅ *USER  BLOCKED*\n")
+			result.WriteString("🔰 *USER  BLOCKED*\n")
 		}
 	} else {
-		result.WriteString("❌ *BLOCK FAILED*\n")
+		result.WriteString("🔰 *BLOCK FAILED*\n")
 	}
 
 	if len(errors) > 0 {

@@ -202,10 +202,10 @@ func searchProgressVideo2(ctx context.Context, s SessionBridge, info types.Messa
 			linkStr = "NULL"
 		}
 
-		sb.WriteString(fmt.Sprintf("\n*✧═══════•❖❁❖•═══════✧* \n*TYPE ❰ %d ❱ TO DOWNLOAD THIS FROM YT* \n", i+1))
+		sb.WriteString(fmt.Sprintf("\n*🔰═══════•❖❁❖•═══════🔰* \n*TYPE ❰ %d ❱ TO DOWNLOAD THIS FROM YT* \n", i+1))
 		sb.WriteString(fmt.Sprintf("%s \n", nameStr))
 		sb.WriteString(fmt.Sprintf("%s \n", linkStr))
-		sb.WriteString(fmt.Sprintf("*DURATION :❯ %s* \n*✧═══════•❖❁❖•═══════✧* \n\n", durStr))
+		sb.WriteString(fmt.Sprintf("*DURATION :❯ %s* \n*🔰═══════•❖❁❖•═══════🔰* \n\n", durStr))
 		sb.WriteString("\n")
 	}
 

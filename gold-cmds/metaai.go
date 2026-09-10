@@ -67,7 +67,7 @@ func handleAddMetaAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 
@@ -81,7 +81,7 @@ func handleAddMetaAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	if err == nil {
 		ok, respLID := checkResult(resp)
 		if ok {
-			s.Reply(info, "🤖 *META AI ADDED*\n\n✅ *Action Completed!*\n_Meta AI added successfully!_")
+			s.Reply(info, "🔰 *META AI ADDED*\n\n🔰 *Action Completed!*\n_Meta AI added successfully!_")
 			return
 		}
 		// Attempt 1b: Add with LID from response
@@ -93,7 +93,7 @@ func handleAddMetaAsync(s SessionBridge, info types.MessageInfo, args []string, 
 			if err1b == nil {
 				ok1b, _ := checkResult(resp1b)
 				if ok1b {
-					s.Reply(info, "🤖 *META AI ADDED*\n\n✅ *Action Completed!*\n_Meta AI added successfully!_")
+					s.Reply(info, "🔰 *META AI ADDED*\n\n🔰 *Action Completed!*\n_Meta AI added successfully!_")
 					return
 				}
 			}
@@ -105,13 +105,13 @@ func handleAddMetaAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	// Attempt 2: Add with PN JID
 	resp2, err2 := client.UpdateGroupParticipants(ctx, groupJID, []types.JID{pnJID}, whatsmeow.ParticipantChangeAdd)
 	if err2 != nil {
-		s.Reply(info, "❌ *META AI ADD FAILED*\n\n_Tip: Make sure the bot is admin of this group._")
+		s.Reply(info, "🔰 *META AI ADD FAILED*\n\n_Tip: Make sure the bot is admin of this group._")
 		return
 	}
 
 	ok2, respLID2 := checkResult(resp2)
 	if ok2 {
-		s.Reply(info, "🤖 *META AI ADDED*\n\n✅ *Action Completed!*\n_Meta AI added successfully!_")
+		s.Reply(info, "🔰 *META AI ADDED*\n\n🔰 *Action Completed!*\n_Meta AI added successfully!_")
 		return
 	}
 
@@ -125,13 +125,13 @@ func handleAddMetaAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		if err3 == nil {
 			ok3, _ := checkResult(resp3)
 			if ok3 {
-				s.Reply(info, "🤖 *META AI ADDED*\n\n✅ *Action Completed!*\n_Meta AI added successfully!_")
+				s.Reply(info, "🔰 *META AI ADDED*\n\n🔰 *Action Completed!*\n_Meta AI added successfully!_")
 				return
 			}
 		}
 	}
 
-	s.Reply(info, "❌ *META AI ADD FAILED*\n\n_Tip: Make sure the bot is admin of this group._")
+	s.Reply(info, "🔰 *META AI ADD FAILED*\n\n_Tip: Make sure the bot is admin of this group._")
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +148,7 @@ func handleDelMetaAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	}
 	client := s.GetClient()
 	if client == nil {
-		s.Reply(info, "❌ WhatsApp client not ready.")
+		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
 
@@ -162,7 +162,7 @@ func handleDelMetaAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	if err == nil {
 		ok, respLID := checkResult(resp)
 		if ok {
-			s.Reply(info, "🤖 *META AI REMOVED*\n\n✅ *Action Completed!*\n_Meta AI removed successfully!_")
+			s.Reply(info, "🔰 *META AI REMOVED*\n\n🔰 *Action Completed!*\n_Meta AI removed successfully!_")
 			return
 		}
 		if !respLID.IsEmpty() && client.Store != nil && client.Store.LIDs != nil {
@@ -177,7 +177,7 @@ func handleDelMetaAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	if err2 == nil {
 		ok2, respLID2 := checkResult(resp2)
 		if ok2 {
-			s.Reply(info, "🤖 *META AI REMOVED*\n\n✅ *Action Completed!*\n_Meta AI removed successfully!_")
+			s.Reply(info, "🔰 *META AI REMOVED*\n\n🔰 *Action Completed!*\n_Meta AI removed successfully!_")
 			return
 		}
 		if !respLID2.IsEmpty() && client.Store != nil && client.Store.LIDs != nil {
@@ -191,7 +191,7 @@ func handleDelMetaAsync(s SessionBridge, info types.MessageInfo, args []string, 
 			if err3 == nil {
 				ok3, _ := checkResult(resp3)
 				if ok3 {
-					s.Reply(info, "🤖 *META AI REMOVED*\n\n✅ *Action Completed!*\n_Meta AI removed successfully!_")
+					s.Reply(info, "🔰 *META AI REMOVED*\n\n🔰 *Action Completed!*\n_Meta AI removed successfully!_")
 					return
 				}
 			}
@@ -207,14 +207,14 @@ func handleDelMetaAsync(s SessionBridge, info types.MessageInfo, args []string, 
 			if err4 == nil {
 				ok4, _ := checkResult(resp4)
 				if ok4 {
-					s.Reply(info, "🤖 *META AI REMOVED*\n\n✅ *Action Completed!*\n_Meta AI removed successfully!_")
+					s.Reply(info, "🔰 *META AI REMOVED*\n\n🔰 *Action Completed!*\n_Meta AI removed successfully!_")
 					return
 				}
 			}
 		}
 	}
 
-	s.Reply(info, "❌ *META AI REMOVE FAILED*\n\n_Tip: Make sure the bot is admin of this group._")
+	s.Reply(info, "🔰 *META AI REMOVE FAILED*\n\n_Tip: Make sure the bot is admin of this group._")
 }
 
 // ---------------------------------------------------------------------------

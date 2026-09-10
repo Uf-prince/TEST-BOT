@@ -76,7 +76,7 @@ func handleToPDFAsync(ctx context.Context, s SessionBridge, info types.MessageIn
 	if err != nil {
 		_ = s.DeleteMessage(info, waitID)
 		if !ctxTimedOut(ctx) {
-			s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ❌ TOPDF FAILED\n*┃* 🔰 "+strings.ToUpper(err.Error())+"\n*╰───────────────⊷*")
+			s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 🔰 TOPDF FAILED\n*┃* 🔰 "+strings.ToUpper(err.Error())+"\n*╰───────────────⊷*")
 		}
 		return
 	}
@@ -87,16 +87,16 @@ func handleToPDFAsync(ctx context.Context, s SessionBridge, info types.MessageIn
 	if err != nil {
 		_ = s.DeleteMessage(info, waitID)
 		if !ctxTimedOut(ctx) {
-			s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ❌ FAILED TO READ PDF OUTPUT\n*╰───────────────⊷*")
+			s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 🔰 FAILED TO READ PDF OUTPUT\n*╰───────────────⊷*")
 		}
 		return
 	}
 
 	if err := s.SendDocument(info, pdfBytes, pdfName, "application/pdf",
-		"*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ✅ TOPDF CONVERTED SUCCESSFULLY\n*┃* 🔰 FILE: "+strings.ToUpper(pdfName)+"\n*╰───────────────⊷*"); err != nil {
+		"*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 🔰 TOPDF CONVERTED SUCCESSFULLY\n*┃* 🔰 FILE: "+strings.ToUpper(pdfName)+"\n*╰───────────────⊷*"); err != nil {
 		_ = s.DeleteMessage(info, waitID)
 		if !ctxTimedOut(ctx) {
-			s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 ❌ FAILED TO SEND PDF\n*╰───────────────⊷*")
+			s.Reply(info, "*╭─🔰「 TOPDF 」──⊷*\n*┃* 🔰 🔰 FAILED TO SEND PDF\n*╰───────────────⊷*")
 		}
 		return
 	}

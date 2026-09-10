@@ -139,7 +139,7 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 	}
 	statusID := twExtractTweetID(rawURL)
 	if statusID == "" {
-		s.Reply(info, "❌ *TWITTER DOWNLOAD ERROR*\nPlease provide a valid tweet link (x.com or twitter.com).")
+		s.Reply(info, "🔰 *TWITTER DOWNLOAD ERROR*\nPlease provide a valid tweet link (x.com or twitter.com).")
 		return
 	}
 
@@ -148,13 +148,13 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 	tweet, err := twFetchTweet(ctx, statusID)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TWITTER DOWNLOAD ERROR*\n"+err.Error())
+		s.Reply(info, "🔰 *TWITTER DOWNLOAD ERROR*\n"+err.Error())
 		return
 	}
 
 	// Photo-only tweets: download & send up to 4 photos as images.
 	if len(tweet.Media.Videos) == 0 && len(tweet.Media.Photos) > 0 {
-		s.EditMessage(info, waitID, "🖼 *Sending photo...*")
+		s.EditMessage(info, waitID, "🔰 *Sending photo...*")
 		client := mediaHTTPClient()
 		caption := twBuildCaption(tweet)
 		sent := 0
@@ -177,21 +177,21 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 		}
 		s.DeleteMessage(info, waitID)
 		if sent == 0 {
-			s.Reply(info, "❌ COULD NOT SEND PHOTO 😢")
+			s.Reply(info, "🔰 COULD NOT SEND PHOTO 🔰")
 		}
 		return
 	}
 
 	if len(tweet.Media.Videos) == 0 {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ NO VIDEO OR PHOTO IN THIS TWEET 🙃")
+		s.Reply(info, "🔰 NO VIDEO OR PHOTO IN THIS TWEET 🔰")
 		return
 	}
 
 	vid := tweet.Media.Videos[0]
 	if vid.URL == "" {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ VIDEO URL NOT FOUND. PLEASE TRY AGAIN 😭")
+		s.Reply(info, "🔰 VIDEO URL NOT FOUND. PLEASE TRY AGAIN 🔰")
 		return
 	}
 
@@ -201,7 +201,7 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 	path, err := streamDownloadToFile(ctx, client, vid.URL, nil)
 	if err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ PLEASE TRY AGAIN 🤗")
+		s.Reply(info, "🔰 PLEASE TRY AGAIN 🔰")
 		return
 	}
 	defer removeTempFile(path)
@@ -219,7 +219,7 @@ func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.Messag
 	caption := twBuildCaption(tweet)
 	if err := s.SendVideoFile(info, path, caption, thumb, secs, w, h); err != nil {
 		s.DeleteMessage(info, waitID)
-		s.Reply(info, "❌ *TWITTER DOWNLOAD ERROR*\nVideo could not be sent.")
+		s.Reply(info, "🔰 *TWITTER DOWNLOAD ERROR*\nVideo could not be sent.")
 		return
 	}
 	s.DeleteMessage(info, waitID)

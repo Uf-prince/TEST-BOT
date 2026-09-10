@@ -241,7 +241,7 @@ func ytsRunAudio(s SessionBridge, info types.MessageInfo, vid VideoResult, prefi
 		if ytAudioEngineClassic(ctx, s, info, vid) {
 			return
 		}
-		s.Reply(info, "*❌ DOWNLOAD FAILED — PLEASE TRY AGAIN LATER*")
+		s.Reply(info, "*🔰 DOWNLOAD FAILED — PLEASE TRY AGAIN LATER*")
 	})
 }
 
@@ -254,7 +254,7 @@ func ytsRunVideo(s SessionBridge, info types.MessageInfo, vid VideoResult, prefi
 		if ytVideoEngineClassic(ctx, s, info, vid) {
 			return
 		}
-		s.Reply(info, "*❌ DOWNLOAD FAILED — PLEASE TRY AGAIN LATER*")
+		s.Reply(info, "*🔰 DOWNLOAD FAILED — PLEASE TRY AGAIN LATER*")
 	})
 }
 

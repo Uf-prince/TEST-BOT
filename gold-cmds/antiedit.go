@@ -81,12 +81,12 @@ func handleAntiEdit(s SessionBridge, info types.MessageInfo, args []string, pref
 		}
 		if sub == "here" {
 			s.SetAntiEditMode("here")
-			s.Reply(info, "*✅ ANTIEDIT MODE SET*\n\n*MODE :› HERE*\n\n*✏️ EDITED MESSAGE ALERTS WILL BE SENT TO THE SAME CHAT/GROUP*\n\n"+antieditGuide(prefix))
+			s.Reply(info, "*🔰 ANTIEDIT MODE SET*\n\n*MODE :› HERE*\n\n*🔰 EDITED MESSAGE ALERTS WILL BE SENT TO THE SAME CHAT/GROUP*\n\n"+antieditGuide(prefix))
 			return
 		}
 		if sub == "inbox" {
 			s.SetAntiEditMode("inbox")
-			s.Reply(info, "*✅ ANTIEDIT MODE SET*\n\n*MODE :› INBOX*\n\n*✏️ EDITED MESSAGE ALERTS WILL BE SENT TO YOUR PRIVATE INBOX (YOU)*\n\n"+antieditGuide(prefix))
+			s.Reply(info, "*🔰 ANTIEDIT MODE SET*\n\n*MODE :› INBOX*\n\n*🔰 EDITED MESSAGE ALERTS WILL BE SENT TO YOUR PRIVATE INBOX (YOU)*\n\n"+antieditGuide(prefix))
 			return
 		}
 		// ".antiedit msg" with no/invalid sub → show current mode + guide
@@ -94,7 +94,7 @@ func handleAntiEdit(s SessionBridge, info types.MessageInfo, args []string, pref
 		if curMode == "" {
 			curMode = "HERE"
 		}
-		s.Reply(info, "*✏️ ANTIEDIT MODE*\n\n*MODE :› "+curMode+"*\n\n"+antieditGuide(prefix))
+		s.Reply(info, "*🔰 ANTIEDIT MODE*\n\n*MODE :› "+curMode+"*\n\n"+antieditGuide(prefix))
 		return
 	}
 
@@ -104,7 +104,7 @@ func handleAntiEdit(s SessionBridge, info types.MessageInfo, args []string, pref
 		if curMode == "" {
 			curMode = "HERE"
 		}
-		s.Reply(info, "*✅ ANTIEDIT ENABLED*\n\n*✏️ BOT WILL NOW CAPTURE EDITED MESSAGES*\n\n*SCOPE :› ALL (Inbox + Groups)*\n*MODE :› "+curMode+"*\n\n"+antieditGuide(prefix))
+		s.Reply(info, "*🔰 ANTIEDIT ENABLED*\n\n*🔰 BOT WILL NOW CAPTURE EDITED MESSAGES*\n\n*SCOPE :› ALL (Inbox + Groups)*\n*MODE :› "+curMode+"*\n\n"+antieditGuide(prefix))
 		return
 	}
 
@@ -114,7 +114,7 @@ func handleAntiEdit(s SessionBridge, info types.MessageInfo, args []string, pref
 		if curMode == "" {
 			curMode = "HERE"
 		}
-		s.Reply(info, "*✅ ANTIEDIT ENABLED*\n\n*SCOPE :› INBOX ONLY*\n*MODE :› "+curMode+"*\n\n"+antieditGuide(prefix))
+		s.Reply(info, "*🔰 ANTIEDIT ENABLED*\n\n*SCOPE :› INBOX ONLY*\n*MODE :› "+curMode+"*\n\n"+antieditGuide(prefix))
 		return
 	}
 
@@ -124,21 +124,21 @@ func handleAntiEdit(s SessionBridge, info types.MessageInfo, args []string, pref
 		if curMode == "" {
 			curMode = "HERE"
 		}
-		s.Reply(info, "*✅ ANTIEDIT ENABLED*\n\n*SCOPE :› GROUPS ONLY*\n*MODE :› "+curMode+"*\n\n"+antieditGuide(prefix))
+		s.Reply(info, "*🔰 ANTIEDIT ENABLED*\n\n*SCOPE :› GROUPS ONLY*\n*MODE :› "+curMode+"*\n\n"+antieditGuide(prefix))
 		return
 	}
 
 	if arg == "off" {
 		s.SetAntiEditSetting(false, "all")
-		s.Reply(info, "*❌ ANTIEDIT DISABLED*")
+		s.Reply(info, "*🔰 ANTIEDIT DISABLED*")
 		return
 	}
 
 	// status (no arg or unknown)
 	st := s.GetAntiEditSetting()
-	statusStr := "❌ OFF"
+	statusStr := "🔰 OFF"
 	if st.Enabled {
-		statusStr = "✅ ON"
+		statusStr = "🔰 ON"
 	}
 	scopeStr := strings.ToUpper(st.Scope)
 	if scopeStr == "" {
@@ -148,7 +148,7 @@ func handleAntiEdit(s SessionBridge, info types.MessageInfo, args []string, pref
 	if modeStr == "" {
 		modeStr = "HERE"
 	}
-	s.Reply(info, "*✏️ ANTIEDIT STATUS*\n\n*STATUS :› "+statusStr+"*\n*SCOPE :› "+scopeStr+"*\n*MODE :› "+modeStr+"*\n\n"+antieditGuide(prefix))
+	s.Reply(info, "*🔰 ANTIEDIT STATUS*\n\n*STATUS :› "+statusStr+"*\n*SCOPE :› "+scopeStr+"*\n*MODE :› "+modeStr+"*\n\n"+antieditGuide(prefix))
 }
 
 func init() {

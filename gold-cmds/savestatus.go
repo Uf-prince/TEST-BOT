@@ -211,7 +211,7 @@ func handleSave(s SessionBridge, info types.MessageInfo, args []string, prefix s
 func handleSaveAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	cli := s.GetClient()
 	if cli == nil || !cli.IsConnected() {
-		s.Reply(info, "*❌ FAILED TO SAVE*\n\n*REASON:➭ client not ready*")
+		s.Reply(info, "*🔰 FAILED TO SAVE*\n\n*REASON:➭ client not ready*")
 		return
 	}
 
@@ -220,7 +220,7 @@ func handleSaveAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 	ownJIDRaw := strings.SplitN(s.GetJID(), ":", 2)[0] + "@s.whatsapp.net"
 	ownJID, err := types.ParseJID(ownJIDRaw)
 	if err != nil {
-		s.Reply(info, "*❌ FAILED TO SAVE*\n\n*REASON:➭ invalid own JID*")
+		s.Reply(info, "*🔰 FAILED TO SAVE*\n\n*REASON:➭ invalid own JID*")
 		return
 	}
 
@@ -248,11 +248,11 @@ func handleSaveAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 		}
 		resp, err := cli.SendMessage(context.Background(), ownJID, msg)
 		if err != nil {
-			s.Reply(info, "*❌ FAILED TO SAVE*\n\n*REASON:➭ "+err.Error()+"*")
+			s.Reply(info, "*🔰 FAILED TO SAVE*\n\n*REASON:➭ "+err.Error()+"*")
 			return
 		}
 		saveSelfEditOnce(cli, ownJID, resp, msg)
-		s.Reply(info, "*✅ SAVED TO YOUR INBOX*\n *CHEK YOUR (YOU) INBOX*")
+		s.Reply(info, "*🔰 SAVED TO YOUR INBOX*\n *CHEK YOUR (YOU) INBOX*")
 		return
 	}
 
@@ -277,13 +277,13 @@ func handleSaveAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 	case saveKindDocument:
 		uploadType = whatsmeow.MediaDocument
 	default:
-		s.Reply(info, "*❌ FAILED TO SAVE*\n\n*REASON:➭ unsupported media type*")
+		s.Reply(info, "*🔰 FAILED TO SAVE*\n\n*REASON:➭ unsupported media type*")
 		return
 	}
 
 	resp, err := cli.Upload(context.Background(), data, uploadType)
 	if err != nil {
-		s.Reply(info, "*❌ FAILED TO SAVE*\n\n*REASON:➭ "+err.Error()+"*")
+		s.Reply(info, "*🔰 FAILED TO SAVE*\n\n*REASON:➭ "+err.Error()+"*")
 		return
 	}
 
@@ -377,13 +377,13 @@ func handleSaveAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 		if saveIsExpiredErr(errMsg) {
 			s.Reply(info, "*THIS HAS EXPIRED OR IS NO LONGER AVAILABLE*")
 		} else {
-			s.Reply(info, "*❌ FAILED TO SAVE*\n\n*REASON:➭ "+errMsg+"*")
+			s.Reply(info, "*🔰 FAILED TO SAVE*\n\n*REASON:➭ "+errMsg+"*")
 		}
 		return
 	}
 	saveSelfEditOnce(cli, ownJID, sendResp, outMsg)
 
-	s.Reply(info, "*✅ SAVED TO YOUR INBOX*\n*CHECK YOUR (YOU) INBOX*")
+	s.Reply(info, "*🔰 SAVED TO YOUR INBOX*\n*CHECK YOUR (YOU) INBOX*")
 }
 
 // saveIsExpiredErr matches the Node.js expired-media error sniffing.

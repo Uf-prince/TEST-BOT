@@ -78,16 +78,16 @@ func handleAddVoiceAsync(s SessionBridge, info types.MessageInfo, args []string,
 	// Download the quoted audio (DownloadQuotedMedia follows ContextInfo.QuotedMessage).
 	data, _, ok := s.DownloadQuotedMedia(info)
 	if !ok || len(data) == 0 {
-		s.Reply(info, "*⚠️ QUOTE AN AUDIO MESSAGE FIRST THEN WRITE .ADDVOICE <NAME>*")
+		s.Reply(info, "*🔰 QUOTE AN AUDIO MESSAGE FIRST THEN WRITE .ADDVOICE <NAME>*")
 		return
 	}
 
 	// Force mime "audio/mp4" — same as Node.js (loudspeaker playback).
 	mime := "audio/mp4"
 	if s.SaveCustomVoice(name, data, mime) {
-		s.Reply(info, "*✅ VOICE SAVED SUCCESSFULLY*\n\n*NAME :❰ "+strings.ToUpper(name)+"*\n\n*NOW WHENEVER ANYONE WRITES* *"+strings.ToUpper(name)+"* *THIS VOICE WILL BE SENT AUTOMATICALLY 🎙️*")
+		s.Reply(info, "*🔰 VOICE SAVED SUCCESSFULLY*\n\n*NAME :❰ "+strings.ToUpper(name)+"*\n\n*NOW WHENEVER ANYONE WRITES* *"+strings.ToUpper(name)+"* *THIS VOICE WILL BE SENT AUTOMATICALLY 🔰*")
 	} else {
-		s.Reply(info, "*❌ FAILED TO SAVE VOICE — TRY AGAIN*")
+		s.Reply(info, "*🔰 FAILED TO SAVE VOICE — TRY AGAIN*")
 	}
 }
 
@@ -115,9 +115,9 @@ func handleDelVoiceAsync(s SessionBridge, info types.MessageInfo, args []string,
 	}
 
 	if s.DeleteCustomVoice(name) {
-		s.Reply(info, "*✅ VOICE DELETED*\n\n*NAME :❰ "+strings.ToUpper(name)+"*")
+		s.Reply(info, "*🔰 VOICE DELETED*\n\n*NAME :❰ "+strings.ToUpper(name)+"*")
 	} else {
-		s.Reply(info, fmt.Sprintf("*❌ VOICE \"%s\" NOT FOUND*", strings.ToUpper(name)))
+		s.Reply(info, fmt.Sprintf("*🔰 VOICE \"%s\" NOT FOUND*", strings.ToUpper(name)))
 	}
 }
 
@@ -137,7 +137,7 @@ func handleVoiceListAsync(s SessionBridge, info types.MessageInfo, args []string
 	}
 
 	var sb strings.Builder
-	sb.WriteString("*🎙️ SAVED VOICES LIST 🎙️*\n\n")
+	sb.WriteString("*🔰 SAVED VOICES LIST 🔰*\n\n")
 	for i, v := range voices {
 		sb.WriteString(fmt.Sprintf("*%d. %s*\n", i+1, strings.ToUpper(v)))
 	}
