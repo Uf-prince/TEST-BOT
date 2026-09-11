@@ -388,7 +388,7 @@ func handleYTInfo(s SessionBridge, info types.MessageInfo, args []string, prefix
 }
 
 func init() {
-	Register(Command{Name: "yts", Category: "SEARCH", Desc: "Search YouTube videos or paste a YouTube link to download (title, channel, views, link)", Run: handleYTSearch})
+	Register(Command{Name: "yts", Category: "DOWNLOADER", Desc: "Search YouTube videos or paste a YouTube link to download (title, channel, views, link)", Run: handleYTSearch})
 	Register(Command{Name: "ytsearch", Hidden: true, Run: handleYTSearch})
 	Register(Command{Name: "ytinfo", Hidden: true, Run: handleYTInfo})
 }
