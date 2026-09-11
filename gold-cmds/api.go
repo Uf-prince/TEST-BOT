@@ -509,8 +509,8 @@ var CategoryOrder = []string{
 	"DOWNLOADER",
 	"SEARCH",
 	"AI & MEDIA",
-	"TOOLS",
 	"PRESENCE & STATUS",
+	"TOOLS",
 }
 
 // CategoryEmoji maps each category to a decorative emoji used in the menu header.
