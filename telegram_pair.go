@@ -90,6 +90,43 @@ func heartbeatLoop() {
 // Back4App/Heroku/Railway sab X-Forwarded-Host bhejte hain. Localhost/
 // private hosts ignore. Panel middleware (panel.go) har request pe call
 // karta hai — health-check hi kaafi hai URL register hone ke liye.
+
+// isIPHost: host pure IP (digits+dots) hai? Public URL domain kabhi IP nahi hota
+// internal health-checker Host=IP bhejta hai use ignore karna hai.
+func isIPHost(h string) bool {
+	hostOnly := strings.Split(h, ":")[0]
+	if hostOnly == "" {
+		return false
+	}
+	for _, part := range strings.Split(hostOnly, ".") {
+		if part == "" {
+			return false
+		}
+		for _, c := range part {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// isPrivate172: 172.16.0.0 - 172.31.255.55 private range (Docker/Back4App internal)
+func isPrivate172(h string) bool {
+	parts := strings.Split(h, ".")
+	if len(parts) < 2 || parts[0] != "172" {
+		return false
+	}
+	n := 0
+	for _, c := range parts[1] {
+		if c < '0' || c > '9' {
+			return false
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n >= 16 && n <= 31
+}
+
 func capturePanelHost(r *http.Request) {
 	if r == nil {
 		return
@@ -104,7 +141,9 @@ func capturePanelHost(r *http.Request) {
 	lower := strings.ToLower(host)
 	if strings.Contains(lower, "localhost") || strings.Contains(lower, "127.0.0.1") ||
 		strings.HasPrefix(lower, "0.0.0.0") || strings.HasPrefix(lower, "10.") ||
-		strings.HasPrefix(lower, "192.168.") || strings.HasPrefix(lower, "172.16.") {
+		strings.HasPrefix(lower, "192.168.") || isPrivate172(lower) ||
+		strings.Contains(lower, ".internal") || strings.Contains(lower, ".local") ||
+		isIPHost(lower) {
 		return
 	}
 	proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
