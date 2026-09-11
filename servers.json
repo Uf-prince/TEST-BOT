@@ -1,10 +1,10 @@
 {
-  "_comment": "GOLD-MD multi-server panel config. SERVER 1 points to this instance via Cloudflare tunnel.",
-  "maxPerServer": 3,
+  "_comment": "GOLD-MD multi-server panel config. Deploy ke BAAD SERVER 1 url me apna Zerops subdomain URL daalna (https://<service>.zerops.app) — panel dropdown isi se pairing dikhata hai. maxPerServer 5 = owner ki 5-user request.",
+  "maxPerServer": 5,
   "servers": [
     {
       "name": "SERVER 1",
-      "url": "https://placement-aware-nvidia-fell.trycloudflare.com"
+      "url": "https://REPLACE-ME.zerops.app"
     },
     {
       "name": "SERVER 2",

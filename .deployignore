@@ -1,0 +1,54 @@
+# Zerops deploy filter — zerops.yaml ke deployFiles ke sath kaam karta hai.
+# Ye files repo me hain lekin runtime container me KABHI nahi jaani chahiye.
+
+# 4 prebuilt binaries — sirf gold-md-cgofree chahiye (build step me gold-md
+# ban jata hai); baaki 60MB+ redundant binaries deploy honge hi nahi.
+/gold-md-bot-arm64
+/gold-md-bot-static
+/gold-md-freebsd
+
+# Modal.com deploy script (runtime pe irrelevant)
+/modal_app.py
+
+# Local launcher scripts (Back4App/serv00/local — Zerops pe irrelevant)
+/start.sh
+/start_bot.sh
+/start_now.sh
+/launch_11221.sh
+/restart_11221.sh
+/restart_11249.sh
+/run_11237.sh
+/run_11238.sh
+/run_11246.sh
+/run_11249.sh
+/deploy_serv00.sh
+
+# Docker files (Zerops native runtime — Docker use nahi hota)
+/Dockerfile
+/Dockerfile.back4app
+/Dockerfile.ghcr
+
+# Reports/docs (deploy artifact me bekaar ~100KB)
+/BANDWIDTH_JUGAAD_GUIDE.md
+/CONVERSION_REPORT.md
+/DOWNLOADER_REPORT.md
+/FIXES_APPLIED.md
+/LATENCY_REPORT.md
+/RESOURCE_REPORT.md
+/VIDEO_FIX_REPORT.md
+/README.md
+/todo_port.md
+/external_api_notes.md
+
+# Telegram relay (Zerops pe panel direct public URL se chalega)
+/telegram_pair.go
+
+# Local test data
+/nexstore
+
+# Go source + vendor — binary deploy hai, compile nahi hota
+/vendor
+/gold-cmds
+*.go
+go.mod
+go.sum

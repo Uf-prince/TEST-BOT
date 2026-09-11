@@ -203,10 +203,10 @@ func main() {
 		InfoLog("Pairing panel → http://0.0.0.0:%d (POST /pair , GET /sessions)", cfg.PanelPort)
 	}
 
-	// ── Telegram pairing bridge (@gold_md_1_bot) — URL expiry-proof ──
-	// Outbound long-polling: container ka public URL expire ho jaye tab bhi
-	// Telegram se pair code generate ho jata hai (owner-only, max 3).
-	go StartPairBridge(mgr)
+	// ── Pair bridge REMOVED (owner order) ──
+	// Purana ntfy/gist/hb.json + Telegram relay system khatam. Ab sirf
+	// panel.go ka built-in HTTP panel chalta hai (POST /pair, GET /sessions)
+	// — pairing URLs servers.json se aate hain, owner khud set karta hai.
 
 	// ── ffmpeg self-installer (owner rule: jaha b deploy kro ho jaye) ──
 	// Background goroutine — boot speed pe 0% asar. Static ffmpeg download
@@ -276,19 +276,20 @@ func main() {
 //   ~50-80 MB and all WhatsApp sessions reconnect from Redis/Storj.
 //
 // Both thresholds use cgroup memory.current (container view, not host).
-// On Render Free (512 MB) this gives: cleanup at 450 MB, restart at 500 MB,
-// leaving ~12 MB headroom before the cgroup hard-kill.
+// On ZeoOps (1 GB container) this gives: cleanup at 850 MB, restart at
+// 950 MB — ~74 MB headroom before the cgroup hard-kill. Normal RAM-clean
+// (cache TTL clear + GC) 850 pe, hard self-restart 950 pe.
 const (
-	cleanupThreshold  uint64 = 450 * 1024 * 1024 // 450 MB → cache cleanup
-	restartThreshold  uint64 = 500 * 1024 * 1024 // 500 MB → self-restart
+	cleanupThreshold  uint64 = 850 * 1024 * 1024 // 850 MB → cache cleanup (owner: 1GB container, normal clean)
+	restartThreshold  uint64 = 950 * 1024 * 1024 // 950 MB → self-restart (owner: 1GB container, hard restart)
 )
 
 // memoryWatchdog monitors container RAM in a background goroutine and
 // takes corrective action BEFORE the cgroup hard limit is hit.
 //
 // ADAPTIVE (owner request: "speed pe 0% farak, kaam kam"): RAM normal
-// (< 400 MB) -> 30s deep sleep. Warning zone (400 MB+) -> 5s fast check
-// taake 450/500 ke thresholds ko bilkul wakt pe pakre. Ye kabhi
+// (< 800 MB) -> 30s deep sleep. Warning zone (800 MB+) -> 5s fast check
+// taake 850/950 ke thresholds ko bilkul wakt pe pakre. Ye kabhi
 // message-processing path ko nahi chhoota, isliye bot speed pe asar
 // hamesha 0% rehta hai.
 func memoryWatchdog(mgr *Manager, redis *Upstash, dbPath string) {
@@ -311,7 +312,7 @@ func memoryWatchdog(mgr *Manager, redis *Upstash, dbPath string) {
 			used = goHeapBytes()
 		}
 
-		// ── Tier 1: cache cleanup at 450 MB ──
+		// ── Tier 1: cache cleanup at 850 MB (normal RAM clean) ──
 		if used >= cleanupThreshold && !cleanupDone {
 			WarnLog("Container memory at %.2f MB — clearing caches to free RAM", float64(used)/(1024*1024))
 			if redis != nil {
@@ -323,17 +324,17 @@ func memoryWatchdog(mgr *Manager, redis *Upstash, dbPath string) {
 			continue
 		}
 
-		// ── Reset cleanup flag when memory drops back below 350 MB ──
-		if used < 350*1024*1024 {
+		// ── Reset cleanup flag when memory drops back below 750 MB ──
+		if used < 750*1024*1024 {
 			cleanupDone = false
 		}
 
-		// ── Tier 2: self-restart at 500 MB ──
+		// ── Tier 2: self-restart at 950 MB (hard restart) ──
 		// BUSY GUARD: koi command (download pipeline) in-flight ho to
 		// restart KABHI nahi. cgroup memory.current me file page-cache
 		// bhi ginta hai — media temp-file likhte hi counter 500+ ho
 		// jata tha aur mid-download process restart ho jata tha. Busy
-		// ke dauran sirf GC; agle cycle me dobara check (400 MB+ warning
+		// ke dauran sirf GC; agle cycle me dobara check (800 MB+ warning
 		// zone me loop 5s fast hai hi). Busy end ke baad hi restart.
 		if used >= restartThreshold && cmdBusyActive() {
 			runtimeGC() // free what we can without killing the download
@@ -346,9 +347,9 @@ func memoryWatchdog(mgr *Manager, redis *Upstash, dbPath string) {
 		}
 
 		// ── ADAPTIVE SLEEP ──
-		// Normal RAM -> 30s deep sleep (kaam kam). Warning zone (400 MB+)
+		// Normal RAM -> 30s deep sleep (kaam kam). Warning zone (800 MB+)
 		// -> 5s fast check (thresholds ko bilkul wakt pe pakarna hai).
-		if used < 400*1024*1024 {
+		if used < 800*1024*1024 {
 			time.Sleep(30 * time.Second)
 		} else {
 			time.Sleep(5 * time.Second)
