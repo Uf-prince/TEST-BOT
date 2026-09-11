@@ -1,21 +1,24 @@
 package main
 
 // ============================================================================
-// GOLD-MD — Pairing bridge (GIST RELAY — page pe seedha code, Telegram optional)
+// GOLD-MD — Pairing bridge (ntfy STREAM relay + gist results, Telegram notify)
 //
 // FLOW (100% browser → page pe code, koi Telegram chat kholna NAHI):
 //   1. HTML page (permanent static URL) pe user number deta hai.
-//   2. HTML GIST (request.json) mein likhta hai: {"phone":"923..","ts":...}
-//   3. YE FILE (Go bot, container ke andar) har 3s gist request.json poll
-//      karta hai (outbound — public URL expire ho tab bhi kaam karta hai).
-//   4. Naya request mile → checks (max 3, already connected) → PairWithCode.
-//   5. Result GIST (paircode.json) mein likha jata hai:
+//   2. HTML ntfy.sh topic pe POST karta hai: {"phone":"923..","ts":...}
+//      (tokenless, CORS-open — koi token HTML me nahi hai).
+//   3. YE FILE (Go bot) ntfy se EK STREAMING connection hold karta hai —
+//      har request instant milti hai (koi polling rate-limit issue nahi,
+//      ntfy.sh free = 60 req/hr hai, 3s polling usse tod deti thi).
+//   4. Request mili → checks (max 3, already connected) → PairWithCode.
+//   5. Result GIST (paircode.json) me likha jata hai:
 //        {"923..":{"code":"ABCD-EFGH","ts":...}}   (ya {"error":"..."})
 //   6. HTML paircode.json poll karke CODE PAGE PE dikha deta hai.
-//   7. BONUS: owner ko Telegram chat mein bhi code chala jata hai (optional).
+//   7. BONUS: owner ko Telegram chat me bhi code chala jata hai.
 // ============================================================================
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -32,7 +35,7 @@ const (
 	tgToken   = "8909299641:AAGcVq7PavhpYNBsdV5eohvNdvTP7j_J3mM" // @gold_md_1_bot (optional notify)
 	tgOwnerID = int64(8397200545)                                 // owner Telegram ID
 	ghToken   = "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"        // gist read/write
-	gistID    = "0d24ea56e9559d94e7318c0c578befdf"                // paircode + request gist
+	gistID    = "0d24ea56e9559d94e7318c0c578befdf"                // paircode gist
 )
 
 const gistRawBase = "https://gist.githubusercontent.com/Uf-prince/" + gistID + "/raw/"
@@ -49,32 +52,64 @@ type pairEntry struct {
 	Error string `json:"error,omitempty"`
 }
 
-var lastReqTS int64 // dedupe: request.json ka last seen ts
+var lastReqTS int64 // dedupe: last seen request ts (ms)
 
-// StartPairBridge launches gist request polling + Telegram long-poll (notify).
+// StartPairBridge launches the ntfy stream + Telegram long-poll (notify).
 func StartPairBridge(mgr *Manager) {
-	go gistRequestLoop(mgr)
+	go ntfyStreamLoop(mgr)
 	go telegramNotifyLoop(mgr)
-	InfoLog("Pair bridge → ntfy relay IN + gist results OUT; TG notify @gold_md_1_bot")
+	InfoLog("Pair bridge → ntfy STREAM in + gist results out; TG notify @gold_md_1_bot")
 }
 
-// ── ntfy request polling (HTML → bot) — tokenless, CORS-open relay ──────
-const ntfyTopic = "goldmd-pair-relay" // HTML POST karta hai, bot poll karta hai
+// ── ntfy STREAM (HTML → bot) — 1 persistent connection, rate-limit-proof ──
+const ntfyTopic = "goldmd-pair-relay" // HTML POST karta hai, bot stream sunta hai
 
-func gistRequestLoop(mgr *Manager) {
-	client := &http.Client{Timeout: 25 * time.Second}
-	since := time.Now().Add(-5 * time.Minute).Unix() // boot se 5min pehle ke requests bhi lo
+// ntfyStreamLoop holds ONE long-lived streaming connection to ntfy.
+// ntfy.sh free tier = 60 requests/hour per IP. 3s polling (1200/hr) broke
+// that quota and got the container IP rate-limited/banned — the exact bug
+// that froze the pair page at "GENERATING...". A single held-open stream
+// is 1 request; with since=<ts> catch-up on reconnect nothing is missed.
+func ntfyStreamLoop(mgr *Manager) {
+	// 12 min client timeout → connection recycles ~5 req/hr (well under 60).
+	client := &http.Client{Timeout: 12 * time.Minute}
+	since := time.Now().Add(-5 * time.Minute).Unix()
+	backoff := 5 * time.Second
+
 	for {
-		url := fmt.Sprintf("https://ntfy.sh/%s/json?poll=1&since=%d", ntfyTopic, since)
+		url := fmt.Sprintf("https://ntfy.sh/%s/json?since=%d", ntfyTopic, since)
 		resp, err := client.Get(url)
 		if err != nil {
-			time.Sleep(5 * time.Second)
+			WarnLog("ntfy stream connect fail: %v — retry in %s", err, backoff)
+			time.Sleep(backoff)
+			if backoff < 60*time.Second {
+				backoff *= 2
+			}
 			continue
 		}
-		b, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		for _, line := range strings.Split(string(b), "\n") {
-			line = strings.TrimSpace(line)
+		if resp.StatusCode == 429 {
+			// Rate-limited/banned (purane 3s-polling binary ki wajah se ho sakta
+			// hai) — cool-down dedo, phir stream pakad lenge.
+			b, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			WarnLog("ntfy 429 (rate-limit/ban): %s — 60s cool-down", string(b))
+			time.Sleep(60 * time.Second)
+			continue
+		}
+		if resp.StatusCode != 200 {
+			b, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			WarnLog("ntfy stream HTTP %d: %s — retry", resp.StatusCode, string(b))
+			time.Sleep(10 * time.Second)
+			continue
+		}
+		backoff = 5 * time.Second
+		InfoLog("ntfy stream connected (topic=%s since=%d)", ntfyTopic, since)
+
+		// Read NDJSON events as they arrive (connection open rehti hai).
+		sc := bufio.NewScanner(resp.Body)
+		sc.Buffer(make([]byte, 64*1024), 1024*1024)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
 			if line == "" {
 				continue
 			}
@@ -101,8 +136,11 @@ func gistRequestLoop(mgr *Manager) {
 			}
 			lastReqTS = req.TS
 			InfoLog("Pair bridge: naya pairing request → %s", digitsOnly(req.Phone))
-			handlePairRequest(mgr, digitsOnly(req.Phone))
+			go handlePairRequest(mgr, digitsOnly(req.Phone))
 		}
+		resp.Body.Close()
+		// Stream toot gaya (timeout/reconnect) — since= catch-up ke saath
+		// turant dobara jod do. Miss kuch nahi hoga.
 		time.Sleep(3 * time.Second)
 	}
 }
@@ -128,7 +166,7 @@ func handlePairRequest(mgr *Manager, phone string) {
 		return
 	}
 	writePairResult(phone, code, "")
-	tgNotify("🔰 PAIR CODE " + phone + ": `" + code + "` (page pe bhi aa gaya)")
+	tgNotify("🔓 PAIR CODE " + phone + ": `" + code + "` (page pe bhi aa gaya)")
 }
 
 // writePairResult updates the in-memory map + pushes paircode.json to the gist.
@@ -225,7 +263,7 @@ func tgHandleCommand(mgr *Manager, text string) {
 		return
 	}
 	if len(fields) < 2 {
-		tgNotify("🔰 /pair 923012345678 — country code ke saath")
+		tgNotify("🔓 /pair 923012345678 — country code ke saath")
 		return
 	}
 	handlePairRequest(mgr, digitsOnly(fields[1]))
