@@ -498,25 +498,28 @@ func orString(v, fallback string) string {
 func init() {
 	Register(Command{
 		Name:     "tempmail",
-		Category: "AI & MEDIA",
+		Category: "TOOLS",
 		Desc:     "Get a throwaway temp-mail inbox (Guerrilla Mail). One address per user. Hidden short aliases: .tmail .cmail .nmail .dmail",
 		Run:      handleTempMail,
 	})
 	Register(Command{
 		Name:     "checkmail",
-		Category: "AI & MEDIA",
+		Category: "TOOLS",
+		Hidden:   true, // menu me nahi dikhta - silently kaam karta hai
 		Desc:     "Check your temp-mail inbox — first 5 mails with full body (OTPs/links visible). Hidden alias: .cmail",
 		Run:      handleCheckMail,
 	})
 	Register(Command{
 		Name:     "delmail",
-		Category: "AI & MEDIA",
+		Category: "TOOLS",
+		Hidden:   true, // menu me nahi dikhta - silently kaam karta hai
 		Desc:     "Delete your temp-mail address for good — all mail in it is lost. Hidden alias: .dmail",
 		Run:      handleDelMail,
 	})
 	Register(Command{
 		Name:     "newmail",
-		Category: "AI & MEDIA",
+		Category: "TOOLS",
+		Hidden:   true, // menu me nahi dikhta - silently kaam karta hai
 		Desc:     "Throw the current temp mail away and generate a fresh address. Hidden alias: .nmail",
 		Run:      handleNewMail,
 	})
@@ -524,28 +527,28 @@ func init() {
 	// ── short aliases (hidden — menu me sirf long form dikhta hai, same work) ──
 	Register(Command{
 		Name:     "tmail",
-		Category: "AI & MEDIA",
+		Category: "TOOLS",
 		Desc:     "Short alias of .tempmail",
 		Hidden:   true, // hidden alias — menu me nahi dikhta
 		Run:      handleTempMail,
 	})
 	Register(Command{
 		Name:     "cmail",
-		Category: "AI & MEDIA",
+		Category: "TOOLS",
 		Desc:     "Short alias of .checkmail",
 		Hidden:   true, // hidden alias — menu me nahi dikhta
 		Run:      handleCheckMail,
 	})
 	Register(Command{
 		Name:     "dmail",
-		Category: "AI & MEDIA",
+		Category: "TOOLS",
 		Desc:     "Short alias of .delmail",
 		Hidden:   true, // hidden alias — menu me nahi dikhta
 		Run:      handleDelMail,
 	})
 	Register(Command{
 		Name:     "nmail",
-		Category: "AI & MEDIA",
+		Category: "TOOLS",
 		Desc:     "Short alias of .newmail",
 		Hidden:   true, // hidden alias — menu me nahi dikhta
 		Run:      handleNewMail,
