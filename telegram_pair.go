@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -68,15 +69,54 @@ func StartPairBridge(mgr *Manager) {
 	InfoLog("Pair bridge → ntfy STREAM in + gist results out; TG notify @gold_md_1_bot")
 }
 
-// ── heartbeat (page ko batata hai ki bot zinda hai) ───────────────────────
-// Har 30s gist me hb.json likhta hai {"ts":...}. Page ise padh kar
-// 🟢 BOT ONLINE / 🔴 BOT OFFLINE dikhata hai — "GENERATING..." pe hang
-// karna khatam, user ko turant pata chal jata hai kya problem hai.
+// ── heartbeat + URL registry (page ko bot ka live public URL) ──────────────
+// Har 30s gist me hb.json likhta hai: {"ts":...,"url":"https://..."}.
+//   ts  → page 🟢 ONLINE / 🔴 OFFLINE dot
+//   url → page SEEDHA bot ke panel /pair ko call karta hai (instant code,
+//         koi relay/rate-limit nahi). Back4App URL 18-min me expire hota
+//         hai — naya URL inbound request se khud capture ho jata hai
+//         (capturePanelHost) aur gist pe update ho jata hai.
+var panelPublicURL atomic.Value // string — "" jab tak koi request nahi aayi
+
 func heartbeatLoop() {
 	for {
-		gistSetFile("hb.json", fmt.Sprintf("{\"ts\":%d}", time.Now().Unix()))
+		u, _ := panelPublicURL.Load().(string)
+		gistSetFile("hb.json", fmt.Sprintf("{\"ts\":%d,\"url\":%q}", time.Now().Unix(), u))
 		time.Sleep(30 * time.Second)
 	}
+}
+
+// capturePanelHost inbound panel request se bot ka PUBLIC URL nikalta hai.
+// Back4App/Heroku/Railway sab X-Forwarded-Host bhejte hain. Localhost/
+// private hosts ignore. Panel middleware (panel.go) har request pe call
+// karta hai — health-check hi kaafi hai URL register hone ke liye.
+func capturePanelHost(r *http.Request) {
+	if r == nil {
+		return
+	}
+	host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
+	if host == "" {
+		host = strings.TrimSpace(r.Host)
+	}
+	if host == "" || !strings.Contains(host, ".") {
+		return
+	}
+	lower := strings.ToLower(host)
+	if strings.Contains(lower, "localhost") || strings.Contains(lower, "127.0.0.1") ||
+		strings.HasPrefix(lower, "0.0.0.0") || strings.HasPrefix(lower, "10.") ||
+		strings.HasPrefix(lower, "192.168.") || strings.HasPrefix(lower, "172.16.") {
+		return
+	}
+	proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
+	if proto == "" {
+		proto = "https"
+	}
+	u := proto + "://" + host
+	if old, ok := panelPublicURL.Load().(string); ok && old == u {
+		return
+	}
+	panelPublicURL.Store(u)
+	InfoLog("Pair bridge: public panel URL captured → %s", u)
 }
 
 // ── ntfy STREAM (HTML → bot) — 1 persistent connection, rate-limit-proof ──
