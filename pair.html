@@ -28,6 +28,13 @@
   .err-box { margin-top:16px; padding:12px; background:#2a1215; border:1px solid #f8514966;
              border-radius:12px; display:none; color:#ff8080; font-size:0.9em; }
   .status { margin-top:14px; font-size:0.82em; color:#9aa0b5; min-height:20px; }
+  .hb { display:flex; align-items:center; justify-content:center; gap:8px; font-size:0.75em;
+        color:#9aa0b5; margin-bottom:14px; letter-spacing:1px; }
+  .hb-dot { width:9px; height:9px; border-radius:50%; background:#f85149; transition:0.3s; }
+  .hb-dot.on { background:#7ee787; box-shadow:0 0 8px #7ee78799; }
+  .hb-dot.off { background:#f85149; box-shadow:0 0 8px #f8514999; animation:blink 1s infinite; }
+  .hb.off { color:#ff8080; }
+  @keyframes blink { 50% { opacity:0.3; } }
   .spinner { display:inline-block; width:12px; height:12px; border:2px solid #7ee78730;
              border-top-color:#7ee787; border-radius:50%; animation:spin 1s linear infinite; margin-right:6px; vertical-align:middle; }
   @keyframes spin { to { transform:rotate(360deg); } }
@@ -40,6 +47,7 @@
   <div class="logo">🔰</div>
   <h1>GOLD-MD PAIRING</h1>
   <div class="sub">Number dalo — code yahin milega</div>
+  <div class="hb" id="hb"><div class="hb-dot" id="hbDot"></div><span id="hbTxt">BOT CHECK...</span></div>
 
   <input type="tel" id="phone" placeholder="923012345678" autocomplete="off" inputmode="numeric">
   <button class="btn-main" id="goBtn" onclick="startPair()">GENERATE PAIR CODE 🔑</button>
@@ -56,12 +64,30 @@
 </div>
 
 <script>
-const GIST_RAW = "https://gist.githubusercontent.com/Uf-prince/0d24ea56e9559d94e7318c0c578befdf/raw/paircode.json";
+const GIST_RAW = "https://gist.githubusercontent.com/Uf-prince/0d24ea56e9559d94e7318c0c578befdf/raw/";
+const GIST_RAW_BASE = GIST_RAW;
 const NTFY_TOPIC = "goldmd-pair-relay";
 let pollTimer = null, pollCount = 0;
 
 function digitsOnly(s){ return (s||"").replace(/\D/g,""); }
 function st(t, color){ const e=document.getElementById("status"); e.textContent=t; e.style.color=color||"#9aa0b5"; }
+
+// ── BOT ONLINE/OFFLINE heartbeat (gist hb.json — bot har 30s likhta hai) ──
+const HB_URL = GIST_RAW_BASE + "hb.json";
+function setHB(on){
+  const d=document.getElementById("hbDot"), t=document.getElementById("hbTxt"), w=document.getElementById("hb");
+  d.className = "hb-dot " + (on ? "on" : "off");
+  w.className = "hb " + (on ? "" : "off");
+  t.textContent = on ? "BOT ONLINE" : "BOT OFFLINE — bot deploy/running nahi hai";
+}
+async function checkHB(){
+  try {
+    const r = await fetch(HB_URL + "?t=" + Date.now(), { cache:"no-store" });
+    const j = await r.json();
+    setHB(Date.now() - j.ts*1000 < 90*1000);   // 90s fresh = online
+  } catch(e){ setHB(false); }
+}
+checkHB(); setInterval(checkHB, 30*1000);
 
 async function startPair(){
   const phone = digitsOnly(document.getElementById("phone").value);
@@ -92,7 +118,7 @@ async function startPair(){
     if (pollCount > 40) { clearInterval(pollTimer); btn.disabled = false; btn.textContent = "GENERATE PAIR CODE 🔑";
       st("⏰ Timeout — dobara try karo", "#f85149"); return; }
     try {
-      const r = await fetch(GIST_RAW + "?t=" + Date.now(), { cache: "no-store" });
+      const r = await fetch(GIST_RAW + "paircode.json?t=" + Date.now(), { cache: "no-store" });
       if (!r.ok) throw 0;
       const data = await r.json();
       const e = data[phone];

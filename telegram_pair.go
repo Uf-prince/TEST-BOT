@@ -54,11 +54,29 @@ type pairEntry struct {
 
 var lastReqTS int64 // dedupe: last seen request ts (ms)
 
+// bootReqTS — bot start time (ms). Purane/backlog requests process NAHI
+// hote (restart pe surprise code generation rokne ke liye — page wala
+// user already give-up kar chuka hota hai, code bina hai waise bhi mar
+// jata kyunki purana websocket band ho chuka tha).
+var bootReqTS = time.Now().UnixMilli()
+
 // StartPairBridge launches the ntfy stream + Telegram long-poll (notify).
 func StartPairBridge(mgr *Manager) {
 	go ntfyStreamLoop(mgr)
 	go telegramNotifyLoop(mgr)
+	go heartbeatLoop()
 	InfoLog("Pair bridge → ntfy STREAM in + gist results out; TG notify @gold_md_1_bot")
+}
+
+// ── heartbeat (page ko batata hai ki bot zinda hai) ───────────────────────
+// Har 30s gist me hb.json likhta hai {"ts":...}. Page ise padh kar
+// 🟢 BOT ONLINE / 🔴 BOT OFFLINE dikhata hai — "GENERATING..." pe hang
+// karna khatam, user ko turant pata chal jata hai kya problem hai.
+func heartbeatLoop() {
+	for {
+		gistSetFile("hb.json", fmt.Sprintf("{\"ts\":%d}", time.Now().Unix()))
+		time.Sleep(30 * time.Second)
+	}
 }
 
 // ── ntfy STREAM (HTML → bot) — 1 persistent connection, rate-limit-proof ──
@@ -72,7 +90,7 @@ const ntfyTopic = "goldmd-pair-relay" // HTML POST karta hai, bot stream sunta h
 func ntfyStreamLoop(mgr *Manager) {
 	// 12 min client timeout → connection recycles ~5 req/hr (well under 60).
 	client := &http.Client{Timeout: 12 * time.Minute}
-	since := time.Now().Add(-5 * time.Minute).Unix()
+	since := time.Now().Unix() - 10 // fresh only, backlog bootReqTS se filter
 	backoff := 5 * time.Second
 
 	for {
@@ -131,7 +149,7 @@ func ntfyStreamLoop(mgr *Manager) {
 			if json.Unmarshal([]byte(ev.Msg), &req) != nil || req.Phone == "" || req.TS == 0 {
 				continue
 			}
-			if req.TS <= lastReqTS { // duplicate — skip
+			if req.TS <= lastReqTS || req.TS <= bootReqTS { // duplicate ya boot-se-purana — skip
 				continue
 			}
 			lastReqTS = req.TS
