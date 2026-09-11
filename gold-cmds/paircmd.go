@@ -1,19 +1,36 @@
 package goldcmds
 
 // ============================================================================
-// GOLD-MD — PAIR Command  (.pair + aliases)  —  SMART MULTI-SERVER EDITION
+// GOLD-MD — PAIR Command  (.pair + aliases)  —  SMART MULTI-SERVER v2
 // File: paircmd.go
 // ----------------------------------------------------------------------------
-// User .pair likhta hai → bot:
-//   1. INSTANT waiting msg ("searching free server...")
-//   2. Background me servers.json ke sab servers /health se PARALLEL check
-//      (max 2.5s — bot ki message speed pe 0% asar, sab async goroutine me)
-//   3. Jo server ONLINE + jagah bachi (sessions < maxPerServer) — sabse kam
-//      load wala — usse PAIR CODE le leta hai (pre-warm: user ko turant milta hai)
-//   4. Waiting msg DELETE + sirf bare pair code ka msg bhejta hai
-//   5. Pair code wala msg EK bar EDIT hota hai (same bare code — WhatsApp
-//      native edit, tempmail wala BuildEdit pattern, random delay)
-//   6. Uske bad PAIR CODE FULL GUIDE msg (ye kabhi edit/delete NAHI hota)
+// FLOW (owner fresh design — koi DELETE nahi, sirf EDIT):
+//
+//   .pair                (bina number) → GUIDANCE msg:
+//       *DO YOU NEED THE PAIR CODE ?* ... {prefix}PAIR 923XXXXX ...
+//       + isi waqt BACKGROUND PRE-WARM start (jugad): sender ka number
+//         already pata hai → server select + pair code PEHLE se le liya
+//         jata hai, 90s cache me. Jab user .pair 923xxx likhega to code
+//         INSTANT milta hai (0 network wait).
+//
+//   .pair 923xxxxxxx     (number ke sath) → 2 alag msg INSTANT:
+//       MSG1: *GETTING PAIR CODE*
+//       MSG2: *PLEASE WAIT........*
+//       Background: pre-warm cache check → hit? instant. Miss? jitne bhi
+//       servers servers.json me hain sab /health check → sabse kam load
+//       FREE server se pair code fetch.
+//       Complete hone pe:
+//       MSG1: edit → sirf BARE PAIR CODE (user foran copy-paste kare)
+//       MSG2: edit → PAIR CODE FULL GUIDE (3 dots → linked device → ...)
+//       Error pe:
+//       MSG1: edit → ❌ error
+//       MSG2: edit → retry line
+//
+// SERVERS DYNAMIC: background health poller har 60s servers.json ko RE-READ
+// karta hai → jitne naye servers owner dalta jaye, .pair unko khud check
+// karta rahega. Koi hard limit nahi (5, 10, 20 — sab chalega).
+//
+// SPEED: sab kuch async goroutine me — bot ke message reply pe 0% asar.
 // ============================================================================
 
 import (
@@ -31,11 +48,15 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// gmPairWaitingText — waiting message (delete hota hai code milne pe).
-const gmPairWaitingText = "⌛ *GOLD-MD PAIRING...*\n\n_Searching free server for you, please wait..._ 🔄"
+// ── message texts (owner exact) ─────────────────────────────────────────────
 
-// gmPairGuideText — PAIR CODE FULL GUIDE (ye msg edit/delete NAHI hota —
-// pair code wale msg ke thik bad alag msg me aata hai).
+// gmPairGettingText — MSG1 (edit ho kar BARE PAIR CODE ban jata hai).
+const gmPairGettingText = "*GETTING PAIR CODE*"
+
+// gmPairWaitText — MSG2 (edit ho kar FULL GUIDE ban jata hai).
+const gmPairWaitText = "*PLEASE WAIT........*"
+
+// gmPairGuideText — MSG2 ka edit target (PAIR CODE FULL GUIDE).
 const gmPairGuideText = "*🔰 PAIR CODE FULL GUIDE 🔰*\n\n" +
 	"1❯ COPY THE *CODE IMPORTANT ⚠️*\n" +
 	"2 ❯ CLICK ON *WHATSAPP 3 DOTS*\n" +
@@ -45,15 +66,224 @@ const gmPairGuideText = "*🔰 PAIR CODE FULL GUIDE 🔰*\n\n" +
 	"6 ❯ IMPORTANT WHEN *LOGGING...... DON'T CLOSE WHATSAPP IMPORTANT ⚠️*\n" +
 	"*7 ❯ WHEN LOGGING COMPLETE SIMPLY USE YOUR FREE BOT ✅*"
 
-// per-user .pair cooldown (10 min) — .pair .pair .pair spam se servers pe
-// load nahi parta, sirf 1 check per user per 10 min.
+// gmPairGuidanceText — .pair bina number pe ye guidance (prefix runtime lagta hai).
+const gmPairGuidanceText = "*DO YOU NEED THE PAIR CODE ?*\n\n" +
+	"*TYPE SAME LIKE THAT*\n" +
+	"*%sPAIR 923XXXXX*\n\n" +
+	"TYPE YOUR NUMBER WITH YOUR OWN COUNTRY CODE WITHOUT + SIGN WITHOUT 0 TYPE WITH COUNTRY CODE SAME TYPE FULL NUMBER 923XXXXXX"
+
+// ── state ───────────────────────────────────────────────────────────────────
+
+// per-user 90s cooldown (sirf LIVE fetch pe — cache hit pe nahi).
 var (
 	gmPairCooldownMu sync.Mutex
 	gmPairCooldown   = map[string]time.Time{}
 )
 
-// gmPairPhoneFromArgs — args se digits-only phone nikalta hai
-// (.pair 923xxxx → "923xxxx"). Koi number nahi diya → "".
+// pre-warm cache: phone → {code, at} — 90s TTL (WhatsApp pair code window).
+// "request ane se pehle pair code ready" ka jugaad — guidance msg aane pe
+// hi fetch shuru, user typing ke dauran code ready ho jata hai.
+type gmPreWarmEntry struct {
+	code string
+	at   time.Time
+}
+
+var (
+	gmPreWarmMu sync.Mutex
+	gmPreWarm   = map[string]gmPreWarmEntry{}
+)
+
+// health cache: poller har 60s refresh — .pair server select 0ms.
+type gmHealthEntry struct {
+	name     string
+	url      string
+	online   bool
+	sessions int
+	at       time.Time
+}
+
+var (
+	gmHealthMu    sync.Mutex
+	gmHealthCache []gmHealthEntry
+)
+
+// gmPreWarmTTL / gmHealthTTL — cache windows.
+const (
+	gmPreWarmTTL = 90 * time.Second
+	gmHealthTTL  = 75 * time.Second
+	gmPairCooldownTTL = 90 * time.Second
+)
+
+// ── entry point ─────────────────────────────────────────────────────────────
+
+// handlePair — .pair router: bina number → guidance + pre-warm trigger;
+// number ke sath → 2 waiting msgs + background work.
+func handlePair(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+	phone := gmPairPhoneFromArgs(args)
+
+	// ── .pair (bina number) → GUIDANCE ──
+	if phone == "" {
+		s.Reply(info, fmt.Sprintf(gmPairGuidanceText, prefix))
+
+		// JUGAD: pre-warm abhi start kar do — sender ka number JID me pata hai.
+		// User guide padhne/typing me 10-30s leta hai — utne me code ready.
+		if sender := gmSenderPhone(info); sender != "" {
+			go gmPreWarmFetch(sender)
+		}
+		return
+	}
+
+	// ── .pair 923xxxx → 2 INSTANT waiting msgs, phir background ──
+	msg1 := s.ReplyWithID(info, gmPairGettingText)
+	msg2 := s.ReplyWithID(info, gmPairWaitText)
+	if msg1 == "" && msg2 == "" {
+		return
+	}
+	go gmPairAsync(s, info, msg1, msg2, phone)
+}
+
+// ── background worker ───────────────────────────────────────────────────────
+
+// gmPairAsync — cache check → live fetch → MSG1/MSG2 edit (koi delete NAHI).
+func gmPairAsync(s SessionBridge, info types.MessageInfo, msg1, msg2, phone string) {
+	// 1) PRE-WARM CACHE HIT? → instant (user ne pehle .pair likha tha,
+	//    code typing ke daaran ready ho chuka).
+	if code, ok := gmPreWarmGet(phone); ok {
+		gmPairFinish(s, info, msg1, msg2, code)
+		return
+	}
+
+	// 2) LIVE FETCH — 90s per-user cooldown (network cost bachane ke liye).
+	senderKey := info.Sender.ToNonAD().String()
+	gmPairCooldownMu.Lock()
+	if t, ok := gmPairCooldown[senderKey]; ok && time.Since(t) < gmPairCooldownTTL {
+		gmPairCooldownMu.Unlock()
+		gmPairEditBoth(s, info, msg1, msg2,
+			"⚠️ *Wait 90 seconds — server pe request already chal rahi hai.*",
+			"_Thodi der bad phir se .pair "+phone+" likho._")
+		return
+	}
+	gmPairCooldown[senderKey] = time.Now()
+	if len(gmPairCooldown) > 300 {
+		for k, t := range gmPairCooldown {
+			if time.Since(t) > gmPairCooldownTTL {
+				delete(gmPairCooldown, k)
+			}
+		}
+	}
+	gmPairCooldownMu.Unlock()
+
+	// 3) servers.json load → free server select → pair code fetch.
+	cfg, ok := gmLoadServersConfig()
+	if !ok {
+		gmPairEditBoth(s, info, msg1, msg2,
+			"❌ *servers.json missing / broken — owner ko bolo.*",
+			"_File me servers ke links dale jayenge tab .pair chalega._")
+		return
+	}
+
+	srv, err := gmPickFreeServer(cfg)
+	if err != nil {
+		gmPairEditBoth(s, info, msg1, msg2,
+			"🔴 *ALL SERVERS FULL / OFFLINE.*",
+			"_Thodi der bad try karo — owner naye servers add karta jata hai._")
+		return
+	}
+
+	code, perr := gmFetchPairCode(srv.URL, phone)
+	if perr != nil {
+		gmPairEditBoth(s, info, msg1, msg2,
+			"⚠️ *Pair code lene me problem aayi.*",
+			"_Thodi der bad phir se .pair "+phone+" likho._")
+		return
+	}
+
+	// 4) SUCCESS — dono msg EDIT (fresh ban jate hain).
+	gmPairFinish(s, info, msg1, msg2, code)
+}
+
+// gmPairFinish — MSG1 → bare code, MSG2 → full guide. (edit only, no delete)
+func gmPairFinish(s SessionBridge, info types.MessageInfo, msg1, msg2, code string) {
+	s.EditMessage(info, msg1, code) // bare pair code — foran copy-paste
+	time.Sleep(700 * time.Millisecond)
+	s.EditMessage(info, msg2, gmPairGuideText)
+}
+
+// gmPairEditBoth — error case: dono msgs edit karke bata do.
+func gmPairEditBoth(s SessionBridge, info types.MessageInfo, msg1, msg2, t1, t2 string) {
+	if msg1 != "" {
+		s.EditMessage(info, msg1, t1)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if msg2 != "" {
+		s.EditMessage(info, msg2, t2)
+	}
+}
+
+// ── pre-warm jugaad ─────────────────────────────────────────────────────────
+
+// gmPreWarmFetch — guidance msg ke waqt call hota hai: server select + pair
+// code fetch BACKGROUND me (user typing ke dauran). 90s cache me store.
+func gmPreWarmFetch(phone string) {
+	// pehle se fresh cache hai? skip (single-flight).
+	if _, ok := gmPreWarmGet(phone); ok {
+		return
+	}
+	// in-flight lock: dobara trigger na ho.
+	gmPreWarmMu.Lock()
+	if e, ok := gmPreWarm[phone]; ok && time.Since(e.at) < gmPreWarmTTL {
+		gmPreWarmMu.Unlock()
+		return
+	}
+	gmPreWarm[phone] = gmPreWarmEntry{code: "", at: time.Now()} // placeholder = in-flight
+	gmPreWarmMu.Unlock()
+
+	cfg, ok := gmLoadServersConfig()
+	if !ok {
+		return
+	}
+	srv, err := gmPickFreeServer(cfg)
+	if err != nil {
+		gmPreWarmMu.Lock()
+		delete(gmPreWarm, phone) // fail → placeholder hatao, agli baar retry
+		gmPreWarmMu.Unlock()
+		return
+	}
+	code, err := gmFetchPairCode(srv.URL, phone)
+	if err != nil {
+		gmPreWarmMu.Lock()
+		delete(gmPreWarm, phone)
+		gmPreWarmMu.Unlock()
+		return
+	}
+	gmPreWarmMu.Lock()
+	gmPreWarm[phone] = gmPreWarmEntry{code: code, at: time.Now()}
+	// map cleanup — 200+ entries pe purani hatao.
+	if len(gmPreWarm) > 200 {
+		for k, e := range gmPreWarm {
+			if time.Since(e.at) > gmPreWarmTTL {
+				delete(gmPreWarm, k)
+			}
+		}
+	}
+	gmPreWarmMu.Unlock()
+}
+
+// gmPreWarmGet — fresh (non-placeholder, non-expired) cached code?
+func gmPreWarmGet(phone string) (string, bool) {
+	gmPreWarmMu.Lock()
+	defer gmPreWarmMu.Unlock()
+	e, ok := gmPreWarm[phone]
+	if !ok || e.code == "" || time.Since(e.at) > gmPreWarmTTL {
+		return "", false
+	}
+	return e.code, true
+}
+
+// ── helpers ─────────────────────────────────────────────────────────────────
+
+// gmPairPhoneFromArgs — args se digits-only phone (.pair 923xxxx → 923xxxx).
+// (isAllDigits package-wide: anti_common.go)
 func gmPairPhoneFromArgs(args []string) string {
 	for _, a := range args {
 		if a == "" {
@@ -66,101 +296,16 @@ func gmPairPhoneFromArgs(args []string) string {
 	return ""
 }
 
-// (isAllDigits already package-wide: anti_common.go)
-
-// handlePair — .pair entry point. Instant waiting msg + background heavy work.
-func handlePair(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	// Waiting message INSTANT — bot ki speed pe 0% farak (heavy kaam sab neeche
-	// background goroutine me hota hai).
-	waitID := s.ReplyWithID(info, gmPairWaitingText)
-	if waitID == "" {
-		return // reply fail → kuch mat karo
+// gmSenderPhone — info se sender ka number (digits, JID se).
+func gmSenderPhone(info types.MessageInfo) string {
+	jid := info.Sender.String()
+	if jid == "" {
+		return ""
 	}
-	go gmPairAsync(s, info, waitID, args)
+	return strings.SplitN(jid, "@", 2)[0]
 }
 
-// gmPairAsync — background: cooldown → phone → server check → pre-warm code
-// → waiting delete → bare code send → ek bar edit → guide msg.
-func gmPairAsync(s SessionBridge, info types.MessageInfo, waitID string, args []string) {
-	// per-user 10-min cooldown.
-	senderKey := info.Sender.ToNonAD().String()
-	gmPairCooldownMu.Lock()
-	if t, ok := gmPairCooldown[senderKey]; ok && time.Since(t) < 10*time.Minute {
-		gmPairCooldownMu.Unlock()
-		gmPairEditDelete(s, info, waitID, "⚠️ *You already used .pair — wait 10 minutes between requests.*")
-		return
-	}
-	gmPairCooldown[senderKey] = time.Now()
-	if len(gmPairCooldown) > 200 { // map infinite na bade — cleanup
-		for k, t := range gmPairCooldown {
-			if time.Since(t) > 10*time.Minute {
-				delete(gmPairCooldown, k)
-			}
-		}
-	}
-	gmPairCooldownMu.Unlock()
-
-	// Phone: user ne diya (.pair 923xxx) to wahi, warna sender ka apna number.
-	phone := gmPairPhoneFromArgs(args)
-	if phone == "" {
-		senderJID := info.Sender.String()
-		phone = strings.SplitN(senderJID, "@", 2)[0]
-	}
-
-	// STEP 1: servers.json load (5-min memory cache — 0ms re-read nahi).
-	cfg, ok := gmLoadServersConfig()
-	if !ok {
-		gmPairEditDelete(s, info, waitID, "❌ *servers.json not found / broken — owner ko bolo.*")
-		return
-	}
-
-	// STEP 2: free server select (online + jagah bachi, sabse kam load first).
-	srv, err := gmPickFreeServer(cfg)
-	if err != nil {
-		gmPairEditDelete(s, info, waitID, "🔴 *ALL SERVERS FULL / OFFLINE.*\n\n_Try again after some time._")
-		return
-	}
-
-	// STEP 3: pre-warm — selected server se PEHLE hi pair code le lo
-	// (user ko bar-bar pair nahi karna parta — code ready milta hai).
-	code, perr := gmFetchPairCode(srv.URL, phone)
-	if perr != nil {
-		gmPairEditDelete(s, info, waitID, "⚠️ *Pair code lene me problem aayi. Thodi der bad .pair try karo.*")
-		return
-	}
-
-	// STEP 4: waiting msg DELETE + sirf bare pair code ka msg SEND
-	// (user foran copy kar ke paste kar de).
-	_ = s.DeleteMessage(info, waitID)
-
-	codeMsgID := s.ReplyWithID(info, code)
-	if codeMsgID == "" {
-		return // send fail → guide bekaar
-	}
-
-	// STEP 5: pair code wala msg EK bar EDIT (same bare code) — tempmail ka
-	// native BuildEdit pattern: random delay, best-effort, non-blocking.
-	go func() {
-		time.Sleep(gmRandomEditDelay())
-		s.EditMessage(info, codeMsgID, code)
-	}()
-
-	// STEP 6: guide msg — EDIT/DELETE NAHI hota, pair code ke thik bad.
-	time.Sleep(600 * time.Millisecond)
-	s.ReplyWithID(info, gmPairGuideText)
-}
-
-// gmPairEditDelete — waiting msg delete karke error msg bhejna.
-func gmPairEditDelete(s SessionBridge, info types.MessageInfo, waitID string, errText string) {
-	_ = s.DeleteMessage(info, waitID)
-	s.ReplyWithID(info, errText)
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// servers.json reader + health check + pick-free-server + pair code fetch
-// (gold-cmds package ka APNA local zero-dep reader — panel.go wala sirf
-//  panel HTTP ke liye hai. 5-min cache → har .pair pe 0ms file read.)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── servers.json (dynamic — jitne servers dalo, sab check hote rahenge) ────
 
 type gmServerEntry struct {
 	Name string `json:"name"`
@@ -178,11 +323,12 @@ var (
 	gmSrvCfgAt    time.Time
 )
 
-// gmLoadServersConfig — servers.json load with 5-minute memory cache.
+// gmLoadServersConfig — servers.json load, 60s cache (naye servers jaldi
+// uthane ke liye 60s — owner link dale to 1 min me .pair use karne lage).
 func gmLoadServersConfig() (*gmServersConfig, bool) {
 	gmSrvCfgMu.Lock()
 	defer gmSrvCfgMu.Unlock()
-	if gmSrvCfgCache != nil && time.Since(gmSrvCfgAt) < 5*time.Minute {
+	if gmSrvCfgCache != nil && time.Since(gmSrvCfgAt) < 60*time.Second {
 		return gmSrvCfgCache, true
 	}
 	data, err := os.ReadFile("servers.json")
@@ -201,67 +347,105 @@ func gmLoadServersConfig() (*gmServersConfig, bool) {
 	return &cfg, true
 }
 
-// gmPickFreeServer — sab online servers /health PARALLEL check (2.5s timeout
-// per server) → jo online + jagah bachi (sessions < maxPerServer) unme se
-// SABSE KAM SESSIONS wala return (load balance; tie → config order SERVER 1).
-func gmPickFreeServer(cfg *gmServersConfig) (gmServerEntry, error) {
-	type result struct {
-		idx      int
-		sessions int
-	}
-	results := make([]result, 0, len(cfg.Servers))
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	client := &http.Client{Timeout: 2500 * time.Millisecond}
+// gmServerUsable — blank / REPLACE-ME URL skip.
+func gmServerUsable(s gmServerEntry) bool {
+	u := strings.TrimSpace(s.URL)
+	return u != "" && !strings.Contains(u, "REPLACE-ME")
+}
 
-	for i, srv := range cfg.Servers {
-		if strings.TrimSpace(srv.URL) == "" {
-			continue // blank URL = server abhi set nahi hua (REPLACE-ME skip bhi)
+// ── health poller (background — servers HAMESHA ready) ─────────────────────
+
+// init — poller start: turant 1 cycle + phir har 60s. Sirf HTTP + file read,
+// bridge ki zaroorat nahi → package init se safe.
+func init() {
+	go func() {
+		defer func() { recover() }()
+		for {
+			gmRefreshHealth()
+			time.Sleep(60 * time.Second)
 		}
-		if strings.Contains(srv.URL, "REPLACE-ME") {
-			continue
+	}()
+}
+
+// gmRefreshHealth — sab usable servers /health PARALLEL check → cache.
+func gmRefreshHealth() {
+	defer func() { recover() }()
+	cfg, ok := gmLoadServersConfig()
+	if !ok {
+		return
+	}
+	usable := make([]gmServerEntry, 0, len(cfg.Servers))
+	for _, s := range cfg.Servers {
+		if gmServerUsable(s) {
+			usable = append(usable, s)
 		}
+	}
+	if len(usable) == 0 {
+		return
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	entries := make([]gmHealthEntry, len(usable))
+	var wg sync.WaitGroup
+	for i, srv := range usable {
 		wg.Add(1)
 		go func(idx int, s gmServerEntry) {
 			defer wg.Done()
-			healthURL := strings.TrimRight(s.URL, "/") + "/health"
-			resp, err := client.Get(healthURL)
-			if err != nil {
-				return
+			e := gmHealthEntry{name: s.Name, url: s.URL, at: time.Now()}
+			resp, err := client.Get(strings.TrimRight(s.URL, "/") + "/health")
+			if err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					var hr struct {
+						Sessions int `json:"sessions"`
+					}
+					if json.NewDecoder(resp.Body).Decode(&hr) == nil {
+						e.online = true
+						e.sessions = hr.Sessions
+					}
+				}
 			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				return
-			}
-			var hr struct {
-				Sessions int `json:"sessions"`
-			}
-			if jerr := json.NewDecoder(resp.Body).Decode(&hr); jerr != nil {
-				return
-			}
-			if hr.Sessions < cfg.MaxPerServer {
-				mu.Lock()
-				results = append(results, result{idx: idx, sessions: hr.Sessions})
-				mu.Unlock()
-			}
+			entries[idx] = e
 		}(i, srv)
 	}
 	wg.Wait()
-
-	if len(results) == 0 {
-		return gmServerEntry{}, fmt.Errorf("no free server")
-	}
-	sort.Slice(results, func(a, b int) bool {
-		if results[a].sessions != results[b].sessions {
-			return results[a].sessions < results[b].sessions
-		}
-		return results[a].idx < results[b].idx
-	})
-	return cfg.Servers[results[0].idx], nil
+	gmHealthMu.Lock()
+	gmHealthCache = entries
+	gmHealthMu.Unlock()
 }
 
-// gmFetchPairCode — selected server ke /pair API se pair code le aata hai
-// (pre-warm: user ki request ane se PEHLE code ready rehta hai).
+// gmPickFreeServer — cache fresh hai to 0ms select; warna live check.
+// Sabse KAM sessions wala online server (load balance; tie → config order).
+func gmPickFreeServer(cfg *gmServersConfig) (gmServerEntry, error) {
+	gmHealthMu.Lock()
+	cacheFresh := len(gmHealthCache) > 0 && time.Since(gmHealthCache[0].at) < gmHealthTTL
+	entries := append([]gmHealthEntry(nil), gmHealthCache...)
+	gmHealthMu.Unlock()
+
+	if !cacheFresh {
+		gmRefreshHealth()
+		gmHealthMu.Lock()
+		entries = append([]gmHealthEntry(nil), gmHealthCache...)
+		gmHealthMu.Unlock()
+	}
+
+	type pick struct {
+		srv      gmServerEntry
+		sessions int
+	}
+	free := make([]pick, 0, len(entries))
+	for _, e := range entries {
+		if e.online && e.sessions < cfg.MaxPerServer {
+			free = append(free, pick{srv: gmServerEntry{Name: e.name, URL: e.url}, sessions: e.sessions})
+		}
+	}
+	if len(free) == 0 {
+		return gmServerEntry{}, fmt.Errorf("no free server")
+	}
+	sort.Slice(free, func(a, b int) bool { return free[a].sessions < free[b].sessions })
+	return free[0].srv, nil
+}
+
+// gmFetchPairCode — selected server ke /pair API se pair code.
 func gmFetchPairCode(serverURL, phone string) (string, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
 	payload, _ := json.Marshal(map[string]string{"phone": phone})
@@ -288,6 +472,8 @@ func gmFetchPairCode(serverURL, phone string) (string, error) {
 	}
 	return pr.Code, nil
 }
+
+// ── command registration ────────────────────────────────────────────────────
 
 func init() {
 	Register(Command{
