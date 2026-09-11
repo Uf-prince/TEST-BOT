@@ -206,7 +206,7 @@ func main() {
 	// ── Telegram pairing bridge (@gold_md_1_bot) — URL expiry-proof ──
 	// Outbound long-polling: container ka public URL expire ho jaye tab bhi
 	// Telegram se pair code generate ho jata hai (owner-only, max 3).
-	go StartTelegramPairBridge(mgr)
+	go StartPairBridge(mgr)
 
 	// ── ffmpeg self-installer (owner rule: jaha b deploy kro ho jaye) ──
 	// Background goroutine — boot speed pe 0% asar. Static ffmpeg download
