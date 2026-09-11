@@ -65,7 +65,7 @@ Tumhari usage (~1GB/day) ke hisaab se **100GB = 3 mahine** chalega. 15 din ka to
 1. **Account banao:** [serv00.com/register-account](https://www.serv00.com/register-account/) — sirf email chahiye, card nahi. (Offer page: "no hooks, no ads"). Kabhi kabhi registrations batch mein khulte hain — agar page pe "register" band dikhe to agli subah try karo.
 2. **SSH enable + files upload:** Account banne pe email milegi server details ke saath. Apne PC se:
    ```bash
-   scp gold-md-freebsd .env servers.json deploy_serv00.sh LOGIN@sX.serv00.com:~/
+   scp gold-md-freebsd servers.json deploy_serv00.sh LOGIN@sX.serv00.com:~/
    ```
    (Windows pe PowerShell se bhi `scp` chalta hai)
 3. **SSH login karo:** `ssh LOGIN@sX.serv00.com` (password email se)

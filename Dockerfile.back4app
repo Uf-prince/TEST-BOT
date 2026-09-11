@@ -17,9 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY gold-md-cgofree ./gold-md
 COPY servers.json .
-COPY .env .
+# .env REMOVED — all credentials are hardcoded in source (storj.go / config.go)
 RUN chmod +x ./gold-md && mkdir -p nexstore/pairing
 
-ENV PORT=2081
+ENV PORT=11224
 EXPOSE 2081
 CMD ["./gold-md"]

@@ -10,15 +10,8 @@ sleep 1
 # Fresh log
 : > bot.log
 
-# Export all Storj + bot env from .env (read line by line, only KEY=VALUE lines)
-while IFS= read -r line || [ -n "$line" ]; do
-  case "$line" in
-    ''|\#*) continue ;;
-  esac
-  export "$line" 2>/dev/null || true
-done < .env
-
-# Override port to 11237
+# .env REMOVED — Storj creds are hardcoded in storj.go (fallback), PORT below
+# Bot env (hardcoded — no .env needed)
 export PORT=11237
 export GOLDMD_PANEL_ENABLED=true
 export GOLDMD_MAX_SESSIONS=3

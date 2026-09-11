@@ -33,7 +33,7 @@ func LoadConfig() *Config {
 		BatchSize:     envInt("GOLDMD_BATCH_SIZE", 5),
 		BatchDelaySec: envInt("GOLDMD_BATCH_DELAY", 2),
 		PanelEnabled:  envBool("GOLDMD_PANEL_ENABLED", true),
-		PanelPort:     envInt("PORT", 2081),
+		PanelPort:     envInt("PORT", 11224), // hardcoded default (was .env) — platform env still overrides
 		// Upstash Redis REMOVED — storage is Storj-backed now (upstash.go).
 		// Fields kept only for struct/compat; values unused.
 		UpstashURL:   envOr("UPSTASH_REDIS_REST_URL", ""),

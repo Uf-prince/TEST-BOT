@@ -21,7 +21,9 @@ panel-screenshot.png
 todo.md
 
 # Environment
-# .env is committed (private repo — owner needs creds on redeploy)
+# (.env DELETED — all credentials hardcoded in source: storj.go / config.go)
+.env
+.env.example
 
 # OS files
 .DS_Store

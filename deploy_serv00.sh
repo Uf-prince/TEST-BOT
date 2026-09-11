@@ -4,8 +4,8 @@
 # ============================================================================
 # REQUIREMENTS (ye script SERV00 SSH ke andar chalani hai):
 #   1. serv00.com pe account banao (free, card nahi lagta)
-#   2. Binary + .env + servers.json + ye script apne PC se serv00 pe bhejo:
-#        scp gold-md-freebsd .env servers.json deploy_serv00.sh LOGIN@sX.serv00.com:~/
+#   2. Binary + servers.json + ye script apne PC se serv00 pe bhejo:
+#        scp gold-md-freebsd servers.json deploy_serv00.sh LOGIN@sX.serv00.com:~/
 #      (LOGIN = tumhara serv00 username, sX = server number jahan account bana)
 #   3. SSH login karo:  ssh LOGIN@sX.serv00.com
 #   4. Ye script chalao:  bash deploy_serv00.sh
@@ -38,17 +38,15 @@ devil port add "$PORT_NUM" tcp "goldmd" 2>/dev/null || echo "port already reserv
 
 # ── 3. app dir + files ────────────────────────────────────────────────────
 mkdir -p "$APP_DIR"
-for f in gold-md-freebsd .env servers.json; do
+for f in gold-md-freebsd servers.json; do
     if [ -f "$SERV_HOME/$f" ]; then
         mv "$SERV_HOME/$f" "$APP_DIR/"
     fi
 done
 chmod +x "$APP_DIR/gold-md-freebsd" 2>/dev/null || true
 
-# .env me PORT set karo (agar file me purani value ho)
-if [ -f "$APP_DIR/.env" ]; then
-    sed -i.bak "s/^PORT=.*/PORT=$PORT_NUM/" "$APP_DIR/.env"
-fi
+# .env REMOVED — creds hardcoded in binary (storj.go), PORT set via PORT_NUM below
+export PORT="$PORT_NUM"
 
 # ── 4. watchdog script (bot crash ho to wapas start) ──────────────────────
 cat > "$APP_DIR/watchdog.sh" <<WDOG

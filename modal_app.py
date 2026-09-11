@@ -5,9 +5,9 @@ Deploy: modal deploy modal_app.py   (repo root se)
 
 FIXES (this deploy):
   1. .env / Redis creds / Storj creds ab main Go files me HARDCODED hain
-     (storj.go, upstash.go, config.go) — .env skip hone pe bhi kaam karenge.
-  2. Dockerfile ab .env ko runtime image me bhi copy karta hai (fallback).
-  3. Persistent Volume /data — session DB ne redeploy ke baad bhi ZINDA rahegi
+     (storj.go, upstash.go, config.go) — .env file DELETE ho chuki hai,
+     Modal pe kuch bhi set karne ki zaroorat nahi.
+  2. Persistent Volume /data — session DB ne redeploy ke baad bhi ZINDA rahegi
      (Redis quota khatam ho jaye tab bhi).
   4. Bot ka stdout + stderr ab Modal logs me stream hoga (subprocess inherit).
 

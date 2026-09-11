@@ -16,9 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=builder /build/gold-md .
 COPY --from=builder /build/servers.json .
-# .env shipped as a fallback for hosts that skip env injection;
-# creds are ALSO hardcoded in storj.go / config.go / upstash.go.
-COPY --from=builder /build/.env .
+# .env REMOVED — all credentials are hardcoded in source (storj.go / config.go)
+# so no env vars / .env file needed on any host.
 RUN mkdir -p nexstore/pairing
 EXPOSE 2081
 CMD ["./gold-md"]

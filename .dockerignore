@@ -2,9 +2,9 @@
 # Secrets aur runtime data IMAGE me kabhi nahi jaana chahiye.
 
 # Secrets / env
-# (.env deliberately SHIPPED in the image: hosts like Modal skip the env
-#  injection into Docker containers, so the bot reads it via loadDotEnv().
-#  Private repo — owner needs creds on redeploy.)
+# (.env file DELETED from repo — all creds hardcoded in storj.go/config.go;
+#  no env vars needed on any host.)
+.env
 .github-token
 
 # Git / CI

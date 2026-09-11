@@ -50,10 +50,8 @@ gold-md/
   ```
 
 ### 2. Configure
-```bash
-cp .env.example .env
-# edit .env — set GOLDMD_OWNERS to your phone number(s)
-```
+Sab credentials (Storj shards, PORT, GOLDMD settings) source mein **hardcoded** hain —
+koi `.env` file ya env vars ki zaroorat nahi. Bas build karke chalao.
 
 ### 3. Build & Run
 ```bash
