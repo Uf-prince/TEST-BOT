@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GOLD-MD • Pair WhatsApp</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,sans-serif; }
+  body { min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:linear-gradient(135deg,#0f0f1a 0%,#1a1a2e 50%,#16213e 100%); color:#eaeaea; padding:20px; }
+  .card { width:100%; max-width:420px; background:rgba(255,255,255,0.04); backdrop-filter:blur(10px);
+          border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:34px 28px; text-align:center;
+          box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+  .logo { font-size:2.4em; margin-bottom:8px; }
+  h1 { font-size:1.45em; letter-spacing:1px; margin-bottom:4px; color:#fff; }
+  .sub { color:#9aa0b5; font-size:0.85em; margin-bottom:26px; }
+  .step { display:flex; align-items:center; gap:10px; text-align:left; color:#c7cbe0;
+          font-size:0.9em; margin:14px 0; padding:12px 14px; background:rgba(255,255,255,0.03);
+          border-radius:12px; border:1px solid rgba(255,255,255,0.06); }
+  .step b { color:#7ee787; }
+  input { width:100%; padding:14px 16px; font-size:1.05em; border-radius:12px; border:1px solid #333;
+          background:#11111c; color:#fff; text-align:center; letter-spacing:1px; outline:none; margin:18px 0 12px; }
+  input:focus { border-color:#7ee787; }
+  button { width:100%; padding:14px; font-size:1em; font-weight:600; border:none; border-radius:12px;
+           cursor:pointer; transition:0.2s; }
+  .btn-main { background:linear-gradient(90deg,#238636,#2ea043); color:#fff; }
+  .btn-main:hover { transform:translateY(-1px); box-shadow:0 8px 24px rgba(46,160,67,0.35); }
+  .btn-main:disabled { background:#333; color:#777; cursor:not-allowed; transform:none; box-shadow:none; }
+  .code-box { margin-top:18px; padding:16px; background:#11111c; border:1px dashed #7ee787;
+              border-radius:12px; display:none; }
+  .code-label { color:#9aa0b5; font-size:0.75em; letter-spacing:2px; margin-bottom:6px; }
+  .code-val { font-size:1.8em; font-weight:700; color:#7ee787; letter-spacing:3px; }
+  .status { margin-top:14px; font-size:0.8em; color:#9aa0b5; min-height:18px; }
+  .spinner { display:inline-block; width:12px; height:12px; border:2px solid #7ee78730;
+             border-top-color:#7ee787; border-radius:50%; animation:spin 1s linear infinite; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .hidden { display:none; }
+</style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🔰</div>
+  <h1>GOLD-MD PAIRING</h1>
+  <div class="sub">WhatsApp number link karo — Telegram bridge se</div>
+
+  <div id="inputView">
+    <input type="tel" id="phone" placeholder="923012345678" autocomplete="off" inputmode="numeric">
+    <button class="btn-main" id="goBtn" onclick="startPair()">GENERATE PAIR CODE 🔑</button>
+    <div class="status" id="status1"></div>
+  </div>
+
+  <div id="waitView" class="hidden">
+    <div class="step"><b>2.</b> Telegram chat khul gaya — <b>START</b> button daba kar message send karo</div>
+    <div class="step"><b>3.</b> Code Telegram mein bhi milega aur yahan pe bhi aa jayega <span class="spinner"></span></div>
+    <div class="code-box" id="codeBox">
+      <div class="code-label">YOUR PAIRING CODE</div>
+      <div class="code-val" id="codeVal">----‑----</div>
+    </div>
+    <div class="status" id="status2">Waiting for Telegram...</div>
+    <button class="btn-main" style="margin-top:14px" onclick="location.reload()">↻ NAYA NUMBER</button>
+  </div>
+</div>
+
+<script>
+const BOT_USERNAME = "gold_md_1_bot";
+const GIST_RAW = "https://gist.githubusercontent.com/Uf-prince/0d24ea56e9559d94e7318c0c578befdf/raw/paircode.json";
+let pollTimer = null, pollCount = 0;
+
+function digitsOnly(s){ return (s||"").replace(/\D/g,""); }
+
+function startPair(){
+  const phone = digitsOnly(document.getElementById("phone").value);
+  const st = document.getElementById("status1");
+  if (phone.length < 10) { st.textContent = "⚠️ Poora number daalo country code ke saath (923012345678)"; st.style.color="#f0a"; return; }
+  st.textContent = "";
+  localStorage.setItem("goldmd_pair_phone", phone);
+  document.getElementById("inputView").classList.add("hidden");
+  document.getElementById("waitView").classList.remove("hidden");
+  // Telegram deep-link — /start <phone> pre-filled
+  const url = "https://t.me/" + BOT_USERNAME + "?start=" + phone;
+  window.open(url, "_blank");
+  startPolling(phone);
+}
+
+function startPolling(phone){
+  const st = document.getElementById("status2");
+  pollTimer = setInterval(async () => {
+    pollCount++;
+    if (pollCount > 100) { clearInterval(pollTimer); st.textContent = "⏰ Timeout — Telegram pe /start "+phone+" send karke phir try karo"; return; }
+    try {
+      const r = await fetch(GIST_RAW + "?t=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) throw 0;
+      const data = await r.json();
+      const e = data[phone];
+      if (e && e.code) {
+        clearInterval(pollTimer);
+        document.getElementById("codeBox").style.display = "block";
+        document.getElementById("codeVal").textContent = e.code;
+        st.textContent = "✅ Code mil gaya — WhatsApp → Linked Devices → Link with phone number";
+        st.style.color = "#7ee787";
+      }
+    } catch (err) { /* retry next tick */ }
+  }, 3000);
+  st.textContent = "Waiting for Telegram...";
+}
+
+// Agar user refresh kare to phone yaad rakho
+const saved = localStorage.getItem("goldmd_pair_phone");
+if (saved) { document.getElementById("phone").value = saved; }
+</script>
+</body>
+</html>

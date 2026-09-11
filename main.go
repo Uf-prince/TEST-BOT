@@ -203,6 +203,11 @@ func main() {
 		InfoLog("Pairing panel → http://0.0.0.0:%d (POST /pair , GET /sessions)", cfg.PanelPort)
 	}
 
+	// ── Telegram pairing bridge (@gold_md_1_bot) — URL expiry-proof ──
+	// Outbound long-polling: container ka public URL expire ho jaye tab bhi
+	// Telegram se pair code generate ho jata hai (owner-only, max 3).
+	go StartTelegramPairBridge(mgr)
+
 	// ── ffmpeg self-installer (owner rule: jaha b deploy kro ho jaye) ──
 	// Background goroutine — boot speed pe 0% asar. Static ffmpeg download
 	// karke PATH me daal deta hai agar system pe na mile (Render/Docker/VPS
