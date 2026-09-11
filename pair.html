@@ -1,86 +1,96 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ur">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GOLD-MD • Pair WhatsApp</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,sans-serif; }
-  body { min-height:100vh; display:flex; align-items:center; justify-content:center;
-         background:linear-gradient(135deg,#0f0f1a 0%,#1a1a2e 50%,#16213e 100%); color:#eaeaea; padding:20px; }
-  .card { width:100%; max-width:430px; background:rgba(255,255,255,0.04); backdrop-filter:blur(10px);
-          border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:34px 28px; text-align:center;
-          box-shadow:0 20px 60px rgba(0,0,0,0.5); }
-  .logo { font-size:2.4em; margin-bottom:8px; }
-  h1 { font-size:1.45em; letter-spacing:1px; margin-bottom:4px; color:#fff; }
-  .sub { color:#9aa0b5; font-size:0.85em; margin-bottom:26px; }
-  input { width:100%; padding:14px 16px; font-size:1.05em; border-radius:12px; border:1px solid #333;
-          background:#11111c; color:#fff; text-align:center; letter-spacing:1px; outline:none; margin:10px 0 14px; }
-  input:focus { border-color:#7ee787; }
-  button { width:100%; padding:14px; font-size:1em; font-weight:600; border:none; border-radius:12px;
-           cursor:pointer; transition:0.2s; }
-  .btn-main { background:linear-gradient(90deg,#238636,#2ea043); color:#fff; }
-  .btn-main:hover { transform:translateY(-1px); box-shadow:0 8px 24px rgba(46,160,67,0.35); }
-  .btn-main:disabled { opacity:0.6; cursor:wait; transform:none; }
-  .code-box { margin-top:18px; padding:16px; background:#11111c; border:1px dashed #7ee787;
-              border-radius:12px; display:none; }
-  .code-label { color:#9aa0b5; font-size:0.75em; letter-spacing:2px; margin-bottom:6px; }
-  .code-val { font-size:1.8em; font-weight:700; color:#7ee787; letter-spacing:3px; word-break:break-all; }
-  .err-box { margin-top:16px; padding:12px; background:#2a1215; border:1px solid #f8514966;
-             border-radius:12px; display:none; color:#ff8080; font-size:0.9em; }
-  .status { margin-top:14px; font-size:0.82em; color:#9aa0b5; min-height:20px; }
-  .hb { display:flex; align-items:center; justify-content:center; gap:8px; font-size:0.75em;
-        color:#9aa0b5; margin-bottom:14px; letter-spacing:1px; }
-  .hb-dot { width:9px; height:9px; border-radius:50%; background:#f85149; transition:0.3s; }
-  .hb-dot.on { background:#7ee787; box-shadow:0 0 8px #7ee78799; }
-  .hb-dot.off { background:#f85149; box-shadow:0 0 8px #f8514999; animation:blink 1s infinite; }
-  .hb.off { color:#ff8080; }
-  @keyframes blink { 50% { opacity:0.3; } }
-  .note { margin-top:18px; font-size:0.72em; color:#6b7286; line-height:1.6; }
-  .credit { position:fixed; bottom:14px; right:16px; font-size:0.72em; color:#6b7286;
-            text-decoration:none; }
-  .credit:hover { color:#a371f7; }
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0f1e;background:radial-gradient(ellipse at top,#16213e 0%,#0a0f1e 60%);padding:20px}
+.card{width:100%;max-width:420px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:20px;padding:28px 24px;backdrop-filter:blur(10px);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+h1{font-size:22px;color:#fff;text-align:center;letter-spacing:.5px}
+h1 .lock{color:#ffd700}
+.sub{text-align:center;color:#8b93a7;font-size:13px;margin:6px 0 18px}
+.hb{display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:#8b93a7;background:rgba(255,255,255,.03);border-radius:10px;padding:8px 12px;margin-bottom:16px}
+.dot{width:9px;height:9px;border-radius:50%;background:#f0566a;box-shadow:0 0 8px #f0566a}
+.dot.on{background:#3fdb84;box-shadow:0 0 8px #3fdb84}
+.dot.off{animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.3}}
+label{display:block;font-size:12px;color:#8b93a7;margin-bottom:6px}
+input{width:100%;padding:13px 14px;font-size:16px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.35);color:#fff;outline:none;transition:.2s}
+input:focus{border-color:#3fdb84;box-shadow:0 0 0 3px rgba(63,219,132,.15)}
+button{width:100%;margin-top:14px;padding:14px;font-size:15px;font-weight:700;border:none;border-radius:12px;cursor:pointer;color:#04150a;background:linear-gradient(135deg,#3fdb84,#2bb673);transition:.2s}
+button:hover{filter:brightness(1.1)}
+button:disabled{opacity:.55;cursor:not-allowed}
+.code-box{margin-top:18px;border:2px dashed #3fdb84;border-radius:14px;padding:18px;text-align:center;display:none}
+.code-box .lbl{font-size:11px;letter-spacing:2px;color:#8b93a7}
+.code-box .code{font-size:30px;font-weight:800;color:#3fdb84;letter-spacing:4px;margin:8px 0;font-family:'Courier New',monospace}
+.code-box .hint{font-size:12px;color:#8b93a7}
+.err-box{margin-top:14px;background:rgba(240,86,106,.1);border:1px solid rgba(240,86,106,.4);color:#ff8fa3;font-size:13px;border-radius:10px;padding:12px;display:none}
+.status{margin-top:14px;font-size:12px;color:#8b93a7;text-align:center;min-height:16px}
+.foot{margin-top:18px;font-size:11px;color:#5c6478;text-align:center;line-height:1.6}
 </style>
 <script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
 </head>
 <body>
 <div class="card">
-  <div class="logo">🔓</div>
-  <h1>GOLD-MD PAIRING</h1>
-  <div class="sub">Number dalo — code yahin milega</div>
-  <div class="hb" id="hb"><div class="hb-dot" id="hbDot"></div><span id="hbTxt">BOT CHECK...</span></div>
-  <input type="tel" id="phone" placeholder="923012345678" autocomplete="off" inputmode="numeric">
-  <button class="btn-main" id="goBtn" onclick="startPair()">GENERATE PAIR CODE 🔑</button>
+  <h1><span class="lock">🔐</span> GOLD-MD PAIRING</h1>
+  <div class="sub">Number daalo — code yahin milega</div>
+
+  <div class="hb"><span class="dot" id="dot"></span><span id="hbTxt">CHECKING…</span></div>
+
+  <label for="phone">WhatsApp Number (country code ke saath)</label>
+  <input id="phone" type="tel" placeholder="923012345678" autocomplete="tel" inputmode="numeric">
+
+  <button id="goBtn" onclick="startPair()">GENERATE PAIR CODE 🔑</button>
+
   <div class="code-box" id="codeBox">
-    <div class="code-label">YOUR PAIRING CODE</div>
-    <div class="code-val" id="codeVal"></div>
-    <div class="note">WhatsApp → Linked Devices → Link with phone number</div>
+    <div class="lbl">YOUR PAIRING CODE</div>
+    <div class="code" id="codeVal">—</div>
+    <div class="hint">WhatsApp → Linked Devices → Link with phone number</div>
   </div>
+
   <div class="err-box" id="errBox"></div>
   <div class="status" id="status"></div>
-  <div class="note">Code 2-10 second mein generate hota hai. Page open rakho — code apne aap dikhega.</div>
+
+  <div class="foot">Code 2-10 second mein generate hota hai.<br>Page open rakho — code apne aap dikhega.</div>
 </div>
-<a class="credit" href="https://www.ninjatech.ai/product/super-ninja" target="_blank">🥷 Made by SuperNinja</a>
 
 <script>
-// ── CONFIG: gist se bot ka LIVE public URL milta hai (bot khud likhta hai) ──
+// ==========================================================================
+// MODE 1 (BEST): NGROK_URL set karo -> bot ka PERMANENT URL (kabhi expire
+//   nahi hota). ngrok free account: dashboard.ngrok.com -> Domains ->
+//   xyz.ngrok-free.app copy karke yahan daalo. Example:
+//   const NGROK_URL = "https://deep-firm-fox.ngrok-free.app";
+// MODE 2 (FALLBACK): NGROK_URL khali -> gist hb.json se bot URL (Back4App
+//   wala flow, URL 18-min expiry ke against self-heal karta hai).
+// ==========================================================================
+const NGROK_URL = "";
+const NGROK_HDR = { "ngrok-skip-browser-warning": "1" }; // free-plan warning bypass
+
 const GIST_BASE = "https://gist.githubusercontent.com/Uf-prince/0d24ea56e9559d94e7318c0c578befdf/raw/";
 const HB_URL = GIST_BASE + "hb.json";
-
-let BOT_URL = "";    // bot ka live URL (hb.json se)
+let BOT_URL = "";
 let busy = false;
 
-function digitsOnly(s){ return (s||"").replace(/\D/g,""); }
-function st(t, color){ const e=document.getElementById("status"); e.textContent=t; e.style.color=color||"#9aa0b5"; }
+function st(t,c){const s=document.getElementById("status");s.textContent=t||"";s.style.color=c||"#8b93a7";}
+function setHB(on,txt){const d=document.getElementById("dot");d.className="dot "+(on?"on":"off");document.getElementById("hbTxt").textContent=txt||(on?"BOT ONLINE":"BOT OFFLINE");}
 
-// ── BOT ONLINE/OFFLINE + LIVE URL (hb.json: {"ts":...,"url":"..."}) ──
-function setHB(on){
-  const d=document.getElementById("hbDot"), t=document.getElementById("hbTxt"), w=document.getElementById("hb");
-  d.className = "hb-dot " + (on ? "on" : "off");
-  w.className = "hb " + (on ? "" : "off");
-  t.textContent = on ? "BOT ONLINE" : "BOT OFFLINE — bot deploy/running nahi hai";
-}
+function digitsOnly(s){return (s||"").replace(/\D+/g,"");}
+
 async function checkHB(){
+  // MODE 1: permanent ngrok URL -> SEEDHA bot health-check (best, real-time)
+  if (NGROK_URL) {
+    try {
+      const r = await fetch(NGROK_URL + "/health?t=" + Date.now(), { headers: NGROK_HDR, cache:"no-store" });
+      const j = await r.json();
+      const on = j && j.status === "online";
+      setHB(on);
+      if (on) BOT_URL = NGROK_URL; else BOT_URL = "";
+    } catch(e){ setHB(false); BOT_URL=""; }
+    return;
+  }
+  // MODE 2: gist heartbeat registry
   try {
     const r = await fetch(HB_URL + "?t=" + Date.now(), { cache:"no-store" });
     const j = await r.json();
@@ -97,11 +107,11 @@ async function startPair(){
   const btn = document.getElementById("goBtn");
   if (phone.length < 10) { st("⚠️ Poora number daalo country code ke saath (923012345678)", "#f0a"); return; }
 
-  // bot URL fresh le lo (URL 18-min expiry ke against)
   await checkHB();
   if (!BOT_URL) {
-    document.getElementById("errBox").textContent = "❌ Bot offline hai — pehle bot deploy/start karo, phir try karo";
-    document.getElementById("errBox").style.display = "block";
+    const eb = document.getElementById("errBox");
+    eb.textContent = "❌ Bot offline hai — bot deploy/start karo, phir try karo";
+    eb.style.display = "block";
     return;
   }
 
@@ -115,56 +125,53 @@ async function startPair(){
   try {
     const r = await fetch(BOT_URL + "/pair", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...NGROK_HDR },
       body: JSON.stringify({ phone: phone })
     });
     const j = await r.json();
     if (j.code) {
       document.getElementById("codeVal").textContent = j.code;
       document.getElementById("codeBox").style.display = "block";
-      st("✅ Code ready! WhatsApp mein daalo", "#7ee787");
       btn.textContent = "NAYA CODE 🔄";
+      st("✅ Code ready! WhatsApp mein daalo", "#3fdb84");
     } else {
-      document.getElementById("errBox").textContent = "❌ " + (j.error || j.message || "Unknown error");
-      document.getElementById("errBox").style.display = "block";
-      btn.textContent = "GENERATE PAIR CODE 🔑";
-      st("");
+      throw new Error(j.error || j.message || "Bot ne code nahi diya");
     }
-  } catch (e) {
-    // URL expire hua hoga — refresh karke ek aur try
+  } catch(e) {
+    // 1 retry: URL refresh karke (fallback mode me URL change ho sakta hai)
     await checkHB();
+    let done = false;
     if (BOT_URL) {
       try {
         const r2 = await fetch(BOT_URL + "/pair", {
-          method: "POST", headers: { "Content-Type": "application/json" },
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...NGROK_HDR },
           body: JSON.stringify({ phone: phone })
         });
         const j2 = await r2.json();
         if (j2.code) {
           document.getElementById("codeVal").textContent = j2.code;
           document.getElementById("codeBox").style.display = "block";
-          st("✅ Code ready! WhatsApp mein daalo", "#7ee787");
           btn.textContent = "NAYA CODE 🔄";
-          busy = false; btn.disabled = false;
-          return;
-        } else {
-          document.getElementById("errBox").textContent = "❌ " + (j2.error || j2.message || "Unknown error");
-          document.getElementById("errBox").style.display = "block";
+          st("✅ Code ready! WhatsApp mein daalo", "#3fdb84");
+          done = true;
         }
-      } catch (e2) {}
+      } catch(e2){}
     }
-    if (document.getElementById("codeBox").style.display !== "block") {
-      document.getElementById("errBox").textContent = "❌ Bot se connect nahi hua — 30s baad dobara try karo (URL refresh hota hai)";
-      document.getElementById("errBox").style.display = "block";
-      st("");
+    if (!done) {
+      const eb = document.getElementById("errBox");
+      eb.textContent = "❌ " + (e.message || "Bot tak nahi pahuncha") + " — 30s baad dobara try karo";
+      eb.style.display = "block";
+      btn.textContent = "GENERATE PAIR CODE 🔑";
     }
-    btn.textContent = "GENERATE PAIR CODE 🔑";
+  } finally {
+    busy = false; btn.disabled = false;
+    if (btn.textContent === "GENERATING...") btn.textContent = "GENERATE PAIR CODE 🔑";
   }
-  busy = false; btn.disabled = false;
 }
 
-const saved = localStorage.getItem("goldmd_pair_phone");
-if (saved) { document.getElementById("phone").value = saved; }
+// saved number wapas lao
+document.getElementById("phone").value = localStorage.getItem("goldmd_pair_phone") || "";
 </script>
 </body>
 </html>

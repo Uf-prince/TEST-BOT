@@ -31,9 +31,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY gold-md-cgofree ./gold-md
 COPY servers.json .
+COPY start.sh .
 # .env REMOVED — all credentials are hardcoded in source (storj.go / config.go)
-RUN chmod +x ./gold-md && mkdir -p nexstore/pairing
+RUN chmod +x ./gold-md && chmod +x ./start.sh && mkdir -p nexstore/pairing
+
+# ngrok agent — permanent URL tunnel (NGROK_AUTHTOKEN + NGROK_DOMAIN env vars
+# container runtime pe set karo, image me bake NAHI karna)
+RUN curl -sL https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz \
+        -o /tmp/ngrok.tgz \
+    && tar xzf /tmp/ngrok.tgz -C /usr/local/bin \
+    && rm /tmp/ngrok.tgz \
+    && chmod +x /usr/local/bin/ngrok
 
 ENV PORT=11224
 EXPOSE 2081
-CMD ["./gold-md"]
+CMD ["./start.sh"]
