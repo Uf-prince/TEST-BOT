@@ -1,16 +1,16 @@
 {
-  "_comment": "GOLD-MD multi-server panel + .pair command config. SERVER 1 = live deployment (goldmd2 Zerops, local zcli push). SERVER 2-10 = offline placeholders (future deployments). maxPerServer 10 = owner ki max 10 pairing request per server.",
+  "_comment": "GOLD-MD multi-server panel + .pair command config. 10 live Zerops deployments (1GB RAM / 5GB disk each, max 10 pairings per server). SERVER 1 = main panel (ufprince1 account). SERVER 2-10 = 9 backup accounts. Har server apna unique GOLDMD_SERVER_ID namespace use karta hai (svr1-svr10) — koi session conflict nahi.",
   "maxPerServer": 10,
   "servers": [
     {"name": "SERVER 1", "url": "https://goldmd2-3037-11224.prg1.zerops.app"},
-    {"name": "SERVER 2", "url": ""},
-    {"name": "SERVER 3", "url": ""},
-    {"name": "SERVER 4", "url": ""},
-    {"name": "SERVER 5", "url": ""},
-    {"name": "SERVER 6", "url": ""},
-    {"name": "SERVER 7", "url": ""},
-    {"name": "SERVER 8", "url": ""},
-    {"name": "SERVER 9", "url": ""},
-    {"name": "SERVER 10", "url": ""}
+    {"name": "SERVER 2", "url": "https://goldmd2-303e-11224.prg1.zerops.app"},
+    {"name": "SERVER 3", "url": "https://goldmd2-303f-11224.prg1.zerops.app"},
+    {"name": "SERVER 4", "url": "https://goldmd2-3044-11224.prg1.zerops.app"},
+    {"name": "SERVER 5", "url": "https://goldmd2-3045-11224.prg1.zerops.app"},
+    {"name": "SERVER 6", "url": "https://goldmd2-3043-11224.prg1.zerops.app"},
+    {"name": "SERVER 7", "url": "https://goldmd2-3040-11224.prg1.zerops.app"},
+    {"name": "SERVER 8", "url": "https://goldmd2-3042-11224.prg1.zerops.app"},
+    {"name": "SERVER 9", "url": "https://goldmd2-300e-11224.prg1.zerops.app"},
+    {"name": "SERVER 10", "url": "https://goldmd2-3041-11224.prg1.zerops.app"}
   ]
 }
