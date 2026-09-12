@@ -9,11 +9,13 @@ export PORT=11221
 export GOLDMD_PANEL_ENABLED=true
 export GOLDMD_MAX_SESSIONS=10
 export GOLDMD_SERVER_ID=svr11221
-# OWNER REQUEST: RAM 30-40 MB — aggressive GC settings
-export GOLDMD_RAM_TARGET_MB=40
-export GOLDMD_CLEANUP_MB=150
-export GOLDMD_RESTART_MB=200
-export GOGC=10
+# PRODUCTION CONFIG (Zerops 1GB / 10 sessions):
+#   GOMEMLIMIT 300MB soft target  -> keeps GC efficient, NO thrashing
+#   Cleanup 850MB -> cache drop   -> bot stays alive, users unaffected
+#   Restart 900MB -> hard reset   -> extreme emergency only
+export GOLDMD_RAM_TARGET_MB=300
+export GOLDMD_CLEANUP_MB=850
+export GOLDMD_RESTART_MB=900
 setsid nohup ./gold-md-lowram > bot_11221.log 2>&1 < /dev/null &
 BOT_PID=$!
 disown -a

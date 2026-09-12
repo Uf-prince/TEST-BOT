@@ -18,7 +18,7 @@ import (
 )
 
 // ramTargetMB is the soft RAM target (default 40 MB, env-overridable).
-var ramTargetMB = envInt("GOLDMD_RAM_TARGET_MB", 120)
+var ramTargetMB = envInt("GOLDMD_RAM_TARGET_MB", 300)
 
 // memlowInit MUST be called first thing in main() — BEFORE LoadConfig.
 // It pins the Go runtime into ultra-low-RAM mode:

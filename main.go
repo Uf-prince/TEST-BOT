@@ -283,11 +283,11 @@ func main() {
 // 950 MB — ~74 MB headroom before the cgroup hard-kill. Normal RAM-clean
 // (cache TTL clear + GC) 850 pe, hard self-restart 950 pe.
 var (
-	// OWNER REQUEST (RAM 30-40 MB): thresholds env-configurable + much lower.
-	// GOLDMD_CLEANUP_MB (default 150) → cache cleanup
-	// GOLDMD_RESTART_MB (default 200) → self-restart
-	cleanupThreshold uint64 = uint64(envInt("GOLDMD_CLEANUP_MB", 150)) * 1024 * 1024
-	restartThreshold uint64 = uint64(envInt("GOLDMD_RESTART_MB", 200)) * 1024 * 1024
+	// OWNER REQUEST (Zerops 1GB / 10 sessions): production-scale thresholds.
+	// GOLDMD_CLEANUP_MB (default 850) → cache cleanup
+	// GOLDMD_RESTART_MB (default 900) → hard self-restart
+	cleanupThreshold uint64 = uint64(envInt("GOLDMD_CLEANUP_MB", 850)) * 1024 * 1024
+	restartThreshold uint64 = uint64(envInt("GOLDMD_RESTART_MB", 900)) * 1024 * 1024
 )
 
 // memoryWatchdog monitors container RAM in a background goroutine and
