@@ -65,6 +65,9 @@ func main() {
 	// still win if both are set.
 	loadDotEnv(".env")
 
+	// OWNER REQUEST: RAM sirf 30-40 MB - ultra-low-RAM runtime pinned FIRST.
+	memlowInit()
+
 	InfoLog("Starting GOLD-MD server...")
 	cfg := LoadConfig()
 
@@ -279,9 +282,12 @@ func main() {
 // On ZeoOps (1 GB container) this gives: cleanup at 850 MB, restart at
 // 950 MB — ~74 MB headroom before the cgroup hard-kill. Normal RAM-clean
 // (cache TTL clear + GC) 850 pe, hard self-restart 950 pe.
-const (
-	cleanupThreshold  uint64 = 850 * 1024 * 1024 // 850 MB → cache cleanup (owner: 1GB container, normal clean)
-	restartThreshold  uint64 = 950 * 1024 * 1024 // 950 MB → self-restart (owner: 1GB container, hard restart)
+var (
+	// OWNER REQUEST (RAM 30-40 MB): thresholds env-configurable + much lower.
+	// GOLDMD_CLEANUP_MB (default 150) → cache cleanup
+	// GOLDMD_RESTART_MB (default 200) → self-restart
+	cleanupThreshold uint64 = uint64(envInt("GOLDMD_CLEANUP_MB", 150)) * 1024 * 1024
+	restartThreshold uint64 = uint64(envInt("GOLDMD_RESTART_MB", 200)) * 1024 * 1024
 )
 
 // memoryWatchdog monitors container RAM in a background goroutine and
@@ -324,8 +330,8 @@ func memoryWatchdog(mgr *Manager, redis *Upstash, dbPath string) {
 			continue
 		}
 
-		// ── Reset cleanup flag when memory drops back below 750 MB ──
-		if used < 750*1024*1024 {
+		// ── Reset cleanup flag when memory drops back below (cleanup-50MB) ──
+		if used < cleanupThreshold-50*1024*1024 {
 			cleanupDone = false
 		}
 
@@ -349,7 +355,7 @@ func memoryWatchdog(mgr *Manager, redis *Upstash, dbPath string) {
 		// ── ADAPTIVE SLEEP ──
 		// Normal RAM -> 30s deep sleep (kaam kam). Warning zone (800 MB+)
 		// -> 5s fast check (thresholds ko bilkul wakt pe pakarna hai).
-		if used < 800*1024*1024 {
+		if used < cleanupThreshold-50*1024*1024 {
 			time.Sleep(30 * time.Second)
 		} else {
 			time.Sleep(5 * time.Second)

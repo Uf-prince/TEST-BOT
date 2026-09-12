@@ -92,8 +92,8 @@ func (s *Session) cacheMessage(id string, msg *waProto.Message) {
 	if s.msgCache == nil {
 		s.msgCache = make(map[string]*waProto.Message)
 	}
-	// opportunistic cleanup: drop entries older than ~5 min by capping size
-	if len(s.msgCache) > 200 {
+	// OWNER REQUEST (RAM 30-40 MB): cache cap tightened 200 → 50 entries.
+	if len(s.msgCache) > 50 {
 		for k := range s.msgCache {
 			delete(s.msgCache, k)
 			break

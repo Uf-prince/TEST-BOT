@@ -48,3 +48,5 @@ tg_debug*
 
 # Compiled bot binary
 gold-md-bot
+# RAM monitor runtime data
+ram_monitor.csv
