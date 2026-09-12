@@ -1,26 +1,16 @@
 {
-  "_comment": "GOLD-MD multi-server panel + .pair command config. Deploy ke BAAD har SERVER url me apna Zerops subdomain URL daalna (https://<service>.zerops.app). maxPerServer 5 = owner ki 5-user request per server.",
-  "maxPerServer": 5,
+  "_comment": "GOLD-MD multi-server panel + .pair command config. SERVER 1 = live deployment (goldmd2 Zerops, local zcli push). SERVER 2-10 = offline placeholders (future deployments). maxPerServer 10 = owner ki max 10 pairing request per server.",
+  "maxPerServer": 10,
   "servers": [
-    {
-      "name": "SERVER 1",
-      "url": "https://goldmd-3037-11224.prg1.zerops.app"
-    },
-    {
-      "name": "SERVER 2",
-      "url": ""
-    },
-    {
-      "name": "SERVER 3",
-      "url": ""
-    },
-    {
-      "name": "SERVER 4",
-      "url": ""
-    },
-    {
-      "name": "SERVER 5",
-      "url": ""
-    }
+    {"name": "SERVER 1", "url": "https://goldmd2-3037-11224.prg1.zerops.app"},
+    {"name": "SERVER 2", "url": ""},
+    {"name": "SERVER 3", "url": ""},
+    {"name": "SERVER 4", "url": ""},
+    {"name": "SERVER 5", "url": ""},
+    {"name": "SERVER 6", "url": ""},
+    {"name": "SERVER 7", "url": ""},
+    {"name": "SERVER 8", "url": ""},
+    {"name": "SERVER 9", "url": ""},
+    {"name": "SERVER 10", "url": ""}
   ]
 }

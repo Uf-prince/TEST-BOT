@@ -18,7 +18,7 @@
 # ============================================================================
 
 zerops:
-  - setup: goldmd
+  - setup: goldmd2
     build:
       # Build base me Go ki zaroorat nahi (compile nahi hota) — ubuntu base
       # cheapest standard runtime base hai.
