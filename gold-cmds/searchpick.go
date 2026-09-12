@@ -1098,7 +1098,8 @@ func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected search
 			// WhatsApp-compat: HEVC/mjpeg reels ko h264+faststart me convert
 			waPath, werr := whatsappifyVideo(ctx, path)
 			if werr == nil && waPath != path {
-				defer removeTempFile(path)
+				defer removeTempFile(path)   // original raw file
+				defer removeTempFile(waPath) // converted .wa.mp4 (LEAK FIX)
 				path = waPath
 			} else {
 				defer removeTempFile(path)
@@ -1182,7 +1183,8 @@ func igSendPermalink(ctx context.Context, s SessionBridge, info types.MessageInf
 	// WhatsApp-compat: HEVC/mjpeg/thumbnail reels ko h264+faststart me convert
 	waPath, werr := whatsappifyVideo(ctx, path)
 	if werr == nil && waPath != path {
-		defer removeTempFile(path)
+		defer removeTempFile(path)   // original raw file
+		defer removeTempFile(waPath) // converted .wa.mp4 (LEAK FIX)
 		path = waPath
 	} else {
 		defer removeTempFile(path)
@@ -1340,7 +1342,8 @@ func searchPickFBDirect(s SessionBridge, info types.MessageInfo, selected search
 		}
 		// WhatsApp-compat: HEVC/mjpeg ko h264+faststart me convert
 		if waPath, werr := whatsappifyVideo(ctx, path); werr == nil && waPath != path {
-			defer removeTempFile(path)
+			defer removeTempFile(path)   // original raw file
+			defer removeTempFile(waPath) // converted .wa.mp4 (LEAK FIX)
 			path = waPath
 		} else {
 			defer removeTempFile(path)

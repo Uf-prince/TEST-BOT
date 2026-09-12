@@ -68,6 +68,10 @@ func main() {
 	// OWNER REQUEST: RAM sirf 30-40 MB - ultra-low-RAM runtime pinned FIRST.
 	memlowInit()
 
+	// OWNER REQUEST: downloaded files bhejne ke baad delete — disk free rahe.
+	// Startup sweep (leaked files clean) + har 10 min periodic sweep.
+	tmpSweepInit()
+
 	InfoLog("Starting GOLD-MD server...")
 	cfg := LoadConfig()
 
