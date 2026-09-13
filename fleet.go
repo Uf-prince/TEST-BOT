@@ -401,6 +401,16 @@ func fleetClaimHolders(jid string) map[string]int64 {
 // max 2) aur koi global session bina LIVE claim ke pada hai → restore +
 // connect. Ek hi claim per tick — cascade naturally failta hai jab tak
 // sab servers full na ho jayein.
+
+// fleetActive: fleet watchdog/claims live hain? (fleetMgr set + Redis hai).
+// StartSession cap sirf tab enforce hota hai jab fleet live hai — warna
+// single-server (fleet off) mode me normal behaviour. fleet.go ke baaki
+// readers ki tarah direct read (fleetMgr fleetBind pe set hota hai, boot
+// race me koi torn read nahi — worst case false = cap off = safe side).
+func fleetActive() bool {
+	return fleetMgr != nil && fleetMgr.Redis != nil
+}
+
 func fleetClaimAvailable() {
 	m := fleetMgr
 	if m == nil || m.Redis == nil {

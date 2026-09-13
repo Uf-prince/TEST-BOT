@@ -361,6 +361,17 @@ func (m *Manager) AutoLoad() {
 					return
 				}
 				InfoLog("Connecting %d/%d: %s", n, len(users), u)
+				// BOOT CAP: is server ka quota (maxPerServer) already full hai
+				// to over-max session connect MAT karo. Mass-boot race me
+				// (Render auto-deploy pe saare servers ek saath uthte hain)
+				// fleet claims abhi bane hi nahi hote the — pehle version
+				// is race window me 3/2 jaisa over-max load kar deta tha.
+				// Over-max jids ko chhod dena SAFE hai: fleet blob GLOBAL hai,
+				// watchdog inhe baad me doosre server pe claim kar dega.
+				if m.Count() >= maxPairedSessions() {
+					WarnLog("BOOT CAP: %s skipped — server full (%d/%d), fleet baad me sambhalega", u, m.Count(), maxPairedSessions())
+					return
+				}
 				// ZOMBIE-RETURN GUARD: ye session kisi AUR live server ke fresh
 				// claim me hai (failover ho chuka) to yahan start mat karo —
 				// double-connect war WhatsApp logout karva deta hai. Fleet
@@ -407,6 +418,15 @@ func (m *Manager) AutoLoad() {
 func (m *Manager) StartSession(jid string) error {
 	if m.IsShuttingDown() {
 		return fmt.Errorf("shutdown in progress")
+	}
+	// FLEET CAP: fleet active hai to quota (maxPerServer) enforce karo.
+	// Fleet claim cycle m.Count() >= max pe pehle se ruk jata hai — yahan
+	// sirf direct-call paths (pairing panel ya AutoLoad boot) guard hai.
+	// Fleet FAILOVER path (fleetRestoreAndConnect) apna quota check khud
+	// karta hai (m.Count() >= max pe claim loop chhod deta hai), isliye
+	// failover-target sessions kabhi block nahi hongi.
+	if fleetActive() && m.Count() >= maxPairedSessions() && !m.AlreadyConnected(jid) {
+		return fmt.Errorf("server full (%d/%d) — fleet is active, try another server or wait for failover", m.Count(), maxPairedSessions())
 	}
 
 	// ensure pairing dir exists for this jid (marks it as paired)
