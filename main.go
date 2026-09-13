@@ -44,6 +44,21 @@ const Banner = `
      GOLD-MD · Go Multi-Session WhatsApp Bot
 `
 
+// legacySvr1BlobExists: purane (pre-fleet) version ka shared "svr1"
+// session-DB blob KV me abhi bhi pada hai? (one-time migration check —
+// main boot flow isko dekh kar svr1 backup ko ek baar restore + delete
+// karta hai taake do upgraded servers kabhi shared key se conflict na karein.)
+func legacySvr1BlobExists(redis *Upstash) bool {
+	if redis == nil {
+		return false
+	}
+	r, err := redis.cmd("GET", sessionDBKeyConst+"svr1"+sessionDBKeySuffix)
+	if err != nil {
+		return false
+	}
+	return trimQuotes(string(r), "") != ""
+}
+
 func hasUsableWhatsAppDevice(path string) bool {
 	if _, err := os.Stat(path); err != nil {
 		return false
@@ -120,6 +135,19 @@ func main() {
 			tmpPath := dbPath + ".restore.tmp"
 			_ = os.Remove(tmpPath)
 			restored, rerr := redis.RestoreSessionDB(tmpPath)
+			if (rerr != nil || !restored) && legacySvr1BlobExists(redis) {
+				// LEGACY MIGRATION: purane version me sab servers shared
+				// "svr1" blob key use karte the. Upgrade ke baad naya
+				// per-server sid apna blob nahi milega to svr1 wala EK
+				// BAAR restore karo aur phir DELETE kar do — one-time
+				// migration (is se kabhi dobara conflict nahi hoga).
+				InfoLog("No blob for this server — trying legacy svr1 backup (one-time migration)...")
+				if lr, lerr := redis.RestoreLegacySessionDB(tmpPath); lerr == nil && lr {
+					restored, rerr = true, nil
+					redis.DeleteLegacySvr1Backup()
+					OkLog("Legacy svr1 session DB migrated & removed (will save under this server's own ID from now on)")
+				}
+			}
 			if rerr != nil {
 				ErrLog("Could not restore session DB from Storj: %v", rerr)
 			} else if restored {

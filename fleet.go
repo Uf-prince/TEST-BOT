@@ -438,6 +438,19 @@ func fleetClaimAvailable() {
 			hb := fleetHeartbeatMap()
 			taken := false
 			for sid := range holders {
+				if sid == fleetSelfID {
+					// SELF-CLAIM HEAL: claim humare naam hai magar local
+					// device nahi (ephemeral redeploy / disk wipe + per-sid
+					// blob missing) → stale self-claim. Ise taken NAHI
+					// mano — neeche se GLOBAL fleet blob se restore +
+					// connect ho jayega. (Device local hai to AutoLoad/boot
+					// sambhal lega — tab taken hi hai.)
+					if fleetDeviceExists(jid) {
+						taken = true
+						break
+					}
+					continue
+				}
 				if fleetHolderAlive(sid, hb) {
 					taken = true
 					break
@@ -522,6 +535,10 @@ func fleetRestoreAndConnect(jid string) {
 	if takeoverFrom != "" {
 		_ = m.Redis.setDel(fleetFailMarkPrefix + jid)
 		go fleetNotifyFailover(jid, takeoverFrom)
+		// DEAD server ka per-session Storj data delete kar do — naya/
+		// replacement server us URL pe banne par purana session wapas
+		// restore kar ke double-connect war shuru na kar de.
+		go fleetPurgeDeadServerKV(takeoverFrom)
 	}
 }
 
@@ -586,6 +603,31 @@ func fleetNotifyFailover(jid string, deadServer string) {
 	} else {
 		OkLog("FLEET: failover notification sent to owner of %s (from server %s → %s)", jid, deadNum, srvNum)
 	}
+}
+
+// fleetPurgeDeadServerKV: failover complete hone ke baad DEAD server ke
+// per-session KV footprints delete kar deta hai — zombie-return ya
+// replacement server (same URL / naya server) boot hone pe purana session
+// wapas restore hone aur double-connect war (WhatsApp stream-replace
+// logout) se bachne ke liye. Ye delete hota hai:
+//   - goldmd:sessiondb:<dead>:blob  (us server ka whole-DB backup)
+//   - goldmd:sessiondb:<dead>:jids  (us server ka JID registry)
+//   - goldmd:fleet:servers hash se uska heartbeat entry
+// GLOBAL fleet blob (goldmd:fleet:sess:<jid>) KABHI delete nahi hota —
+// wahi future failovers ka single source of truth hai (jis server ne
+// takeover kiya wo use refresh karta rehta hai).
+func fleetPurgeDeadServerKV(deadSid string) {
+	if deadSid == "" {
+		return
+	}
+	m := fleetMgr
+	if m == nil || m.Redis == nil {
+		return
+	}
+	_, _ = m.Redis.cmd("DEL", sessionDBKeyConst+deadSid+sessionDBKeySuffix)
+	_, _ = m.Redis.cmd("DEL", sessionJidsKeyConst+deadSid+sessionJidsKeySuffix)
+	_, _ = m.Redis.cmd("HDEL", fleetServersHash, deadSid)
+	InfoLog("FLEET: purged dead server %q session data (sessiondb blob+jids+heartbeat)", deadSid)
 }
 
 func fleetMarkFailed(jid string) {

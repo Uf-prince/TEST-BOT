@@ -96,8 +96,24 @@ const upstashCacheTTL = 3 * time.Minute
 const upstashRefreshInterval = 2 * time.Minute
 
 func resolveServerID() string {
+	// Per-server UNIQUE ID — fleetSelfID wali chain (GOLDMD_SERVER_ID ->
+	// RENDER_EXTERNAL_URL -> RENDER_INSTANCE_ID -> hostname). Pehle ye
+	// sirf GOLDMD_SERVER_ID -> "svr1" default tha, is liye bina env ke
+	// SAB Render services EK HI "svr1" session-DB blob key share karti
+	// thein — har reboot par kisi bhi doosre server ka pura DB restore
+	// ho sakta tha (session conflict / double-connect logout). Ab har
+	// deployment ka apna namespaced blob hota hai.
 	if v := strings.TrimSpace(os.Getenv("GOLDMD_SERVER_ID")); v != "" {
 		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("RENDER_EXTERNAL_URL")); v != "" {
+		return strings.TrimPrefix(strings.TrimPrefix(v, "https://"), "http://")
+	}
+	if v := strings.TrimSpace(os.Getenv("RENDER_INSTANCE_ID")); v != "" {
+		return v
+	}
+	if h, err := os.Hostname(); err == nil && h != "" {
+		return h
 	}
 	return "svr1"
 }
@@ -1189,6 +1205,34 @@ func (u *Upstash) RestoreSessionDB(path string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// RestoreLegacySessionDB: purane (pre-fleet) shared "svr1" whole-DB backup
+// ko disk pe wapas likhta hai — ONE-TIME migration (main.go boot flow).
+// Uske baad DeleteLegacySvr1Backup use hata deta hai taake koi doosra
+// upgraded server dobara restore na kare (shared-key conflict khatam).
+func (u *Upstash) RestoreLegacySessionDB(path string) (bool, error) {
+	r, err := u.cmd("GET", sessionDBKeyConst+"svr1"+sessionDBKeySuffix)
+	if err != nil {
+		return false, err
+	}
+	encoded := trimQuotes(string(r), "")
+	if encoded == "" {
+		return false, nil
+	}
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return false, err
+	}
+	return true, os.WriteFile(path, data, 0o644)
+}
+
+// DeleteLegacySvr1Backup one-time migration ke baad purana shared svr1
+// blob + uska JID registry delete kar deta hai — is se kabhi koi doosra
+// server us shared key se restore karke conflict nahi kar sakta.
+func (u *Upstash) DeleteLegacySvr1Backup() {
+	_, _ = u.cmd("DEL", sessionDBKeyConst+"svr1"+sessionDBKeySuffix)
+	_, _ = u.cmd("DEL", sessionJidsKeyConst+"svr1"+sessionJidsKeySuffix)
 }
 
 // RegisterJID remembers a paired JID so its pairing folder can be recreated

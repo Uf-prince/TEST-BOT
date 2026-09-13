@@ -119,3 +119,32 @@ func TestFleetServerNumberForSIDTable(t *testing.T) {
 		}
 	}
 }
+
+// ── PATCH 15 smoke: dead-server conflict fix ─────────────────────────
+func TestFleetPurgeDeadServerKVNilSafe(t *testing.T) {
+	// nil fleetMgr → no panic, no-op (fleet inactive in tests)
+	fleetPurgeDeadServerKV("")
+	fleetPurgeDeadServerKV("gold-md-xsvr1.onrender.com")
+}
+
+func TestFleetPurgeKeyStrings(t *testing.T) {
+	// purge keys exactly per-sid namespaced hain — "svr1" default kabhi
+	// share nahi hoga (fix2 ke baad resolveServerID unique chain use karta hai)
+	blob := sessionDBKeyConst + "gold-md-xsvr2.onrender.com" + sessionDBKeySuffix
+	jids := sessionJidsKeyConst + "gold-md-xsvr2.onrender.com" + sessionJidsKeySuffix
+	if blob != "goldmd:sessiondb:gold-md-xsvr2.onrender.com:blob" {
+		t.Errorf("blob key = %q", blob)
+	}
+	if jids != "goldmd:sessiondb:gold-md-xsvr2.onrender.com:jids" {
+		t.Errorf("jids key = %q", jids)
+	}
+}
+
+func TestResolveServerIDUniqueChain(t *testing.T) {
+	// GOLDMD_SERVER_ID set ho to wahi use hota hai (fleetSelfID jaisa),
+	// warna default "svr1" fallback (test env me koi Render env nahi).
+	t.Setenv("GOLDMD_SERVER_ID", "test-sid-xyz")
+	if got := resolveServerID(); got != "test-sid-xyz" {
+		t.Errorf("resolveServerID() = %q, want test-sid-xyz", got)
+	}
+}
