@@ -31,7 +31,6 @@ package main
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"go.mau.fi/whatsmeow/types"
 )
@@ -103,7 +102,6 @@ func isDeveloperCommand(s *Session, info types.MessageInfo) bool {
 // hai. Server-menu family ab PUBLIC hai (koi bhi chala sakta hai) par .menu
 // me ab bhi nahi dikhti (secret rahegi, sirf wahi jaanne wale use karenge).
 var hiddenCommands = map[string]bool{
-	"server":     true,
 	"servers":    true,
 	"svr":        true,
 	"svrinfo":    true,
@@ -197,24 +195,9 @@ func (s *Session) CmdServerMenu(info types.MessageInfo, args []string, prefix st
 	b.WriteString(fmt.Sprintf("*🔰 SERVERS OFFLINE :➯ %d*\n", offline))
 	b.WriteString(fmt.Sprintf("*🔰 TOTAL LIVE PAIRINGS :➯ %d*\n", pairs))
 
-	// ── LOCAL SESSIONS detail — SIRF DEVELOPERS (private JIDs public me
-	//    leak nahi honge; pairing status sabko dikhta hai, numbers nahi) ──
-	if isDeveloperCommand(s, info) {
-		sessions := s.Manager.List()
-		b.WriteString(fmt.Sprintf("\n*🔰 THIS SERVER (%s) :➯ ❮ %d/%d ❯*\n",
-			fleetSelfID, s.Manager.Count(), maxPairedSessions()))
-		if len(sessions) > 0 {
-			b.WriteString("\n*🔰 LOCAL SESSIONS 🔰*\n\n")
-			for i, sess := range sessions {
-				status := "🔴 disconnected"
-				if sess.Client != nil && sess.Client.IsConnected() {
-					status = "🟢 online"
-				}
-				b.WriteString(fmt.Sprintf("%d. %s\n   %s | %s\n", i+1,
-					sess.JID, status, formatUptime(time.Since(sess.Started))))
-			}
-		}
-	}
+	// OWNER ORDER: LOCAL SESSIONS / THIS SERVER block REMOVED — server
+	// report me koi bhi private JID / local session detail NAHI dikhega
+	// (sirf fleet-wide pairing counts). Developers ke liye bhi nahi.
 
 	s.Reply(info, b.String())
 }

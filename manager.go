@@ -1240,7 +1240,11 @@ func (s *Session) sendStartupNotification() {
 
 	// Core commands are handled by handler.go's fallback switch.
 	// Plugin commands are registered separately by commands_loader.go.
-	coreCount := 5                          // alive, ping, menu, uptime, sessions
+	// Core visible commands: alive, ping, menu, uptime, sessions + host5gb
+	// + server (dono ab .menu me bhi dikhte hain — count bhi wahi hona
+	// chahiye, warna menu COMMANDS ❮N❯ vs startup card COMMANDS ❮N❯ alag
+	// alag dikhte the).
+	coreCount := 7
 	pluginCount := goldcmds.CommandsCount() // only visible (non-hidden) commands
 
 	totalCmds := coreCount + pluginCount
@@ -1663,7 +1667,7 @@ func isMenuLifelineCommand(name string, view *goldcmds.CmdNameView) bool {
 // gold-cmds registry (alive, ping, uptime, menu, sessions).
 func coreCommandCategory(name string) string {
 	switch name {
-	case "alive", "ping", "uptime", "menu", "sessions", "host5gb":
+	case "alive", "ping", "uptime", "menu", "sessions", "host5gb", "server":
 		return "OWNER & SYSTEM"
 	default:
 		return "OTHER"
@@ -1684,6 +1688,8 @@ func coreCommandDesc(name string) string {
 		return "List all active bot sessions (owner)"
 	case "host5gb":
 		return "5GB bandwidth report of all servers (developer only)"
+	case "server":
+		return "All servers live pairing status menu"
 	default:
 		return ""
 	}
