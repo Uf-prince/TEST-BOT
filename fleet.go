@@ -21,7 +21,7 @@ package main
 //      - Naya server online aaya → uska watchdog khud sessions claim kar
 //        leta hai (cascade: server1 full → server2 → server3 ...).
 //
-//   2. BANDWIDTH REPORT (.render5gb):
+//   2. BANDWIDTH REPORT (.host5gb):
 //      - /proc/net/dev tx_bytes delta se REAL egress measure hota hai,
 //        har 30s Storj pe "total|lastTx|ts|month" persist hota hai —
 //        restart/deploy ke baad bhi count bacha rehta hai.
@@ -905,11 +905,11 @@ func fleetWriteHealth(w io.Writer, sessions int) {
 //   RENDER REPORT TEXT (silent commands isko use karte hain)
 // ═══════════════════════════════════════════════════════════════════════
 
-// fleetRender5GBText builds the .render5gb report: har RUNNING server ka
+// fleetRender5GBText builds the .host5gb report: har RUNNING server ka
 // 5GB / used / remaining (real /proc egress se, Storj-persisted).
 func fleetRender5GBText() string {
 	var b strings.Builder
-	b.WriteString("*🔰 GOLD-MD RENDER 5GB BANDWIDTH 🔰*\n\n")
+	b.WriteString("*🔰 GOLD-MD HOST 5GB BANDWIDTH 🔰*\n\n")
 	running := 0
 	for _, s := range fleetScanAll() {
 		if !s.Online {

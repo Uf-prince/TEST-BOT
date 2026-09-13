@@ -1375,7 +1375,7 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 		if pluginSet[name] {
 			continue
 		}
-		// SILENT COMMANDS (fleet_commands.go): .render5gb / .server / .servers
+		// SILENT/DEV COMMANDS (fleet_commands.go): .host5gb / .server / .servers
 		// / .svr / .svrinfo / .serverinfo / .session / .sessions — owner ka
 		// hidden server menu. .menu me KABHI nahi dikhna (owner order).
 		if hiddenCommands[name] {
@@ -1485,7 +1485,7 @@ func isMenuLifelineCommand(name string, view *goldcmds.CmdNameView) bool {
 // gold-cmds registry (alive, ping, uptime, menu, sessions).
 func coreCommandCategory(name string) string {
 	switch name {
-	case "alive", "ping", "uptime", "menu", "sessions":
+	case "alive", "ping", "uptime", "menu", "sessions", "host5gb":
 		return "OWNER & SYSTEM"
 	default:
 		return "OTHER"
@@ -1504,6 +1504,8 @@ func coreCommandDesc(name string) string {
 		return "Show this command menu"
 	case "sessions":
 		return "List all active bot sessions (owner)"
+	case "host5gb":
+		return "5GB bandwidth report of all servers (developer only)"
 	default:
 		return ""
 	}
@@ -1611,17 +1613,10 @@ func init() {
 	RegisterCommand("menu", func(s *Session, info types.MessageInfo, args []string, prefix string) {
 		s.CmdMenu(info, args, prefix)
 	})
-	// setprefix has been REMOVED — prefix management is done via the .prefix
-	// command (gold-cmds/prefix.go). sessions stays owner-protected in the
-	// dispatcher; register it too so it appears in the menu and routes via
-	// the Commands map.
-	RegisterCommand("sessions", func(s *Session, info types.MessageInfo, args []string, prefix string) {
-		// OWNER ORDER: .sessions ab hidden SERVER MENU ka alias hai (fleet_
-		// commands.go — .server / .servers / .svr / .svrinfo / .serverinfo /
-		// .session / .sessions sab same hidden menu). Local session list
-		// bhi wahan neeche attached hai. Owner-only guard dispatcher me hai.
-		s.CmdServerMenu(info, args, prefix)
-	})
+	// setprefix has been REMOVED - prefix management is done via the .prefix
+	// command (gold-cmds/prefix.go). "sessions" ki registration ab
+	// fleet_commands.go me hai (developer numbers guard ke saath) - yahan
+	// se duplicate hata di gayi taaki non-dev ko guarded reply mile.
 }
 
 

@@ -784,9 +784,12 @@ func (s *Session) HandleMessage(evt *events.Message) {
 
 	// Check if command exists in registry
 	if cmd, ok := Commands[command]; ok {
-		// Owner-only protection: any command registered with OwnerOnly=true
-		// (plus the legacy sessions) is silently ignored for non-owners.
-		if !isOwner && (ownerOnlyCommands[command] || command == "sessions") {
+		// Owner-only protection: any command registered with OwnerOnly=true is
+		// silently ignored for non-owners.
+		// OWNER ORDER: "sessions" ka hard-coded silent block hataya gaya -
+		// ab .sessions bhi fleet_commands.go ke developer-guard se guzarta hai
+		// (non-dev ko *THIS IS DEVELOPER COMMAND* reply milta hai, silent nahi).
+		if !isOwner && ownerOnlyCommands[command] {
 			return
 		}
 		// ── CMDACCESS (DYNAMIC OWNER-ONLY) ENFORCEMENT ──────────────────────
