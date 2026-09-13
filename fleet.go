@@ -417,8 +417,8 @@ func fleetClaimAvailable() {
 		return
 	}
 	max := maxPairedSessions()
-	if m.Count() >= max {
-		return // server full — agla server uthayega
+	if m.SlotsUsed() >= max {
+		return // server full (live + in-flight) — agla server uthayega
 	}
 	now := time.Now().Unix()
 	fleetFailedMu.Lock()
@@ -430,7 +430,7 @@ func fleetClaimAvailable() {
 	fleetFailedMu.Unlock()
 
 	for _, jid := range m.Redis.setMembers(fleetSessionsSet) {
-		if m.IsShuttingDown() || m.Count() >= max {
+		if m.IsShuttingDown() || m.SlotsUsed() >= max {
 			return
 		}
 		if m.AlreadyConnected(fleetUserPart(jid)) {
@@ -474,7 +474,7 @@ func fleetClaimAvailable() {
 			}
 		}
 
-		InfoLog("FLEET: claiming unowned session %s (paired %d/%d)", jid, m.Count(), max)
+		InfoLog("FLEET: claiming unowned session %s (slots %d/%d)", jid, m.SlotsUsed(), max)
 		fleetRestoreAndConnect(jid)
 		// claim attempts ke beech thoda gap — Storj read storm nahi.
 		time.Sleep(5 * time.Second)

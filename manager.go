@@ -152,6 +152,19 @@ type Manager struct {
 
 	mu       sync.Mutex
 	sessions map[string]*Session // key = JID
+
+	// slotMu guards slotRes — the CONNECT-LEVEL quota reservation. Sirf
+	// in-flight StartSession/PairWithCode goroutines ko yahan mark karo
+	// (Count() in-flight sessions ko nahi dekh sakta — connect hone tak
+	// wo map me nahi aati, isliye BOOT CAP/FLEET CAP/panel quota race me
+	// sab goroutines Count()=0 dekh kar pass ho jate the). Reservation
+	// SUCCESS pe session ke jid-key se merge ho jati hai (same key — no
+	// double count), FAIL pe releaseSlot se hat jati hai. Session ke
+	// zinda rehne tak ye set usi jid ko rakhta hai — Count() usko
+	// connected session se replace kar deta hai.
+	slotMu   sync.Mutex
+	slotRes  map[string]time.Time // jid → reserve time
+
 	shutdown bool
 }
 
@@ -160,6 +173,7 @@ func NewManager(cfg *Config, container *sqlstore.Container) *Manager {
 		cfg:       cfg,
 		container: container,
 		sessions:  map[string]*Session{},
+		slotRes:   map[string]time.Time{},
 	}
 }
 
@@ -175,6 +189,99 @@ func (m *Manager) IsShuttingDown() bool {
 // actually linked (PairSuccess received / Store.ID set). Pending sessions
 // (code generated but not yet linked in WhatsApp) are NOT counted, because
 // WhatsApp is the source of truth, not Redis and not the pairing folder.
+// SLOT RESERVATION — connect-level quota. Count() sirf connected sessions
+// ginta hai, aur StartSession/PairWithCode session ko connect hone ke BAAD
+// map me daalte hain — isliye in-flight connects (AutoLoad batch-5 mass-boot,
+// concurrent panel pairings, fleet claim + panel race) Count() ke liye
+// invisible the. Race window me 5 goroutines ek saath Count()=0 dekh kar
+// pass ho jati thi → FULL 5/2 over-max (owner ne ye exactly dekha tha).
+// Fix: pehle SLOT reserve karo, phir connect karo.
+//
+// Model: slotRes[jid] = reservation. Live session (jid map me, WhatsApp-truth
+// connected) aur uska reservation SAME jid-key share karte hain → jid-level
+// dedup → double-count kabhi nahi. Orphan reservation (crash/leak) 10 min
+// me self-expire — quota permanently block nahi hota.
+
+// slotsUsedLocked: live sessions + fresh in-flight reservations (quota view).
+// Lock order hamesha slotMu → mu (caller dono hold kare).
+func (m *Manager) slotsUsedLocked() int {
+	live := map[string]bool{}
+	for j, s := range m.sessions {
+		if s != nil && s.Paired && s.Client != nil &&
+			s.Client.IsConnected() &&
+			s.Client.Store != nil && s.Client.Store.ID != nil {
+			live[j] = true
+		}
+	}
+	used := len(live)
+	stale := 10 * time.Minute
+	for r, ts := range m.slotRes {
+		if live[r] {
+			continue // reservation live session ke saath merged — overlap OK
+		}
+		if time.Since(ts) > stale {
+			delete(m.slotRes, r) // self-heal: leaked reservation expire
+			continue
+		}
+		used++ // fresh in-flight reservation — quota me gino
+	}
+	return used
+}
+
+// SlotsUsed: public quota view — live + in-flight dono (Count() sirf live).
+// Panel pairing pre-check + fleet claim cycle + AutoLoad BOOT CAP yehi use
+// karte hain taake race window me bhi quota sach bole.
+func (m *Manager) SlotsUsed() int {
+	if m == nil {
+		return 0
+	}
+	m.slotMu.Lock()
+	defer m.slotMu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.slotsUsedLocked()
+}
+
+// reserveSlot: jid ke liye connect-slot book karo. Idempotent — jid already
+// WhatsApp-truth live hai to true (fleet retry / re-pair / reconnect).
+// Quota (live + in-flight) full hai to false.
+func (m *Manager) reserveSlot(jid string) bool {
+	if m == nil {
+		return false
+	}
+	m.slotMu.Lock()
+	defer m.slotMu.Unlock()
+	if m.slotRes == nil {
+		m.slotRes = map[string]time.Time{}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// already live? — idempotent reserve (koi naya slot nahi chahiye)
+	if s, ok := m.sessions[jid]; ok && s != nil && s.Paired && s.Client != nil &&
+		s.Client.IsConnected() &&
+		s.Client.Store != nil && s.Client.Store.ID != nil {
+		return true
+	}
+	if m.slotsUsedLocked() >= maxPairedSessions() {
+		return false // quota full — live + in-flight dono gine gaye
+	}
+	m.slotRes[jid] = time.Now()
+	return true
+}
+
+// releaseSlot: StartSession/PairWithCode ke ERROR paths + cleanupSession pe
+// slot free karo. Connect SUCCESS pe slot live session ke saath merge hota
+// hai (same jid key) — release ki zaroorat nahi.
+func (m *Manager) releaseSlot(jid string) {
+	if m == nil {
+		return
+	}
+	m.slotMu.Lock()
+	defer m.slotMu.Unlock()
+	delete(m.slotRes, jid)
+}
+
 func (m *Manager) Count() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -378,8 +485,8 @@ func (m *Manager) AutoLoad() {
 				// is race window me 3/2 jaisa over-max load kar deta tha.
 				// Over-max jids ko chhod dena SAFE hai: fleet blob GLOBAL hai,
 				// watchdog inhe baad me doosre server pe claim kar dega.
-				if m.Count() >= maxPairedSessions() {
-					WarnLog("BOOT CAP: %s skipped — server full (%d/%d), fleet baad me sambhalega", u, m.Count(), maxPairedSessions())
+				if m.SlotsUsed() >= maxPairedSessions() {
+					WarnLog("BOOT CAP: %s skipped — server full (%d/%d), fleet baad me sambhalega", u, m.SlotsUsed(), maxPairedSessions())
 					return
 				}
 				// ZOMBIE-RETURN GUARD: ye session kisi AUR live server ke fresh
@@ -429,15 +536,24 @@ func (m *Manager) StartSession(jid string) error {
 	if m.IsShuttingDown() {
 		return fmt.Errorf("shutdown in progress")
 	}
-	// FLEET CAP: fleet active hai to quota (maxPerServer) enforce karo.
-	// Fleet claim cycle m.Count() >= max pe pehle se ruk jata hai — yahan
-	// sirf direct-call paths (pairing panel ya AutoLoad boot) guard hai.
-	// Fleet FAILOVER path (fleetRestoreAndConnect) apna quota check khud
-	// karta hai (m.Count() >= max pe claim loop chhod deta hai), isliye
-	// failover-target sessions kabhi block nahi hongi.
-	if fleetActive() && m.Count() >= maxPairedSessions() && !m.AlreadyConnected(jid) {
-		return fmt.Errorf("server full (%d/%d) — fleet is active, try another server or wait for failover", m.Count(), maxPairedSessions())
+	// SLOT CAP (race-safe FLEET CAP): pehle slot RESERVE karo, connect baad
+	// me. Purana Count()-based check in-flight connects ko nahi dekh sakta
+	// tha — AutoLoad batch-5 / concurrent pairings race window me sab
+	// Count()=0 dekh kar pass ho jate the (FULL 5/2 over-max). reserveSlot
+	// live + in-flight dono ginta hai, atomic (slotMu). Failover path bhi
+	// yahin se hi quota paata hai — fail ke pe HDEL claim + cooldown
+	// (fleet.go) isliye failover kabhi hard-block nahi hota, sirf clean
+	// retry hota hai. Fleet off (direct instance) me GOLDMD_MAX_SESSIONS
+	// hi quota hai — AutoLoad BOOT CAP ke barabar.
+	if !m.reserveSlot(jid) {
+		return fmt.Errorf("server full (%d/%d) — fleet is active, try another server or wait for failover", m.SlotsUsed(), maxPairedSessions())
 	}
+	ok := false
+	defer func() {
+		if !ok {
+			m.releaseSlot(jid) // connect fail/qr timeout/no-device — slot wapas
+		}
+	}()
 
 	// ensure pairing dir exists for this jid (marks it as paired)
 	pairDir := filepath.Join(m.cfg.PairingDir, jid)
@@ -600,6 +716,7 @@ func (m *Manager) StartSession(jid string) error {
 	}
 
 	//	JSONDebug("RECONNECT_OK", map[string]any{"jid": jid})
+	ok = true // connect SUCCESS — reservation live session me merge (same jid key)
 	return nil
 }
 
@@ -692,6 +809,21 @@ func (m *Manager) PairWithCode(phone string) (string, error) {
 	//		"pairingDir": m.cfg.PairingDir,
 	//		"redisOn":    m.Redis != nil,
 	//	})
+
+	// SLOT CAP (race-safe): concurrent /pair requests dono Count()=0 dekh
+	// kar pass ho jate the. Ab pehle slot reserve — pending pairing bhi
+	// quota occupy karega (120s watchdog cleanup pe release). Stale-cleanup
+	// ke BAAD reserve karo (cleanup releaseSlot karta hai — warna apni hi
+	// reservation ud jati).
+	if !m.reserveSlot(jid) {
+		return "", fmt.Errorf("server full (%d/%d) — try another server", m.SlotsUsed(), maxPairedSessions())
+	}
+	pairedOK := false
+	defer func() {
+		if !pairedOK {
+			m.releaseSlot(jid)
+		}
+	}()
 
 	_ = os.MkdirAll(filepath.Join(m.cfg.PairingDir, jid), 0o755)
 
@@ -803,6 +935,7 @@ func (m *Manager) PairWithCode(phone string) (string, error) {
 	OkLog("Pairing code for %s: %s%s%s (enter in WhatsApp → Link a device)",
 		jid, cBold+cGreen, pairingCode, cReset)
 
+	pairedOK = true // code diya gaya — pending session + reservation 120s watchdog ke hawale
 	return pairingCode, nil
 }
 
@@ -1187,6 +1320,10 @@ func (m *Manager) cleanupSession(s *Session, reason string) {
 	if s == nil {
 		return
 	}
+
+	// 0. Release the connect-slot reservation (jid key same tha — cleanup
+	// ke baad reservation orphan ban jati, isliye yahin hatao).
+	m.releaseSlot(s.JID)
 
 	// 1. Remove from in-memory session map
 	m.mu.Lock()

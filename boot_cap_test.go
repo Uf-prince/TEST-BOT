@@ -39,8 +39,14 @@ func TestBootCapGuardsPresentInSource(t *testing.T) {
 		t.Fatalf("manager.go read: %v", err)
 	}
 	src := string(mgrSrc)
-	if !strings.Contains(src, "if fleetActive() && m.Count() >= maxPairedSessions()") {
-		t.Errorf("StartSession FLEET CAP guard missing in manager.go")
+	if !strings.Contains(src, "if !m.reserveSlot(jid) {") {
+		t.Errorf("StartSession SLOT CAP guard missing in manager.go")
+	}
+	if !strings.Contains(src, "func (m *Manager) SlotsUsed() int") {
+		t.Errorf("SlotsUsed quota view missing in manager.go")
+	}
+	if !strings.Contains(src, "m.SlotsUsed() >= maxPairedSessions()") {
+		t.Errorf("AutoLoad BOOT CAP must use SlotsUsed (race-safe), not Count()")
 	}
 	if !strings.Contains(src, "BOOT CAP: is server ka quota") {
 		t.Errorf("AutoLoad BOOT CAP comment/guard missing in manager.go")

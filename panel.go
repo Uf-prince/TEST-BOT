@@ -702,12 +702,12 @@ func StartPanel(mgr *Manager, port int) {
 			effectiveMax = maxPairedSessions()
 		}
 
-		if mgr.Count() >= effectiveMax {
+		if mgr.SlotsUsed() >= effectiveMax {
 			w.WriteHeader(http.StatusTooManyRequests)
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"status": "max_pairing_reached",
 				"error":  "MAX PAIRING REQUEST REACHED GO BACK AND SWITCH TO ANOTHER SERVER AND TRY AGAIN",
-				"count":  mgr.Count(), "max": effectiveMax,
+				"count":  mgr.SlotsUsed(), "max": effectiveMax,
 			})
 			return
 		}
