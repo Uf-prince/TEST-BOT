@@ -102,3 +102,20 @@ func TestFleetNotifyTextShape(t *testing.T) {
 		t.Errorf("user part extraction broken")
 	}
 }
+
+// ── PATCH 14 smoke: number-wise order + new msg formats ──
+func TestFleetServerNumberForSIDTable(t *testing.T) {
+	cases := []struct{ sid, want string }{
+		{"", "0"},
+		{"https://gold-md-xsvr1.onrender.com", "1"},
+		{"gold-md-xsvr1.onrender.com", "1"},
+		{"https://gold-md-omil.onrender.com/", "5"},
+		{"https://gold-md-xsvr5.onrender.com/", "14"},
+		{"https://unknown-host.onrender.com", "0"},
+	}
+	for _, c := range cases {
+		if got := fleetServerNumberForSID(c.sid); got != c.want {
+			t.Errorf("fleetServerNumberForSID(%q) = %q, want %q", c.sid, got, c.want)
+		}
+	}
+}

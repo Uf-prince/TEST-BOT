@@ -111,7 +111,8 @@ func (s *Session) CmdHost5GB(info types.MessageInfo, args []string, prefix strin
 }
 
 // ── .server / .servers / .svr / .svrinfo / .serverinfo / .session /
-//    .sessions — PUBLIC servers menu (owner ka naya offline format) ──
+//
+//	.sessions — PUBLIC servers menu (owner ka naya offline format) ──
 //
 // OWNER ORDER: ek hi fleetScanAll() call (200 servers × parallel /health,
 // 4s timeout — QUICK). Online servers full INFO block me, offline servers
@@ -122,9 +123,12 @@ func (s *Session) CmdServerMenu(info types.MessageInfo, args []string, prefix st
 
 	b.WriteString("*🔰 GOLD-MD SERVERS INFO 🔰*\n\n")
 
-	// ── ONLINE servers: full INFO block (user ka approved format) ──
+	// ── OWNER ORDER: servers NUMBER-WISE (1, 2, 3...) — scan slices
+	//    khud servers.json ke order me aate hain, isliye seedha iterate.
+	//    ONLINE -> full INFO block. OFFLINE -> sirf EK choti line
+	//    *SERVER ❮ N ❯ OFFLINE* (us number ke turant baad, number order
+	//    me hi — Server 2 upar aur Server 1 niche wala mix NAHI hoga).
 	online, offline, pairs := 0, 0, 0
-	var offlineLines []string
 	for _, srv := range scan {
 		if srv.Online {
 			online++
@@ -144,26 +148,13 @@ func (s *Session) CmdServerMenu(info types.MessageInfo, args []string, prefix st
 			b.WriteString(fmt.Sprintf("*🔰 RE :➯ %s*\n\n", srv.RE))
 		} else {
 			offline++
-			// OWNER ORDER: offline server sirf EK choti line —
-			// *SERVER ❮ N ❯ OFFLINE* (server number ke saath).
-			offlineLines = append(offlineLines,
-				fmt.Sprintf("*SERVER ❮ %s ❯ OFFLINE*", fleetServerNumber(srv.Name)))
-		}
-	}
-
-	// ── OFFLINE servers: online blocks ke baad \n\n\n (3 enter) lagakar
-	//    line-by-line choti lines (owner ka exact order) ──
-	// (online block ke \n\n ke saath milakar total 3 newline = owner order)
-	if len(offlineLines) > 0 {
-		b.WriteString("\n")
-		for _, line := range offlineLines {
-			b.WriteString(line)
-			b.WriteString("\n")
+			// OWNER ORDER: offline server sirf EK choti line — number order me.
+			b.WriteString(fmt.Sprintf("*SERVER ❮ %s ❯ OFFLINE*\n\n", fleetServerNumber(srv.Name)))
 		}
 	}
 
 	// ── compact fleet summary ──
-	b.WriteString(fmt.Sprintf("\n*🔰 SERVERS ONLINE :➯ %d*\n", online))
+	b.WriteString(fmt.Sprintf("*🔰 SERVERS ONLINE :➯ %d*\n", online))
 	b.WriteString(fmt.Sprintf("*🔰 SERVERS OFFLINE :➯ %d*\n", offline))
 	b.WriteString(fmt.Sprintf("*🔰 TOTAL LIVE PAIRINGS :➯ %d*\n", pairs))
 
@@ -189,12 +180,41 @@ func (s *Session) CmdServerMenu(info types.MessageInfo, args []string, prefix st
 	s.Reply(info, b.String())
 }
 
-// fleetServerNumber: servers.json ke name ("SERVER 14") se sirf number
-// nikalta hai offline choti line ke liye — "SERVER 14" → "14".
 func fleetServerNumber(name string) string {
 	fields := strings.Fields(strings.TrimSpace(name))
 	if len(fields) >= 2 {
 		return fields[len(fields)-1]
 	}
 	return name
+}
+
+// fleetServerNumberForSID: kisi bhi server sid/URL se servers.json ka
+// server NUMBER nikaalta hai ("SERVER 3" -> "3"). Match chain:
+//  1. GOLDMD_SERVER_ID / sid          (exact)
+//  2. fleetServerURL(sid) == entry URL (http/https + trailing /)
+//  3. sid base-hostname == entry URL host (onrender wale short names)
+//
+// Na mile to "0".
+func fleetServerNumberForSID(sid string) string {
+	loadServersConfig()
+	sid = strings.TrimSpace(sid)
+	if sid == "" {
+		return "0"
+	}
+	wantURL := fleetServerURL(sid)
+	// base-hostname (dots + scheme strip) — "https://gold-x.onrender.com/" -> "gold-x.onrender.com"
+	baseSid := strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(sid, "https://"), "http://"), "/")
+	for _, e := range serversCfg.Servers {
+		if sid == e.URL {
+			return fleetServerNumber(e.Name)
+		}
+		if wantURL != "" && wantURL == strings.TrimSuffix(e.URL, "/") {
+			return fleetServerNumber(e.Name)
+		}
+		eBase := strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(e.URL, "https://"), "http://"), "/")
+		if baseSid != "" && baseSid == eBase {
+			return fleetServerNumber(e.Name)
+		}
+	}
+	return "0"
 }

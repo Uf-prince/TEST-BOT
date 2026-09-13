@@ -182,6 +182,7 @@ func fleetWatchdog() {
 
 		fleetHeartbeat()
 		fleetPushEgress()
+		fleetWarnPreCrash()
 
 		if tick%2 == 0 {
 			// orphan sweep + claim — 60s cadence (light on Storj reads).
@@ -565,23 +566,15 @@ func fleetNotifyFailover(jid string, deadServer string) {
 		InfoLog("FLEET: failover notify skip %s — session not live here", jid)
 		return
 	}
-	srv := fleetSelfID
-	if strings.Contains(srv, ".onrender.com") {
-		if i := strings.Index(srv, ".onrender.com"); i > 0 {
-			srv = srv[:i]
-		}
-	}
-	dead := deadServer
-	if strings.Contains(dead, ".onrender.com") {
-		if i := strings.Index(dead, ".onrender.com"); i > 0 {
-			dead = dead[:i]
-		}
-	}
-	text := "*── SESSION FAILOVER ──*\n\n" +
-		"\u26a1 Purana server band ho gaya tha (" + dead + ").\n" +
-		"\u2705 Bot ab dusre server pe *online* hai — session *reconnect ho gaya*\n" +
-		"\u2139\ufe0f New Server: " + srv + "\n\n" +
-		"\u2705 Apne pas rakh liya — ab jaise pehle hi use karo, koi farak nahi."
+	// ── OWNER ORDER (naya format): server NUMBERS ke saath — jis server
+	//    pe user ne pair kiya tha (ab band) aur jis pe ab online hai.
+	//    fleetServerNumberForSID: sid/URL -> servers.json number ("3").
+	srvNum := fleetServerNumberForSID(fleetSelfID)
+	deadNum := fleetServerNumberForSID(deadServer)
+	text := "*\U0001F530 GOLD-MD SERVER ERROR \U0001F530*\n\n" +
+		"*YOU PAIRED YOUR BOT ON THIS SERVER \u276e " + deadNum + " \u276f BUT THIS SERVER HAS BEEN SHUT DOWN*\n\n" +
+		"*NOW YOUR BOT IS RUNNING ON THIS SERVER \u276e " + srvNum + " \u276f*\n\n" +
+		"*DON'T WORRY ABOUT THIS ISSUE. YOUR BOT IS ONLINE AGAIN AND WORKING FINE. NO NEED TO PAIR AGAIN \u2705*"
 
 	_, err = sess.Client.SendMessage(context.Background(), ownerJID, &waProto.Message{
 		ExtendedTextMessage: &waProto.ExtendedTextMessage{
@@ -591,7 +584,7 @@ func fleetNotifyFailover(jid string, deadServer string) {
 	if err != nil {
 		WarnLog("FLEET: failover notify send failed for %s: %v", jid, err)
 	} else {
-		OkLog("FLEET: failover notification sent to owner of %s (from %s → %s)", jid, dead, srv)
+		OkLog("FLEET: failover notification sent to owner of %s (from server %s → %s)", jid, deadNum, srvNum)
 	}
 }
 
@@ -920,6 +913,11 @@ var (
 	fleetEgressTotal  int64  // bytes this month
 	fleetEgressLastTx int64  // last /proc snapshot
 	fleetEgressMonth  string // "2025-01"
+
+	// pre-crash warning state — ek hi baar per month per process (render
+	// bandwidth khatam hone se PEHLE owners ko batado).
+	fleetWarnMu      sync.Mutex
+	fleetWarnedMonth string // "2025-01" — jis month warning chala
 )
 
 // fleetPushEgress snapshots /proc/net/dev, adds the delta to the running
@@ -953,6 +951,64 @@ func fleetPushEgress() {
 
 	val := fmt.Sprintf("%d|%d|%d|%s", total, lastTx, now.Unix(), month)
 	_, _ = m.Redis.cmd("SET", fleetEgressPrefix+fleetSelfID, val)
+}
+
+// fleetWarnPreCrash: RENDER PRE-CRASH WARNING (owner order) — jab is server
+// ka egress ~90% of 5GB budget cross ho jaye (Render bandwidth khatam hone
+// wala hai), is server ke LOCAL connected session owners ko PEHLE bata do:
+//
+//	*GOLD-MD SERVER ❮ N ❯ STOPPING*
+//
+//	*YOUR BOT IS MOVING TO ANOTHER SERVER NO NEED TO PAIR AGAIN YOUR BOT
+//	COME BACK ONLINE IN 2/3 MINTS ONLY PLEASE WAIT.....*
+//
+// Ek hi baar per calendar month per process — spam nahi. Warning ke baad
+// egress natural continue hota hai (sirf $100GB hard-stop tak alag).
+const fleetWarnThreshold = 0.90 // 90% of budget
+
+func fleetWarnPreCrash() {
+	m := fleetMgr
+	if m == nil || m.Redis == nil {
+		return
+	}
+	used := fleetEgressUsedMB()
+	budget := float64(fleetBudgetMB)
+	if budget <= 0 || used < budget*fleetWarnThreshold {
+		return
+	}
+	fleetWarnMu.Lock()
+	month := time.Now().UTC().Format("2006-01")
+	if fleetWarnedMonth == month {
+		fleetWarnMu.Unlock()
+		return // is month warning already chal chuka
+	}
+	fleetWarnedMonth = month // abhi mark karo — send fail ho to next boot
+	fleetWarnMu.Unlock()
+
+	srvNum := fleetServerNumberForSID(fleetSelfID)
+	text := "*GOLD-MD SERVER \u276e " + srvNum + " \u276f STOPPING*\n\n" +
+		"*YOUR BOT IS MOVING TO ANOTHER SERVER NO NEED TO PAIR AGAIN YOUR BOT COME BACK ONLINE IN 2/3 MINTS ONLY PLEASE WAIT.....*"
+
+	sent := 0
+	for _, sess := range m.List() {
+		if sess.Client == nil || !sess.Client.IsConnected() {
+			continue
+		}
+		owner := fleetOwnerFor(sess.JID)
+		if owner == "" {
+			continue
+		}
+		ownerJID, err := types.ParseJID(normalizeJID(owner))
+		if err != nil || ownerJID.IsEmpty() {
+			continue
+		}
+		if _, err := sess.Client.SendMessage(context.Background(), ownerJID, &waProto.Message{
+			ExtendedTextMessage: &waProto.ExtendedTextMessage{Text: &text},
+		}); err == nil {
+			sent++
+		}
+	}
+	InfoLog("FLEET: pre-crash warning sent to %d owners (egress %.0fMB / %dMB budget)", sent, used, fleetBudgetMB)
 }
 
 // fleetLoadEgress restores the persisted egress counters at boot (survives
