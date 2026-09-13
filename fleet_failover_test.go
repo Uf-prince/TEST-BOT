@@ -109,7 +109,9 @@ func TestFleetServerNumberForSIDTable(t *testing.T) {
 		{"", "0"},
 		{"https://gold-md-xsvr1.onrender.com", "1"},
 		{"gold-md-xsvr1.onrender.com", "1"},
-		{"https://gold-md-botxd2.onrender.com/", "5"},
+		// servers.json me SERVER 5 ka URL owner ne gold-md-xdbotzz se
+		// replace kar diya tha (botxd2 purani entry) — drift fix only.
+		{"https://gold-md-xdbotzz.onrender.com/", "5"},
 		{"https://gold-md-xsvr5.onrender.com/", "14"},
 		{"https://unknown-host.onrender.com", "0"},
 	}

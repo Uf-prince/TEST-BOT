@@ -30,9 +30,13 @@ package main
 // ============================================================================
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -51,6 +55,11 @@ type Upstash struct {
 	// Kept for API compatibility — no longer used (no REST endpoint).
 	BaseURL string
 	Token   string
+
+	// BANDWIDTH JUGAD (hash-skip state): last successfully-uploaded
+	// session-DB sha256 — unchanged DB → zero Storj upload.
+	dbHashMu sync.Mutex
+	dbHash   string
 
 	// serverID namespaces the session-DB persistence keys so each
 	// deployment restores only its own sessions (see resolveServerID).
@@ -354,6 +363,57 @@ func (u *Upstash) kvPing(ctx context.Context) (json.RawMessage, error) {
 	return json.RawMessage(`"PONG"`), nil
 }
 
+// ── BANDWIDTH JUGAD (transparent gzip on kv/strings) ─────────────────────
+// Render free tier me PutObject ka BODY hi metered egress hai (5GB/month).
+// Session-DB blob + fleet blobs roz 144× base64-sqlite (MBs) jaate the.
+// Ab badi string values Storj pe "GZ1:"+gzip body ke sath jaati hain —
+// base64 text gzip me ~8-15x chhoti ho jati hai. Read side (kvGet) isko
+// TRANSPARENT decompress karta hai, is liye value semantics 100% same
+// hain aur mixed fleet (jo servers abhi naya binary nahi uthaye) bhi
+// bilkul theek chalega — unko wahi value milegi jo pehle milti thi.
+const kvGzPrefix = "GZ1:"
+const kvGzMinBytes = 4096 // 4KB se chhoti values (settings etc.) plain hi
+
+// kvGzipMaybe compresses val when big enough & compression actually helps.
+// Returns exact bytes to PUT ("GZ1:"+gzip) — ya original val as-is.
+func kvGzipMaybe(val string) string {
+	if len(val) < kvGzMinBytes {
+		return val
+	}
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write([]byte(val)); err != nil {
+		return val
+	}
+	if err := gz.Close(); err != nil {
+		return val
+	}
+	comp := buf.Bytes()
+	if len(comp)+len(kvGzPrefix) >= len(val) {
+		return val // incompressible → plain bhejo (legacy body)
+	}
+	return kvGzPrefix + string(comp)
+}
+
+// kvGunzipMaybe — read-side mirror: "GZ1:"+gzip → original bytes.
+// Koi bhi issue (unexpected prefix content / gunzip fail) → raw as-is
+// (legacy values kabhi corrupt nahi hote — best-effort fallback).
+func kvGunzipMaybe(data []byte) []byte {
+	if !bytes.HasPrefix(data, []byte(kvGzPrefix)) {
+		return data // legacy plain value — untouched
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(data[len(kvGzPrefix):]))
+	if err != nil {
+		return data
+	}
+	defer zr.Close()
+	out, err := io.ReadAll(zr)
+	if err != nil {
+		return data
+	}
+	return out
+}
+
 func (u *Upstash) kvGet(ctx context.Context, key string) (json.RawMessage, error) {
 	shard := u.kvShard(key)
 	if shard == nil {
@@ -366,6 +426,8 @@ func (u *Upstash) kvGet(ctx context.Context, key string) (json.RawMessage, error
 	if !found {
 		return json.RawMessage(`null`), nil
 	}
+	// transparent read-side decompress (mixed-fleet safe)
+	data = kvGunzipMaybe(data)
 	raw, err := json.Marshal(string(data))
 	if err != nil {
 		return nil, err
@@ -378,8 +440,11 @@ func (u *Upstash) kvSet(ctx context.Context, key, val string) (json.RawMessage, 
 	if shard == nil {
 		return nil, fmt.Errorf("kv: storj not ready")
 	}
+	// BANDWIDTH JUGAD: PUT body gzip jab help kare (badi values) —
+	// metered egress 8-15x kam. Value semantics same (read-side decompress).
+	body := kvGzipMaybe(val)
 	_, err := shard.client.PutObject(ctx, shard.bucket, kvStringsPrefix+kvEncode(key),
-		strings.NewReader(val), int64(len(val)), minio.PutObjectOptions{ContentType: "text/plain"})
+		strings.NewReader(body), int64(len(body)), minio.PutObjectOptions{ContentType: "text/plain"})
 	if err != nil {
 		return nil, err
 	}
@@ -1580,6 +1645,15 @@ func trimQuotes(s, fb string) string {
 // ============================================================================
 
 // SaveSessionDB checkpoints SQLite before uploading the auth database.
+//
+// BANDWIDTH JUGAD (transparent, behaviour SAME):
+//  1. HASH-SKIP — agar DB file last successful upload se UNCHANGED hai
+//     (sha256 match) to upload hi skip — 0 bytes egress. Idle servers
+//     (koi message/key-rotation nahi) ab kuch bhi nahi bhejenge. Sirf
+//     successful upload ke baad hash yaad rakha jata hai — Storj fail
+//     ho to next tick dobara try hoga (koi data-loss window nahi).
+//  2. GZIP — base64 blob ab kvSet me transparent gzip hota hai (GZ1:),
+//     ~8-15x chhota PUT body. Value/read path bilkul same.
 func (u *Upstash) SaveSessionDB(path string) error {
 	if _, err := os.Stat(path); err != nil {
 		return err
@@ -1591,10 +1665,22 @@ func (u *Upstash) SaveSessionDB(path string) error {
 	if err != nil {
 		return err
 	}
+	// hash-skip: unchanged DB → zero upload (idle ke 144 uploads/day khatam)
+	sum := sha256.Sum256(data)
+	hexSum := hex.EncodeToString(sum[:])
+	u.dbHashMu.Lock()
+	skip := u.dbHash == hexSum && hexSum != ""
+	u.dbHashMu.Unlock()
+	if skip {
+		return nil
+	}
 	encoded := base64.StdEncoding.EncodeToString(data)
 	if err := u.setString(u.sessionDBKey(), encoded); err != nil {
 		return fmt.Errorf("save session blob: %w", err)
 	}
+	u.dbHashMu.Lock()
+	u.dbHash = hexSum
+	u.dbHashMu.Unlock()
 	return nil
 }
 

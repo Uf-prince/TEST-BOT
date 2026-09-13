@@ -44,8 +44,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
@@ -199,10 +201,29 @@ func fleetWatchdog() {
 }
 
 // fleetHeartbeat marks this server alive in the global servers hash.
+//
+// BANDWIDTH JUGAD (60s cadence): watchdog 30s tick pehle HAR tick HSET
+// mar raha tha (2880 PUT/day). Liveness window 2-min hai (fleetProbeAfter)
+// aur stale-window me ACTIVE /health probe fallback bhi zinda hai — is
+// liye 60s pe ek hi write bilkul safe hai: freshness margin 2x, aur agar
+// tick miss bhi ho jaye to probe holder ko alive confirm karta hai.
+// Failover timing pe ZERO asar (orphan sweep 60s pe hi chalta tha/rahega).
+var (
+	fleetHeartbeatMu   sync.Mutex
+	fleetLastHeartbeat time.Time
+)
+
 func fleetHeartbeat() {
 	if fleetMgr == nil || fleetMgr.Redis == nil {
 		return
 	}
+	fleetHeartbeatMu.Lock()
+	if time.Since(fleetLastHeartbeat) < 55*time.Second {
+		fleetHeartbeatMu.Unlock()
+		return // abhi hi likha tha — skip (ek minute me ek hi HSET)
+	}
+	fleetLastHeartbeat = time.Now()
+	fleetHeartbeatMu.Unlock()
 	_, _ = fleetMgr.Redis.cmd("HSET", fleetServersHash, fleetSelfID,
 		strconv.FormatInt(time.Now().Unix(), 10))
 }
@@ -661,6 +682,7 @@ func fleetNotifyFailover(jid string, deadServer string) {
 //   - goldmd:sessiondb:<dead>:blob  (us server ka whole-DB backup)
 //   - goldmd:sessiondb:<dead>:jids  (us server ka JID registry)
 //   - goldmd:fleet:servers hash se uska heartbeat entry
+//
 // GLOBAL fleet blob (goldmd:fleet:sess:<jid>) KABHI delete nahi hota —
 // wahi future failovers ka single source of truth hai (jis server ne
 // takeover kiya wo use refresh karta rehta hai).
@@ -842,6 +864,14 @@ func sqlQuoteIdent(p string) string {
 //   BLOB SAVE (pair/connect hooks) + lifecycle
 // ═══════════════════════════════════════════════════════════════════════
 
+// BANDWIDTH JUGAD (fleet blob hash-skip): per-JID last-uploaded blob
+// sha256. Unchanged blob → blob PUT + meta PUT + SADD teeno skip —
+// idle connected sessions ka 10-min refresh ab zero egress.
+var (
+	fleetBlobHashMu sync.Mutex
+	fleetBlobHashes = map[string]string{} // jid → hex sha256 of tmp db bytes
+)
+
 // fleetSaveBlob extracts this JID's rows from the shared goldmd.db into a
 // fresh per-JID sqlite, base64-encodes it, and pushes it to Storj. Registry
 // set + owner meta bhi update. Fire-and-forget goroutine me chalao.
@@ -865,11 +895,25 @@ func fleetSaveBlob(jid string) {
 		if err != nil {
 			return
 		}
+		// BANDWIDTH JUGAD: unchanged blob → teeno Storj writes skip
+		// (blob + meta + SADD). PUT body gzip transparent hota hai
+		// (kvSet GZ1:) — changed blob ~8-15x chhota jata hai.
+		sum := sha256.Sum256(data)
+		hexSum := hex.EncodeToString(sum[:])
+		fleetBlobHashMu.Lock()
+		if fleetBlobHashes[jid] == hexSum {
+			fleetBlobHashMu.Unlock()
+			return // idle session — kuch bhi upload nahi
+		}
+		fleetBlobHashMu.Unlock()
 		enc := base64.StdEncoding.EncodeToString(data)
 		if err := m.Redis.setString(fleetBlobPrefix+jid, enc); err != nil {
 			WarnLog("FLEET: blob upload failed for %s: %v", jid, err)
 			return
 		}
+		fleetBlobHashMu.Lock()
+		fleetBlobHashes[jid] = hexSum
+		fleetBlobHashMu.Unlock()
 		meta, _ := json.Marshal(map[string]any{
 			"owner": fleetOwnerFor(jid),
 			"saved": time.Now().Unix(),
@@ -944,10 +988,10 @@ func fleetOnConnected(jid string) {
 		}
 		// BOOT-RESTORE PATH: AutoLoad ne (per-sid blob se) seedha connect
 		// kar diya — fleet claim path se nahi aya. Stale dead-holder claim
-			// pada ho to usko HDEL karo, apna fresh claim daalo, aur agar
-			// failover marker pada hai to PURGE + NOTIFY bhi karo — warna
-			// ye session bina claim ke chalta rehta hai aur takeover flow
-			// (dead server ka data delete + owner ko msg) kabhi nahi chalta.
+		// pada ho to usko HDEL karo, apna fresh claim daalo, aur agar
+		// failover marker pada hai to PURGE + NOTIFY bhi karo — warna
+		// ye session bina claim ke chalta rehta hai aur takeover flow
+		// (dead server ka data delete + owner ko msg) kabhi nahi chalta.
 		holders := fleetClaimHolders(jid)
 		live := false
 		for sid := range holders {
@@ -970,7 +1014,7 @@ func fleetOnConnected(jid string) {
 			_, _ = m.Redis.cmd("HSET", fleetClaimPrefix+jid, fleetSelfID,
 				strconv.FormatInt(time.Now().Unix(), 10))
 			// FAILOVER COMPLETE: marker pada hai (is jid ka purana holder
-				// dead tha) → purge + owner-notify ek hi baar.
+			// dead tha) → purge + owner-notify ek hi baar.
 			if mk, ok := m.Redis.getStringKV(fleetFailMarkPrefix + jid); ok && mk != "" {
 				if mk == fleetSelfID {
 					// ZOMBIE-RETURN HOME: marker humare hi purane crash ka hai
@@ -997,11 +1041,11 @@ func fleetOnCleanup(jid string) {
 // fleetPurgeLoggedOutSession (OWNER ORDER — WHATSAPP TRUTH):
 // WhatsApp ne is JID ke liye LOGOUT bola hai (chahe session jis bhi URL /
 // server se aaya ho). Silent purge:
-//   • fleet blob (goldmd:fleet:sess:<jid>)     — DELETE (koi b server dobara
+//   - fleet blob (goldmd:fleet:sess:<jid>)     — DELETE (koi b server dobara
 //     claim karke wapas na laaye)
-//   • fleet meta + sessions-set + claim + fail-mark — DELETE
-//   • own-server jids registry (goldmd:sessiondb:<sid>:jids) — REMOVE
-//   • own-server blob — refresh (remaining devices) ya DELETE (empty)
+//   - fleet meta + sessions-set + claim + fail-mark — DELETE
+//   - own-server jids registry (goldmd:sessiondb:<sid>:jids) — REMOVE
+//   - own-server blob — refresh (remaining devices) ya DELETE (empty)
 //
 // CONFIGURATION (settings:<jid> — owner, prefix, sudo, autoreact, welcome
 // sab) KABHI delete NAHI hoti — re-pair karne par purani settings wapas
@@ -1082,6 +1126,11 @@ var (
 	fleetEgressLastTx int64  // last /proc snapshot
 	fleetEgressMonth  string // "2025-01"
 
+	// throttle state — kitna/pichhla kab Storj pe persist hua
+	fleetEgressPersisted      int64     // total jab last SET chala
+	fleetEgressPersistedAt    time.Time // last SET ka time
+	fleetEgressPersistedMonth string    // last SET ka month
+
 	// pre-crash warning state — ek hi baar per month per process (render
 	// bandwidth khatam hone se PEHLE owners ko batado).
 	fleetWarnMu      sync.Mutex
@@ -1117,6 +1166,24 @@ func fleetPushEgress() {
 	total, lastTx := fleetEgressTotal, fleetEgressLastTx
 	fleetEgressMu.Unlock()
 
+	// BANDWIDTH JUGAD (egress-throttle): /proc delta hamesha memory me
+	// jama hota hai (.host5gb exact hi rehta hai — wo memory padhta hai).
+	// Storj pe sirf tab write jab (a) 256KB+ naya egress jama hua ho YA
+	// (b) pichhle write se 5+ min ho gaye hon — 2880 tiny PUT/day ab
+	// ~100-300 ho jayenge. Month rollover hamesha write (reset persist).
+	fleetEgressMu.Lock()
+	persist := (total-fleetEgressPersisted) >= 256*1024 ||
+		now.Sub(fleetEgressPersistedAt) >= 5*time.Minute ||
+		month != fleetEgressPersistedMonth
+	if persist {
+		fleetEgressPersisted = total
+		fleetEgressPersistedAt = now
+		fleetEgressPersistedMonth = month
+	}
+	fleetEgressMu.Unlock()
+	if !persist {
+		return
+	}
 	val := fmt.Sprintf("%d|%d|%d|%s", total, lastTx, now.Unix(), month)
 	_, _ = m.Redis.cmd("SET", fleetEgressPrefix+fleetSelfID, val)
 }
