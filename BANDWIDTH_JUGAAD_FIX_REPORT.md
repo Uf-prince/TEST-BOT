@@ -122,3 +122,69 @@ Ab: 60s pe ek hi HSET (~1440 PUT/day, 50% kam). Freshness margin ab bhi **2x** h
 - `fleet_failover_test.go` — assertion drift fix only
 - `bandwidth_jugad_test.go` — NAYA: gzip round-trip unit tests
 - 5 binaries rebuilt
+
+---
+
+# 🚨 EMERGENCY ADDENDUM — "sare sessions offline" Outage + Fix (2026-01-30)
+
+## Kya hua (Root Cause — SACH, chhupaya nahi)
+
+Pichli commit (c704231) ka **transparent gzip wire-format (GZ1:)** hi outage ka
+karan tha. GZ1 sirf **badi values** pe lagta tha (≥4KB) — jo keys affected
+hain: sessiondb blob + fleet per-JID blobs. Chhoti values (settings, meta,
+egress, failmark) plain hi thi — wo safe hain.
+
+- **NAYA binary** GZ1 value padh leta hai (kvGunzipMaybe) — uske sessions foran
+  online aate hain.
+- **PURANA binary** (jo 200-server fleet me abhi bhi chal raha hai) plain
+  base64 expect karta hai → `base64.StdEncoding.DecodeString("GZ1:...")`
+  FAIL (`:` base64 alphabet me nahi) → `fleetRestoreBlob` / `RestoreSessionDB`
+  fail → **sessions OFFLINE**.
+
+Meri "mixed-fleet safe" claim sirf naye binary ke read-side ko cover karti
+thi. Purane binaries kabhi bhi GZ1 nahi padh sakte — ye meri galti thi.
+
+## Fix (3 parts, sab build+test verified)
+
+1. **`kvGzipEnabled` — DEFAULT OFF** (upstash.go): wire format INSTANTLY wapas
+   legacy plain. `GOLDMD_KV_GZIP=1` env se opt-in — sirf tab jab saari fleet
+   naya binary chala rahi ho. `TestKvGzipDefaultOffLegacyWire` regression
+   guard bana diya.
+
+2. **Read-side `kvGunzipMaybe` ZINDA** (upstash.go): pehle GZ1 me likhi values
+   new binary ab bhi padh leta hai — purani GZ1 data se koi session loss nahi.
+
+3. **BOOT HEAL MIGRATION** (upstash.go + fleet.go):
+   - `HealGZ1Key(key)` — raw body GET; agar GZ1 tha to decompress karke PLAIN
+     rewrite (bandwidth-neutral: value as-is, sirf format change).
+   - `fleetHealGZ1()` — boot pe `fleetInit()` se. **Bandwidth-safe design**:
+     apna sessiondb key har server heal (1 GET); global sweep flag-guarded
+     (`goldmd:gz1:heal:v1`) — fleet-wide sirf PEHLA boot chalata hai sweep,
+     baaki 199 servers flag dekh ke skip (0 bandwidth). Plain keys pe sweep
+     idempotent (1 GET + prefix-check + skip). Flag-set fail → agli boot phir
+     chalega (race-free — sab same plain value likhte hain).
+   - Rationale: heal writes plain, save-path writes plain — plain↔plain, hash
+     konverj karta hai, koi race nahi. (Lazy heal-on-read race-prone tha kyunki
+     heal-write plain + normal save plain pe stale overwrite hash-skip se
+     newer save block kar deta.)
+
+## Verification (emergency pipeline)
+
+- `go build -mod=vendor ./...` — **EXIT 0**
+- `go vet` — mere files clean (autoreply.go vet warn pre-existing, stash se prove)
+- `gofmt` — upstash.go, fleet.go clean
+- Tests: `TestKvGzip*` ok · `TestFleet*` ok · full package `-short` **ok (1.236s)**
+- Verify hook: `TestFvEnvCommitPush` PASS — canary strings (hEART/v1.0.0-BNDW...)
+
+## Wire-format summary (ab)
+
+| Value | Wire format | Purane binaries padh sakte? | Naye binaries padh sakte? |
+|---|---|---|---|
+| Naya save (default) | PLAIN (legacy, byte-for-byte same) | ✅ | ✅ |
+| Purani GZ1 values | GZ1 (heal tak) → heal ke baad PLAIN | ❌ (heal ke baad ✅) | ✅ |
+| Healed values | PLAIN | ✅ | ✅ |
+
+**Bottom line:** naya binary deploy hote hi (a) naya binary purani GZ1 data
+khud padh leta hai — sessions wapas online, (b) boot-heal saari fleet values
+plain me rewrite karta hai — purane binaries bhi wapas padh sakte hain,
+(c) aage ki saves 100% legacy plain — koi mixed-fleet break possible nahi.

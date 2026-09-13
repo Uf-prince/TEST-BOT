@@ -374,9 +374,19 @@ func (u *Upstash) kvPing(ctx context.Context) (json.RawMessage, error) {
 const kvGzPrefix = "GZ1:"
 const kvGzMinBytes = 4096 // 4KB se chhoti values (settings etc.) plain hi
 
+// kvGzipEnabled — EMERGENCY OFF (owner: "sare sessions offline").
+// Mixed-fleet me purane binaries GZ1 payload NAHI padh sakte (plain base64
+// expect karte hain — shared fleet blob keys pe failover toot gaya tha).
+// Default OFF = wire format EXACTLY legacy. Enable sirf tab jab saare
+// servers naya binary chala rahe hon: GOLDMD_KV_GZIP=1.
+var kvGzipEnabled = strings.TrimSpace(os.Getenv("GOLDMD_KV_GZIP")) == "1"
+
 // kvGzipMaybe compresses val when big enough & compression actually helps.
 // Returns exact bytes to PUT ("GZ1:"+gzip) — ya original val as-is.
 func kvGzipMaybe(val string) string {
+	if !kvGzipEnabled {
+		return val // EMERGENCY: default OFF — legacy plain wire format
+	}
 	if len(val) < kvGzMinBytes {
 		return val
 	}
@@ -1719,6 +1729,52 @@ func (u *Upstash) RestoreSessionDB(path string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// ── EMERGENCY GZ1 HEAL (mixed-fleet recovery) ──────────────────────────────
+// Broken build (c704231) ne badi string values "GZ1:"+gzip me likhi thin.
+// Naya binary unhe padh leta hai, purane binaries NAHI (base64 decode fail
+// -> failover/restore fail -> sessions offline gaye the). HealGZ1Key raw
+// body padhta hai; agar GZ1 tha to ORIGINAL value decompress karke PLAIN
+// rewrite karta hai taake poori fleet (purane binaries included) wapas
+// padh sake. Boot pe one-time chalta hai (fleetInit se).
+func (u *Upstash) HealGZ1Key(key string) bool {
+	shard := u.kvShard(key)
+	if shard == nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	raw, found, err := u.kvRead(ctx, shard, kvStringsPrefix+kvEncode(key))
+	if err != nil || !found {
+		return false
+	}
+	if !bytes.HasPrefix(raw, []byte(kvGzPrefix)) {
+		return false // already plain — kuch nahi karna
+	}
+	plain := kvGunzipMaybe(raw)
+	if len(plain) == 0 || bytes.HasPrefix(plain, []byte(kvGzPrefix)) {
+		return false // corrupt/fallback — rewrite mat karo
+	}
+	// PLAIN rewrite (kvGzipEnabled false hai to kvSet body as-is jayegi)
+	if err := u.setString(key, string(plain)); err != nil {
+		WarnLog("GZ1-HEAL: rewrite failed for %s: %v", key, err)
+		return false
+	}
+	InfoLog("GZ1-HEAL: rewrote %s in legacy plain format (%d -> %d bytes)",
+		key, len(raw), len(plain))
+	return true
+}
+
+// HealGZ1Keys multiple keys ka heal — kitne heal hue return.
+func (u *Upstash) HealGZ1Keys(keys []string) int {
+	n := 0
+	for _, k := range keys {
+		if u.HealGZ1Key(k) {
+			n++
+		}
+	}
+	return n
 }
 
 // RestoreLegacySessionDB: purane (pre-fleet) shared "svr1" whole-DB backup

@@ -12,7 +12,29 @@ import (
 	"testing"
 )
 
+// EMERGENCY NOTE: GZ1 default OFF hai (mixed-fleet safety). Round-trip
+// tests override se ON karke check karte hain - production wire format
+// plain rehta hai jab tak GOLDMD_KV_GZIP=1 na ho.
+
+func withKvGzipOn(t *testing.T) {
+	t.Helper()
+	old := kvGzipEnabled
+	kvGzipEnabled = true
+	t.Cleanup(func() { kvGzipEnabled = old })
+}
+
+func TestKvGzipDefaultOffLegacyWire(t *testing.T) {
+	// EMERGENCY regression guard: default (no env) me compression kabhi
+	// nahi honi chahiye - wire format 100% legacy plain (purane binaries
+	// fleet-wide safe). Ye test fail hona kabhi acceptable NAHI.
+	big := strings.Repeat("A", 100000)
+	if got := kvGzipMaybe(big); got != big {
+		t.Fatalf("default OFF hai to badi value bhi plain honi chahiye (len=%d)", len(got))
+	}
+}
+
 func TestKvGzipRoundTrip(t *testing.T) {
+	withKvGzipOn(t)
 	// base64-sqlite jaisa realistic payload: 60KB random-ish + pattern
 	raw := bytes.Repeat([]byte("SQLite-format 3\x00goldmd.db rows here..."), 1800)
 	enc := base64.StdEncoding.EncodeToString(raw)

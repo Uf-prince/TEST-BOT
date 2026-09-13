@@ -154,8 +154,72 @@ func fleetInit(m *Manager, dbPath string) {
 		return
 	}
 	go fleetWatchdog()
+	go fleetHealGZ1()
 	InfoLog("FLEET: session-distribution watchdog started (sid=%s, max=%d/server, tick=%s)",
 		fleetSelfID, maxPairedSessions(), fleetTickInterval)
+}
+
+// ── EMERGENCY GZ1 BOOT HEAL (mixed-fleet recovery) ─────────────────────
+//
+// Broken build (c704231) ne shared KV values "GZ1:"+gzip me likh di thin.
+// NAYA binary unhe padh leta hai (kvGunzipMaybe) — isliye naye binary pe
+// sessions foran online aa sakte hain. Lekin PURANE binaries (jo abhi bhi
+// 200-server fleet me chalein) plain base64 expect karte hain aur GZ1 pe
+// base64 decode fail kar dete hain -> session restore fail -> OFFLINE.
+//
+// Heal un stored values ko PLAIN me rewrite karta hai taake poori fleet
+// (purane binaries included) wapas padh sake. Bandwidth-safe design:
+//
+//	fleetGZ1HealFlag = "goldmd:gz1:heal:v1"
+//	  - apna sessiondb key: HAR server boot pe heal (1 GET — sasta,
+//	    broken build usi sid pe chala tha to yehi key GZ1 hui hogi)
+//	  - global sweep (saare fleet blob keys): flag-guarded — sirf pehla
+//	    naya binary jo boot hota hai sweep karta hai, flag SET karta hai,
+//	    baaki servers flag dekh ke SKIP kar dete hain (0 bandwidth).
+//	    Sweep idempotent hai: plain keys pe 1 GET + prefix-check + skip.
+//	    Flag-set fail ho jaye to agli boot pe phir chalega (race-free —
+//	    sab same plain value likhte hain).
+//
+// Boot pe go-routine me chalta hai — restore/watchdog pehle chalte hain
+// (naya binary GZ1 khud padh leta hai, sweep sirf purane binaries ke
+// liye plain format wapas laata hai, koi urgency nahi).
+const fleetGZ1HealFlag = "goldmd:gz1:heal:v1"
+
+func fleetHealGZ1() {
+	defer func() {
+		if r := recover(); r != nil {
+			WarnLog("GZ1-HEAL: boot heal panic recovered: %v", r)
+		}
+	}()
+	m := fleetMgr
+	if m == nil || m.Redis == nil {
+		return
+	}
+	// (a) apna sessiondb key — har server, har boot (1 GET, negligible).
+	if m.Redis.HealGZ1Key(m.Redis.sessionDBKey()) {
+		InfoLog("GZ1-HEAL: apna sessiondb blob plain me rewrite ho gaya")
+	}
+	// (b) global fleet-blob sweep — flag-guarded, fleet-wide EK baar.
+	if v, ok := m.Redis.getStringKV(fleetGZ1HealFlag); ok && v != "" {
+		return // kisi aur server ne sweep kar liya — skip (0 bandwidth)
+	}
+	keys := make([]string, 0, 256)
+	for _, jid := range m.Redis.setMembers(fleetSessionsSet) {
+		if jid == "" {
+			continue
+		}
+		keys = append(keys, fleetBlobPrefix+jid)
+	}
+	if len(keys) == 0 {
+		_ = m.Redis.setString(fleetGZ1HealFlag, fleetSelfID)
+		return
+	}
+	n := m.Redis.HealGZ1Keys(keys)
+	// flag SET — agli boots skip kar dein (sweep one-time hai).
+	if err := m.Redis.setString(fleetGZ1HealFlag, fleetSelfID); err != nil {
+		WarnLog("GZ1-HEAL: flag set nahi hua — agli boot pe sweep phir chalega (idempotent): %v", err)
+	}
+	InfoLog("GZ1-HEAL: fleet sweep done — %d/%d blob keys plain me rewrite hue", n, len(keys))
 }
 
 // storjReadyFlag reports whether the global Storj store is initialised.
