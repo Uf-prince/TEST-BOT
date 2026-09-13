@@ -922,10 +922,17 @@ func fleetOnConnected(jid string) {
 				strconv.FormatInt(time.Now().Unix(), 10))
 			// FAILOVER COMPLETE: marker pada hai (is jid ka purana holder
 				// dead tha) → purge + owner-notify ek hi baar.
-			if mk, ok := m.Redis.getStringKV(fleetFailMarkPrefix + jid); ok && mk != "" && mk != fleetSelfID {
-				_ = m.Redis.setDel(fleetFailMarkPrefix + jid)
-				go fleetNotifyFailover(jid, mk)
-				go fleetPurgeDeadServerKV(mk)
+			if mk, ok := m.Redis.getStringKV(fleetFailMarkPrefix + jid); ok && mk != "" {
+				if mk == fleetSelfID {
+					// ZOMBIE-RETURN HOME: marker humare hi purane crash ka hai
+					// aur session wapas hum hi pe aa gaya — koi failover nahi
+					// hua, marker silently hata do (notify/purge nahi).
+					_ = m.Redis.setDel(fleetFailMarkPrefix + jid)
+				} else {
+					_ = m.Redis.setDel(fleetFailMarkPrefix + jid)
+					go fleetNotifyFailover(jid, mk)
+					go fleetPurgeDeadServerKV(mk)
+				}
 			}
 		}
 		fleetSaveBlob(jid) // connected keys latest rakho
