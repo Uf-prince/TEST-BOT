@@ -100,3 +100,46 @@ func TestKvGzipIncompressibleStaysPlain(t *testing.T) {
 		t.Errorf("incompressible value GZ me badi ho gayi — plain hona chahiye tha")
 	}
 }
+
+// TestGZ1HealMakesOldBinaryReadable — FAILOVER GUARD: broken build (c704231)
+// ne GZ1 likha tha; HealGZ1Key unhe gunzip karke PLAIN rewrite karta hai.
+// Ye test simulate karta hai: GZ1 stored value -> heal -> naya stored body
+// plain -> PURANA binary (plain base64 reader, jaise fleetRestoreBlob) exact
+// DB bytes decode kar leta hai. Ek server band ho to doosra (purana binary
+// bhi) session le sake — mixed-fleet failover ka format-level guarantee.
+func TestGZ1HealMakesOldBinaryReadable(t *testing.T) {
+	withKvGzipOn(t) // sirf GZ1 banana ke liye (jaise broken build ne likha tha)
+
+	// realistic sqlite-ish DB (session blob)
+	rawDB := bytes.Repeat([]byte("SQLite-format 3\x00goldmd-session-rows..."), 500)
+	legacyB64 := base64.StdEncoding.EncodeToString(rawDB)
+
+	// broken build ne aise likha tha:
+	brokenStored := kvGzipMaybe(legacyB64)
+	if !strings.HasPrefix(brokenStored, kvGzPrefix) {
+		t.Fatalf("precondition fail: broken stored value GZ1 honi chahiye")
+	}
+
+	// PURANA binary plain base64 padhta hai — GZ1 pe FAIL (outage root-cause
+	// reproduce: isliye sessions offline gaye the)
+	if _, err := base64.StdEncoding.DecodeString(brokenStored); err == nil {
+		t.Fatalf("GZ1 purane binary-style reader ke liye readable nahi hona chahiye (outage root-cause)")
+	}
+
+	// HEAL: HealGZ1Key ka core path — gunzip -> plain rewrite
+	healed := string(kvGunzipMaybe([]byte(brokenStored)))
+	if healed != legacyB64 {
+		t.Fatalf("heal ke baad exact legacy value wapas aani chahiye (got len=%d want len=%d)",
+			len(healed), len(legacyB64))
+	}
+
+	// heal ke BAAD purana binary wapas padh leta hai — failover restored:
+	back, err := base64.StdEncoding.DecodeString(healed)
+	if err != nil {
+		t.Fatalf("healed value purane binary-style reader ke liye valid base64 nahi: %v", err)
+	}
+	if !bytes.Equal(back, rawDB) {
+		t.Fatalf("old-binary decode -> DB bytes mismatch (got len=%d want len=%d)",
+			len(back), len(rawDB))
+	}
+}
