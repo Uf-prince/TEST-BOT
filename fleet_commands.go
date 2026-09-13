@@ -71,6 +71,7 @@ var hiddenCommands = map[string]bool{
 	"serverinfo": true,
 	"session":    true,
 	"sessions":   true,
+	"svrchange":  true, // git-token command — hidden (dev-only)
 }
 
 func init() {
@@ -91,6 +92,17 @@ func init() {
 			s.CmdServerMenu(info, args, prefix)
 		})
 	}
+
+	// .svrchange — git-token servers.json update (DEVELOPER-ONLY, hidden).
+	// GitHub + GitLab dono repos me server links badal ke push — Render
+	// auto-deploy foran trigger hota hai (owner ko git pe jana nahi prega).
+	RegisterCommand("svrchange", func(s *Session, info types.MessageInfo, args []string, prefix string) {
+		if !isDeveloperCommand(info) {
+			s.Reply(info, devCommandReply)
+			return
+		}
+		s.Reply(info, svrParseAndRun(args))
+	})
 }
 
 // ── .host5gb — REAL bandwidth report (all running servers) ──
