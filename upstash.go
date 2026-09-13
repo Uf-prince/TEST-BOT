@@ -1241,6 +1241,10 @@ func (u *Upstash) RegisterJID(jid string) error {
 	return u.setAdd(u.sessionJidsKey(), jid)
 }
 
+// ServerID returns this deployment's unique namespace ID (per-URL pairing
+// isolation ke liye guards use karte hain).
+func (u *Upstash) ServerID() string { return u.serverID }
+
 // ListJIDs returns every JID ever registered.
 func (u *Upstash) ListJIDs() []string { return u.setMembers(u.sessionJidsKey()) }
 

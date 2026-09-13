@@ -125,6 +125,17 @@ func main() {
 			ErrLog("Storj storage health check failed; session persistence may be unavailable")
 		}
 
+		// URL-ISOLATED PAIRING (owner demand): ye URL sirf APNE namespace
+		// (goldmd:sessiondb:<this-url>:*) se restore karta hai. Purane
+		// pre-fleet version ka shared "svr1" blob DOOSRE servers ke pairs
+		// rakhta tha — usko kabhi restore NAHI karte. Har boot pe ek sasta
+		// GET check karke uska naamo-nishan Storj se mita do (blob hatne ke
+		// baad ye check khud false ho jata hai — self-extinguishing).
+		if redis.ServerID() != "svr1" && legacySvr1BlobExists(redis) {
+			redis.DeleteLegacySvr1Backup()
+			OkLog("Legacy shared svr1 blob purged from Storj (URL-scoped pairing: sirf is URL ke apne pairs restore honge)")
+		}
+
 		// Restore before opening sqlstore whenever the local DB is missing or
 		// does not contain a usable WhatsApp device. A plain file-exists check
 		// is not enough: an empty/stale sqlite file can survive a restart while
@@ -135,19 +146,6 @@ func main() {
 			tmpPath := dbPath + ".restore.tmp"
 			_ = os.Remove(tmpPath)
 			restored, rerr := redis.RestoreSessionDB(tmpPath)
-			if (rerr != nil || !restored) && legacySvr1BlobExists(redis) {
-				// LEGACY MIGRATION: purane version me sab servers shared
-				// "svr1" blob key use karte the. Upgrade ke baad naya
-				// per-server sid apna blob nahi milega to svr1 wala EK
-				// BAAR restore karo aur phir DELETE kar do — one-time
-				// migration (is se kabhi dobara conflict nahi hoga).
-				InfoLog("No blob for this server — trying legacy svr1 backup (one-time migration)...")
-				if lr, lerr := redis.RestoreLegacySessionDB(tmpPath); lerr == nil && lr {
-					restored, rerr = true, nil
-					redis.DeleteLegacySvr1Backup()
-					OkLog("Legacy svr1 session DB migrated & removed (will save under this server's own ID from now on)")
-				}
-			}
 			if rerr != nil {
 				ErrLog("Could not restore session DB from Storj: %v", rerr)
 			} else if restored {
