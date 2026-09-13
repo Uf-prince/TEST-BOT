@@ -1,16 +1,19 @@
 {
-  "_comment": "GOLD-MD multi-server panel + .pair command config. 10 live Zerops deployments (1GB RAM / 5GB disk each, max 10 pairings per server). SERVER 1 = main panel (ufprince1 account). SERVER 2-10 = 9 backup accounts. Har server apna unique GOLDMD_SERVER_ID namespace use karta hai (svr1-svr10) — koi session conflict nahi.",
-  "maxPerServer": 10,
+  "_comment": "GOLD-MD multi-server panel + hidden .server menu config. 13 Render free deployments (512MB RAM / 5GB bandwidth each, max 2 pairings per server). SERVER 1-4 = xsvr1-4, SERVER 5 = omil, SERVER 6-11 = svrr7-12, SERVER 12-13 = svrr13 (owner list me svrr13 do baar tha, 13 servers order ke hisaab se). Owner baad me on kar dega — off servers report me STOPPED dikhenge.",
+  "maxPerServer": 2,
   "servers": [
-    {"name": "SERVER 1", "url": "https://goldmd2-3037-11224.prg1.zerops.app"},
-    {"name": "SERVER 2", "url": "https://goldmd2-303e-11224.prg1.zerops.app"},
-    {"name": "SERVER 3", "url": "https://goldmd2-303f-11224.prg1.zerops.app"},
-    {"name": "SERVER 4", "url": "https://goldmd2-3044-11224.prg1.zerops.app"},
-    {"name": "SERVER 5", "url": "https://goldmd2-3045-11224.prg1.zerops.app"},
-    {"name": "SERVER 6", "url": "https://goldmd2-3043-11224.prg1.zerops.app"},
-    {"name": "SERVER 7", "url": "https://goldmd2-3040-11224.prg1.zerops.app"},
-    {"name": "SERVER 8", "url": "https://goldmd2-3042-11224.prg1.zerops.app"},
-    {"name": "SERVER 9", "url": "https://goldmd2-300e-11224.prg1.zerops.app"},
-    {"name": "SERVER 10", "url": "https://goldmd2-3041-11224.prg1.zerops.app"}
+    {"name": "SERVER 1", "url": "https://gold-md-xsvr1.onrender.com"},
+    {"name": "SERVER 2", "url": "https://gold-md-xsvr2.onrender.com"},
+    {"name": "SERVER 3", "url": "https://gold-md-xsvr3.onrender.com"},
+    {"name": "SERVER 4", "url": "https://gold-md-xsvr4.onrender.com"},
+    {"name": "SERVER 5", "url": "https://gold-md-omil.onrender.com"},
+    {"name": "SERVER 6", "url": "https://gold-md-svrr7.onrender.com"},
+    {"name": "SERVER 7", "url": "https://gold-md-svrr8.onrender.com"},
+    {"name": "SERVER 8", "url": "https://gold-md-svrr9.onrender.com"},
+    {"name": "SERVER 9", "url": "https://gold-md-svrr10.onrender.com"},
+    {"name": "SERVER 10", "url": "https://gold-md-svrr11.onrender.com"},
+    {"name": "SERVER 11", "url": "https://gold-md-svrr12.onrender.com"},
+    {"name": "SERVER 12", "url": "https://gold-md-svrr13.onrender.com"},
+    {"name": "SERVER 13", "url": "https://gold-md-svrr13.onrender.com"}
   ]
 }

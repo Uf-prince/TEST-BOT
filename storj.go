@@ -54,22 +54,23 @@ const maxStorjBytes = 50 * 1024 * 1024
 // egUploadCapBytes — env-gated egress cap (bandwidth jugaad). Render free tier
 // (5GB/month metered egress) pe har message proto upload karna bandwidth kha
 // jata hai. GOLDMD_STORJ_MAX_UPLOAD_KB set karo to us size (KB) se bade proto
-// upload hi nahi honge (skip ho jayenge). Default 512KB — text/chat protos
+// upload hi nahi honge (skip ho jayenge). DEFAULT ON = 256KB (CID mode,
+// owner request — Render bandwidth bachao) — text/chat protos
 // (2-20KB) normally upload hote rahenge, media-heavy protos (MBs) skip.
-// "0" = cap off (purana behaviour, sab kuch upload).
+// "51200" = purana behaviour (50MB, sab kuch upload).
 //
 // NOTE: ye sirf *message-archival* uploads (antidelete/view-once backup) ko
 // gate karta hai — WhatsApp media send (Client.Upload) is se alag path hai.
 var egUploadCapBytes int64 = func() int64 {
 	v := strings.TrimSpace(os.Getenv("GOLDMD_STORJ_MAX_UPLOAD_KB"))
 	if v == "" {
-		// DEFAULT OFF - bilkul purana behaviour (50MiB tak sab upload).
-		// Cap sirf tab jab Render pe bandwidth bachani ho: env me
-		// GOLDMD_STORJ_MAX_UPLOAD_KB=512 set karo. NOTE: cap PROTO size
-		// pe lagta hai (video/photo bytes proto me nahi hote - sirf
-		// URL+keys ~5-15KB) - isliye deleted-media recovery cap ke saath
-		// bhi 100% kaam karta hai.
-		return maxStorjBytes
+		// OWNER REQUEST (Render free-bandwidth plan): CID mode default ON.
+		// Default cap 256KB - text/chat protos (2-20KB) normally upload
+		// hote rahenge (antidelete/view-once recovery 100% kaam karta hai
+		// - real media bytes proto me nahi hote, sirf URL+keys ~5-15KB),
+		// media-heavy protos (MBs) skip - Storj egress ~80% kam.
+		// Purana behaviour chahiye to GOLDMD_STORJ_MAX_UPLOAD_KB=51200 set karo.
+		return 256 * 1024
 	}
 	if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 		if n <= 0 {

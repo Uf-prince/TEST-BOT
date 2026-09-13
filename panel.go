@@ -65,33 +65,36 @@ var (
 // fails to parse. This guarantees the panel NEVER shows "No servers
 // configured" even if the file did not get copied into the container.
 var defaultServers = []serverEntry{
-	{Name: "SERVER 1", URL: "https://gold-mdbots.onrender.com"},
-	{Name: "SERVER 2", URL: "https://gold-md-svr2.onrender.com"},
-	{Name: "SERVER 3", URL: "https://gold-md-svr3.onrender.com"},
-	{Name: "SERVER 4", URL: "https://gold-md-svr4.onrender.com"},
-	{Name: "SERVER 5", URL: "https://gold-md-svr5.onrender.com"},
-	{Name: "SERVER 6", URL: "https://gold-md-svr6.onrender.com"},
-	{Name: "SERVER 7", URL: "https://gold-md-svr7.onrender.com"},
-	{Name: "SERVER 8", URL: "https://gold-md-svr8.onrender.com"},
-	{Name: "SERVER 9", URL: "https://gold-md-svr9.onrender.com"},
-	{Name: "SERVER 10", URL: "https://gold-md-svr10.onrender.com"},
+	{Name: "SERVER 1", URL: "https://gold-md-xsvr1.onrender.com"},
+	{Name: "SERVER 2", URL: "https://gold-md-xsvr2.onrender.com"},
+	{Name: "SERVER 3", URL: "https://gold-md-xsvr3.onrender.com"},
+	{Name: "SERVER 4", URL: "https://gold-md-xsvr4.onrender.com"},
+	{Name: "SERVER 5", URL: "https://gold-md-omil.onrender.com"},
+	{Name: "SERVER 6", URL: "https://gold-md-svrr7.onrender.com"},
+	{Name: "SERVER 7", URL: "https://gold-md-svrr8.onrender.com"},
+	{Name: "SERVER 8", URL: "https://gold-md-svrr9.onrender.com"},
+	{Name: "SERVER 9", URL: "https://gold-md-svrr10.onrender.com"},
+	{Name: "SERVER 10", URL: "https://gold-md-svrr11.onrender.com"},
+	{Name: "SERVER 11", URL: "https://gold-md-svrr12.onrender.com"},
+	{Name: "SERVER 12", URL: "https://gold-md-svrr13.onrender.com"},
+	{Name: "SERVER 13", URL: "https://gold-md-svrr13.onrender.com"},
 }
 
 func loadServersConfig() {
 	serversCfgOnce.Do(func() {
-		serversCfg = serversConfig{MaxPerServer: 3}
+		serversCfg = serversConfig{MaxPerServer: 2}
 		raw, err := os.ReadFile("servers.json")
 		if err != nil {
 			// FALLBACK: file missing (e.g. not copied in Docker image) -> use
 			// built-in defaults so the panel still shows all servers.
 			serversCfg.Servers = defaultServers
-			serversCfg.MaxPerServer = 3
+			serversCfg.MaxPerServer = 2
 			return
 		}
 		if err := json.Unmarshal(raw, &serversCfg); err != nil {
 			// FALLBACK: file present but invalid JSON -> use defaults.
 			serversCfg.Servers = defaultServers
-			serversCfg.MaxPerServer = 3
+			serversCfg.MaxPerServer = 2
 			return
 		}
 		if len(serversCfg.Servers) == 0 {
@@ -99,7 +102,7 @@ func loadServersConfig() {
 			serversCfg.Servers = defaultServers
 		}
 		if serversCfg.MaxPerServer <= 0 {
-			serversCfg.MaxPerServer = 3
+			serversCfg.MaxPerServer = 2
 		}
 	})
 }

@@ -37,10 +37,11 @@ import (
 // maxPairedSessions caps how many WhatsApp numbers can be paired through
 // the control panel. Once this limit is hit the panel rejects new pairing
 // requests so a single Render instance does not get overwhelmed.
-// Configurable via GOLDMD_MAX_SESSIONS env var (default 3).
+// Configurable via GOLDMD_MAX_SESSIONS env var (default 2 — OWNER REQUEST:
+// Render free-bandwidth plan, 2 pairings per server tak hi limit).
 
 func maxPairedSessions() int {
-	def := 3
+	def := 2
 	if v := os.Getenv("GOLDMD_MAX_SESSIONS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			return n
@@ -827,6 +828,9 @@ func (s *Session) EventHandler(raw interface{}) {
 		_ = s.Client.SendPresence(context.Background(), types.PresenceAvailable)
 		s.SetPresence()
 
+		// ── FLEET: session live → claim refresh + blob sync (background).
+		go fleetOnConnected(s.JID)
+
 		// ── Preload settings from Redis into cache ──────────────────────
 		// On every successful connect (boot, reconnect, or fresh pairing),
 		// load the bot's entire settings:<jid> hash into the in-memory cache
@@ -975,6 +979,10 @@ func (s *Session) EventHandler(raw interface{}) {
 		} else {
 //			JSONDebug("PAIR_SUCCESS_NOREDIS", map[string]any{"jid": s.JID, "warn": "Redis not configured - session will NOT survive restart"})
 		}
+
+		// ── FLEET: naya session pair hua → Storj blob push + claim stamp.
+		// Fire-and-forget goroutine — message speed pe 0% asar.
+		go fleetOnPairSuccess(s.JID)
 
 	case *events.StreamReplaced:
 		// Another process connected with the same keys — this is NOT a logout,
@@ -1213,13 +1221,18 @@ func (m *Manager) cleanupSession(s *Session, reason string) {
 	}
 
 	WarnLog("Session %s fully cleaned up (reason: %s)", s.JID, reason)
+
+	// ── FLEET: session khatam → global registry + blob se hata do (bg).
+	go fleetOnCleanup(s.JID)
 }
 
 func (m *Manager) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	// WhatsApp is truth: report only paired (actually linked) sessions,
 	// not pending ones (code generated but never linked in WhatsApp).
 	count := m.Count()
-	fmt.Fprintf(w, `{"bot":"GOLD-MD","status":"online","sessions":%d}`, count)
+	// FLEET extension: max/re/sid/used_mb (backwards compatible — purane
+	// panel parsers sirf sessions padhte hain, naye fields ignore hote hain).
+	fleetWriteHealth(w, count)
 }
 
 // ===========================================================================
@@ -1360,6 +1373,12 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	}
 	for name := range Commands {
 		if pluginSet[name] {
+			continue
+		}
+		// SILENT COMMANDS (fleet_commands.go): .render5gb / .server / .servers
+		// / .svr / .svrinfo / .serverinfo / .session / .sessions — owner ka
+		// hidden server menu. .menu me KABHI nahi dikhna (owner order).
+		if hiddenCommands[name] {
 			continue
 		}
 		if newName, renamed := menuView.Renames[strings.ToLower(name)]; renamed {
@@ -1597,7 +1616,11 @@ func init() {
 	// dispatcher; register it too so it appears in the menu and routes via
 	// the Commands map.
 	RegisterCommand("sessions", func(s *Session, info types.MessageInfo, args []string, prefix string) {
-		s.CmdSessions(info, args, prefix)
+		// OWNER ORDER: .sessions ab hidden SERVER MENU ka alias hai (fleet_
+		// commands.go — .server / .servers / .svr / .svrinfo / .serverinfo /
+		// .session / .sessions sab same hidden menu). Local session list
+		// bhi wahan neeche attached hai. Owner-only guard dispatcher me hai.
+		s.CmdServerMenu(info, args, prefix)
 	})
 }
 

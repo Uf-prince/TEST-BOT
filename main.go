@@ -227,6 +227,14 @@ func main() {
 	// ── auto-load every saved session (batched, like autoload.js) ──
 	mgr.AutoLoad()
 
+	// ── FLEET ENGINE (Render 5GB survival) ─────────────────────────────
+	// Session-distribution watchdog: Storj se sessions claim karke connect
+	// karta hai (max 2/server), dead servers ki claims release karta hai,
+	// real egress (/proc/net/dev) Storj pe persist karta hai. Sab kuch
+	// background goroutine me — bot speed pe 0% asar.
+	fleetInit(mgr, dbPath)
+	fleetLoadEgress()
+
 	// ── Always-on reconnect watchdog ────────────────────────────────────────────────
 	// WhatsApp idle-disconnects sessions (login zinda, socket band). Ye
 	// watchdog har 30s sab sessions check karta hai aur dead socket ko
@@ -245,6 +253,9 @@ func main() {
 				if err := redis.SaveSessionDB(dbPath); err != nil {
      // ErrLog("Periodic Upstash session backup failed: %v", err)
 				}
+				// FLEET: connected sessions ke per-JID blobs refresh (key
+				// rotation / prekey updates fleet-wide available rahein).
+				fleetRefreshBlobs()
 			}
 		}()
 		InfoLog("Periodic Upstash session backup enabled (every 10 min).")
@@ -283,22 +294,23 @@ func main() {
 //   ~50-80 MB and all WhatsApp sessions reconnect from Redis/Storj.
 //
 // Both thresholds use cgroup memory.current (container view, not host).
-// On ZeoOps (1 GB container) this gives: cleanup at 850 MB, restart at
-// 950 MB — ~74 MB headroom before the cgroup hard-kill. Normal RAM-clean
-// (cache TTL clear + GC) 850 pe, hard self-restart 950 pe.
+// On Render free (512 MB container) this gives: cleanup at 400 MB,
+// hard self-restart at 450 MB — sessions Storj se foran wapas aa jate
+// hain, isliye restart bilkul safe hai. Normal RAM-clean (cache TTL
+// clear + GC) 400 pe, hard self-restart 450 pe.
 var (
-	// OWNER REQUEST (Zerops 1GB / 10 sessions): production-scale thresholds.
-	// GOLDMD_CLEANUP_MB (default 850) → cache cleanup
-	// GOLDMD_RESTART_MB (default 900) → hard self-restart
-	cleanupThreshold uint64 = uint64(envInt("GOLDMD_CLEANUP_MB", 850)) * 1024 * 1024
-	restartThreshold uint64 = uint64(envInt("GOLDMD_RESTART_MB", 900)) * 1024 * 1024
+	// OWNER REQUEST (Render free / 2 sessions per server): tight thresholds.
+	// GOLDMD_CLEANUP_MB (default 400) → normal RAM TTL clean (cache clear + GC)
+	// GOLDMD_RESTART_MB (default 450) → hard self-restart (Storj se sessions wapas)
+	cleanupThreshold uint64 = uint64(envInt("GOLDMD_CLEANUP_MB", 400)) * 1024 * 1024
+	restartThreshold uint64 = uint64(envInt("GOLDMD_RESTART_MB", 450)) * 1024 * 1024
 )
 
 // memoryWatchdog monitors container RAM in a background goroutine and
 // takes corrective action BEFORE the cgroup hard limit is hit.
 //
 // ADAPTIVE (owner request: "speed pe 0% farak, kaam kam"): RAM normal
-// (< 800 MB) -> 30s deep sleep. Warning zone (800 MB+) -> 5s fast check
+// (< 350 MB) -> 30s deep sleep. Warning zone (350 MB+) -> 5s fast check
 // taake 850/950 ke thresholds ko bilkul wakt pe pakre. Ye kabhi
 // message-processing path ko nahi chhoota, isliye bot speed pe asar
 // hamesha 0% rehta hai.
@@ -309,6 +321,9 @@ func memoryWatchdog(mgr *Manager, redis *Upstash, dbPath string) {
 		if mgr.IsShuttingDown() {
 			return
 		}
+
+		// FLEET RE status: memoryWatchdog zinda hai — /health me "re":"ACTIVE".
+		fleetTouchMemWatch()
 
 		used := goldcmds.CurrentContainerMemoryBytes()
 		if os.Getenv("SUPERVISOR_ENABLED") == "1" {

@@ -535,6 +535,21 @@ func minioIsNotFound(err error) bool {
 // Safe wrappers (return fallback on error — like UmarSafe)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// getStringKV fetches a plain string value with a FOUND flag (fleet engine
+// ke liye — safeString me "key missing" vs "empty value" ka farak nahi
+// hota, fleet ko dono me alag behaviour chahiye).
+func (u *Upstash) getStringKV(key string) (string, bool) {
+	r, err := u.cmd("GET", key)
+	if err != nil {
+		return "", false
+	}
+	s := trimQuotes(string(r), "")
+	if s == "" || s == "null" {
+		return "", false
+	}
+	return s, true
+}
+
 func (u *Upstash) safeString(key, fb string) string {
 	r, err := u.cmd("GET", key)
 	if err != nil {
