@@ -161,7 +161,25 @@ func (m *Manager) reviveIfDead(s *Session) bool {
 		return true
 	}
 	if s.Client.IsConnected() {
-		// Healthy: reset attempts so a future blip again gets fast retries.
+		// LOGOUT-LINTER (WhatsApp-truth): socket zinda dikhta hai magar
+		// login-token dead (WhatsApp ne logout kiya, event miss/out-of-band)
+		// to ye session zinda NAHI hai. Storj/Paired-flag jhuta bole to bhi
+		// isko gino mat. 515 stream-restart ke transient re-login window
+		// (10-20s) me bhi IsLoggedIn() false reh sakta hai is liye 60s GRACE:
+		// pehle fail pe sirf timestamp mark, 60s+ se bhi dead to cleanup.
+		if !s.Client.IsLoggedIn() {
+			if s.LoginDeadSince.IsZero() {
+				s.LoginDeadSince = time.Now()
+				WarnLog("⛑ WATCHDOG: %s socket alive but login dead — marking (60s grace, 515-relogin transient safe)", s.JID)
+			} else if time.Since(s.LoginDeadSince) > 60*time.Second {
+				WarnLog("⛑ WATCHDOG: %s login dead 60s+ — WhatsApp-side logout cleanup", s.JID)
+				m.cleanupSession(s, "watchdog: socket alive but login dead 60s+")
+				return true
+			}
+		} else {
+			s.LoginDeadSince = time.Time{} // login wapas aaya — grace reset
+		}
+		// Healthy (ya grace window): reset attempts so a future blip again gets fast retries.
 		m.resetAttempts(s.JID)
 		return true
 	}

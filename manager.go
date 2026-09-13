@@ -57,6 +57,11 @@ type Session struct {
 	Manager *Manager
 	Started time.Time
 
+	// LoginDeadSince: logout-linter (watchdog) ka grace-window timestamp.
+	// Socket zinda + IsLoggedIn() false pe pehli baar set; 60s+ dead pe
+	// cleanupSession. Login wapas aane pe reset. (515 relogin transient safe)
+	LoginDeadSince time.Time
+
 	// Paired is true only after WhatsApp confirms the link
 	// (*events.PairSuccess / Store.ID != nil). Until then the session is
 	// "pending": a pairing code was generated but the user has NOT linked it
@@ -175,7 +180,12 @@ func (m *Manager) Count() int {
 	defer m.mu.Unlock()
 	n := 0
 	for _, s := range m.sessions {
-		if s != nil && s.Paired {
+		// WHATSAPP IS TRUTH: sirf Paired flag (memory/Storj-restore) kaafi
+		// nahi. Socket zinda + device linked tabhi gino — WhatsApp logout
+		// kar de to Storj/flag jhuta bole to bhi count sahi rahega.
+		if s != nil && s.Paired && s.Client != nil &&
+			s.Client.IsConnected() &&
+			s.Client.Store != nil && s.Client.Store.ID != nil {
 			n++
 		}
 	}
