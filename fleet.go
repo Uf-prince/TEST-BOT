@@ -358,7 +358,10 @@ func fleetServerURL(sid string) string {
 }
 
 // fleetProbeURL does one quick GET {url} with fleetHTTPTimeout. true =
-// koi bhi HTTP response aaya (2xx-5xx) — server process zinda hai.
+// /health ne 2xx/3xx diya — server process waqai zinda hai. 4xx/5xx
+// (Render error page, tunnel 502 Bad Gateway, 503 wake-fail) = ORIGIN
+// DOWN = dead — pehle ye bhi "alive" gin jata tha is liye crashed server
+// ka failover kabhi trigger nahi hota tha. Network error/DNS fail = dead.
 func fleetProbeURL(raw string) bool {
 	cl := &http.Client{Timeout: fleetHTTPTimeout}
 	resp, err := cl.Get(raw)
@@ -367,7 +370,7 @@ func fleetProbeURL(raw string) bool {
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
-	return true
+	return resp.StatusCode >= 200 && resp.StatusCode < 400
 }
 
 // fleetClaimHolders parses the claim hash for a JID → {serverID: ts}.
