@@ -75,6 +75,21 @@ type Upstash struct {
 	// warmedGroups tracks which group settings hashes have been warmed
 	// (one HGETALL per group per process lifetime) — see WarmGroupSettings.
 	warmedGroups map[string]bool
+
+	// ── STORJ WRITE-SAFETY: background retry queue ──
+	// Har failed Storj write (SET/DEL/SADD/SREM/HSET/HDEL) yahan queue hota
+	// hai aur background ticker (30s) usay retry karta rehta hai jab tak
+	// Storj me permanently save na ho jaye. Is se user ki settings kabhi
+	// loss nahi hotin (Storj temporarily down hone par bhi). Owner order:
+	// "background me storj me b safe hote rhe".
+	retryMu  sync.Mutex
+	retryOps []storjRetryOp
+}
+
+// storjRetryOp ek failed write operation jo Storj me baad me save hoga.
+type storjRetryOp struct {
+	args []string
+	ts   time.Time
 }
 
 func (u *Upstash) sessionDBKey() string {
@@ -171,10 +186,35 @@ func kvDecode(s string) string {
 	return out
 }
 
-// cmd is the central dispatcher — mirrors the old Upstash REST pipeline.
+// cmd is the public entry point (all internal + external callers use this).
+// It dispatches via cmdCore and — CRITICAL for data safety — enqueues any
+// FAILED write op (SET/DEL/SADD/SREM/HSET/HDEL) into the background retry
+// queue so user settings are never lost when Storj hiccups (temporarily
+// down, network blip). Reads are never queued (retrying a read is useless —
+// the caller already got the def/fallback value and the cache holds it).
+func (u *Upstash) cmd(args ...string) (json.RawMessage, error) {
+	res, err := u.cmdCore(args...)
+	if err != nil {
+		if storjWriteRetryable(args) {
+			u.queueWriteRetry(args)
+		}
+		return res, err
+	}
+	// WRITE-SUCCESS: is nayi (latest) write ne jo purane queued retries
+	// supersede kar diye unko queue se hata do — warna 30s baad purana
+	// failed op replay hokar user ki NAYI value overwrite kar deta
+	// (RACE: "HSET mode off" fail→queued, phir "HSET mode on" success
+	// → replay "off" = data loss).
+	if storjWriteRetryable(args) {
+		u.purgeSupersededRetry(args)
+	}
+	return res, nil
+}
+
+// cmdCore is the central dispatcher — mirrors the old Upstash REST pipeline.
 // Signature kept identical (variadic string args) so direct call sites
 // (commands_loader.go: cmd("DEL", key)) keep working.
-func (u *Upstash) cmd(args ...string) (json.RawMessage, error) {
+func (u *Upstash) cmdCore(args ...string) (json.RawMessage, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("kv: empty command")
 	}
@@ -201,7 +241,10 @@ func (u *Upstash) cmd(args ...string) (json.RawMessage, error) {
 		}
 		res, err := u.kvDel(ctx, args[1])
 		if err == nil {
-			u.cacheDel("setmembers:" + args[1]) // GROUP-SPEED FIX: keep set cache fresh
+			// CACHE-SYNC FIX: delete ka asar foran — empty sentinel. (Key SHAPE
+			// ka pata hota hai to sirf wahi key ki cache hati hai — "settings:"
+			// hash fields apne Set/Del handlers se alag handle hoti hain.)
+			u.cacheDel("setmembers:" + args[1])
 		}
 		return res, err
 	case "SADD":
@@ -210,7 +253,11 @@ func (u *Upstash) cmd(args ...string) (json.RawMessage, error) {
 		}
 		res, err := u.kvSAdd(ctx, args[1], args[2:])
 		if err == nil {
-			u.cacheDel("setmembers:" + args[1]) // GROUP-SPEED FIX: keep set cache fresh
+			// CACHE-SYNC FIX: nayi member list FORAN cache me (invalidation ki
+			// jagah optimistic update) — next read 0ms me NAYI list degi, ~1s
+			// S3 round-trip nahi. Storj me write already ho chuka hai (success
+			// path), 2-min refresher baad me revalidate karega.
+			u.setCacheApplyAdd(args[1], args[2:])
 		}
 		return res, err
 	case "SREM":
@@ -219,7 +266,10 @@ func (u *Upstash) cmd(args ...string) (json.RawMessage, error) {
 		}
 		res, err := u.kvSRem(ctx, args[1], args[2:])
 		if err == nil {
-			u.cacheDel("setmembers:" + args[1]) // GROUP-SPEED FIX: keep set cache fresh
+			// CACHE-SYNC FIX: removed members FORAN cached list se hat jate hain
+			// — next read 0ms me NAYI (chhoti) list degi. Storj updated hai,
+			// refresher revalidate karega.
+			u.setCacheApplyRem(args[1], args[2:])
 		}
 		return res, err
 	case "SMEMBERS":
@@ -664,6 +714,271 @@ func (u *Upstash) setRem(key string, members ...string) error {
 	return err
 }
 
+// ─── optimistic SET-cache updates (CACHE-SYNC FIX) ─────────────────
+// Ye helpers SADD/SREM ke SUCCESS ke foran baad chalte hain: cached member
+// list me members add/remove karke NAYI list wapas cache me rakh dete hain.
+// Is se (1) next read 0ms me nayi values deti hai (koi S3 round-trip nahi),
+// aur (2) write ka asar instant dikhta hai — owner order: "user koi bhi
+// setting change update kre to wo foran nay settings k sath Naya catch ban
+// jana chahye". Agar key abhi cached nahi hai to kuch nahi karte (next read
+// khud fresh S3 se padh legi aur cache karegi — pehli read ka normal path).
+
+func (u *Upstash) setCacheApplyAdd(key string, members []string) {
+	ck := "setmembers:" + key
+	u.mu.Lock()
+	e, ok := u.cache[ck]
+	u.mu.Unlock()
+	if !ok {
+		return // not cached yet — first read will fetch+cache fresh
+	}
+	if e.value == "\x00" {
+		// empty set → sirf naye members ki nayi list
+		u.cacheSetList(ck, members)
+		return
+	}
+	var arr []string
+	if err := json.Unmarshal([]byte(e.value), &arr); err != nil {
+		u.cacheDel(ck) // corrupt entry — next read re-fetches
+		return
+	}
+	set := map[string]bool{}
+	for _, m := range arr {
+		set[m] = true
+	}
+	changed := false
+	for _, m := range members {
+		if !set[m] {
+			set[m] = true
+			changed = true
+		}
+	}
+	if !changed {
+		return
+	}
+	out := make([]string, 0, len(set))
+	for m := range set {
+		out = append(out, m)
+	}
+	sort.Strings(out)
+	u.cacheSetList(ck, out)
+}
+
+func (u *Upstash) setCacheApplyRem(key string, members []string) {
+	ck := "setmembers:" + key
+	u.mu.Lock()
+	e, ok := u.cache[ck]
+	u.mu.Unlock()
+	if !ok {
+		return // not cached yet — first read will fetch+cache fresh
+	}
+	if e.value == "\x00" {
+		return // already empty
+	}
+	var arr []string
+	if err := json.Unmarshal([]byte(e.value), &arr); err != nil {
+		u.cacheDel(ck) // corrupt entry — next read re-fetches
+		return
+	}
+	rem := map[string]bool{}
+	for _, m := range members {
+		rem[m] = true
+	}
+	out := make([]string, 0, len(arr))
+	changed := false
+	for _, m := range arr {
+		if rem[m] {
+			changed = true
+			continue
+		}
+		out = append(out, m)
+	}
+	if !changed {
+		return
+	}
+	u.cacheSetList(ck, out)
+}
+
+// cacheSetList JSON-encodes a member list into the cache (empty → \x00
+// sentinel) so it stays consistent with setMembers' cache format.
+func (u *Upstash) cacheSetList(ck string, arr []string) {
+	if len(arr) == 0 {
+		u.cacheSet(ck, "\x00")
+		return
+	}
+	if b, err := json.Marshal(arr); err == nil {
+		u.cacheSet(ck, string(b))
+	}
+}
+
+// ─── Storj write-safety retry queue (owner order) ──────────────────
+// "background me storj me b safe hote rhe" — Storj temporarily down ho to
+// bhi user ki settings loss na hon. Failed writes yahan queue hote hain,
+// 30s background ticker retry karta rehta hai. Retry sirf WRITE ops pe
+// (SET/DEL/SADD/SREM/HSET/HDEL) — read retry bekar hai (caller ko def/fallback
+// already mil chuka hai, cache me value hai).
+
+func storjWriteRetryable(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch strings.ToUpper(args[0]) {
+	case "SET", "DEL", "SADD", "SREM", "HSET", "HDEL":
+		return true
+	}
+	return false
+}
+
+func (u *Upstash) queueWriteRetry(args []string) {
+	cp := make([]string, len(args))
+	copy(cp, args)
+	u.retryMu.Lock()
+	// dedup: bilkul same op already queued hai to skip (ops idempotent hain,
+	// last-wins — pehli queued entry ke args same hain to dobara queue nahi)
+	for i := range u.retryOps {
+		op := u.retryOps[i]
+		if len(op.args) == len(cp) {
+			same := true
+			for j := range cp {
+				if op.args[j] != cp[j] {
+					same = false
+					break
+				}
+			}
+			if same {
+				u.retryMu.Unlock()
+				return
+			}
+		}
+	}
+	u.retryOps = append(u.retryOps, storjRetryOp{args: cp, ts: time.Now()})
+	n := len(u.retryOps)
+	u.retryMu.Unlock()
+	if n == 1 || n%20 == 0 {
+		InfoLog("Storj write queued for retry (%d pending): op=%s", n, cp[0])
+	}
+}
+
+// purgeSupersededRetry removes queued retry ops that a JUST-SUCCEEDED write
+// (the newest user action) has made stale. Rules:
+//   - SET/DEL success on key K: full-key write → saare purane queued ops
+//     on K obsolete (key ka naya state already S3 me hai).
+//   - HSET/HDEL success on (K, field): same-field queued HSET/HDEL stale
+//     (nayi value jeet gayi), aur queued DEL on K bhi stale (purana
+//     full-wipe replay naya field-write mita deta).
+//   - SADD/SREM success on set K: exact-same queued op redundant, aur
+//     queued DEL on K stale (purana clear replay naye members mita deta).
+//
+// flushWriteRetries me ye purge NAHI hota — wahan FIFO replay (oldest
+// first) khud newest value pe converge karta hai, aur beech ka success
+// newer queued value ko drop karne ka khatra hota hai.
+func (u *Upstash) purgeSupersededRetry(successArgs []string) {
+	if len(successArgs) < 2 {
+		return
+	}
+	succOp := strings.ToUpper(successArgs[0])
+	key := successArgs[1]
+	field := ""
+	if (succOp == "HSET" || succOp == "HDEL") && len(successArgs) >= 3 {
+		field = successArgs[2]
+	}
+	u.retryMu.Lock()
+	kept := u.retryOps[:0]
+	dropped := 0
+	for _, q := range u.retryOps {
+		if retrySuperseded(q.args, succOp, key, field, successArgs) {
+			dropped++
+			continue
+		}
+		kept = append(kept, q)
+	}
+	u.retryOps = kept
+	u.retryMu.Unlock()
+	if dropped > 0 {
+		InfoLog("Storj retry queue: %d stale op(s) dropped (superseded by newer successful write)", dropped)
+	}
+}
+
+// retrySuperseded reports whether queued op q is made obsolete by the just
+// succeeded write (succOp/key/field/succArgs). Only ops on the SAME key are
+// ever superseded — dusri keys ka data untouched.
+func retrySuperseded(qArgs []string, succOp, key, field string, succArgs []string) bool {
+	if len(qArgs) < 2 {
+		return false
+	}
+	if qArgs[1] != key {
+		return false // different key — never superseded
+	}
+	qOp := strings.ToUpper(qArgs[0])
+	switch succOp {
+	case "SET", "DEL":
+		// full-key write jeet gaya → us key ka purana sab kuch stale
+		return true
+	case "HSET", "HDEL":
+		if field == "" {
+			return false
+		}
+		if qOp == "HSET" || qOp == "HDEL" {
+			// same field: nayi (latest) write jeeti — purani queued value stale
+			return len(qArgs) >= 3 && qArgs[2] == field
+		}
+		if qOp == "DEL" {
+			// purana full-hash DEL replay naya field-write mita deta — stale
+			return true
+		}
+		return false
+	case "SADD", "SREM":
+		if qOp == "DEL" {
+			// purana set-clear replay naye members mita deta — stale
+			return true
+		}
+		// exactly wahi members wala queued op redundant hai (S3 me already)
+		if qOp == succOp && len(qArgs) == len(succArgs) {
+			same := true
+			for i := range qArgs {
+				if qArgs[i] != succArgs[i] {
+					same = false
+					break
+				}
+			}
+			if same {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+// flushWriteRetries attempts all queued write ops via cmdCore (NOT cmd —
+// warna fail hone pe dobara queue hota rahe). Success wale hata do, fail
+// wale agli ticker tick pe dobara try honge. Ops idempotent hain
+// (HSET/SADD/SREM/DEL/SET/HDEL — dobara chalana safe hai).
+func (u *Upstash) flushWriteRetries() {
+	u.retryMu.Lock()
+	ops := u.retryOps
+	u.retryOps = nil
+	u.retryMu.Unlock()
+	if len(ops) == 0 {
+		return
+	}
+	var failed []storjRetryOp
+	for _, op := range ops {
+		if _, err := u.cmdCore(op.args...); err != nil {
+			failed = append(failed, op)
+		}
+	}
+	u.retryMu.Lock()
+	u.retryOps = append(u.retryOps, failed...)
+	left := len(u.retryOps)
+	u.retryMu.Unlock()
+	_ = left
+	if len(failed) > 0 {
+		ErrLog("Storj retry: %d/%d writes still pending (will retry in 30s)", len(failed), len(ops))
+	} else {
+		OkLog("Storj retry: %d queued write(s) saved successfully", len(ops))
+	}
+}
+
 // ── cache helpers ────────────────────────────────────────────────────────────
 
 func (u *Upstash) cacheGet(key string) (string, bool) {
@@ -928,7 +1243,20 @@ func (u *Upstash) SetSetting(jid, field, val string) {
 }
 
 func (u *Upstash) DelSetting(jid, field string) {
-	u.cacheDel("settings:" + jid + ":" + field)
+	ck := "settings:" + jid + ":" + field
+	// CACHE-SYNC FIX: pehle yahan cacheDel hota tha — is se agli read S3
+	// round-trip karti thi (~1s). Ab field-delete ka asar FORAN cache me
+	// \x00 sentinel (missing-field) ke saath likha jata hai — next read
+	// def value 0ms me degi, Storj write background me safe ho jayega.
+	u.cacheSet(ck, "\x00")
+	// If a background re-fetch (triggered by ClearCache) is in progress,
+	// record this update so the re-fetch does NOT overwrite it. The user's
+	// change always wins.
+	u.refetchMu.Lock()
+	if u.refetching {
+		u.pendingUpdates[ck] = "\x00"
+	}
+	u.refetchMu.Unlock()
 	_, _ = u.cmd("HDEL", "settings:"+jid, field)
 }
 
@@ -937,6 +1265,10 @@ func (u *Upstash) DelSetting(jid, field string) {
 func (u *Upstash) startCacheRefresher() {
 	ticker := time.NewTicker(upstashRefreshInterval)
 	defer ticker.Stop()
+	// STORJ WRITE-SAFETY: 30s retry ticker — failed writes background me
+	// Storj tak pahunchte rehte hain jab tak save na hon (owner order).
+	retryTicker := time.NewTicker(30 * time.Second)
+	defer retryTicker.Stop()
 
 	for {
 		select {
@@ -944,6 +1276,8 @@ func (u *Upstash) startCacheRefresher() {
 			return
 		case <-ticker.C:
 			u.refreshAllSettings()
+		case <-retryTicker.C:
+			u.flushWriteRetries()
 		}
 	}
 }
