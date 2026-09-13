@@ -199,17 +199,29 @@ func (u *Upstash) cmd(args ...string) (json.RawMessage, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("kv DEL: missing key")
 		}
-		return u.kvDel(ctx, args[1])
+		res, err := u.kvDel(ctx, args[1])
+		if err == nil {
+			u.cacheDel("setmembers:" + args[1]) // GROUP-SPEED FIX: keep set cache fresh
+		}
+		return res, err
 	case "SADD":
 		if len(args) < 3 {
 			return nil, fmt.Errorf("kv SADD: missing members")
 		}
-		return u.kvSAdd(ctx, args[1], args[2:])
+		res, err := u.kvSAdd(ctx, args[1], args[2:])
+		if err == nil {
+			u.cacheDel("setmembers:" + args[1]) // GROUP-SPEED FIX: keep set cache fresh
+		}
+		return res, err
 	case "SREM":
 		if len(args) < 3 {
 			return nil, fmt.Errorf("kv SREM: missing members")
 		}
-		return u.kvSRem(ctx, args[1], args[2:])
+		res, err := u.kvSRem(ctx, args[1], args[2:])
+		if err == nil {
+			u.cacheDel("setmembers:" + args[1]) // GROUP-SPEED FIX: keep set cache fresh
+		}
+		return res, err
 	case "SMEMBERS":
 		if len(args) < 2 {
 			return nil, fmt.Errorf("kv SMEMBERS: missing key")
@@ -580,6 +592,26 @@ func (u *Upstash) setString(key, val string) error {
 }
 
 func (u *Upstash) setMembers(key string) []string {
+	// GROUP-SPEED FIX: set members are now cached in memory (same pattern as
+	// GetSetting / PremiumMembersCached). SMEMBERS on Storj is an S3
+	// ListObjects round-trip (~0.5-1s) — it was previously paid on EVERY
+	// group message (bangcuser banned-user check runs synchronously per
+	// message, and the anti-* detectors read their whitelists per message).
+	// With the cache the check is 0ms. The cache is invalidated on every
+	// write (SADD/SREM/DEL via cmd() below) and re-validated every 2 min by
+	// the background refresher (refreshAllSettings) — exactly like the
+	// settings hash cache. Behavior is identical: same members, same order
+	// (sorted), same nil on error/empty.
+	ck := "setmembers:" + key
+	if v, ok := u.cacheGet(ck); ok {
+		if v == "\x00" { // sentinel: set exists but is empty
+			return nil
+		}
+		var arr []string
+		if err := json.Unmarshal([]byte(v), &arr); err == nil {
+			return arr
+		}
+	}
 	r, err := u.cmd("SMEMBERS", key)
 	if err != nil {
 		return nil
@@ -587,6 +619,11 @@ func (u *Upstash) setMembers(key string) []string {
 	var arr []string
 	if err := json.Unmarshal(r, &arr); err != nil {
 		return nil
+	}
+	if len(arr) == 0 {
+		u.cacheSet(ck, "\x00")
+	} else if b, err := json.Marshal(arr); err == nil {
+		u.cacheSet(ck, string(b))
 	}
 	return arr
 }
@@ -921,13 +958,41 @@ func (u *Upstash) refreshAllSettings() {
 
 	u.mu.Lock()
 	var keys []string
+	var setKeys []string
 	for k := range u.cache {
 		if strings.HasPrefix(k, "settings:") {
 			keys = append(keys, k)
+		} else if strings.HasPrefix(k, "setmembers:") { // GROUP-SPEED FIX
+			setKeys = append(setKeys, k)
 		}
 	}
 	u.mu.Unlock()
 
+	if len(keys) == 0 && len(setKeys) == 0 {
+		return
+	}
+
+	// GROUP-SPEED FIX: re-validate cached SET member lists (bangcuser bans,
+	// anti-* whitelists, premium/banned/sudo lists) in the background every
+	// 2 min so changes made from another server/deployment are picked up —
+	// exactly like the settings hash cache below. One SMEMBERS per cached
+	// SET key, off the reply path.
+	for _, ck := range setKeys {
+		key := strings.TrimPrefix(ck, "setmembers:")
+		r, err := u.cmd("SMEMBERS", key)
+		if err != nil {
+			continue // best-effort: keep existing cached value
+		}
+		var arr []string
+		if err := json.Unmarshal(r, &arr); err != nil {
+			continue
+		}
+		if len(arr) == 0 {
+			u.cacheSet(ck, "\x00")
+		} else if b, err := json.Marshal(arr); err == nil {
+			u.cacheSet(ck, string(b))
+		}
+	}
 	if len(keys) == 0 {
 		return
 	}
@@ -1074,6 +1139,35 @@ func (u *Upstash) WarmGroupSettings(groupJID string) {
 		for i := 0; i < len(pairs); i += 2 {
 			u.cacheSet("settings:"+groupJID+":"+pairs[i], pairs[i+1])
 		}
+	}()
+}
+
+// WarmGroupBanList warms the per-group bangcuser banned-users SET into the
+// in-memory set-members cache (GROUP-SPEED FIX). One background SMEMBERS per
+// group per process lifetime — after this, the synchronous per-message
+// banned check (handler.go) hits memory at 0ms instead of paying an S3
+// ListObjects round-trip on every single group message.
+func (u *Upstash) WarmGroupBanList(groupJID, botJID string) {
+	if u.warmedGroups == nil {
+		u.mu.Lock()
+		if u.warmedGroups == nil {
+			u.warmedGroups = map[string]bool{}
+		}
+		u.mu.Unlock()
+	}
+	warmKey := "bangcuser:" + botJID + ":" + groupJID
+	u.mu.Lock()
+	_, seen := u.warmedGroups[warmKey]
+	u.mu.Unlock()
+	if seen {
+		return
+	}
+	u.mu.Lock()
+	u.warmedGroups[warmKey] = true
+	u.mu.Unlock()
+	go func() {
+		defer func() { _ = recover() }()
+		_ = u.setMembers("goldmd:" + botJID + ":groupset:" + groupJID + ":bangcuser")
 	}()
 }
 

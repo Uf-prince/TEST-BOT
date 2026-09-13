@@ -96,7 +96,8 @@ func handleAntibot(s SessionBridge, info types.MessageInfo, args []string, prefi
 }
 
 func handleAntibotAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	if !requireGroupOwner(s, info) {
+	// ANTIBOT apna naam dikhaye (pehle ANTILINK likha aata tha)
+	if !requireGroupOwnerNamed(s, info, "ANTIBOT") {
 		return
 	}
 	groupJID := info.Chat.String()

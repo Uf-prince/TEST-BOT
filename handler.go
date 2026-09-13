@@ -431,6 +431,10 @@ func (s *Session) HandleMessage(evt *events.Message) {
 	if info.IsGroup {
 		if s.Manager != nil && s.Manager.Redis != nil {
 			s.Manager.Redis.WarmGroupSettings(info.Chat.String())
+			// GROUP-SPEED FIX: warm this group's bangcuser banned-users SET
+			// in the same background warmup so the per-message banned check
+			// below hits memory (0ms) instead of an S3 ListObjects round-trip.
+			s.Manager.Redis.WarmGroupBanList(info.Chat.String(), s.JID)
 		}
 	}
 
