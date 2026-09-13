@@ -35,13 +35,29 @@ COPY start.sh .
 # .env REMOVED — all credentials are hardcoded in source (storj.go / config.go)
 RUN chmod +x ./gold-md && chmod +x ./start.sh && mkdir -p nexstore/pairing
 
-# ngrok agent — permanent URL tunnel (NGROK_AUTHTOKEN + NGROK_DOMAIN env vars
-# container runtime pe set karo, image me bake NAHI karna)
-RUN curl -sL https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz \
-        -o /tmp/ngrok.tgz \
-    && tar xzf /tmp/ngrok.tgz -C /usr/local/bin \
-    && rm /tmp/ngrok.tgz \
-    && chmod +x /usr/local/bin/ngrok
+# ngrok agent — optional runtime tool (NGROK_AUTHTOKEN + NGROK_DOMAIN env vars
+# container runtime pe set karo, image me bake NAHI karna).
+# NON-FATAL: Render builder egress proxy equinox.io CDN ko block kar sakta hai
+# (curl exit 107). Agar download fail ho to ngrok SKIP — build/pass kharab
+# NAHI hoga. Bot ngrok ke bina bilkul theek chalta hai (sirf tunnel off).
+RUN set -eux; \
+    if curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 \
+            https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz \
+            -o /tmp/ngrok.tgz 2>/dev/null; then \
+        tar xzf /tmp/ngrok.tgz -C /usr/local/bin; \
+        rm -f /tmp/ngrok.tgz; \
+        chmod +x /usr/local/bin/ngrok; \
+        /usr/local/bin/ngrok --version || true; \
+    elif wget -q --tries=3 --timeout=20 -O /tmp/ngrok.tgz \
+            https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz \
+            && [ -s /tmp/ngrok.tgz ]; then \
+        tar xzf /tmp/ngrok.tgz -C /usr/local/bin; \
+        rm -f /tmp/ngrok.tgz; \
+        chmod +x /usr/local/bin/ngrok; \
+        /usr/local/bin/ngrok --version || true; \
+    else \
+        echo "WARN: ngrok download FAILED (proxy/CDN block) — skipping ngrok install, build continue"; \
+    fi
 
 ENV PORT=11224
 EXPOSE 2081

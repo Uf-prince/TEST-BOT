@@ -1,5 +1,5 @@
 {
-  "_comment": "GOLD-MD multi-server panel + hidden .server menu config. 200 Render free deployments (512MB RAM / 5GB bandwidth each, max 2 pairings per server). SERVER 1-13 owner ke original list se (xsvr1-4, omil, svrr7-13). SERVER 14-200 = xsvr5-xsvr191 (auto-generated). Owner baad me on kar dega \u2014 off servers .server report me STOPPED dikhenge.",
+  "_comment": "GOLD-MD multi-server panel + hidden .server menu config. 200 Render free deployments (512MB RAM / 5GB bandwidth each, max 2 pairings per server). SERVER 1-13 owner ki updated list se (xsvr1-4, botxd2, svrr10/11/12, svrr7/8/9, svrr13, svrr13). SERVER 14-200 = xsvr5-xsvr191 (auto-generated). Owner baad me on kar dega \u2014 off servers .server report me STOPPED dikhenge.",
   "maxPerServer": 2,
   "servers": [
     {
@@ -20,31 +20,31 @@
     },
     {
       "name": "SERVER 5",
-      "url": "https://gold-md-omil.onrender.com"
+      "url": "https://gold-md-botxd2.onrender.com"
     },
     {
       "name": "SERVER 6",
-      "url": "https://gold-md-svrr7.onrender.com"
-    },
-    {
-      "name": "SERVER 7",
-      "url": "https://gold-md-svrr8.onrender.com"
-    },
-    {
-      "name": "SERVER 8",
-      "url": "https://gold-md-svrr9.onrender.com"
-    },
-    {
-      "name": "SERVER 9",
       "url": "https://gold-md-svrr10.onrender.com"
     },
     {
-      "name": "SERVER 10",
+      "name": "SERVER 7",
       "url": "https://gold-md-svrr11.onrender.com"
     },
     {
-      "name": "SERVER 11",
+      "name": "SERVER 8",
       "url": "https://gold-md-svrr12.onrender.com"
+    },
+    {
+      "name": "SERVER 9",
+      "url": "https://gold-md-svrr7.onrender.com"
+    },
+    {
+      "name": "SERVER 10",
+      "url": "https://gold-md-svrr8.onrender.com"
+    },
+    {
+      "name": "SERVER 11",
+      "url": "https://gold-md-svrr9.onrender.com"
     },
     {
       "name": "SERVER 12",

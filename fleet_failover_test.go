@@ -109,7 +109,7 @@ func TestFleetServerNumberForSIDTable(t *testing.T) {
 		{"", "0"},
 		{"https://gold-md-xsvr1.onrender.com", "1"},
 		{"gold-md-xsvr1.onrender.com", "1"},
-		{"https://gold-md-omil.onrender.com/", "5"},
+		{"https://gold-md-botxd2.onrender.com/", "5"},
 		{"https://gold-md-xsvr5.onrender.com/", "14"},
 		{"https://unknown-host.onrender.com", "0"},
 	}
