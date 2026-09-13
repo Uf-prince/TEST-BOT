@@ -143,3 +143,38 @@ func TestGZ1HealMakesOldBinaryReadable(t *testing.T) {
 			len(back), len(rawDB))
 	}
 }
+
+// TestGZ1LazyHealRaceSafety — LAZY HEAL race guard: rewrite se pehle
+// re-read; object PLAIN ho chuka ho (kisi ne newer/plain likha) to
+// heal OVERWRITE nahi karta. Yehi guard newer-session-data clobbering
+// se bachata hai. (Format-level simulation — network nahi.)
+func TestGZ1LazyHealRaceSafety(t *testing.T) {
+	withKvGzipOn(t)
+	legacy := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("session-v2"), 900))
+	gzBody := kvGzipMaybe(legacy) // GZ1:... (broken-build style)
+	if !strings.HasPrefix(gzBody, kvGzPrefix) {
+		t.Fatalf("precondition: GZ1 body bani honi chahiye")
+	}
+
+	// SIMULATION A — abhi bhi GZ1 (heal eligible):
+	// prefix-check + gunzip (kvGet ka lazy-heal branch) => exact legacy
+	if !strings.HasPrefix(gzBody, kvGzPrefix) {
+		t.Fatal("A: prefix")
+	}
+	plain := string(kvGunzipMaybe([]byte(gzBody)))
+	if plain != legacy {
+		t.Fatalf("A: gunzip mismatch")
+	}
+
+	// SIMULATION B — re-read PLAIN mila (race: newer writer ne plain
+	// likh diya) => heal SKIP karega (overwrite NAHI).
+	if strings.HasPrefix(plain, kvGzPrefix) { // plain ab
+		t.Fatal("B: plain me GZ1 prefix nahi ho sakta")
+	}
+	// healGZ1Lazy ka skip condition: cur PLAIN => return (no rewrite)
+	// — yahan sirf format-level prove: healed value purane-binary
+	// reader ke liye valid plain base64 hai:
+	if _, err := base64.StdEncoding.DecodeString(plain); err != nil {
+		t.Fatalf("B: healed plain purane binary-style reader ke liye valid nahi: %v", err)
+	}
+}

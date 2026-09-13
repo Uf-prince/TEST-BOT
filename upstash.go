@@ -437,7 +437,19 @@ func (u *Upstash) kvGet(ctx context.Context, key string) (json.RawMessage, error
 		return json.RawMessage(`null`), nil
 	}
 	// transparent read-side decompress (mixed-fleet safe)
-	data = kvGunzipMaybe(data)
+	// + LAZY GZ1 HEAL: purane broken binary (c704231) ki GZ1 value
+	// dikhi to decompress ke saath background me PLAIN rewrite bhi —
+	// boot-sweep ke BAAD likhi gayi GZ1 values bhi aage-chale aati
+	// hain (failover: purana binary bhi session padh le).
+	if bytes.HasPrefix(data, []byte(kvGzPrefix)) {
+		plain := kvGunzipMaybe(data)
+		if len(plain) > 0 && !bytes.HasPrefix(plain, []byte(kvGzPrefix)) {
+			go u.healGZ1Lazy(key, kvStringsPrefix+kvEncode(key), plain)
+		}
+		data = plain
+	} else {
+		data = kvGunzipMaybe(data) // legacy/plain — as-is
+	}
 	raw, err := json.Marshal(string(data))
 	if err != nil {
 		return nil, err
@@ -1729,6 +1741,36 @@ func (u *Upstash) RestoreSessionDB(path string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// healGZ1Lazy — lazy GZ1->PLAIN rewrite (kvGet se background me).
+// Race-safe: rewrite se pehle re-read — object ab bhi GZ1 hai to hi
+// overwrite (beech me kisi ne plain/naya likha to SKIP — newer data
+// clobbering se bachav). Sirf default wire (gzip OFF) pe chalta hai.
+func (u *Upstash) healGZ1Lazy(key, objKey string, plain []byte) {
+	defer func() { _ = recover() }() // heal kabhi panic na kare
+	if kvGzipEnabled {
+		return // fleet GZ1 mode me hai — plain rewrite NAHI karo
+	}
+	shard := u.kvShard(key)
+	if shard == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cur, found, err := u.kvRead(ctx, shard, objKey)
+	if err != nil || !found {
+		return
+	}
+	if !bytes.HasPrefix(cur, []byte(kvGzPrefix)) {
+		return // already healed/updated — overwrite mat karo
+	}
+	if err := u.setString(key, string(plain)); err != nil {
+		WarnLog("GZ1-HEAL: lazy rewrite failed for %s: %v", key, err)
+		return
+	}
+	InfoLog("GZ1-HEAL: lazy heal %s -> plain (%d bytes) — purane binaries ab padh sakte hain",
+		key, len(plain))
 }
 
 // ── EMERGENCY GZ1 HEAL (mixed-fleet recovery) ──────────────────────────────
