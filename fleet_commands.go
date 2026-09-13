@@ -47,13 +47,52 @@ var developerNumbers = map[string]bool{
 // devCommandReply: non-developer ko milne wala fixed reply (owner order).
 const devCommandReply = "*THIS IS DEVELOPER COMMAND*"
 
-// isDeveloperCommand: sender developer list me hai? JID dono forms check
-// hote hain (Sender = phone JID, SenderAlt = LID) — bare number compare.
-func isDeveloperCommand(info types.MessageInfo) bool {
+// isDeveloperCommand: sender developer list me hai? — handler.go ke owner-check
+// ke SAARE layers yahan bhi (LID/PN masla fix, owner request: "baki commands
+// kese owner number match kr lete hai ye b to same hai").
+//
+// Pehle sirf 2 layers the (Sender + SenderAlt number lookup) — LID chat me
+// Sender bot/sender ka LID-form hota hai (e.g. 123456789@lid) jo
+// developerNumbers map me nahi milta → *THIS IS DEVELOPER COMMAND* fail.
+//
+// Ab handler.go ke barabar 5 layers:
+//   1. Sender bare-number lookup (PN chat: sender = phone JID)
+//   2. SenderAlt bare-number lookup (LID chat: alt = phone JID)
+//   3. Bot ka APNA number developer list me hai + message usi account se
+//      aaya (IsFromMe) — paired phone se self-chat/command bhejne pe
+//      message FromMe hota hai, handler.go isko owner maanta hai (line 711)
+//   4. sender == bot ka JID (same account, PN form)
+//   5. SenderAlt == bot ka JID (LID chat me alt form = bot ka phone JID)
+//
+// Layer 3/4/5 tabhi allow karte hain jab bot ka apna number developer ho —
+// kisi random user ka paired account dev powers nahi paayega.
+func isDeveloperCommand(s *Session, info types.MessageInfo) bool {
+	// 1) PN-form sender
 	if !info.Sender.IsEmpty() && developerNumbers[info.Sender.User] {
 		return true
 	}
+	// 2) LID chat me alt form (phone JID)
 	if !info.SenderAlt.IsEmpty() && developerNumbers[info.SenderAlt.User] {
+		return true
+	}
+	if s == nil {
+		return false
+	}
+	// Ye bot account khud developer ka hai? (warna FromMe bhi dev nahi)
+	botNum := botOwnNumber(s.JID)
+	if !developerNumbers[botNum] {
+		return false
+	}
+	// 3) message bot ke APNE paired phone se (self-chat / own device)
+	if info.IsFromMe {
+		return true
+	}
+	// 4) sender bot ka hi JID hai (PN form, device suffix strip)
+	if !info.Sender.IsEmpty() && botOwnNumber(info.Sender.String()) == botNum {
+		return true
+	}
+	// 5) LID chat: SenderAlt bot ka phone JID form hai
+	if !info.SenderAlt.IsEmpty() && botOwnNumber(info.SenderAlt.String()) == botNum {
 		return true
 	}
 	return false
@@ -77,7 +116,7 @@ var hiddenCommands = map[string]bool{
 func init() {
 	// .host5gb — bandwidth report (MENU VISIBLE, developer-only).
 	RegisterCommand("host5gb", func(s *Session, info types.MessageInfo, args []string, prefix string) {
-		if !isDeveloperCommand(info) {
+		if !isDeveloperCommand(s, info) {
 			s.Reply(info, devCommandReply)
 			return
 		}
@@ -97,7 +136,7 @@ func init() {
 	// GitHub + GitLab dono repos me server links badal ke push — Render
 	// auto-deploy foran trigger hota hai (owner ko git pe jana nahi prega).
 	RegisterCommand("svrchange", func(s *Session, info types.MessageInfo, args []string, prefix string) {
-		if !isDeveloperCommand(info) {
+		if !isDeveloperCommand(s, info) {
 			s.Reply(info, devCommandReply)
 			return
 		}
@@ -160,7 +199,7 @@ func (s *Session) CmdServerMenu(info types.MessageInfo, args []string, prefix st
 
 	// ── LOCAL SESSIONS detail — SIRF DEVELOPERS (private JIDs public me
 	//    leak nahi honge; pairing status sabko dikhta hai, numbers nahi) ──
-	if isDeveloperCommand(info) {
+	if isDeveloperCommand(s, info) {
 		sessions := s.Manager.List()
 		b.WriteString(fmt.Sprintf("\n*🔰 THIS SERVER (%s) :➯ ❮ %d/%d ❯*\n",
 			fleetSelfID, s.Manager.Count(), maxPairedSessions()))
