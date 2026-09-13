@@ -53,6 +53,7 @@ package goldcmds
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -116,64 +117,44 @@ func automsgKey(botJID, chat string) string {
 // parseDuration parses a "XXhXXmXXs" token into a duration.
 // Examples: "02h30m00s" → 2h30m, "00h00m45s" → 45s, "1h0m0s" → 1h.
 // Returns ok=false if the format is wrong or the total is <= 0.
+// FIX 2026-09-13: Purana parser pehle trailing "s" strip kar deta tha, is
+// wajah se seconds ke digits ke aage unit letter ("s") nahi bachta tha aur
+// HAR sahi format (06h05m06s, 02h30m00s, ...) reject ho jata tha. Naya
+// parser seedha regex se h/m/s teeno segments match karta hai — koi strip
+// nahi, koi ambiguity nahi.
+//
+// Accepted forms (strict, exactly h + m + s, two-digit padding optional):
+//
+//	06h05m06s   2h30m0s   00h00m45s   1h2m3s
+//
+// Rejected: 30m (missing h/s), 2h30m (missing s), 45s (missing h/m),
+//
+//	2h30m00 (missing trailing s), abc, 0h0m0s (total must be > 0).
+var automsgDurRe = regexp.MustCompile(`^(\d+)h(\d+)m(\d+)s$`)
+
 func parseAutomsgDuration(token string) (time.Duration, bool) {
-	token = strings.ToLower(strings.TrimSpace(token))
-	if !strings.HasSuffix(token, "s") {
+	m := automsgDurRe.FindStringSubmatch(strings.ToLower(strings.TrimSpace(token)))
+	if m == nil {
 		return 0, false
 	}
-	// strip trailing 's' so we can scan h/m/s segments
-	core := token
-	if strings.HasSuffix(core, "s") {
-		core = core[:len(core)-1]
+	h, err1 := strconv.ParseInt(m[1], 10, 64)
+	mn, err2 := strconv.ParseInt(m[2], 10, 64)
+	sec, err3 := strconv.ParseInt(m[3], 10, 64)
+	if err1 != nil || err2 != nil || err3 != nil {
+		return 0, false
 	}
-	var total time.Duration
-	ok := true
-	i := 0
-	for i < len(core) {
-		// read digits
-		j := i
-		for j < len(core) && core[j] >= '0' && core[j] <= '9' {
-			j++
-		}
-		if j == i {
-			ok = false
-			break
-		}
-		num, err := strconv.Atoi(core[i:j])
-		if err != nil {
-			ok = false
-			break
-		}
-		i = j
-		// read unit
-		if i >= len(core) {
-			ok = false
-			break
-		}
-		switch core[i] {
-		case 'h':
-			if num < 0 || num > 8784 { // sane upper bound (~1 year)
-				ok = false
-			}
-			total += time.Duration(num) * time.Hour
-		case 'm':
-			if num < 0 || num >= 60 {
-				ok = false
-			}
-			total += time.Duration(num) * time.Minute
-		case 's':
-			// trailing 's' already stripped, but a 's' unit in the middle is invalid
-			ok = false
-		default:
-			ok = false
-		}
-		i++
+	// sane bounds: minutes & seconds must be < 60, hours < ~1 year
+	if mn < 0 || mn > 59 {
+		return 0, false
 	}
-	// require all three units present (h, m, s) in the original token
-	if !strings.Contains(token, "h") || !strings.Contains(token, "m") || !strings.Contains(token, "s") {
-		ok = false
+	if sec < 0 || sec > 59 {
+		return 0, false
 	}
-	if !ok || total <= 0 {
+	if h < 0 || h > 8784 {
+		return 0, false
+	}
+	total := time.Duration(h)*time.Hour + time.Duration(mn)*time.Minute + time.Duration(sec)*time.Second
+	if total <= 0 {
 		return 0, false
 	}
 	return total, true
@@ -210,6 +191,38 @@ func isJustNumber(s string) bool {
 // delPendingKey is the map key for a owner's pending-delete list.
 func delPendingKey(botJID, senderJID string) string {
 	return botJID + "|" + senderJID
+}
+
+// ── AutomsgTryDeleteReply ──────────────────────────────────────────────────
+// Prefix-less number-reply hook for .automsg delete. handler.go isko apne
+// prefix-check se PEHLE call karta hai: agar owner ne abhi .automsg delete
+// ka numbered list dekha hai aur uska next message sirf ek number hai (jaise
+// "2"), to wahi schedule delete ho jata hai — bina prefix type kiye. Baaki
+// sab cases me false return hota hai (koi impact nahi).
+func AutomsgTryDeleteReply(s SessionBridge, info types.MessageInfo, body string) bool {
+	t := strings.TrimSpace(body)
+	if !isJustNumber(t) || t == "" {
+		return false
+	}
+	// owner-only feature
+	if !s.IsOwner(info) {
+		return false
+	}
+	dpk := delPendingKey(s.GetJID(), info.Sender.String())
+	automsgDelMu.Lock()
+	pending := automsgDelPending[dpk]
+	automsgDelMu.Unlock()
+	if pending == nil || len(pending.keys) == 0 {
+		return false
+	}
+	if time.Since(pending.ts) > 2*time.Minute {
+		automsgDelMu.Lock()
+		delete(automsgDelPending, dpk)
+		automsgDelMu.Unlock()
+		return false
+	}
+	go handleAutomsgDeleteByNumber(s, info, ".", pending, t)
+	return true
 }
 
 func handleAutomsg(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -278,6 +291,18 @@ func handleAutomsgAsync(s SessionBridge, info types.MessageInfo, args []string, 
 	// ── .automsg off → turn off (pause) current chat ──
 	if strings.EqualFold(argStr, "off") || strings.EqualFold(argStr, "pause") {
 		handleAutomsgOff(s, info, prefix, key)
+		return
+	}
+
+	// ── .automsg status → live countdown for this chat ──
+	if strings.EqualFold(argStr, "status") || strings.EqualFold(argStr, "st") {
+		handleAutomsgStatus(s, info, prefix, key)
+		return
+	}
+
+	// ── .automsg stop → cancel timer + SAFE-DELETE config (docs me tha, code me missing tha) ──
+	if strings.EqualFold(argStr, "stop") || strings.EqualFold(argStr, "cancel") {
+		handleAutomsgStop(s, info, prefix, key)
 		return
 	}
 
@@ -366,7 +391,7 @@ func handleAutomsgAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		formatHMS(dur),
 		"BOT MEMORY 🔰",
 		modeNote,
-		prefix, prefix, prefix,
+		prefix, prefix,
 	))
 }
 
@@ -727,6 +752,183 @@ func automsgCancel(key string) {
 	}
 }
 
+// ── .automsg status ────────────────────────────────────────────────────
+// Shows the current chat's schedule with a LIVE countdown. If the timer is
+// active it reads the in-memory nextFire; if paused (off) it shows the saved
+// config from bot memory with "paused" status.
+func handleAutomsgStatus(s SessionBridge, info types.MessageInfo, prefix string, key string) {
+	automsgMu.Lock()
+	t, active := automsgTimers[key]
+	automsgMu.Unlock()
+	if active && t != nil {
+		remaining := time.Until(t.nextFire)
+		if remaining < 0 {
+			remaining = 0
+		}
+		modeEmoji := "🔴"
+		modeLabel := "REPEAT"
+		if t.cfg.Mode == "once" {
+			modeEmoji = "1️⃣"
+			modeLabel = "ONCE"
+		}
+		s.Reply(info, fmt.Sprintf(
+			"🔴 *AUTOMSG STATUS* 🔴\n\n"+
+				"🟢 *SCHEDULE IS ACTIVE*\n\n"+
+				"🔴 *TIME     :❰ %s ❱*\n"+
+				"%s *MODE     :❰ %s ❱*\n"+
+				"🔴 *MESSAGE  :❰ %s ❱*\n"+
+				"🔴 *CHAT     :❰ %s ❱*\n"+
+				"⏱ *NEXT FIRE IN :❰ %s ❱*\n\n"+
+				"*TO PAUSE TYPE:* ```%sautomsg off```\n"+
+				"*TO CANCEL TYPE:* ```%sautomsg stop```",
+			formatHMS(time.Duration(t.cfg.DurationSec)*time.Second),
+			modeEmoji, modeLabel,
+			t.cfg.Message,
+			t.cfg.Chat,
+			formatHMS(remaining),
+			prefix, prefix,
+		))
+		return
+	}
+	// no live timer → check memory for a paused schedule
+	if s.MemoryReady() {
+		if data, ok, _ := s.MemoryLoad(key); ok && len(data) > 0 {
+			var cfg automsgConfig
+			if json.Unmarshal(data, &cfg) == nil {
+				s.Reply(info, fmt.Sprintf(
+					"🔴 *AUTOMSG STATUS* 🔴\n\n"+
+						"🔴 *SCHEDULE IS PAUSED (OFF)*\n\n"+
+						"🔴 *TIME     :❰ %s ❱*\n"+
+						"🔴 *MODE     :❰ %s ❱*\n"+
+						"🔴 *MESSAGE  :❰ %s ❱*\n"+
+						"🔴 *CHAT     :❰ %s ❱*\n\n"+
+						"*TO RESUME TYPE:* ```%sautomsg on```\n"+
+						"*TO CANCEL TYPE:* ```%sautomsg stop```",
+					formatHMS(time.Duration(cfg.DurationSec)*time.Second),
+					strings.ToUpper(cfg.Mode),
+					cfg.Message,
+					cfg.Chat,
+					prefix, prefix,
+				))
+				return
+			}
+		}
+	}
+	s.Reply(info, "🔴 *AUTOMSG STATUS* 🔴\n\n🔴 *No active or saved auto-message schedule in this chat.*\n\n*To set one type:* ```"+prefix+"automsg XXhXXmXXs repeat/once {msg}```")
+}
+
+// ── .automsg stop ────────────────────────────────────────────────────
+// Cancel + SAFE-DELETE: cancels the live timer AND removes the config from
+// bot memory (idempotent — no error if already gone). Ye file ke header docs
+// me described tha ("stop → cancel the active timer + safe-delete the
+// config from the bot's MEMORY") par handleAutomsg me "stop" ka dispatch hi
+// missing tha — ab added.
+func handleAutomsgStop(s SessionBridge, info types.MessageInfo, prefix string, key string) {
+	// snapshot config (agar live timer hai) for the confirmation text
+	automsgMu.Lock()
+	t, active := automsgTimers[key]
+	automsgMu.Unlock()
+	var hadCfg automsgConfig
+	had := false
+	if active && t != nil {
+		hadCfg = t.cfg
+		had = true
+	} else if s.MemoryReady() {
+		if data, ok, _ := s.MemoryLoad(key); ok && len(data) > 0 {
+			if json.Unmarshal(data, &hadCfg) == nil {
+				had = true
+			}
+		}
+	}
+	// cancel live timer
+	automsgCancel(key)
+	// safe-delete from bot memory
+	delErr := error(nil)
+	if s.MemoryReady() {
+		delErr = s.MemoryDelete(key)
+	}
+	if delErr != nil {
+		s.Reply(info, "🔴 *AUTOMSG STOP FAILED*\n\n*Timer cancelled but memory cleanup failed:*\n"+delErr.Error())
+		return
+	}
+	if !had {
+		s.Reply(info, "🔴 *AUTOMSG STOP* 🔴\n\n🔴 *No active auto-message schedule in this chat.*\n\n*To set one type:* ```"+prefix+"automsg XXhXXmXXs repeat/once {msg}```")
+		return
+	}
+	s.Reply(info, fmt.Sprintf(
+		"🔴 *AUTOMSG STOPPED* 🔴\n\n"+
+			"❌ *Schedule cancelled & removed from bot memory*\n\n"+
+			"🔴 *TIME     :❰ %s ❱*\n"+
+			"🔴 *MODE     :❰ %s ❱*\n"+
+			"🔴 *MESSAGE  :❰ %s ❱*\n\n"+
+			"*TO SET A NEW ONE TYPE:* ```%sautomsg XXhXXmXXs repeat/once {msg}```",
+		formatHMS(time.Duration(hadCfg.DurationSec)*time.Second),
+		strings.ToUpper(hadCfg.Mode),
+		hadCfg.Message,
+		prefix,
+	))
+}
+
+// ── AutomsgRestoreSavedSchedules ───────────────────────────────────────
+// RESTART RESTORE: bot restart/reconnect hone par manager.go ke
+// *events.Connected handler se call hota hai. Bot ki MEMORY (automsg/ prefix
+// objects) me saved har repeat schedule ko padhta hai aur timer RE-ARM kar
+// deta hai — is tarah "persists across restart" wala promise actually poora
+// hota hai (pehle config save hota tha par restart ke baad koi re-arm nahi
+// karta tha, isliye schedule chupchaap mar jata tha).
+//
+// once-mode schedules restore NAHI hote — wo one-shot hote hain; agar bot
+// down tha jab fire hona tha, to ab wapas arm karna risky hai (delayed send
+// confusion). Owner dobara set kar sakta hai.
+//
+// Restore deadline: agar NextFireMs already 2+ durations peeche chuka hai
+// (bot bahut der se down tha), to missed cycles nahi bheje jaate — seedha
+// fresh full-duration timer arm hota hai.
+func AutomsgRestoreSavedSchedules(s SessionBridge) {
+	if !s.MemoryReady() {
+		return
+	}
+	entries, err := s.MemoryList()
+	if err != nil || len(entries) == 0 {
+		return
+	}
+	restored := 0
+	for _, e := range entries {
+		var cfg automsgConfig
+		if json.Unmarshal(e.Data, &cfg) != nil {
+			continue
+		}
+		// sirf repeat schedules re-arm karo
+		if cfg.Mode != "repeat" {
+			continue
+		}
+		dur := time.Duration(cfg.DurationSec) * time.Second
+		if dur <= 0 {
+			continue
+		}
+		key := e.ID
+		// already armed? (double Connected event guard)
+		automsgMu.Lock()
+		_, active := automsgTimers[key]
+		automsgMu.Unlock()
+		if active {
+			continue
+		}
+		// synthetic MessageInfo — Reply sirf info.Chat use karta hai
+		chat, jerr := types.ParseJID(cfg.Chat)
+		if jerr != nil || chat.IsEmpty() || chat.Server == "" {
+			continue
+		}
+		info := types.MessageInfo{}
+		info.Chat = chat
+		armAutomsgTimer(s, info, key, cfg, dur)
+		restored++
+	}
+	if restored > 0 {
+		fmt.Printf("[automsg] restart-restore: %d repeat schedule(s) re-armed from bot memory\n", restored)
+	}
+}
+
 // automsgUsage returns the GOLD-MD styled help text (no-arg reply).
 func automsgUsage(prefix string) string {
 	return "🔰 *GOLD-MD AUTOMSG* 🔰\n\n" +
@@ -747,7 +949,7 @@ func automsgUsage(prefix string) string {
 		"*COMMANDS:*\n" +
 		"🟢 ```" + prefix + "automsg on```     → turn on / resume saved schedule\n" +
 		"🔴 ```" + prefix + "automsg off```    → turn off / pause (config stays in memory)\n" +
-		"🔴 ```" + prefix + "automsg off```    → turn off / pause (config stays in memory)\n" +
+		"🟢 ```" + prefix + "automsg status```  → live countdown of this chat\n" +
 		"🔰 ```" + prefix + "automsg list```   → see ALL saved schedules (numbered)\n" +
 		"🔰 ```" + prefix + "automsg delete``` → delete a schedule (reply a number)\n\n" +
 		"*TIME FORMAT: XXhXXmXXs (hours minutes seconds)*\n" +

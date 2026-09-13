@@ -162,8 +162,8 @@ type Manager struct {
 	// double count), FAIL pe releaseSlot se hat jati hai. Session ke
 	// zinda rehne tak ye set usi jid ko rakhta hai — Count() usko
 	// connected session se replace kar deta hai.
-	slotMu   sync.Mutex
-	slotRes  map[string]time.Time // jid → reserve time
+	slotMu  sync.Mutex
+	slotRes map[string]time.Time // jid → reserve time
 
 	shutdown bool
 }
@@ -1045,6 +1045,22 @@ func (s *Session) EventHandler(raw interface{}) {
 
 		// ── FLEET: session live → claim refresh + blob sync (background).
 		go fleetOnConnected(s.JID)
+
+		// ── AUTOMSG RESTART-RESTORE ───────────────────────────────────────
+		// Bot ki MEMORY me saved repeat schedules ko phir se ARM karo
+		// (pehle config save hota tha par restart ke baad koi re-arm nahi
+		// karta tha — "persists across restart" ka promise toota tha).
+		// Background goroutine — connect path pe 0 blocking.
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// restore panic se bot kabhi nahi marna chahiye
+					_ = r
+				}
+			}()
+			brRestore := &bridge{s: s}
+			goldcmds.AutomsgRestoreSavedSchedules(brRestore)
+		}()
 
 		// ── Preload settings from Redis into cache ──────────────────────
 		// On every successful connect (boot, reconnect, or fresh pairing),

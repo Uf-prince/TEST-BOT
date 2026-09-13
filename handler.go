@@ -647,6 +647,15 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		// Otherwise it might be a new command with prefix — fall through.
 	}
 
+	// ── AUTOMSG DELETE NUMBER-REPLY ─────────────────────────────────────────────
+	// .automsg delete ke baad owner jo plain number ("2") reply karta hai
+	// (bina prefix), use automsg handler tak pahunchana hai. Ye prefix-check
+	// se PEHLE chalta hai (settings/compress/yts/search hooks jaisa hi pattern).
+	// Sirf owner ke liye, sirf pending list + 2-min window ke andar.
+	if goldcmds.AutomsgTryDeleteReply(brAR, info, body) {
+		return
+	}
+
 	if !strings.HasPrefix(body, prefix) {
 		return
 	}
