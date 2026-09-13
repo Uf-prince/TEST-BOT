@@ -893,10 +893,40 @@ func fleetOnConnected(jid string) {
 		if m == nil || m.Redis == nil {
 			return
 		}
+		// BOOT-RESTORE PATH: AutoLoad ne (per-sid blob se) seedha connect
+		// kar diya — fleet claim path se nahi aya. Stale dead-holder claim
+			// pada ho to usko HDEL karo, apna fresh claim daalo, aur agar
+			// failover marker pada hai to PURGE + NOTIFY bhi karo — warna
+			// ye session bina claim ke chalta rehta hai aur takeover flow
+			// (dead server ka data delete + owner ko msg) kabhi nahi chalta.
 		holders := fleetClaimHolders(jid)
-		if len(holders) == 0 {
+		live := false
+		for sid := range holders {
+			if sid == fleetSelfID {
+				continue
+			}
+			if fleetHolderAlive(sid, fleetHeartbeatMap()) {
+				live = true
+				break
+			}
+		}
+		if !live {
+			if len(holders) > 0 {
+				// stale dead-holder claims release karo (boot ke waqt
+				// sweep abhi nahi chula hoga)
+				for sid := range holders {
+					_, _ = m.Redis.cmd("HDEL", fleetClaimPrefix+jid, sid)
+				}
+			}
 			_, _ = m.Redis.cmd("HSET", fleetClaimPrefix+jid, fleetSelfID,
 				strconv.FormatInt(time.Now().Unix(), 10))
+			// FAILOVER COMPLETE: marker pada hai (is jid ka purana holder
+				// dead tha) → purge + owner-notify ek hi baar.
+			if mk, ok := m.Redis.getStringKV(fleetFailMarkPrefix + jid); ok && mk != "" && mk != fleetSelfID {
+				_ = m.Redis.setDel(fleetFailMarkPrefix + jid)
+				go fleetNotifyFailover(jid, mk)
+				go fleetPurgeDeadServerKV(mk)
+			}
 		}
 		fleetSaveBlob(jid) // connected keys latest rakho
 	}()
