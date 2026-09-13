@@ -440,6 +440,11 @@ func fleetClaimAvailable() {
 		_, recentlyFailed := fleetFailedAt[jid]
 		fleetFailedMu.Unlock()
 		if recentlyFailed {
+			// WHATSAPP TRUTH (owner order): connect attempt fail hua aur
+			// abhi cooldown chal raha hai. Agar StartSession ne "whatsapp
+			// logged out" error diya tha to blob pehle hi purge ho chuka
+			// (JID set se nikal chuka) — skip hota rahega. Sirf transient
+			// network fail wale retry karenge (cooldown khatam hone pe).
 			continue
 		}
 
@@ -526,18 +531,48 @@ func fleetRestoreAndConnect(jid string) {
 	// 4. local device hai to seedha connect, warna Storj blob se restore.
 	if !fleetDeviceExists(jid) {
 		if err := fleetRestoreBlob(jid); err != nil {
-			WarnLog("FLEET: blob restore failed for %s: %v", jid, err)
 			_, _ = m.Redis.cmd("HDEL", fleetClaimPrefix+jid, fleetSelfID)
 			fleetMarkFailed(jid)
+			// TRANSIENT vs DEAD: Storj glitch me restore ek baar fail ho
+			// sakta hai — cooldown (10 min) baad ek aur try hota hai.
+			// Baar-baar fail (3+ attempts) = blob hi corrupt/mara hua hai
+			// — WhatsApp truth: is session ko koi server revive nahi kar
+			// sakta. Silent purge (config safe) — fleet set se bhi nikal
+			// gaya, watchdog kabhi dobara claim nahi karega.
+			fleetFailedMu.Lock()
+			attempts := fleetRestoreAttempts[jid] + 1
+			fleetRestoreAttempts[jid] = attempts
+			fleetFailedMu.Unlock()
+			if attempts >= 3 {
+				WarnLog("FLEET: blob restore failed %dx for %s — dead blob, silent purge (config safe): %v", attempts, jid, err)
+				fleetPurgeLoggedOutSession(jid)
+			} else {
+				WarnLog("FLEET: blob restore failed for %s (attempt %d/3): %v", jid, attempts, err)
+			}
 			return
 		}
+		// restore success → attempt counter reset (session wapas zinda hai)
+		fleetFailedMu.Lock()
+		delete(fleetRestoreAttempts, jid)
+		fleetFailedMu.Unlock()
 	}
 
 	// 5. connect (registration + AutoLoad-style flow StartSession me hai).
+	// WHATSAPP-TRUTH VERIFY WINDOW StartSession ke andar hai — ye call
+	// tabhi nil return karta hai jab WhatsApp ne LOGIN confirm kiya ho.
 	if err := m.StartSession(jid); err != nil {
-		WarnLog("FLEET: connect failed for %s: %v", jid, err)
 		_, _ = m.Redis.cmd("HDEL", fleetClaimPrefix+jid, fleetSelfID)
 		fleetMarkFailed(jid)
+		// WHATSAPP TRUTH (owner order): agar WhatsApp ne khud LOGOUT bola
+		// (verify-window ne purge kar diya — blob/set/meta sab delete)
+		// to ye dead session hai — bas silently nikal jao, dobara claim
+		// nahi hoga (JID fleet set me nahi bacha). Sirf TRANSIENT fail
+		// (network/full/tombstone timeout) wale retry karenge.
+		if strings.Contains(err.Error(), "whatsapp logged out") {
+			WarnLog("FLEET: WhatsApp ne %s ko logout kar diya — session data purge ho chuka (config safe), dobara claim nahi hoga", jid)
+			return
+		}
+		WarnLog("FLEET: connect failed for %s: %v", jid, err)
 		return
 	}
 	OkLog("FLEET: session %s restored from Storj and connected (server %s)", jid, fleetSelfID)
@@ -648,6 +683,10 @@ func fleetMarkFailed(jid string) {
 	fleetFailedAt[jid] = time.Now().Unix()
 	fleetFailedMu.Unlock()
 }
+
+// fleetRestoreAttempts: per-JID blob-restore fail counter (3+ fail = dead
+// blob → silent purge). fleetFailedMu guard karta hai.
+var fleetRestoreAttempts = map[string]int{}
 
 // fleetUserPart extracts the bare phone from a JID ("9231...@s.whatsapp.net"
 // ya "9231...:12@s.whatsapp.net" → "9231...").
@@ -952,17 +991,54 @@ func fleetOnConnected(jid string) {
 // fleetOnCleanup: session locally hata gaya (logout) → blob + registry del.
 // Ye session ab fleet me nahi aayega (WhatsApp ne khud logout kiya).
 func fleetOnCleanup(jid string) {
-	go func() {
-		defer func() { _ = recover() }()
-		m := fleetMgr
-		if m == nil || m.Redis == nil {
-			return
+	go fleetPurgeLoggedOutSession(jid)
+}
+
+// fleetPurgeLoggedOutSession (OWNER ORDER — WHATSAPP TRUTH):
+// WhatsApp ne is JID ke liye LOGOUT bola hai (chahe session jis bhi URL /
+// server se aaya ho). Silent purge:
+//   • fleet blob (goldmd:fleet:sess:<jid>)     — DELETE (koi b server dobara
+//     claim karke wapas na laaye)
+//   • fleet meta + sessions-set + claim + fail-mark — DELETE
+//   • own-server jids registry (goldmd:sessiondb:<sid>:jids) — REMOVE
+//   • own-server blob — refresh (remaining devices) ya DELETE (empty)
+//
+// CONFIGURATION (settings:<jid> — owner, prefix, sudo, autoreact, welcome
+// sab) KABHI delete NAHI hoti — re-pair karne par purani settings wapas
+// mil jati hain. Ye SILENT hai: koi error loop nahi, koi retry nahi —
+// WhatsApp ka faisla final hai.
+func fleetPurgeLoggedOutSession(jid string) {
+	defer func() { _ = recover() }()
+	m := fleetMgr
+	if m == nil || m.Redis == nil || jid == "" {
+		return
+	}
+	// 1. fleet-level keys (GLOBAL — har server inhi se session uthata hai)
+	_, _ = m.Redis.cmd("DEL", fleetClaimPrefix+jid)
+	_ = m.Redis.setRem(fleetSessionsSet, jid)
+	_ = m.Redis.setDel(fleetBlobPrefix + jid)
+	_ = m.Redis.setDel(fleetMetaPrefix + jid)
+	_ = m.Redis.setDel(fleetFailMarkPrefix + jid)
+	// failed-cooldown bhi hata do — JID set me hi nahi, cooldown bekaar
+	fleetFailedMu.Lock()
+	delete(fleetFailedAt, jid)
+	fleetFailedMu.Unlock()
+
+	// 2. own-server jids registry — AutoLoad isi se restore karta hai
+	_ = m.Redis.RemoveJID(jid)
+
+	// 3. own-server blob refresh: device-row SQLite se pehle hi delete ho
+	// chuka hai (cleanupSession step 3). Blob me wo device nahi bacha —
+	// lekin agar koi aur live device hai to blob REFRESH karo (delete
+	// nahi), warna empty blob DELETE (stale restore se bachav).
+	if m.container != nil {
+		remaining, rerr := m.container.GetAllDevices(context.Background())
+		if rerr == nil && len(remaining) > 0 {
+			_ = m.Redis.SaveSessionDB(fleetDBPath)
+		} else {
+			_ = m.Redis.DelSessionDB()
 		}
-		_, _ = m.Redis.cmd("DEL", fleetClaimPrefix+jid)
-		_ = m.Redis.setRem(fleetSessionsSet, jid)
-		_ = m.Redis.setDel(fleetBlobPrefix + jid)
-		_ = m.Redis.setDel(fleetMetaPrefix + jid)
-	}()
+	}
 }
 
 // ═══════════════════════════════════════════════════════════════════════

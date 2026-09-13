@@ -630,6 +630,12 @@ func (m *Manager) StartSession(jid string) error {
 			WarnLog("WhatsApp has no device for %s but Redis says connected — WhatsApp is truth, clearing stale Redis entry", jid)
 			_ = m.Redis.RemoveJID(jid)
 			// Also remove the pairing folder so AutoLoad skips it next time.
+			// NOTE (owner rule): fleet blob (goldmd:fleet:sess:<jid>) SAFE
+			// rehta hai — wahi GLOBAL backup hai jis se koi bhi server is
+			// session ko restore kar sakta hai. Local device missing = DB
+			// wipe/corruption, WhatsApp ka logout statement NAHI. Watchdog
+			// blob se revive karega; agar blob sach me mara hua hai to 3x
+			// restore-fail purge (fleet.go) khud sambhal lega.
 			_ = os.RemoveAll(filepath.Join(m.cfg.PairingDir, jid))
 		}
 		return fmt.Errorf("no saved device found for %s (was it ever paired?)", jid)
@@ -676,6 +682,44 @@ func (m *Manager) StartSession(jid string) error {
 	// if the device actually has credentials (Store.ID != nil). WhatsApp is truth.
 	if sess.Client != nil && sess.Client.Store != nil && sess.Client.Store.ID != nil {
 		sess.Paired = true
+	}
+
+	// ══ WHATSAPP-TRUTH VERIFY WINDOW (owner order) ════════════════════════
+	// Session JID chahe jis bhi URL se aaya ho (boot-restore, failover,
+	// claim, panel) — Connect() sirf websocket kholta hai; WhatsApp ka
+	// login/logout faisla ASYNC event me 1-3s baad aata hai. Purana code
+	// turant JID re-register + blob save kar deta tha, aur logout event
+	// cleanup ke BAAD late save land ho jata tha → dead JID wapas Storj.
+	// Ab pehle VERIFY karo (12s window, sync):
+	//   • IsLoggedIn() true → WhatsApp ne login confirm kiya → reconnect
+	//     complete, registration/save aage chalenge (kisi bhi server pe).
+	//   • Store.Deleted / session map se hata → WhatsApp ne LOGOUT bola →
+	//     silent purge (fleetPurgeLoggedOutSession — config SAFE) aur
+	//     StartSession error ke saath nikal jao. Kabhi re-register NAHI.
+	{
+		verified, explicitLogout, whyNot := whatsappTruthVerified(sess, 12*time.Second)
+		if explicitLogout {
+			// WHATSAPP NE KHUD LOGOUT BOLA (401/403/410/device-removed):
+			// silently ignore — session data har taraf se purge (fleet
+			// blob, meta, set, claim, own jids, blob refresh/delete).
+			// CONFIGURATION (settings:<jid>) SAFE — re-pair par wapas.
+			OkLog("WHATSAPP TRUTH: %s — logout confirm, silent purge (config safe) [%s]", jid, whyNot)
+			fleetPurgeLoggedOutSession(jid)
+			return fmt.Errorf("whatsapp logged out %s — session data purged, configuration kept", jid)
+		}
+		// verified=true (login OK) ya transient (na login na logout — slow
+		// network / 515 race): session REGISTER karo, aage ki normal flow
+		// chale. Transient case ko runtime safety-nets sambhalte hain —
+		// LoggedOut event → cleanupSession → silent purge, watchdog linter
+		// (60s login-dead) → cleanupSession → purge. Is tarah client ka
+		// background socket orphan nahi rehta (agar yahan error return
+		// karte to session map me kabhi na aata lekin socket zinda reh
+		// jata — commands isko kabhi nahi dhundhte).
+		if verified {
+			OkLog("WHATSAPP TRUTH: %s — WhatsApp login confirmed, reconnect complete", jid)
+		} else {
+			OkLog("WHATSAPP TRUTH: %s — inconclusive [%s] — registered, runtime linter sambhalega", jid, whyNot)
+		}
 	}
 
 	// AUTOBLOCK CONTACT SYNC — force-fetch the WhatsApp server's contact
@@ -1310,6 +1354,49 @@ func (s *Session) sendStartupNotification() {
 	}
 }
 
+// whatsappTruthVerified: StartSession ke Connect() ke baad WhatsApp ka
+// login/logout faisla sync me confirm karne wala poll window. whatsmeow
+// Connect() sirf websocket kholta hai — auth result (connect success ya
+// 401/410 logout failure) 1-3s me ASYNC event ke roop me aata hai
+// (handleConnectSuccess → IsLoggedIn true / handleConnectFailure →
+// LoggedOut event + Store.Delete). Ye window dono outcomes ko pakadti hai:
+//
+//	verified=true, false, ""   → WhatsApp login OK (IsLoggedIn)
+//	verified=false, true, why  → WhatsApp EXPLICIT logout (Store.Deleted)
+//	verified=false, false, why → inconclusive/transient — purge NAHI
+//
+// Owner rule: logout = silently ignore + purge (config safe); login =
+// reconnect (kisi bhi server pe); inconclusive = baad me retry.
+func whatsappTruthVerified(s *Session, window time.Duration) (bool, bool, string) {
+	if s == nil {
+		return false, false, "nil session"
+	}
+	deadline := time.Now().Add(window)
+	for time.Now().Before(deadline) {
+		cli := s.Client
+		if cli == nil {
+			return false, false, "client gone"
+		}
+		// WIN: WhatsApp ne login confirm kiya (connect success event).
+		if cli.IsLoggedIn() {
+			return true, false, ""
+		}
+		// LOGOUT (EXPLICIT): whatsmeow ne Store.Delete kar diya — 401/403/
+		// 410 connect-failure aur 401 device_removed stream-error SAB isi
+		// path se Store.Deleted=true karte hain (connectionevents.go). Ye
+		// WhatsApp ka pakka logout statement hai.
+		if cli.Store != nil && cli.Store.Deleted {
+			return false, true, "whatsapp explicit logout (401/403/410/device-removed)"
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	// Window khatam — NA login confirm hua, NA logout. Ye transient hai
+	// (slow network / 515 relogin race). Owner rule: sirf WhatsApp ke
+	// EXPLICIT logout pe purge; is case me purge NAHI — slot release +
+	// error return, fleet cooldown (10 min) baad dobara try hoga.
+	return false, false, "no login confirmation within window (transient)"
+}
+
 // cleanupSession performs a FULL cleanup when WhatsApp confirms a session is
 // genuinely logged out. This trusts WhatsApp over Redis:
 //
@@ -1403,8 +1490,12 @@ func (m *Manager) cleanupSession(s *Session, reason string) {
 
 	WarnLog("Session %s fully cleaned up (reason: %s)", s.JID, reason)
 
-	// ── FLEET: session khatam → global registry + blob se hata do (bg).
-	go fleetOnCleanup(s.JID)
+	// ── WHATSAPP-TRUTH PURGE (owner order): session khatam — global registry,
+	// blob aur fleet keys se hata do. Ye WhatsApp ke kehne pe chala hai (logout
+	// event ya restore-time truth-check) — isliye DATA purge hota hai lekin
+	// CONFIGURATION (settings:<jid> — owner, prefix, sudo, autoreact, welcome)
+	// HAMESHA SAFE rehti hai. Re-pairing par purani settings wapas mil jati hain.
+	fleetPurgeLoggedOutSession(s.JID)
 }
 
 func (m *Manager) HealthHandler(w http.ResponseWriter, r *http.Request) {
