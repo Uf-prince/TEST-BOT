@@ -48,6 +48,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/types"
 	"io"
 	"net/http"
 	"os"
@@ -57,17 +59,17 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
 )
 
 // ── fleet KV keys (GLOBAL — koi server-namespace nahi, sab servers share) ──
 const (
-	fleetSessionsSet  = "goldmd:fleet:sessions"   // set: all known JIDs
-	fleetClaimPrefix  = "goldmd:fleet:claim:"     // hash: jid -> {serverID: ts}
-	fleetServersHash  = "goldmd:fleet:servers"    // hash: serverID -> heartbeat ts
-	fleetEgressPrefix = "goldmd:fleet:egress:"    // str: "total|lastTx|ts|month"
-	fleetBlobPrefix   = "goldmd:fleet:sess:"      // str: base64 per-JID sqlite
-	fleetMetaPrefix   = "goldmd:fleet:meta:"      // str: JSON {owner,saved}
+	fleetSessionsSet    = "goldmd:fleet:sessions" // set: all known JIDs
+	fleetClaimPrefix    = "goldmd:fleet:claim:"   // hash: jid -> {serverID: ts}
+	fleetServersHash    = "goldmd:fleet:servers"  // hash: serverID -> heartbeat ts
+	fleetEgressPrefix   = "goldmd:fleet:egress:"  // str: "total|lastTx|ts|month"
+	fleetBlobPrefix     = "goldmd:fleet:sess:"    // str: base64 per-JID sqlite
+	fleetMetaPrefix     = "goldmd:fleet:meta:"    // str: JSON {owner,saved}
+	fleetFailMarkPrefix = "goldmd:fleet:fail:"    // str: dead sid (failover marker)
 )
 
 // ── timing / limits ──
@@ -79,6 +81,7 @@ const (
 	fleetRaceWait     = 3 * time.Second  // claim race re-verify window
 	fleetFailCooldown = 10 * time.Minute // failed restore retry cooldown
 	fleetHTTPTimeout  = 4 * time.Second  // remote /health timeout (quick public .server)
+	fleetProbeAfter   = 2 * time.Minute  // heartbeat stale = ACTIVE /health probe start
 )
 
 // fleetBudgetMB: Render free monthly egress budget (5GB). .render5gb iske
@@ -123,6 +126,21 @@ var (
 // fleetInit bootstraps the fleet engine. Background goroutine launch hoti
 // hai — caller (main.go) kabhi block nahi hota. Agar Storj ready nahi hai
 // to fleet silently skip (single-server mode, sab kuch pehle jaisa).
+// fleetBind: fleetMgr/fleetDBPath set karo BINA watchdog start kiye.
+// main.go isko AutoLoad se PEHLE call karta hai taake AutoLoad ka
+// zombie-return guard (fleetHeldByLiveServer) kaam kar sake. Watchdog
+// fleetInit me baad me start hota hai — AutoLoad ke concurrent-start
+// race se door.
+func fleetBind(m *Manager, dbPath string) {
+	if m == nil {
+		return
+	}
+	fleetMgr = m
+	if dbPath != "" {
+		fleetDBPath = dbPath
+	}
+}
+
 func fleetInit(m *Manager, dbPath string) {
 	fleetMgr = m
 	fleetDBPath = dbPath
@@ -167,8 +185,8 @@ func fleetWatchdog() {
 
 		if tick%2 == 0 {
 			// orphan sweep + claim — 60s cadence (light on Storj reads).
-			alive := fleetAliveServers()
-			fleetOrphanSweep(alive)
+			// alive-set ab per-holder probe se aata hai (fleetHolderAlive).
+			fleetOrphanSweep()
 			if !fleetMgr.IsShuttingDown() {
 				fleetClaimAvailable()
 			}
@@ -188,64 +206,167 @@ func fleetHeartbeat() {
 		strconv.FormatInt(time.Now().Unix(), 10))
 }
 
-// fleetAliveServers returns the set of serverIDs whose heartbeat is fresh
-// (newer than fleetOrphanAfter). Khud ko hamesha include karta hai.
-func fleetAliveServers() map[string]bool {
-	alive := map[string]bool{fleetSelfID: true}
-	if fleetMgr == nil || fleetMgr.Redis == nil {
-		return alive
-	}
-	r, err := fleetMgr.Redis.cmd("HGETALL", fleetServersHash)
-	if err != nil {
-		return alive
-	}
-	var pairs []string
-	if json.Unmarshal(r, &pairs) != nil {
-		return alive
-	}
-	now := time.Now().Unix()
-	for i := 0; i+1 < len(pairs); i += 2 {
-		sid, tsStr := pairs[i], pairs[i+1]
-		ts, err := strconv.ParseInt(strings.TrimSpace(tsStr), 10, 64)
-		if err != nil {
-			continue
-		}
-		if now-ts < int64(fleetOrphanAfter/time.Second) {
-			alive[sid] = true
-		} else if now-ts > int64(fleetStaleServer/time.Second) {
-			// 24h+ purani heartbeat — field purge (best effort).
-			_, _ = fleetMgr.Redis.cmd("HDEL", fleetServersHash, sid)
-		}
-	}
-	return alive
-}
-
 // fleetOrphanSweep releases claims held by dead servers so their sessions
 // can be picked up by live servers (Render spin-down / crash scenario).
-func fleetOrphanSweep(alive map[string]bool) {
+//
+// LIVENESS (fleetHolderAlive — unified):
+//
+//	heartbeat fresh (<2min)  → ALIVE (koi probe nahi — tick chal raha hai)
+//	heartbeat 2min+ stale    → ACTIVE /health probe (4s timeout)
+//	                           probe OK → ALIVE (busy server, rehne do)
+//	                           probe FAIL → DEAD → claim release
+//	heartbeat hi nahi        → DEAD (purani entry)
+//
+// Isse failover 5min wait → ~2min ho jata hai (owner ka order) — bina
+// kisi alive server ke claim ko galat release kiye.
+func fleetOrphanSweep() {
 	if fleetMgr == nil || fleetMgr.Redis == nil {
 		return
 	}
+	// heartbeat source map — per-holder liveness decision (sid -> last ts).
+	heartbeats := fleetHeartbeatMap()
+
 	for _, jid := range fleetMgr.Redis.setMembers(fleetSessionsSet) {
 		holders := fleetClaimHolders(jid)
 		if len(holders) == 0 {
 			continue // unclaimed — fleetClaimAvailable utha lega
 		}
-		anyAlive := false
+		allDead := true
 		for sid := range holders {
-			if alive[sid] {
-				anyAlive = true
+			if fleetHolderAlive(sid, heartbeats) {
+				allDead = false
 				break
 			}
 		}
-		if !anyAlive {
-			// sab holders dead — claims release kar do.
-			for sid := range holders {
-				_, _ = fleetMgr.Redis.cmd("HDEL", fleetClaimPrefix+jid, sid)
-			}
-			InfoLog("FLEET: orphan claim released for %s (all holders dead)", jid)
+		if !allDead {
+			continue // koi holder zinda hai — session usi ke paas
+		}
+		// sab holders dead — claims release kar do + FAILOVER marker
+		// save karo (takeover hone pe owner ko notify karne ke liye).
+		for sid := range holders {
+			_, _ = fleetMgr.Redis.cmd("HDEL", fleetClaimPrefix+jid, sid)
+			_ = fleetMgr.Redis.setString(fleetFailMarkPrefix+jid, sid)
+		}
+		InfoLog("FLEET: orphan claim released for %s (all holders dead, probe-confirmed)", jid)
+	}
+}
+
+// fleetHeartbeatMap: servers hash → {sid: last heartbeat ts} (probe
+// decision ke liye — fleetAliveServers se hataya, duplicate KV read bacha).
+func fleetHeartbeatMap() map[string]int64 {
+	out := map[string]int64{}
+	if fleetMgr == nil || fleetMgr.Redis == nil {
+		return out
+	}
+	r, err := fleetMgr.Redis.cmd("HGETALL", fleetServersHash)
+	if err != nil {
+		return out
+	}
+	var pairs []string
+	if json.Unmarshal(r, &pairs) != nil {
+		return out
+	}
+	for i := 0; i+1 < len(pairs); i += 2 {
+		ts, err := strconv.ParseInt(strings.TrimSpace(pairs[i+1]), 10, 64)
+		if err != nil {
+			continue
+		}
+		// 24h+ purani heartbeat — server hash se field purge (hygiene,
+		// purane fleetAliveServers ka side-effect yahan shift hua).
+		if time.Now().Unix()-ts > int64(fleetStaleServer/time.Second) {
+			_, _ = fleetMgr.Redis.cmd("HDEL", fleetServersHash, pairs[i])
+			continue
+		}
+		out[pairs[i]] = ts
+	}
+	return out
+}
+
+// fleetHolderAlive: ek claim holder REAL me zinda hai ya nahi — unified
+// decision (orphanSweep + claimAvailable + zombie-guard sab yahi use
+// karte hain). Heartbeat fresh = zinda. Stale = ACTIVE /health probe.
+// Sirf watchdog/background paths se call hota hai — hot-path cost 0.
+func fleetHolderAlive(sid string, heartbeats map[string]int64) bool {
+	if sid == "" {
+		return false
+	}
+	// hum khud — obviously zinda (yeh code chal raha hai).
+	if sid == fleetSelfID {
+		return true
+	}
+	ts, ok := heartbeats[sid]
+	if !ok || ts <= 0 {
+		// heartbeat hi nahi — purani claim entry → dead.
+		return false
+	}
+	age := time.Now().Unix() - ts
+	if age < int64(fleetProbeAfter/time.Second) {
+		// heartbeat fresh (<2min) — watchdog tick de raha hai → zinda.
+		return true
+	}
+	// heartbeat 2min+ stale — ab ACTIVE /health probe (1 attempt, 4s).
+	url := fleetServerURL(sid)
+	if url == "" {
+		return false // URL resolve nahi hua → dead man lo
+	}
+	if fleetProbeURL(url + "/health") {
+		return true // busy tha lekin process zinda hai
+	}
+	InfoLog("FLEET: active probe FAILED for %s (hb %ds stale) — treating dead", sid, age)
+	return false
+}
+
+// fleetHeldByLiveServer: kya ye JID kisi AUR live server ke fresh claim
+// me hai? (ZOMBIE-RETURN GUARD: dead server wapas aaya to AutoLoad isko
+// dobara start na kare — dusre server pe already failover ho chuka hai.
+// Double-connect war = WhatsApp stream-replace = logout. Ye guard war
+// rokta hai.) AutoLoad ke batch goroutines se call hota hai.
+func fleetHeldByLiveServer(jid string) bool {
+	m := fleetMgr
+	if m == nil || m.Redis == nil || !storjReadyFlag() {
+		return false // fleet inactive — sab local load karo
+	}
+	holders := fleetClaimHolders(jid)
+	if len(holders) == 0 {
+		return false
+	}
+	hb := fleetHeartbeatMap()
+	for sid := range holders {
+		if sid != fleetSelfID && fleetHolderAlive(sid, hb) {
+			return true // koi aur live server isko chala raha hai
 		}
 	}
+	return false
+}
+
+// fleetServerURL resolves a serverID → base URL (https://{sid}/health).
+// fleetSelfID wahi pattern use karta hai (RENDER_EXTERNAL_URL etc).
+func fleetServerURL(sid string) string {
+	if sid == "" {
+		return ""
+	}
+	if strings.HasPrefix(sid, "http://") || strings.HasPrefix(sid, "https://") {
+		return strings.TrimSuffix(sid, "/")
+	}
+	// hostname-style sid → Render external URL pattern nahi banta —
+	// heuristic: pure-hostname ya onrender.com ho to https:// prefix.
+	if strings.Contains(sid, ".") {
+		return "https://" + strings.TrimSuffix(sid, "/")
+	}
+	return ""
+}
+
+// fleetProbeURL does one quick GET {url} with fleetHTTPTimeout. true =
+// koi bhi HTTP response aaya (2xx-5xx) — server process zinda hai.
+func fleetProbeURL(raw string) bool {
+	cl := &http.Client{Timeout: fleetHTTPTimeout}
+	resp, err := cl.Get(raw)
+	if err != nil {
+		return false
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	return true
 }
 
 // fleetClaimHolders parses the claim hash for a JID → {serverID: ts}.
@@ -310,11 +431,13 @@ func fleetClaimAvailable() {
 
 		holders := fleetClaimHolders(jid)
 		if len(holders) > 0 {
-			// koi live holder hai? (dead holders ko orphan sweep hata dega)
-			alive := fleetAliveServers()
+			// koi live holder hai? (probe-based — 2min+ stale wale ko
+			// /health se confirm karo; dead holder ke stale ts se race
+			// tie-break me hum hi jeetenge, HDEL ka intezar nahi)
+			hb := fleetHeartbeatMap()
 			taken := false
 			for sid := range holders {
-				if alive[sid] {
+				if fleetHolderAlive(sid, hb) {
 					taken = true
 					break
 				}
@@ -339,6 +462,15 @@ func fleetRestoreAndConnect(jid string) {
 		return
 	}
 	now := strconv.FormatInt(time.Now().Unix(), 10)
+
+	// 0. FAILOVER detection — orphanSweep ne dead-holder claims release
+	// kiye the (isliye holders ab empty lagte hain) + failover MARKER
+	// save kiya tha (goldmd:fleet:fail:<jid> = dead sid). marker se dead
+	// server uthalo — restore success pe owner ko notify karenge.
+	var takeoverFrom string
+	if mk, ok := m.Redis.getStringKV(fleetFailMarkPrefix + jid); ok && mk != "" && mk != fleetSelfID {
+		takeoverFrom = mk
+	}
 
 	// 1. claim stamp daalo.
 	_, _ = m.Redis.cmd("HSET", fleetClaimPrefix+jid, fleetSelfID, now)
@@ -382,6 +514,85 @@ func fleetRestoreAndConnect(jid string) {
 		return
 	}
 	OkLog("FLEET: session %s restored from Storj and connected (server %s)", jid, fleetSelfID)
+
+	// FAILOVER: ye session kisi aur (dead) server ka tha — owner ko batado
+	// ki bot dusre server pe wapas online ho gaya hai. Marker ab delete —
+	// ek hi baar notify (duplicate messages nahi).
+	if takeoverFrom != "" {
+		_ = m.Redis.setDel(fleetFailMarkPrefix + jid)
+		go fleetNotifyFailover(jid, takeoverFrom)
+	}
+}
+
+// fleetNotifyFailover: failover-complete hone par session ke owner ko
+// message bhejta hai. Owner Redis setting "owner" se milta hai (pairing
+// time pe set hota hai). Message session ke khud ke client se jata hai —
+// iska matlab bot ka number khud apne owner ko bata raha hai: "main ab
+// dusre server pe online hoon, reconnect ho gaya".
+func fleetNotifyFailover(jid string, deadServer string) {
+	defer func() { _ = recover() }()
+	m := fleetMgr
+	if m == nil {
+		return
+	}
+	// client settle hone do (connect ke turant baad message queues full
+	// ho sakte hain) — 10s baad bhejo.
+	time.Sleep(10 * time.Second)
+
+	// session ki owner JID nikaalo (Redis setting).
+	owner := fleetOwnerFor(jid)
+	if owner == "" {
+		InfoLog("FLEET: failover notify skip %s — owner unknown", jid)
+		return
+	}
+	ownerJID, err := types.ParseJID(normalizeJID(owner))
+	if err != nil || ownerJID.IsEmpty() {
+		InfoLog("FLEET: failover notify skip %s — owner JID parse failed", jid)
+		return
+	}
+
+	// jis session ke liye notify karna hai wo ab is server pe live hai —
+	// uska client use karo (bot apne owner ko khud batayega).
+	// NOTE: m.Get() nahi hai — m.List() se user-part match.
+	var sess *Session
+	for _, s := range m.List() {
+		if fleetUserPart(s.JID) == fleetUserPart(jid) {
+			sess = s
+			break
+		}
+	}
+	if sess == nil || sess.Client == nil || !sess.Client.IsConnected() {
+		InfoLog("FLEET: failover notify skip %s — session not live here", jid)
+		return
+	}
+	srv := fleetSelfID
+	if strings.Contains(srv, ".onrender.com") {
+		if i := strings.Index(srv, ".onrender.com"); i > 0 {
+			srv = srv[:i]
+		}
+	}
+	dead := deadServer
+	if strings.Contains(dead, ".onrender.com") {
+		if i := strings.Index(dead, ".onrender.com"); i > 0 {
+			dead = dead[:i]
+		}
+	}
+	text := "*── SESSION FAILOVER ──*\n\n" +
+		"\u26a1 Purana server band ho gaya tha (" + dead + ").\n" +
+		"\u2705 Bot ab dusre server pe *online* hai — session *reconnect ho gaya*\n" +
+		"\u2139\ufe0f New Server: " + srv + "\n\n" +
+		"\u2705 Apne pas rakh liya — ab jaise pehle hi use karo, koi farak nahi."
+
+	_, err = sess.Client.SendMessage(context.Background(), ownerJID, &waProto.Message{
+		ExtendedTextMessage: &waProto.ExtendedTextMessage{
+			Text: &text,
+		},
+	})
+	if err != nil {
+		WarnLog("FLEET: failover notify send failed for %s: %v", jid, err)
+	} else {
+		OkLog("FLEET: failover notification sent to owner of %s (from %s → %s)", jid, dead, srv)
+	}
 }
 
 func fleetMarkFailed(jid string) {
@@ -613,7 +824,9 @@ func fleetOwnerFor(jid string) string {
 // ── lifecycle hooks (EventHandler se fire — sab async) ──
 
 // fleetOnPairSuccess: naya session pair hua → blob push + claim + registry.
-func fleetOnPairSuccess(jid string) {
+// owner pairing panel se aata hai — Redis "owner" setting me save hota hai
+// (failover notification isi JID pe jata hai; fleetOwnerFor padhta hai).
+func fleetOnPairSuccess(jid string, owner string) {
 	fleetSaveBlob(jid)
 	go func() {
 		defer func() { _ = recover() }()
@@ -624,6 +837,13 @@ func fleetOnPairSuccess(jid string) {
 		_, _ = m.Redis.cmd("HSET", fleetClaimPrefix+jid, fleetSelfID,
 			strconv.FormatInt(time.Now().Unix(), 10))
 		_ = m.Redis.setAdd(fleetSessionsSet, jid)
+		// owner setting — sirf tab jab pehli baar set ho raha ho (kisi
+		// ne .setowner style change kiya ho to usko overwrite mat karo).
+		if owner != "" {
+			if existing := m.Redis.GetSetting(jid, "owner", ""); existing == "" {
+				m.Redis.SetSetting(jid, "owner", normalizeJID(owner))
+			}
+		}
 	}()
 }
 
@@ -846,14 +1066,14 @@ func fleetRemoteHealth(url string) (*fleetHealthFields, error) {
 
 // fleetServerInfo: one row of the .server / .render5gb report.
 type fleetServerInfo struct {
-	Name    string
-	URL     string
-	Online  bool
+	Name     string
+	URL      string
+	Online   bool
 	Sessions int
-	Max     int
-	RE      string
-	SID     string
-	UsedMB  float64
+	Max      int
+	RE       string
+	SID      string
+	UsedMB   float64
 }
 
 // fleetScanAll checks every server in servers.json in PARALLEL (real /health
@@ -868,10 +1088,10 @@ func fleetScanAll() []fleetServerInfo {
 		go func(idx int, s serverEntry) {
 			defer wg.Done()
 			info := fleetServerInfo{
-				Name:    s.Name,
-				URL:     s.URL,
-				Max:     cfg.MaxPerServer,
-				RE:      "STOPPED", // offline = engine stopped
+				Name: s.Name,
+				URL:  s.URL,
+				Max:  cfg.MaxPerServer,
+				RE:   "STOPPED", // offline = engine stopped
 			}
 			if hf, err := fleetRemoteHealth(s.URL); err == nil {
 				info.Online = true

@@ -16,8 +16,8 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 
 	"go.mau.fi/whatsmeow"
-	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/appstate"
+	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -262,7 +262,7 @@ func (m *Manager) AutoLoad() {
 	// but Redis still remembers them (this is the Render-restart scenario).
 	if m.Redis != nil {
 		redisJids := m.Redis.ListJIDs()
-//		JSONDebug("AUTOLOAD_REDIS_JIDS", map[string]any{"jids": redisJids})
+		//		JSONDebug("AUTOLOAD_REDIS_JIDS", map[string]any{"jids": redisJids})
 		for _, rj := range redisJids {
 			already := false
 			for _, u := range users {
@@ -275,7 +275,7 @@ func (m *Manager) AutoLoad() {
 				// recreate the pairing folder so the rest of AutoLoad logic is uniform
 				_ = os.MkdirAll(filepath.Join(m.cfg.PairingDir, rj), 0o755)
 				users = append(users, rj)
-//				JSONDebug("AUTOLOAD_REDIS_ADD", map[string]any{"jid": rj, "source": "redis"})
+				//				JSONDebug("AUTOLOAD_REDIS_ADD", map[string]any{"jid": rj, "source": "redis"})
 			}
 		}
 	}
@@ -285,12 +285,12 @@ func (m *Manager) AutoLoad() {
 	// the case where JID registry was cleared but the DB blob still holds
 	// valid credentials (e.g. a botched cleanup / older code version).
 	if len(users) == 0 && m.container != nil {
-//		JSONDebug("AUTOLOAD_DB_SCAN_START", map[string]any{"reason": "no users from folders/redis, scanning DB"})
+		//		JSONDebug("AUTOLOAD_DB_SCAN_START", map[string]any{"reason": "no users from folders/redis, scanning DB"})
 		allDevs, derr := m.container.GetAllDevices(context.Background())
 		if derr != nil {
 			WarnLog("DB scan for devices failed: %v", derr)
 		} else {
-//			JSONDebug("AUTOLOAD_DB_SCAN", map[string]any{"deviceCount": len(allDevs)})
+			//			JSONDebug("AUTOLOAD_DB_SCAN", map[string]any{"deviceCount": len(allDevs)})
 			for _, d := range allDevs {
 				if d.ID == nil || d.ID.User == "" {
 					continue
@@ -308,11 +308,11 @@ func (m *Manager) AutoLoad() {
 				if !already {
 					_ = os.MkdirAll(filepath.Join(m.cfg.PairingDir, baseJid), 0o755)
 					users = append(users, baseJid)
-//					JSONDebug("AUTOLOAD_DB_ADD", map[string]any{
-//						"baseJid":   baseJid,
-//						"storedJid": d.ID.String(),
-//						"source":    "db_scan",
-//					})
+					//					JSONDebug("AUTOLOAD_DB_ADD", map[string]any{
+					//						"baseJid":   baseJid,
+					//						"storedJid": d.ID.String(),
+					//						"source":    "db_scan",
+					//					})
 					// also register in Redis so future restarts find it via registry
 					if m.Redis != nil {
 						_ = m.Redis.RegisterJID(baseJid)
@@ -322,7 +322,7 @@ func (m *Manager) AutoLoad() {
 		}
 	}
 
-//	JSONDebug("AUTOLOAD_USERS", map[string]any{"count": len(users), "users": users})
+	//	JSONDebug("AUTOLOAD_USERS", map[string]any{"count": len(users), "users": users})
 
 	if len(users) == 0 {
 		WarnLog("No paired users found in %s", m.cfg.PairingDir)
@@ -361,8 +361,16 @@ func (m *Manager) AutoLoad() {
 					return
 				}
 				InfoLog("Connecting %d/%d: %s", n, len(users), u)
+				// ZOMBIE-RETURN GUARD: ye session kisi AUR live server ke fresh
+				// claim me hai (failover ho chuka) to yahan start mat karo —
+				// double-connect war WhatsApp logout karva deta hai. Fleet
+				// watchdog us server ke marne pe ye session wapas le lega.
+				if fleetHeldByLiveServer(u) {
+					InfoLog("FLEET: skip %s — live claim on another server (failover target)", u)
+					return
+				}
 				if err := m.StartSession(u); err != nil {
-     // ErrLog("Failed for %s: %v", u, err)
+					// ErrLog("Failed for %s: %v", u, err)
 					return
 				}
 				OkLog("Connected: %s", u)
@@ -405,12 +413,12 @@ func (m *Manager) StartSession(jid string) error {
 	pairDir := filepath.Join(m.cfg.PairingDir, jid)
 	_ = os.MkdirAll(pairDir, 0o755)
 
-//	JSONDebug("RECONNECT_START", map[string]any{
-//		"jid":      jid,
-//		"pairDir":  pairDir,
-//		"redisOn":  m.Redis != nil,
-//		"redisHas": m.Redis != nil && m.Redis.HasJID(jid),
-//	})
+	//	JSONDebug("RECONNECT_START", map[string]any{
+	//		"jid":      jid,
+	//		"pairDir":  pairDir,
+	//		"redisOn":  m.Redis != nil,
+	//		"redisHas": m.Redis != nil && m.Redis.HasJID(jid),
+	//	})
 
 	parsedJID, err := types.ParseJID(jid)
 	if err != nil {
@@ -431,27 +439,27 @@ func (m *Manager) StartSession(jid string) error {
 	//devFoundBy := "exact"
 	if dev == nil {
 		// Exact match failed — scan all devices for a matching user.
-//		JSONDebug("RECONNECT_DEVICE_FALLBACK", map[string]any{
-//			"jid":    jid,
-//			"reason": "exact GetDevice nil, trying user match across all devices",
-//		})
+		//		JSONDebug("RECONNECT_DEVICE_FALLBACK", map[string]any{
+		//			"jid":    jid,
+		//			"reason": "exact GetDevice nil, trying user match across all devices",
+		//		})
 		allDevs, aerr := m.container.GetAllDevices(context.Background())
 		if aerr != nil {
 			return fmt.Errorf("get all devices: %w", aerr)
 		}
 		baseUser := parsedJID.User
-//		JSONDebug("RECONNECT_ALL_DEVICES", map[string]any{
-//			"baseUser":  baseUser,
-//			"totalDevs": len(allDevs),
-//		})
+		//		JSONDebug("RECONNECT_ALL_DEVICES", map[string]any{
+		//			"baseUser":  baseUser,
+		//			"totalDevs": len(allDevs),
+		//		})
 		for _, d := range allDevs {
 			if d.ID != nil && d.ID.User == baseUser && d.ID.Server == parsedJID.Server {
 				dev = d
 				//devFoundBy = "user_match:" + d.ID.String()
-//				JSONDebug("RECONNECT_DEVICE_MATCHED", map[string]any{
-//					"baseJid":    jid,
-//					"matchedJid": d.ID.String(),
-//				})
+				//				JSONDebug("RECONNECT_DEVICE_MATCHED", map[string]any{
+				//					"baseJid":    jid,
+				//					"matchedJid": d.ID.String(),
+				//				})
 				break
 			}
 		}
@@ -460,13 +468,13 @@ func (m *Manager) StartSession(jid string) error {
 	if dev != nil && dev.ID != nil {
 		//devJidStr = dev.ID.String()
 	}
-//	JSONDebug("RECONNECT_DEVICE", map[string]any{
-//		"jid":      jid,
-//		"found":    dev != nil,
-//		"foundBy":  devFoundBy,
-//		"hasCreds": dev != nil && dev.ID != nil,
-//		"devJid":   devJidStr,
-//	})
+	//	JSONDebug("RECONNECT_DEVICE", map[string]any{
+	//		"jid":      jid,
+	//		"found":    dev != nil,
+	//		"foundBy":  devFoundBy,
+	//		"hasCreds": dev != nil && dev.ID != nil,
+	//		"devJid":   devJidStr,
+	//	})
 	if dev == nil {
 		// WhatsApp has no saved device for this JID.
 		// Check Redis: if Redis says this JID is registered, Redis is lying
@@ -548,20 +556,20 @@ func (m *Manager) StartSession(jid string) error {
 	// WhatsApp confirmed the session is still valid.
 	if m.Redis != nil {
 		if err := m.Redis.RegisterJID(jid); err != nil {
-   // ErrLog("Failed to register JID %s in Redis: %v", jid, err)
+			// ErrLog("Failed to register JID %s in Redis: %v", jid, err)
 		} else {
-//			JSONDebug("REDIS_REGISTER", map[string]any{"jid": jid})
+			//			JSONDebug("REDIS_REGISTER", map[string]any{"jid": jid})
 		}
 		// Also save the session DB right after a reconnect so any key changes
 		// during the previous run are persisted to Redis immediately.
 		if err := m.Redis.SaveSessionDB(filepath.Join(m.cfg.DataDir, "goldmd.db")); err != nil {
-   // ErrLog("Failed to save session DB after reconnect: %v", err)
+			// ErrLog("Failed to save session DB after reconnect: %v", err)
 		} else {
-//			JSONDebug("REDIS_SAVE", map[string]any{"jid": jid, "stage": "after_reconnect"})
+			//			JSONDebug("REDIS_SAVE", map[string]any{"jid": jid, "stage": "after_reconnect"})
 		}
 	}
 
-//	JSONDebug("RECONNECT_OK", map[string]any{"jid": jid})
+	//	JSONDebug("RECONNECT_OK", map[string]any{"jid": jid})
 	return nil
 }
 
@@ -648,12 +656,12 @@ func (m *Manager) PairWithCode(phone string) (string, error) {
 		}
 	}
 
-//	JSONDebug("PAIR_START", map[string]any{
-//		"phone":      phone,
-//		"jid":        jid,
-//		"pairingDir": m.cfg.PairingDir,
-//		"redisOn":    m.Redis != nil,
-//	})
+	//	JSONDebug("PAIR_START", map[string]any{
+	//		"phone":      phone,
+	//		"jid":        jid,
+	//		"pairingDir": m.cfg.PairingDir,
+	//		"redisOn":    m.Redis != nil,
+	//	})
 
 	_ = os.MkdirAll(filepath.Join(m.cfg.PairingDir, jid), 0o755)
 
@@ -718,7 +726,7 @@ func (m *Manager) PairWithCode(phone string) (string, error) {
 	// Now the websocket is connected and ready — PairPhone is safe.
 	pairingCode, err := cli.PairPhone(context.Background(), phone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
 	if err != nil {
-//		JSONDebug("PAIR_ERR", map[string]any{"jid": jid, "error": err.Error()})
+		//		JSONDebug("PAIR_ERR", map[string]any{"jid": jid, "error": err.Error()})
 		return "", fmt.Errorf("pair phone: %w", err)
 	}
 
@@ -756,11 +764,11 @@ func (m *Manager) PairWithCode(phone string) (string, error) {
 		m.cleanupSession(cur, "pairing code not linked in WhatsApp within 120s")
 	}()
 
-//	JSONDebug("PAIR_CODE", map[string]any{
-//		"jid":  jid,
-//		"code": pairingCode,
-//		"msg":  "Enter this code in WhatsApp -> Linked Devices -> Link with phone number",
-//	})
+	//	JSONDebug("PAIR_CODE", map[string]any{
+	//		"jid":  jid,
+	//		"code": pairingCode,
+	//		"msg":  "Enter this code in WhatsApp -> Linked Devices -> Link with phone number",
+	//	})
 
 	OkLog("Pairing code for %s: %s%s%s (enter in WhatsApp → Link a device)",
 		jid, cBold+cGreen, pairingCode, cReset)
@@ -813,7 +821,7 @@ func (s *Session) EventHandler(raw interface{}) {
 	// jata" the user reported). We catch + log + keep running.
 	defer func() {
 		if r := recover(); r != nil {
-   // ErrLog("[%s] recovered panic in EventHandler: %v", s.JID, r)
+			// ErrLog("[%s] recovered panic in EventHandler: %v", s.JID, r)
 		}
 	}()
 	switch evt := raw.(type) {
@@ -823,7 +831,7 @@ func (s *Session) EventHandler(raw interface{}) {
 		// ke waqt se pehle aaye sab queued messages ignore ho chuke honge
 		// (handler.go ka isOldMessage guard). Ab se naye messages ka hi jawab.
 		markOnlineFresh(s.JID)
-//		JSONDebug("CONNECTED", map[string]any{"jid": s.JID, "owner": s.Owner})
+		//		JSONDebug("CONNECTED", map[string]any{"jid": s.JID, "owner": s.Owner})
 		// set presence + bio
 		_ = s.Client.SendPresence(context.Background(), types.PresenceAvailable)
 		s.SetPresence()
@@ -913,14 +921,14 @@ func (s *Session) EventHandler(raw interface{}) {
 		// ── FULL JSON DEBUG: read/delivered receipts. Some edit-related state
 		// can travel here; logging helps trace missing edit events.
 		// JSONDebug("ANTIEDIT_RECEIPT", map[string]any{
-			// "botJID":        s.JID,
-			// "msgIDs":        evt.MessageIDs,
-			// "chat":          evt.Chat.String(),
-			// "sender":        evt.Sender.String(),
-			// "messageSender": evt.MessageSender.String(),
-			// "type":          string(evt.Type),
-			// "timestamp":     evt.Timestamp.Unix(),
-			// "stage":         "receipt",
+		// "botJID":        s.JID,
+		// "msgIDs":        evt.MessageIDs,
+		// "chat":          evt.Chat.String(),
+		// "sender":        evt.Sender.String(),
+		// "messageSender": evt.MessageSender.String(),
+		// "type":          string(evt.Type),
+		// "timestamp":     evt.Timestamp.Unix(),
+		// "stage":         "receipt",
 		// })
 
 	case *events.PairPasskeyRequest:
@@ -935,12 +943,12 @@ func (s *Session) EventHandler(raw interface{}) {
 
 	case *events.PairSuccess:
 		OkLog("🔰 Pairing succeeded for %s", s.JID)
-//		JSONDebug("PAIR_SUCCESS", map[string]any{
-//			"jid":      s.JID,
-//			"id":       evt.ID.String(),
-//			"platform": evt.Platform,
-//			"redisOn":  s.Manager.Redis != nil,
-//		})
+		//		JSONDebug("PAIR_SUCCESS", map[string]any{
+		//			"jid":      s.JID,
+		//			"id":       evt.ID.String(),
+		//			"platform": evt.Platform,
+		//			"redisOn":  s.Manager.Redis != nil,
+		//		})
 		// WhatsApp confirmed the link — THIS is the only moment we trust.
 		// Flip the session to Paired so Count() includes it and Redis keeps it.
 		s.Paired = true
@@ -951,17 +959,17 @@ func (s *Session) EventHandler(raw interface{}) {
 		// Register this JID in Redis so AutoLoad can find it after a restart.
 		if s.Manager.Redis != nil {
 			if err := s.Manager.Redis.RegisterJID(s.JID); err != nil {
-    // ErrLog("Failed to register JID %s in Redis: %v", s.JID, err)
-//				JSONDebug("REDIS_REGISTER_ERR", map[string]any{"jid": s.JID, "error": err.Error()})
+				// ErrLog("Failed to register JID %s in Redis: %v", s.JID, err)
+				//				JSONDebug("REDIS_REGISTER_ERR", map[string]any{"jid": s.JID, "error": err.Error()})
 			} else {
-//				JSONDebug("REDIS_REGISTER", map[string]any{"jid": s.JID, "stage": "pair_success"})
+				//				JSONDebug("REDIS_REGISTER", map[string]any{"jid": s.JID, "stage": "pair_success"})
 			}
 			// Save the session DB so the new credentials survive a restart.
 			if err := s.Manager.Redis.SaveSessionDB(filepath.Join(s.Manager.cfg.DataDir, "goldmd.db")); err != nil {
-    // ErrLog("Failed to save session DB after pair: %v", err)
-//				JSONDebug("REDIS_SAVE_ERR", map[string]any{"jid": s.JID, "error": err.Error()})
+				// ErrLog("Failed to save session DB after pair: %v", err)
+				//				JSONDebug("REDIS_SAVE_ERR", map[string]any{"jid": s.JID, "error": err.Error()})
 			} else {
-//				JSONDebug("REDIS_SAVE", map[string]any{"jid": s.JID, "stage": "pair_success"})
+				//				JSONDebug("REDIS_SAVE", map[string]any{"jid": s.JID, "stage": "pair_success"})
 			}
 			// ── Default bot name footer for fresh pair ──
 			// We intentionally do NOT store the marker sentinel in Redis. The
@@ -977,12 +985,14 @@ func (s *Session) EventHandler(raw interface{}) {
 				}
 			}
 		} else {
-//			JSONDebug("PAIR_SUCCESS_NOREDIS", map[string]any{"jid": s.JID, "warn": "Redis not configured - session will NOT survive restart"})
+			//			JSONDebug("PAIR_SUCCESS_NOREDIS", map[string]any{"jid": s.JID, "warn": "Redis not configured - session will NOT survive restart"})
 		}
 
 		// ── FLEET: naya session pair hua → Storj blob push + claim stamp.
 		// Fire-and-forget goroutine — message speed pe 0% asar.
-		go fleetOnPairSuccess(s.JID)
+		// s.Owner = pairing panel pe jo number bot ka owner hai — failover
+		// notification (fleetNotifyFailover) isi se session owner ko milati hai.
+		go fleetOnPairSuccess(s.JID, s.Owner)
 
 	case *events.StreamReplaced:
 		// Another process connected with the same keys — this is NOT a logout,
@@ -993,7 +1003,7 @@ func (s *Session) EventHandler(raw interface{}) {
 		// Group call offer — anticall only rejects 1:1 (inbox) calls,
 		// same as Node.js `if (call.isGroup) continue`. Just log + skip.
 		// DebugLog("[%s] call offer notice (group=%s) — anticall skips group calls",
-			// s.JID, evt.Type)
+		// s.JID, evt.Type)
 
 	case *events.CallOffer:
 		// ── ANTICALL: auto-reject incoming 1:1 calls if anticall is ON ──
@@ -1038,7 +1048,7 @@ func (s *Session) sendStartupNotification() {
 	ownerJID := normalizeJID(s.Owner)
 	target, err := types.ParseJID(ownerJID)
 	if err != nil {
-  // ErrLog("Failed to parse owner JID for startup notification: %v", err)
+		// ErrLog("Failed to parse owner JID for startup notification: %v", err)
 		return
 	}
 
@@ -1094,20 +1104,20 @@ func (s *Session) sendStartupNotification() {
 	// Fetch logo bytes
 	resp, err := http.Get(logoURL)
 	if err != nil {
-  // ErrLog("Failed to fetch startup logo: %v", err)
+		// ErrLog("Failed to fetch startup logo: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 	imgData, err := io.ReadAll(resp.Body)
 	if err != nil {
-  // ErrLog("Failed to read startup logo data: %v", err)
+		// ErrLog("Failed to read startup logo data: %v", err)
 		return
 	}
 
 	// Upload image
 	uploaded, err := s.Client.Upload(context.Background(), imgData, whatsmeow.MediaImage)
 	if err != nil {
-  // ErrLog("Failed to upload startup logo to WhatsApp: %v", err)
+		// ErrLog("Failed to upload startup logo to WhatsApp: %v", err)
 		return
 	}
 
@@ -1127,7 +1137,7 @@ func (s *Session) sendStartupNotification() {
 
 	_, err = s.Client.SendMessage(context.Background(), target, msg)
 	if err != nil {
-  // ErrLog("Failed to send startup notification: %v", err)
+		// ErrLog("Failed to send startup notification: %v", err)
 	} else {
 		OkLog("Startup notification sent to %s", s.Owner)
 	}
@@ -1168,7 +1178,7 @@ func (m *Manager) cleanupSession(s *Session, reason string) {
 		dev := s.Client.Store
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		if err := m.container.DeleteDevice(ctx, dev); err != nil {
-   // ErrLog("Failed to delete device for %s from store: %v", s.JID, err)
+			// ErrLog("Failed to delete device for %s from store: %v", s.JID, err)
 		} else {
 			InfoLog("Deleted device row for %s from SQLite store", s.JID)
 		}
@@ -1180,7 +1190,7 @@ func (m *Manager) cleanupSession(s *Session, reason string) {
 	//    the next AutoLoad doesn't try to restore a dead session.
 	if m.Redis != nil {
 		if err := m.Redis.RemoveJID(s.JID); err != nil {
-   // ErrLog("Failed to remove JID %s from Redis registry: %v", s.JID, err)
+			// ErrLog("Failed to remove JID %s from Redis registry: %v", s.JID, err)
 		} else {
 			InfoLog("Cleared stale Redis session for %s (reason: %s)", s.JID, reason)
 		}
@@ -1193,20 +1203,20 @@ func (m *Manager) cleanupSession(s *Session, reason string) {
 		go func() {
 			defer func() { _ = recover() }()
 			remaining, _ := m.container.GetAllDevices(context.Background())
-//			JSONDebug("CLEANUP_REDIS_SAVE", map[string]any{
-//				"jid":           s.JID,
-//				"remainingDevs": len(remaining),
-//				"reason":        reason,
-//			})
+			//			JSONDebug("CLEANUP_REDIS_SAVE", map[string]any{
+			//				"jid":           s.JID,
+			//				"remainingDevs": len(remaining),
+			//				"reason":        reason,
+			//			})
 			if len(remaining) > 0 {
 				if err := m.Redis.SaveSessionDB(filepath.Join(m.cfg.DataDir, "goldmd.db")); err != nil {
-     // ErrLog("Failed to save session DB after cleanup: %v", err)
+					// ErrLog("Failed to save session DB after cleanup: %v", err)
 				}
 			} else {
-//				JSONDebug("CLEANUP_REDIS_DEL_BLOB", map[string]any{
-//					"jid":    s.JID,
-//					"reason": "last device removed, deleting empty blob to avoid stale restore",
-//				})
+				//				JSONDebug("CLEANUP_REDIS_DEL_BLOB", map[string]any{
+				//					"jid":    s.JID,
+				//					"reason": "last device removed, deleting empty blob to avoid stale restore",
+				//				})
 				_ = m.Redis.DelSessionDB()
 			}
 		}()
@@ -1333,6 +1343,7 @@ func (s *Session) CmdUptime(info types.MessageInfo, args []string, prefix string
 //   - Header image from menuHeaderImageURL
 //   - 🔰 emoji + fancy borders + sectioned layout
 //   - Sent as an image with the forwarded newsletter channel link button
+//
 // menuCmd is a flat command entry used by buildCategoryMenu to render the
 // category-grouped .menu.  It carries the command name, its category and its
 // one-line description (all derived from the Command registry).
@@ -1560,7 +1571,7 @@ func (s *Session) CmdMenu(info types.MessageInfo, args []string, prefix string) 
 	imgURL := s.botPicURL()
 	imgData, fetchErr := fetchMenuImageURL(imgURL)
 	if fetchErr != nil || len(imgData) == 0 {
-  // ErrLog("[%s] menu header image fetch failed (%v) — falling back to text menu", s.JID, fetchErr)
+		// ErrLog("[%s] menu header image fetch failed (%v) — falling back to text menu", s.JID, fetchErr)
 		// Fallback: send text-only menu (still with newsletter button)
 		s.ReplyWithNewsletter(info, caption)
 		return
@@ -1619,7 +1630,6 @@ func init() {
 	// se duplicate hata di gayi taaki non-dev ko guarded reply mile.
 }
 
-
 // ── WELCOME / GOODBYE ENGINE (group join/leave) ────────────────────────────
 //
 // Ported from UMAR-MD pair.js lines 9345-9440 (group-participants.update).
@@ -1628,11 +1638,11 @@ func init() {
 //   - evt.Leave = members who left/were removed  → send GOODBYE for each
 //
 // For each participant:
-//   1. Read the per-group config (.welcome / .goodbye on/off + custom msg).
-//   2. If enabled, build the message text: replace @user with @<number>,
-//      @gname with the group subject.
-//   3. Fetch the group DP. If present → send image + caption + @mention.
-//      If absent → send text-only + @mention.
+//  1. Read the per-group config (.welcome / .goodbye on/off + custom msg).
+//  2. If enabled, build the message text: replace @user with @<number>,
+//     @gname with the group subject.
+//  3. Fetch the group DP. If present → send image + caption + @mention.
+//     If absent → send text-only + @mention.
 //
 // Everything runs in its own goroutine (the case launches `go ...`) so it
 // never blocks the event loop.

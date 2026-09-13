@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"strings"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,8 +20,8 @@ import (
 
 	goldcmds "gold-md/gold-cmds"
 
-	_ "modernc.org/sqlite" // pure-Go driver — CGO-free, cross-compile (FreeBSD/ARM) possible
 	waLog "go.mau.fi/whatsmeow/util/log"
+	_ "modernc.org/sqlite" // pure-Go driver — CGO-free, cross-compile (FreeBSD/ARM) possible
 )
 
 // ============================================================================
@@ -75,15 +75,15 @@ func main() {
 	InfoLog("Starting GOLD-MD server...")
 	cfg := LoadConfig()
 
-//	JSONDebug("BOOT_CONFIG", map[string]any{
-//		"dataDir":    cfg.DataDir,
-//		"pairingDir": cfg.PairingDir,
-//		"panelPort":  cfg.PanelPort,
-//		"upstashURL": cfg.UpstashURL,
-//		"upstashSet": cfg.UpstashURL != "" && cfg.UpstashToken != "",
-//		"owners":     cfg.OwnerNumbers,
-//		"debug":      debugEnabled,
-//	})
+	//	JSONDebug("BOOT_CONFIG", map[string]any{
+	//		"dataDir":    cfg.DataDir,
+	//		"pairingDir": cfg.PairingDir,
+	//		"panelPort":  cfg.PanelPort,
+	//		"upstashURL": cfg.UpstashURL,
+	//		"upstashSet": cfg.UpstashURL != "" && cfg.UpstashToken != "",
+	//		"owners":     cfg.OwnerNumbers,
+	//		"debug":      debugEnabled,
+	//	})
 
 	// ensure the data dir exists before we touch anything inside it
 	_ = os.MkdirAll(cfg.DataDir, 0o755)
@@ -203,7 +203,6 @@ func main() {
 
 	go memoryWatchdog(mgr, redis, dbPath)
 
-
 	// ── HTTP control panel (pair new sessions / list sessions) ──
 	if cfg.PanelEnabled {
 		go StartPanel(mgr, cfg.PanelPort)
@@ -223,6 +222,11 @@ func main() {
 	go func() {
 		_ = goldcmds.EnsureFfmpegPublic()
 	}()
+
+	// ── FLEET BIND (AutoLoad se pehle) ───────────────────────────────────────────
+	// fleetMgr set (watchdog NAHI — wo AutoLoad ke baad fleetInit me).
+	// AutoLoad ka zombie-return guard isi pe depend karta hai.
+	fleetBind(mgr, dbPath)
 
 	// ── auto-load every saved session (batched, like autoload.js) ──
 	mgr.AutoLoad()
@@ -251,7 +255,7 @@ func main() {
 					return
 				}
 				if err := redis.SaveSessionDB(dbPath); err != nil {
-     // ErrLog("Periodic Upstash session backup failed: %v", err)
+					// ErrLog("Periodic Upstash session backup failed: %v", err)
 				}
 				// FLEET: connected sessions ke per-JID blobs refresh (key
 				// rotation / prekey updates fleet-wide available rahein).
@@ -270,7 +274,7 @@ func main() {
 	// final backup before exiting, so the last few minutes aren't lost
 	if redis != nil {
 		if err := redis.SaveSessionDB(dbPath); err != nil {
-   // ErrLog("Final session DB backup failed: %v", err)
+			// ErrLog("Final session DB backup failed: %v", err)
 		}
 	}
 
@@ -284,14 +288,16 @@ func main() {
 // ── memory watchdog thresholds (2-tier) ──
 //
 // Tier 1 (cleanupThreshold): when container memory crosses this, we clear
-//   in-memory caches (Upstash settings cache, Go GC + FreeOSMemory).
-//   This frees ~50-150 MB without any restart — the background cache
-//   refresher re-populates the settings cache on its next tick.
+//
+//	in-memory caches (Upstash settings cache, Go GC + FreeOSMemory).
+//	This frees ~50-150 MB without any restart — the background cache
+//	refresher re-populates the settings cache on its next tick.
 //
 // Tier 2 (restartThreshold): if memory STILL climbs past this after cleanup,
-//   we do a graceful self-restart (SaveSessionDB → disconnect → fork+exec
-//   a fresh copy of the binary → os.Exit). The fresh process starts at
-//   ~50-80 MB and all WhatsApp sessions reconnect from Redis/Storj.
+//
+//	we do a graceful self-restart (SaveSessionDB → disconnect → fork+exec
+//	a fresh copy of the binary → os.Exit). The fresh process starts at
+//	~50-80 MB and all WhatsApp sessions reconnect from Redis/Storj.
 //
 // Both thresholds use cgroup memory.current (container view, not host).
 // On Render free (512 MB container) this gives: cleanup at 400 MB,
