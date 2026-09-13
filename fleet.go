@@ -78,7 +78,7 @@ const (
 	fleetStaleServer  = 24 * time.Hour   // heartbeat itni purani = purge
 	fleetRaceWait     = 3 * time.Second  // claim race re-verify window
 	fleetFailCooldown = 10 * time.Minute // failed restore retry cooldown
-	fleetHTTPTimeout  = 6 * time.Second  // remote /health timeout
+	fleetHTTPTimeout  = 4 * time.Second  // remote /health timeout (quick public .server)
 )
 
 // fleetBudgetMB: Render free monthly egress budget (5GB). .render5gb iske
