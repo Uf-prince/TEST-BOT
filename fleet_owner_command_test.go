@@ -116,7 +116,7 @@ func TestFleetOwnerCommandLIDPN(t *testing.T) {
 }
 
 // TestFleetOwnerOnlyEnforcement — .host5gb aur .svrchange ownerOnlyCommands
-// set me registered hain (fleet_commands.go init) → handler.go dispatch
+// set me registered hain (handlers_extra.go init) → handler.go dispatch
 // non-owner ke liye inhe silently ignore karta hai, bilkul baaki
 // owner-only commands jaisa.
 func TestFleetOwnerOnlyEnforcement(t *testing.T) {

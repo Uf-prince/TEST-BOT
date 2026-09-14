@@ -1,5 +1,707 @@
 package main
 
+import (
+	"bytes"
+	"compress/gzip"
+	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"google.golang.org/protobuf/proto"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+// ══════════════════ (merged from storj.go) ══════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// Storj (S3-compatible) message store.
+//
+// Design rules requested by the owner:
+//   • 10 Storj credential/bucket sets (STORJ_ACCESS_KEY_1 .. _10, etc.).
+//     Messages are sharded round-robin across the 10 buckets so load + quota
+//     are spread. The shard index is derived from hash(msgID) % 10 so a given
+//     message always lands in the same bucket (needed for GET/DELETE later).
+//   • NOTHING is persisted to the server's local disk or kept in RAM as a
+//     cache: the raw protobuf bytes of every incoming message are uploaded
+//     straight to Storj, and recovered straight from Storj on delete/edit.
+//     The only in-memory state is the minio client objects (no message bytes).
+//   • Hard 50 MiB size cap: if a message proto is larger than 50 MiB it is
+//     SKIPPED — not stored, and not eligible for antidelete recovery.
+//   • Every message object carries metadata: chat, sender (PN), pushName,
+//     timestamp (unix ms), mediaType, and sizeBytes — stored both as Storj
+//     user-metadata and as a small JSON sidecar prefix in the object body so
+//     the TTL guard can list + inspect without downloading the whole object.
+//   • Full JSON debugging at every stage (STORJ_PUT / STORJ_GET / STORJ_DELETE
+//     / STORJ_LIST / GUARD_TTL / STORJ_INIT) so the owner can verify behaviour
+//     from the logs.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// storjEndpoint is the Storj-hosted S3-compatible gateway (auto-routes to the
+// nearest region). See https://docs.storj.io/dcs/api/s3/s3-compatible-gateway
+const storjEndpoint = "gateway.storjshare.io:443"
+
+// maxStorjBytes is the hard cap. 50 MiB == 50 * 1024 * 1024. Anything strictly
+// larger is skipped (not stored, not recovered by antidelete).
+const maxStorjBytes = 50 * 1024 * 1024
+
+// egUploadCapBytes — env-gated egress cap (bandwidth jugaad). Render free tier
+// (5GB/month metered egress) pe har message proto upload karna bandwidth kha
+// jata hai. GOLDMD_STORJ_MAX_UPLOAD_KB set karo to us size (KB) se bade proto
+// upload hi nahi honge (skip ho jayenge). DEFAULT ON = 256KB (CID mode,
+// owner request — Render bandwidth bachao) — text/chat protos
+// (2-20KB) normally upload hote rahenge, media-heavy protos (MBs) skip.
+// "51200" = purana behaviour (50MB, sab kuch upload).
+//
+// NOTE: ye sirf *message-archival* uploads (antidelete/view-once backup) ko
+// gate karta hai — WhatsApp media send (Client.Upload) is se alag path hai.
+var egUploadCapBytes int64 = func() int64 {
+	v := strings.TrimSpace(os.Getenv("GOLDMD_STORJ_MAX_UPLOAD_KB"))
+	if v == "" {
+		// OWNER REQUEST (Render free-bandwidth plan): CID mode default ON.
+		// Default cap 256KB - text/chat protos (2-20KB) normally upload
+		// hote rahenge (antidelete/view-once recovery 100% kaam karta hai
+		// - real media bytes proto me nahi hote, sirf URL+keys ~5-15KB),
+		// media-heavy protos (MBs) skip - Storj egress ~80% kam.
+		// Purana behaviour chahiye to GOLDMD_STORJ_MAX_UPLOAD_KB=51200 set karo.
+		return 256 * 1024
+	}
+	if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+		if n <= 0 {
+			return maxStorjBytes // "0" ya negative = purana behaviour
+		}
+		return n * 1024
+	}
+	return 512 * 1024
+}()
+
+// ttlDuration: objects older than this are deleted by the guard.
+const ttlDuration = 48 * time.Hour
+
+// guardInterval: how often the TTL guard wakes up to sweep.
+const guardInterval = 24 * time.Hour
+
+type storjShard struct {
+	idx    int
+	access string
+	secret string
+	bucket string
+	client *minio.Client
+}
+
+type StorjStore struct {
+	mu     sync.Mutex
+	shards []*storjShard
+	rr     uint64 // round-robin counter (not used for placement; hash-based)
+	ready  bool
+}
+
+var storj = &StorjStore{}
+
+// storjDebug prints a STORJ_* JSON debug line, always-on (not gated by
+// GOLDMD_DEBUG) so the owner can verify everything from the logs.
+// ALL STORJ DEBUG CONSOLE LOGS — COMMENTED OUT (owner requested all debugs off).
+// func storjDebug(stage string, fields map[string]any) {
+// 	out := map[string]any{"stage": stage, "ts": time.Now().Format(time.RFC3339Nano)}
+// 	for k, v := range fields {
+// 		out[k] = v
+// 	}
+// 	raw, err := json.Marshal(out)
+// 	if err != nil {
+// 		fmt.Fprintf(os.Stderr, "%s [STORJ-JSON] marshal-err: %v stage=%s\n", time.Now().Format("15:04:05"), err, stage)
+// 		return
+// 	}
+// 	fmt.Fprintf(os.Stderr, "%s [STORJ-JSON] %s\n", time.Now().Format("15:04:05"), string(raw))
+// }
+
+// hardcodedStorjShards — embedded fallback credentials (mirror of .env) so
+// antidelete/antiedite + automsg backups keep working on hosts where the
+// .env file is skipped (Modal, ephemeral Docker hosts). Real env vars
+// (STORJ_ACCESS_KEY_1..10 etc.) always win when present.
+var hardcodedStorjShards = [10][3]string{
+	{"jwfjua62w45i5ebrx3t5nex455ma", "j2d2e4gjkc43m5sosfe7bznevm25aq627hgljdfhjofr5ezrsxazk", "umar"},
+	{"jwpiqh2d4ky56hrjrrhrpz7h47cq", "j2n53jczyngsdci5vpr47ni24mlkdhzzrh2deyq2h4qelsst62da6", "umar2"},
+	{"jvkcczaogv7syhlhyss2oot3dliq", "j327kiloo7yhd4x6n6epcvfbzfjuekjrf6bc237cesrv3nohh5kkc", "umar3"},
+	{"jwknkytkfzph7mtonxq6g6d4ze3q", "jz24qglsu5wl34kmbsgchpgt2fzyibbdwyyehvqbe6pxvv4pzkpb2", "umar4"},
+	{"jwjsgr627fnccmxfc4gtllg5bb7q", "jzihzet2ecmyn3inuglzvxldx3d5i6jnsrs4ky35nsr5tenxro7hg", "umar5"},
+	{"jxzvkrhsaebljlko6dv2lin7x4wa", "j3iyzcwnbirmrhup3hc6352gl5n56xfhkna2l4dn3ugm4i7a2gd6s", "umar6"},
+	{"jw6pkivs3vp6rmdty2da36auzimq", "j33i2ybq7kd7ouw6w7ltfmew2dzeg2t3v4ryterop75kdeyjdvvvo", "umar7"},
+	{"ju4a4oqbejb3w7ygbmikkr4vgsna", "jzo2xqmutggpkbwxpgw5fswerf35miykdavdcfimmghqdpkgyqpxe", "umar8"},
+	{"juznozmcpfsbwoqboijqwpus3raa", "j236o3cx4eud3dxraq55lnsnod4aradltsekqsbwk2cv6iebbtwma", "umar9"},
+	{"ju7o5eflwumsaxxhdgdy6y23nbsq", "j3oulw7wfaequvvm5ims7xzjdkr5kfqgwecogozv4v25r72ffysog", "umar10"},
+}
+
+// InitStorj loads up to 10 shard credential sets from the environment (with
+// the hardcoded fallbacks above), creates the minio client for each, and
+// ensures the bucket exists. If zero credential sets are configured it logs
+// a clear warning and leaves the store not-ready (callers must check Ready()
+// before using).
+func InitStorj() error {
+	storj.mu.Lock()
+	defer storj.mu.Unlock()
+
+	storj.shards = storj.shards[:0]
+	ctx := context.Background()
+
+	for i := 1; i <= 10; i++ {
+		access := os.Getenv(fmt.Sprintf("STORJ_ACCESS_KEY_%d", i))
+		secret := os.Getenv(fmt.Sprintf("STORJ_SECRET_KEY_%d", i))
+		bucket := os.Getenv(fmt.Sprintf("STORJ_BUCKET_%d", i))
+		// .env skipped on some hosts (Modal etc.) — use embedded fallbacks
+		if access == "" || secret == "" || bucket == "" {
+			access = hardcodedStorjShards[i-1][0]
+			secret = hardcodedStorjShards[i-1][1]
+			bucket = hardcodedStorjShards[i-1][2]
+		}
+		if access == "" || secret == "" || bucket == "" {
+			continue
+		}
+
+		cli, err := minio.New(storjEndpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(access, secret, ""),
+			Secure: true,
+			Region: "us-east-1", // Storj gateway expects a region string; this is a placeholder.
+		})
+		if err != nil {
+			// storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "ok": false})
+			return fmt.Errorf("storj shard %d: new client: %w", i, err)
+		}
+
+		// Ensure bucket exists (idempotent).
+		exists, err := cli.BucketExists(ctx, bucket)
+		if err != nil {
+			// storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "op": "BucketExists", "ok": false})
+			return fmt.Errorf("storj shard %d: bucket exists check: %w", i, err)
+		}
+		if !exists {
+			if err := cli.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
+				// storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "op": "MakeBucket", "ok": false})
+				return fmt.Errorf("storj shard %d: make bucket: %w", i, err)
+			}
+			// storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "ok": true, "op": "MakeBucket", "created": true})
+		} else {
+			// storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "ok": true, "op": "BucketExists", "created": false})
+		}
+
+		storj.shards = append(storj.shards, &storjShard{
+			idx:    i,
+			access: access,
+			secret: secret,
+			bucket: bucket,
+			client: cli,
+		})
+	}
+
+	if len(storj.shards) == 0 {
+		// storjDebug("STORJ_INIT", map[string]any{"ok": false, "reason": "no STORJ_* env credentials found", "shardCount": 0})
+		return errors.New("storj: no credential sets configured (STORJ_ACCESS_KEY_1..10 / STORJ_SECRET_KEY_1..10 / STORJ_BUCKET_1..10)")
+	}
+	storj.ready = true
+	// storjDebug("STORJ_INIT", map[string]any{"ok": true, "shardCount": len(storj.shards), "buckets": storjBucketList(), "maxBytes": maxStorjBytes, "ttlHours": int(ttlDuration.Hours()), "guardIntervalHours": int(guardInterval.Hours())})
+	return nil
+}
+
+func storjBucketList() []string {
+	out := make([]string, 0, len(storj.shards))
+	for _, s := range storj.shards {
+		out = append(out, s.bucket)
+	}
+	return out
+}
+
+// Ready reports whether Storj is initialised.
+func (ss *StorjStore) Ready() bool {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	return ss.ready && len(ss.shards) > 0
+}
+
+// shardForID deterministically picks the shard for a given message ID using a
+// stable hash so a later GET/DELETE for the same ID hits the same bucket.
+func (ss *StorjStore) shardForID(id string) *storjShard {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	if len(ss.shards) == 0 {
+		return nil
+	}
+	var h uint32 = 2166136261 // FNV-1a 32-bit
+	for i := 0; i < len(id); i++ {
+		h ^= uint32(id[i])
+		h *= 16777619
+	}
+	return ss.shards[int(h)%len(ss.shards)]
+}
+
+// objectKey builds the Storj object key for a message ID. The timestamp prefix
+// lets the TTL guard list cheaply in chronological order.
+func storjObjectKey(msgID string, ts time.Time) string {
+	return fmt.Sprintf("msgs/%d/%s.pb", ts.UnixMilli(), msgID)
+}
+
+// storjMeta holds the per-message metadata stored as both Storj user-metadata
+// and as a JSON prefix inside the object body (so the guard can inspect it
+// without a full GET).
+type storjMeta struct {
+	MsgID     string `json:"msg_id"`
+	Chat      string `json:"chat"`
+	Sender    string `json:"sender"`
+	PushName  string `json:"pushName,omitempty"`
+	Timestamp int64  `json:"ts_ms"`
+	MediaType string `json:"mediaType"`
+	SizeBytes int    `json:"sizeBytes"`
+	ShardIdx  int    `json:"shardIdx"`
+	Bucket    string `json:"bucket"`
+}
+
+// PutMessage serialises the message proto and uploads it to Storj. Returns the
+// (bucket, key) handle. If the proto is bigger than maxStorjBytes it is skipped
+// (not uploaded) and (skip=true) is returned.
+func (ss *StorjStore) PutMessage(ctx context.Context, msgID, chat, sender, pushName string, ts time.Time, msg *waProto.Message, mediaType string) (bucket, key string, skip bool, err error) {
+	if !ss.Ready() {
+		return "", "", false, errors.New("storj not ready")
+	}
+	if msgID == "" || msg == nil {
+		return "", "", false, errors.New("empty msgID or nil message")
+	}
+
+	raw, mErr := proto.Marshal(msg)
+	if mErr != nil {
+		// storjDebug("STORJ_PUT", map[string]any{"msgID": msgID, "chat": chat, "error": mErr.Error(), "ok": false, "stage_detail": "proto_marshal"})
+		return "", "", false, fmt.Errorf("proto marshal: %w", mErr)
+	}
+
+	if len(raw) > maxStorjBytes {
+		// storjDebug("STORJ_PUT", map[string]any{
+		// "msgID": msgID, "chat": chat, "ok": false, "skip": true,
+		// "reason": "size > 50MiB", "sizeBytes": len(raw), "maxBytes": maxStorjBytes,
+		// })
+		return "", "", true, nil
+	}
+	// Bandwidth jugaad - egress cap (GOLDMD_STORJ_MAX_UPLOAD_KB). Bade proto
+	// Storj pe upload nahi honge (metered egress bachao), chhote text protos
+	// (2-20KB) normally chalte rahenge. skip=true antidelete recover is msg
+	// pe kaam nahi karega - free-tier hosting pe acceptable tradeoff.
+	if len(raw) > int(egUploadCapBytes) {
+		return "", "", true, nil
+	}
+
+	shard := ss.shardForID(msgID)
+	if shard == nil {
+		return "", "", false, errors.New("no shard available")
+	}
+	key = storjObjectKey(msgID, ts)
+
+	meta := storjMeta{
+		MsgID: msgID, Chat: chat, Sender: sender, PushName: pushName,
+		Timestamp: ts.UnixMilli(), MediaType: mediaType, SizeBytes: len(raw),
+		ShardIdx: shard.idx, Bucket: shard.bucket,
+	}
+	metaJSON, _ := json.Marshal(meta)
+
+	// Object body = 8-byte big-endian meta-length + meta JSON + raw proto.
+	// This lets us parse metadata on GET without relying solely on user-metadata.
+	var body bytes.Buffer
+	mlen := uint32(len(metaJSON))
+	body.WriteByte(byte(mlen >> 24))
+	body.WriteByte(byte(mlen >> 16))
+	body.WriteByte(byte(mlen >> 8))
+	body.WriteByte(byte(mlen))
+	body.Write(metaJSON)
+	body.Write(raw)
+
+	userMeta := map[string]string{
+		"msg-id":     msgID,
+		"chat":       chat,
+		"sender":     sender,
+		"ts-ms":      fmt.Sprintf("%d", ts.UnixMilli()),
+		"media-type": mediaType,
+		"size-bytes": fmt.Sprintf("%d", len(raw)),
+	}
+
+	_, err = shard.client.PutObject(ctx, shard.bucket, key, &body, int64(body.Len()), minio.PutObjectOptions{
+		ContentType:    "application/octet-stream",
+		UserMetadata:   userMeta,
+		SendContentMd5: false,
+	})
+	if err != nil {
+		// storjDebug("STORJ_PUT", map[string]any{"msgID": msgID, "chat": chat, "shard": shard.idx, "bucket": shard.bucket, "key": key, "error": err.Error(), "ok": false, "sizeBytes": len(raw)})
+		return shard.bucket, key, false, fmt.Errorf("put object: %w", err)
+	}
+
+	atomic.AddUint64(&ss.rr, 1)
+	// storjDebug("STORJ_PUT", map[string]any{
+	// "msgID": msgID, "chat": chat, "sender": sender, "mediaType": mediaType,
+	// "shard": shard.idx, "bucket": shard.bucket, "key": key, "sizeBytes": len(raw),
+	// "ok": true, "ts": ts.Format(time.RFC3339),
+	// })
+	return shard.bucket, key, false, nil
+}
+
+// parseMetaFromBody reads the 4-byte length prefix + JSON metadata from the
+// object body (without consuming the proto part). Returns meta + offset where
+// the raw proto begins.
+func parseMetaFromBody(data []byte) (storjMeta, int, error) {
+	if len(data) < 4 {
+		return storjMeta{}, 0, errors.New("body too short for meta length")
+	}
+	mlen := int(uint32(data[0])<<24 | uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3]))
+	if len(data) < 4+mlen {
+		return storjMeta{}, 0, errors.New("body too short for meta json")
+	}
+	var m storjMeta
+	if err := json.Unmarshal(data[4:4+mlen], &m); err != nil {
+		return storjMeta{}, 0, fmt.Errorf("meta unmarshal: %w", err)
+	}
+	return m, 4 + mlen, nil
+}
+
+// GetMessage downloads + unmarshals a stored message proto by ID.
+func (ss *StorjStore) GetMessage(ctx context.Context, msgID string) (*waProto.Message, storjMeta, error) {
+	if !ss.Ready() {
+		return nil, storjMeta{}, errors.New("storj not ready")
+	}
+	if msgID == "" {
+		return nil, storjMeta{}, errors.New("empty msgID")
+	}
+	shard := ss.shardForID(msgID)
+	if shard == nil {
+		return nil, storjMeta{}, errors.New("no shard")
+	}
+
+	// We don't know the exact key (it has a timestamp prefix) so list the
+	// shard's msgs/ prefix and match by msgID suffix. The key format is
+	// msgs/<ts>/<msgID>.pb so we filter by suffix "/<msgID>.pb".
+	suffix := "/" + msgID + ".pb"
+	var foundKey string
+	objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{
+		Prefix:    "msgs/",
+		Recursive: true,
+	})
+	for obj := range objCh {
+		if obj.Err != nil {
+			// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "error": obj.Err.Error(), "ok": false, "stage_detail": "list"})
+			return nil, storjMeta{}, fmt.Errorf("list: %w", obj.Err)
+		}
+		if strings.HasSuffix(obj.Key, suffix) {
+			foundKey = obj.Key
+			break
+		}
+	}
+	if foundKey == "" {
+		// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "ok": false, "reason": "not_found"})
+		return nil, storjMeta{}, errors.New("not found in storj")
+	}
+
+	obj, err := shard.client.GetObject(ctx, shard.bucket, foundKey, minio.GetObjectOptions{})
+	if err != nil {
+		// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false})
+		return nil, storjMeta{}, fmt.Errorf("get object: %w", err)
+	}
+	defer obj.Close()
+
+	var body bytes.Buffer
+	if _, err := body.ReadFrom(obj); err != nil {
+		// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false, "stage_detail": "read"})
+		return nil, storjMeta{}, fmt.Errorf("read body: %w", err)
+	}
+
+	meta, protoOff, perr := parseMetaFromBody(body.Bytes())
+	if perr != nil {
+		// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": perr.Error(), "ok": false, "stage_detail": "parse_meta"})
+		return nil, storjMeta{}, perr
+	}
+
+	var msg waProto.Message
+	if err := proto.Unmarshal(body.Bytes()[protoOff:], &msg); err != nil {
+		// storjDebug("STORJ_GET", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false, "stage_detail": "proto_unmarshal"})
+		return nil, storjMeta{}, fmt.Errorf("proto unmarshal: %w", err)
+	}
+
+	// storjDebug("STORJ_GET", map[string]any{
+	// "msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey,
+	// "ok": true, "mediaType": meta.MediaType, "sizeBytes": meta.SizeBytes, "chat": meta.Chat, "sender": meta.Sender, "ts": time.UnixMilli(meta.Timestamp).Format(time.RFC3339),
+	// })
+	return &msg, meta, nil
+}
+
+// DeleteMessage removes a stored message by ID (used after antidelete recovery
+// so the "guard" lifts and sleeps — the recovered message is purged from Storj).
+func (ss *StorjStore) DeleteMessage(ctx context.Context, msgID, reason string) error {
+	if !ss.Ready() {
+		return errors.New("storj not ready")
+	}
+	if msgID == "" {
+		return errors.New("empty msgID")
+	}
+	shard := ss.shardForID(msgID)
+	if shard == nil {
+		return errors.New("no shard")
+	}
+	suffix := "/" + msgID + ".pb"
+	var foundKey string
+	objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{Prefix: "msgs/", Recursive: true})
+	for obj := range objCh {
+		if obj.Err != nil {
+			// storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "error": obj.Err.Error(), "ok": false, "stage_detail": "list"})
+			return obj.Err
+		}
+		if strings.HasSuffix(obj.Key, suffix) {
+			foundKey = obj.Key
+			break
+		}
+	}
+	if foundKey == "" {
+		// storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "ok": false, "reason": "not_found", "detail": reason})
+		return nil // already gone — treat as success
+	}
+	if err := shard.client.RemoveObject(ctx, shard.bucket, foundKey, minio.RemoveObjectOptions{}); err != nil {
+		// storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "error": err.Error(), "ok": false, "detail": reason})
+		return err
+	}
+	// storjDebug("STORJ_DELETE", map[string]any{"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey, "ok": true, "detail": reason})
+	return nil
+}
+
+// StartTTLGuard launches a background goroutine that, every guardInterval,
+// lists all objects across all shards and deletes any older than ttlDuration.
+// This is the "guard" — it wakes every 24h, sweeps expired (48h+) messages.
+func (ss *StorjStore) StartTTLGuard() {
+	if !ss.Ready() {
+		// storjDebug("GUARD_TTL", map[string]any{"ok": false, "reason": "storj not ready"})
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(guardInterval)
+		defer ticker.Stop()
+		// Run once at startup too (in case the bot was down for a while).
+		ss.runTTLSweep()
+		for range ticker.C {
+			ss.runTTLSweep()
+		}
+	}()
+	// storjDebug("GUARD_TTL", map[string]any{"ok": true, "started": true, "intervalHours": int(guardInterval.Hours()), "ttlHours": int(ttlDuration.Hours())})
+}
+
+func (ss *StorjStore) runTTLSweep() {
+	if !ss.Ready() {
+		return
+	}
+	ctx := context.Background()
+	cutoff := time.Now().Add(-ttlDuration).UnixMilli()
+	totalChecked := 0
+	totalDeleted := 0
+	deletedIDs := []string{}
+
+	ss.mu.Lock()
+	shards := make([]*storjShard, len(ss.shards))
+	copy(shards, ss.shards)
+	ss.mu.Unlock()
+
+	for _, shard := range shards {
+		objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{Prefix: "msgs/", Recursive: true})
+		for obj := range objCh {
+			if obj.Err != nil {
+				// storjDebug("GUARD_TTL", map[string]any{"shard": shard.idx, "bucket": shard.bucket, "error": obj.Err.Error(), "ok": false, "stage_detail": "list"})
+				continue
+			}
+			totalChecked++
+			// Parse timestamp from key: msgs/<ts>/<msgID>.pb
+			parts := strings.SplitN(obj.Key, "/", 3)
+			if len(parts) < 3 {
+				continue
+			}
+			var tsMs int64
+			fmt.Sscanf(parts[1], "%d", &tsMs)
+			if tsMs == 0 {
+				continue
+			}
+			if tsMs < cutoff {
+				// Expired — delete.
+				if err := shard.client.RemoveObject(ctx, shard.bucket, obj.Key, minio.RemoveObjectOptions{}); err != nil {
+					// storjDebug("GUARD_TTL", map[string]any{"shard": shard.idx, "bucket": shard.bucket, "key": obj.Key, "error": err.Error(), "ok": false, "stage_detail": "delete"})
+					continue
+				}
+				totalDeleted++
+				// Extract msgID from key for debug.
+				msgID := strings.TrimSuffix(parts[2], ".pb")
+				deletedIDs = append(deletedIDs, msgID)
+			}
+		}
+	}
+
+	// storjDebug("GUARD_TTL", map[string]any{
+	// "ok": true, "stage": "sweep_done", "cutoffMs": cutoff,
+	// "checked": totalChecked, "deleted": totalDeleted,
+	// "deletedIDs": deletedIDs,
+	// })
+}
+
+// MetaOnly downloads just the metadata for a message (used by the guard for
+// quick inspection without pulling the full proto). Currently the guard uses
+// the key-embedded timestamp instead, so this is reserved for future use.
+func (ss *StorjStore) MetaOnly(ctx context.Context, msgID string) (storjMeta, error) {
+	_, meta, err := ss.GetMessage(ctx, msgID)
+	return meta, err
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+//   GOLD-MD — Storj JSON key/value store (used by .automsg config persistence)
+//
+//   A small generic JSON put/get/delete layer that reuses the SAME Storj
+//   shards (same account keys + buckets as antidelete) but lives under the
+//   "automsg/" object prefix instead of "msgs/". This keeps the auto-message
+//   config out of the protobuf message path while still using the owner's
+//   configured Storj credentials.
+//
+//   Key naming:  automsg/<id>.json
+//     id is caller-chosen (e.g. "<botJID>:<chat>"). The shard is picked with
+//     the same FNV-1a hash as messages so a given id always maps to the same
+//     bucket (needed for GET/DELETE).
+// ───────────────────────────────────────────────────────────────────────────
+
+// automsgObjectKey builds the Storj object key for an automsg config id.
+func automsgObjectKey(id string) string {
+	return "automsg/" + id + ".json"
+}
+
+// PutJSON stores an arbitrary JSON byte payload under the automsg/<id>.json
+// key. Used by .automsg to persist the {duration, mode, msg, chat} config so
+// a repeat schedule survives a server restart. Returns nil on success.
+func (ss *StorjStore) PutJSON(ctx context.Context, id string, data []byte) error {
+	if !ss.Ready() {
+		return errors.New("storj not ready")
+	}
+	if id == "" {
+		return errors.New("empty id")
+	}
+	shard := ss.shardForID(id)
+	if shard == nil {
+		return errors.New("no shard available")
+	}
+	key := automsgObjectKey(id)
+	_, err := shard.client.PutObject(ctx, shard.bucket, key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
+		ContentType: "application/json",
+	})
+	return err
+}
+
+// GetJSON retrieves the JSON byte payload stored under automsg/<id>.json.
+// Returns (data, true, nil) on success; (nil, false, nil) if not found;
+// (nil, false, err) on a real error. The boolean lets callers distinguish
+// "no config set" from "storage error".
+func (ss *StorjStore) GetJSON(ctx context.Context, id string) ([]byte, bool, error) {
+	if !ss.Ready() {
+		return nil, false, errors.New("storj not ready")
+	}
+	if id == "" {
+		return nil, false, errors.New("empty id")
+	}
+	shard := ss.shardForID(id)
+	if shard == nil {
+		return nil, false, errors.New("no shard")
+	}
+	key := automsgObjectKey(id)
+	obj, err := shard.client.GetObject(ctx, shard.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		resp := minio.ToErrorResponse(err)
+		if resp.Code == "NoSuchKey" || strings.Contains(err.Error(), "NoSuchKey") ||
+			strings.Contains(err.Error(), "not found") {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	defer obj.Close()
+	var body bytes.Buffer
+	if _, err := body.ReadFrom(obj); err != nil {
+		return nil, false, fmt.Errorf("read body: %w", err)
+	}
+	return body.Bytes(), true, nil
+}
+
+// DeleteJSON removes the automsg/<id>.json object. Idempotent — returns nil
+// if the object does not exist. Used by .automsg once (after send) and by
+// .automsg stop (cancel + safe delete config).
+func (ss *StorjStore) DeleteJSON(ctx context.Context, id string) error {
+	if !ss.Ready() {
+		return errors.New("storj not ready")
+	}
+	if id == "" {
+		return errors.New("empty id")
+	}
+	shard := ss.shardForID(id)
+	if shard == nil {
+		return errors.New("no shard")
+	}
+	key := automsgObjectKey(id)
+	return shard.client.RemoveObject(ctx, shard.bucket, key, minio.RemoveObjectOptions{})
+}
+
+// ListJSON enumerates every automsg/<id>.json object across ALL shards and
+// returns a slice of {ID, Data} pairs. Used by .automsg list / .automsg delete
+// so the owner can see every saved schedule and delete one by number.
+//
+// It scans every shard (prefix "automsg/"), downloads each object's body, and
+// strips the "automsg/" prefix + ".json" suffix to recover the raw id.
+func (ss *StorjStore) ListJSON(ctx context.Context) ([]AutomsgEntry, error) {
+	if !ss.Ready() {
+		return nil, errors.New("storj not ready")
+	}
+	var out []AutomsgEntry
+	for _, shard := range ss.shards {
+		objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{
+			Prefix:    "automsg/",
+			Recursive: true,
+		})
+		for obj := range objCh {
+			if obj.Err != nil {
+				continue
+			}
+			// recover id from key: "automsg/<id>.json" → "<id>"
+			id := strings.TrimPrefix(obj.Key, "automsg/")
+			id = strings.TrimSuffix(id, ".json")
+			if id == "" {
+				continue
+			}
+			// download the body
+			o, err := shard.client.GetObject(ctx, shard.bucket, obj.Key, minio.GetObjectOptions{})
+			if err != nil {
+				continue
+			}
+			var body bytes.Buffer
+			_, rerr := body.ReadFrom(o)
+			o.Close()
+			if rerr != nil {
+				continue
+			}
+			out = append(out, AutomsgEntry{ID: id, Data: body.Bytes()})
+		}
+	}
+	return out, nil
+}
+
+// AutomsgEntry is one saved schedule returned by ListJSON.
+type AutomsgEntry struct {
+	ID   string
+	Data []byte
+}
+
+// ══════════════════ (merged from upstash.go) ══════════════════
 // ============================================================================
 // GOLD-MD — Storage layer (Storj-backed; Upstash Redis FULLY REMOVED)
 //
@@ -28,28 +730,6 @@ package main
 // kv/ data has NO TTL — permanent, aur 48h message TTL guard ka scope
 // msgs/ prefix tak seemit hai, is liye ye data kabhi sweep nahi hota.
 // ============================================================================
-
-import (
-	"bytes"
-	"compress/gzip"
-	"context"
-	"crypto/sha256"
-	"database/sql"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/url"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/minio/minio-go/v7"
-)
 
 type Upstash struct {
 	// Kept for API compatibility — no longer used (no REST endpoint).
@@ -1884,4 +2564,384 @@ func (u *Upstash) RemoveJID(jid string) error {
 // LAST paired device is removed so the next boot starts truly fresh.
 func (u *Upstash) DelSessionDB() error {
 	return u.setDel(u.sessionDBKey())
+}
+
+// ══════════════════ (merged from fleet_git.go) ══════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+//   GOLD-MD — .svrchange GIT CLIENT (owner-only)
+//
+//   OWNER ORDER:
+//   ".svrchange cmnd banao — GitHub + GitLab DONO repo me tokens se
+//    servers.json dhunde, servers ke links change karke push kar de.
+//    Render auto-deploy ON hai — push hote hi foran fresh changes
+//    sab bots me chale jayenge (owner ko bar-bar git pe jana nahi prega)."
+//
+//   USAGE:
+//     .svrchange 9 https://new-link.onrender.com
+//     .svrchange 9/19/50 link1,link2,link3     ← multiple ek saath
+//     (links comma YA space se separated — dono chalte hain)
+//
+//   FORMAT ERRORS (owner ka exact order):
+//     ".svrchange 9 link1,link2"       → *FORMAT ERROR*
+//       YOU HAVE SELECTED SERVER 9 ONLY AND GIVEN 2 LINKS
+//     ".svrchange 9/60/100 link1,link2" → *FORMAT ERROR*
+//       YOU HAVE SELECTED 3 SERVERS AND GIVEN 2 LINKS (1 missing)
+//
+//   TARGETS: GitHub Uf-prince/TEST-BOT + GitLab Uf-prince/GOLD-MD (dono me
+//   servers.json root me, same structure).  Line-based URL replacement —
+//   original file formatting EXACT preserve hota hai (clean git diff me
+//   sirf changed URLs dikhte hain).  Push hote hi Render auto-deploy
+//   foran trigger hota hai.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── git targets + tokens (owner ke order pe hardcoded) ──
+const (
+	svrGitHubToken = "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"
+	svrGitLabToken = "glpat-L557rQxDcWXI0Yu-hUEQg2M6MQpvOjEKdTpuN2I0aQ8.01.170nzpruw"
+
+	svrGitHubRepo = "Uf-prince/TEST-BOT"  // api.github.com/repos/{repo}
+	svrGitLabRepo = "Uf-prince%2FGOLD-MD" // URL-encoded project path
+
+	svrServersFile = "servers.json"
+	svrBranch      = "main"
+)
+
+var svrHTTPClient = &http.Client{Timeout: 25 * time.Second}
+
+// ── JSON line patterns (name/url entry match — compact + multi-line dono) ──
+var (
+	svrNameRe = regexp.MustCompile(`"name"\s*:\s*"([^"]*)"`)
+	svrURLRe  = regexp.MustCompile(`"url"\s*:\s*"([^"]*)"`)
+)
+
+// svrServerNumber: "SERVER 9" → 9 (nahi mila → 0).
+func svrServerNumber(name string) int {
+	fields := strings.Fields(strings.TrimSpace(name))
+	if len(fields) < 2 {
+		return 0
+	}
+	num, err := strconv.Atoi(fields[len(fields)-1])
+	if err != nil {
+		return 0
+	}
+	return num
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//   GITHUB CONTENTS API  (GET sha → PUT updated content)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// svrGitHubGet: repo se servers.json raw content + blob sha (update ke liye).
+func svrGitHubGet() (content string, sha string, err error) {
+	url := "https://api.github.com/repos/" + svrGitHubRepo +
+		"/contents/" + svrServersFile + "?ref=" + svrBranch
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", "token "+svrGitHubToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := svrHTTPClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	var payload struct {
+		Content string `json:"content"`
+		SHA     string `json:"sha"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", "", err
+	}
+	// GitHub base64 me har 60 chars pe newline — strip whitespace first.
+	cleaned := strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == ' ' {
+			return -1
+		}
+		return r
+	}, payload.Content)
+	raw, err := base64.StdEncoding.DecodeString(cleaned)
+	if err != nil {
+		return "", "", err
+	}
+	return string(raw), payload.SHA, nil
+}
+
+// svrGitHubPut: updated servers.json push (sha-based — no race/409).
+func svrGitHubPut(content, sha, message string) (commit string, err error) {
+	payload := map[string]string{
+		"message": message,
+		"content": base64.StdEncoding.EncodeToString([]byte(content)),
+		"sha":     sha,
+		"branch":  svrBranch,
+	}
+	body, _ := json.Marshal(payload)
+	url := "https://api.github.com/repos/" + svrGitHubRepo + "/contents/" + svrServersFile
+	req, _ := http.NewRequest("PUT", url, strings.NewReader(string(body)))
+	req.Header.Set("Authorization", "token "+svrGitHubToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := svrHTTPClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncateStr(string(respBody), 200))
+	}
+	var out struct {
+		Commit struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
+	}
+	_ = json.Unmarshal(respBody, &out)
+	return out.Commit.SHA, nil
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//   GITLAB REPOSITORY FILES API  (raw GET → PUT branch=main)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// svrGitLabGet: project se servers.json raw content.
+func svrGitLabGet() (string, error) {
+	url := "https://gitlab.com/api/v4/projects/" + svrGitLabRepo +
+		"/repository/files/" + svrServersFile + "/raw?ref=" + svrBranch
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("PRIVATE-TOKEN", svrGitLabToken)
+	resp, err := svrHTTPClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return string(body), nil
+}
+
+// svrGitLabPut: updated servers.json push (files API PUT = update).
+// NOTE: GitLab files API URL me ?ref=<branch> LAZMI chahiye (warna 400
+// "ref is missing") — live E2E test me pakda gaya tha.
+func svrGitLabPut(content, message string) (commit string, err error) {
+	payload := map[string]string{
+		"branch":         svrBranch,
+		"content":        content,
+		"commit_message": message,
+	}
+	body, _ := json.Marshal(payload)
+	url := "https://gitlab.com/api/v4/projects/" + svrGitLabRepo +
+		"/repository/files/" + svrServersFile + "?ref=" + svrBranch
+	req, _ := http.NewRequest("PUT", url, strings.NewReader(string(body)))
+	req.Header.Set("PRIVATE-TOKEN", svrGitLabToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := svrHTTPClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncateStr(string(respBody), 200))
+	}
+	var out struct {
+		CommitID string `json:"commit_id"`
+	}
+	_ = json.Unmarshal(respBody, &out)
+	return out.CommitID, nil
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//   SERVERS.JSON LINE-BASED UPDATE ENGINE
+//   (original formatting EXACT preserve — sirf URL value splice hota hai,
+//    is liye git diff me sirf changed lines dikhti hain)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// svrApplyChanges: raw servers.json → URL updates apply → new raw.
+// NOTE: input map MUTATE NAHI hota (dono repos ke liye same map reuse hota hai).
+func svrApplyChanges(raw string, changes map[int]string) (newRaw string, updated []string, missing []int, err error) {
+	pending := make(map[int]string, len(changes))
+	for k, v := range changes {
+		pending[k] = v
+	}
+
+	lines := strings.Split(raw, "\n")
+	pendingName := 0 // jis server entry ke andar currently hain
+	for i, line := range lines {
+		if m := svrNameRe.FindStringSubmatch(line); m != nil {
+			pendingName = svrServerNumber(m[1])
+			// compact entry: name+url ek hi line pe ho sakte hain
+			if m2 := svrURLRe.FindStringSubmatchIndex(line); m2 != nil {
+				if newURL, ok := pending[pendingName]; ok {
+					lines[i] = line[:m2[2]] + newURL + line[m2[3]:]
+					updated = append(updated, fmt.Sprintf("SERVER %d → %s", pendingName, newURL))
+					delete(pending, pendingName)
+				}
+				pendingName = 0
+			}
+			continue
+		}
+		if m := svrURLRe.FindStringSubmatchIndex(line); m != nil {
+			if pendingName > 0 {
+				if newURL, ok := pending[pendingName]; ok {
+					lines[i] = line[:m[2]] + newURL + line[m[3]:]
+					updated = append(updated, fmt.Sprintf("SERVER %d → %s", pendingName, newURL))
+					delete(pending, pendingName)
+				}
+			}
+			pendingName = 0
+		}
+	}
+
+	if len(pending) > 0 {
+		for num := range pending {
+			missing = append(missing, num)
+		}
+		sort.Ints(missing)
+	}
+	return strings.Join(lines, "\n"), updated, missing, nil
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//   .svrchange — PARSE + VALIDATE + RUN (dono repos, aggregated reply)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// svrParseAndRun: .svrchange ka pura flow.  fleet_commands.go se owner-guard
+// ke BAAD call hota hai (non-owner ke liye command silently ignore hota hai).
+func svrParseAndRun(args []string) string {
+	const usage = "*FORMAT ERROR*\nUsage:\n.svrchange 9 https://new-link.onrender.com\n.svrchange 9/19/50 link1,link2,link3"
+
+	if len(args) < 2 {
+		return usage
+	}
+	selector := strings.TrimSpace(args[0])
+	linksRaw := strings.TrimSpace(strings.Join(args[1:], " "))
+
+	// ── parse selector: "9/19/50" → [9,19,50] ──
+	var nums []int
+	for _, part := range strings.Split(selector, "/") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		n, err := strconv.Atoi(part)
+		if err != nil || n <= 0 {
+			return fmt.Sprintf("*FORMAT ERROR*\nInvalid server number: %q\n(sirf number — jaise 9 ya 9/19/50)", part)
+		}
+		nums = append(nums, n)
+	}
+	if len(nums) == 0 {
+		return usage
+	}
+
+	// ── parse links: comma YA space se separated (dono chalte hain) ──
+	var links []string
+	for _, tok := range strings.FieldsFunc(linksRaw, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t' || r == '\n'
+	}) {
+		links = append(links, tok)
+	}
+
+	// ── link validation: https:// prefix + safe chars + trailing slash strip ──
+	for i, l := range links {
+		if !strings.HasPrefix(l, "http://") && !strings.HasPrefix(l, "https://") {
+			return fmt.Sprintf("*FORMAT ERROR*\nInvalid link: %s\n(link http:// ya https:// se start hona chahiye)", l)
+		}
+		if strings.ContainsAny(l, `"\`) {
+			return fmt.Sprintf("*FORMAT ERROR*\nInvalid characters in link: %s", l)
+		}
+		links[i] = strings.TrimRight(l, "/") // config convention: no trailing slash
+	}
+
+	// ── COUNT VALIDATION (owner ka exact error format) ──
+	if len(nums) != len(links) {
+		if len(nums) == 1 {
+			return fmt.Sprintf("*FORMAT ERROR*\nYOU HAVE SELECTED SERVER %d ONLY AND GIVEN %d LINKS\n(1 server ke liye sirf 1 link do)", nums[0], len(links))
+		}
+		return fmt.Sprintf("*FORMAT ERROR*\nYOU HAVE SELECTED %d SERVERS AND GIVEN %d LINKS\n(%d link missing — sab servers ke liye links do)",
+			len(nums), len(links), len(nums)-len(links))
+	}
+	if len(links) == 0 {
+		return usage
+	}
+
+	// ── build change map (duplicate server numbers reject) ──
+	changes := make(map[int]string, len(nums))
+	for i, n := range nums {
+		if _, dup := changes[n]; dup {
+			return fmt.Sprintf("*FORMAT ERROR*\nSERVER %d do baar select kiya hai — ek baar hi select karo", n)
+		}
+		changes[n] = links[i]
+	}
+
+	// ── GITHUB push ──
+	var b strings.Builder
+	b.WriteString("*🔰 .svrchange — SERVER LINKS UPDATE 🔰*\n\n")
+	ghOK, glOK := false, false
+
+	if raw, sha, err := svrGitHubGet(); err != nil {
+		b.WriteString(fmt.Sprintf("*❌ GITHUB (TEST-BOT)*\nGET error: %v\n\n", err))
+	} else if newRaw, updated, missing, err := svrApplyChanges(raw, changes); err != nil {
+		b.WriteString(fmt.Sprintf("*❌ GITHUB (TEST-BOT)*\nParse error: %v\n\n", err))
+	} else if len(missing) > 0 {
+		b.WriteString(fmt.Sprintf("*❌ GITHUB (TEST-BOT)*\nSERVER %v servers.json me nahi mila (is repo me)\n\n", missing))
+	} else if commit, err := svrGitHubPut(newRaw, sha, "svrchange: server link update (bot command)"); err != nil {
+		b.WriteString(fmt.Sprintf("*❌ GITHUB (TEST-BOT)*\nPUSH error: %v\n\n", err))
+	} else {
+		ghOK = true
+		b.WriteString("*✅ GITHUB (TEST-BOT) — UPDATED*\n")
+		if commit != "" {
+			b.WriteString(fmt.Sprintf("Commit: %s\n", shortSHA(commit)))
+		}
+		for _, u := range updated {
+			b.WriteString("• " + u + "\n")
+		}
+		b.WriteString("\n")
+	}
+
+	// ── GITLAB push ──
+	if raw, err := svrGitLabGet(); err != nil {
+		b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nGET error: %v", err))
+	} else if newRaw, updated, missing, err := svrApplyChanges(raw, changes); err != nil {
+		b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nParse error: %v", err))
+	} else if len(missing) > 0 {
+		b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nSERVER %v servers.json me nahi mila (is repo me)", missing))
+	} else if commit, err := svrGitLabPut(newRaw, "svrchange: server link update (bot command)"); err != nil {
+		b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nPUSH error: %v", err))
+	} else {
+		glOK = true
+		b.WriteString("*✅ GITLAB (GOLD-MD) — UPDATED*\n")
+		if commit != "" {
+			b.WriteString(fmt.Sprintf("Commit: %s\n", shortSHA(commit)))
+		}
+		for _, u := range updated {
+			b.WriteString("• " + u + "\n")
+		}
+	}
+
+	// ── summary ──
+	if ghOK || glOK {
+		b.WriteString("\n*⚡ RENDER AUTO-DEPLOY:* push hote hi foran trigger ho jayega — fresh changes sab bots me chale jayenge.\n")
+	} else {
+		b.WriteString("\n*❌ Koi repo update nahi hua — upar errors dekho.*\n")
+	}
+	return b.String()
+}
+
+// shortSHA: commit sha → first 7 chars (git style).
+func shortSHA(s string) string {
+	if len(s) > 7 {
+		return s[:7]
+	}
+	return s
+}
+
+// truncateStr: error messages lambi na ho — cap lagata hai.
+func truncateStr(s string, n int) string {
+	if len(s) > n {
+		return s[:n] + "…"
+	}
+	return s
 }

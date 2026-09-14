@@ -13,11 +13,11 @@ import (
 // jaisa reconnect hi chale."
 // ============================================================================
 
-// TestGuardFileStructure: session_online_guard.go ki zaroori cheezein.
+// TestGuardFileStructure: session_guards.go ki zaroori cheezein.
 func TestGuardFileStructure(t *testing.T) {
-	b, err := os.ReadFile("session_online_guard.go")
+	b, err := os.ReadFile("session_guards.go")
 	if err != nil {
-		t.Fatal("session_online_guard.go missing:", err)
+		t.Fatal("session_guards.go missing:", err)
 	}
 	src := string(b)
 
@@ -28,7 +28,7 @@ func TestGuardFileStructure(t *testing.T) {
 		"/sessions",
 	} {
 		if !strings.Contains(src, want) {
-			t.Errorf("session_online_guard.go me missing: %q", want)
+			t.Errorf("session_guards.go me missing: %q", want)
 		}
 	}
 }
@@ -77,9 +77,9 @@ func TestGuardHookFleetClaim(t *testing.T) {
 
 // TestGuardOrderClaimFirst: guard STEP 1 claim check hai, STEP 2 probe.
 func TestGuardOrderClaimFirst(t *testing.T) {
-	b, err := os.ReadFile("session_online_guard.go")
+	b, err := os.ReadFile("session_guards.go")
 	if err != nil {
-		t.Fatal("session_online_guard.go missing:", err)
+		t.Fatal("session_guards.go missing:", err)
 	}
 	src := string(b)
 	ci := strings.Index(src, "if fleetHeldByLiveServer(jid) {")

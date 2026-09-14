@@ -42,20 +42,20 @@ func requireNotContains(t *testing.T, src, needle, where string) {
 	}
 }
 
-// TestLocalOnlyFileStructure: localonly_session.go me marker + guard + fleet
+// TestLocalOnlyFileStructure: session_guards.go me marker + guard + fleet
 // key cleaner sab maujood.
 func TestLocalOnlyFileStructure(t *testing.T) {
-	b, err := os.ReadFile("localonly_session.go")
+	b, err := os.ReadFile("session_guards.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	src := stripComments2(string(b))
-	requireContains(t, src, "const localOnlyMarkerFile", "localonly_session.go")
-	requireContains(t, src, "func writeLocalOnlyMarker", "localonly_session.go")
-	requireContains(t, src, "func isLocalOnlyJID", "localonly_session.go")
-	requireContains(t, src, "func anyLocalOnlyOnDisk", "localonly_session.go")
-	requireContains(t, src, "func localOnlyUploadBlocked", "localonly_session.go")
-	requireContains(t, src, "func localOnlyCleanFleetKeys", "localonly_session.go")
+	requireContains(t, src, "const localOnlyMarkerFile", "session_guards.go")
+	requireContains(t, src, "func writeLocalOnlyMarker", "session_guards.go")
+	requireContains(t, src, "func isLocalOnlyJID", "session_guards.go")
+	requireContains(t, src, "func anyLocalOnlyOnDisk", "session_guards.go")
+	requireContains(t, src, "func localOnlyUploadBlocked", "session_guards.go")
+	requireContains(t, src, "func localOnlyCleanFleetKeys", "session_guards.go")
 	// fleet keys cleaner: blob + claim + set + registry sab DEL/SREM/SDEL
 	requireContains(t, src, "fleetBlobPrefix + jid", "localOnlyCleanFleetKeys")
 	requireContains(t, src, "fleetClaimPrefix+jid", "localOnlyCleanFleetKeys")
@@ -144,11 +144,11 @@ func TestAutoLoadBypassesFleetGuards(t *testing.T) {
 	requireContains(t, window, "if fleetSessionOnlineElsewhere(u)", "AutoLoad online-elsewhere guard")
 }
 
-// TestSaveSessionDBUploadGuard: upstash.go SaveSessionDB me central disk-only
+// TestSaveSessionDBUploadGuard: storage.go SaveSessionDB me central disk-only
 // upload gate hai — local-only session disk pe ho to whole-DB Storj upload
 // kabhi nahi hota.
 func TestSaveSessionDBUploadGuard(t *testing.T) {
-	b, err := os.ReadFile("upstash.go")
+	b, err := os.ReadFile("storage.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestPanelCodeEndpointDirect(t *testing.T) {
 // TestWarGuardDiskOnlySafe: war-guard local-only session ko kabhi surrender
 // nahi karta, claim nahi stamp karta, reconnect skip nahi karta.
 func TestWarGuardDiskOnlySafe(t *testing.T) {
-	b, err := os.ReadFile("session_war_guard.go")
+	b, err := os.ReadFile("session_guards.go")
 	if err != nil {
 		t.Fatal(err)
 	}

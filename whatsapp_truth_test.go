@@ -27,9 +27,9 @@ func TestCountWhatsAppTruthSource(t *testing.T) {
 	if !strings.Contains(src, "LoginDeadSince time.Time") {
 		t.Errorf("Session.LoginDeadSince field missing")
 	}
-	wb, err := os.ReadFile("reconnect_watchdog.go")
+	wb, err := os.ReadFile("session_guards.go")
 	if err != nil {
-		t.Fatalf("reconnect_watchdog.go: %v", err)
+		t.Fatalf("session_guards.go: %v", err)
 	}
 	wsrc := string(wb)
 	if !strings.Contains(wsrc, "login dead 60s+") {

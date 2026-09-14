@@ -55,6 +55,25 @@ func stripComments(src string) string {
 }
 
 // caseBody: event-router case clause ka body — next "case *events." tak.
+// mergedRegion: root consolidation ke baad session_guards.go me har original
+// file ka content apne separator comment (merged from <file>) ke baad next
+// separator tak exact rehta hai — tests usi region ko scan karte hain,
+// taaki doosri merged files ka legit code (cleanupSession etc.) war-guard
+// leak na lage.
+func mergedRegion(src, orig string) string {
+	marker := "(merged from " + orig + ")"
+	start := strings.Index(src, marker)
+	if start < 0 {
+		return src
+	}
+	rest := src[start:]
+	next := strings.Index(rest[len(marker):], "\n// \u2550")
+	if next < 0 {
+		return rest
+	}
+	return rest[:len(marker)+next]
+}
+
 func caseBody(src string, marker string) string {
 	i := strings.Index(src, marker)
 	if i < 0 {
@@ -75,13 +94,13 @@ func caseBody(src string, marker string) string {
 // reconnect → crash → 401 → purge ka war loop yahin khatam."
 // ============================================================================
 
-// TestWarGuardFileStructure: session_war_guard.go ki zaroori cheezein.
+// TestWarGuardFileStructure: session_guards.go ki zaroori cheezein.
 func TestWarGuardFileStructure(t *testing.T) {
-	b, err := os.ReadFile("session_war_guard.go")
+	b, err := os.ReadFile("session_guards.go")
 	if err != nil {
-		t.Fatal("session_war_guard.go missing:", err)
+		t.Fatal("session_guards.go missing:", err)
 	}
-	src := string(b)
+	src := mergedRegion(string(b), "session_war_guard.go")
 
 	for _, want := range []string{
 		"func (m *Manager) surrenderSession(s *Session, reason string)",
@@ -92,7 +111,7 @@ func TestWarGuardFileStructure(t *testing.T) {
 		"warRetakeDelay",
 	} {
 		if !strings.Contains(src, want) {
-			t.Errorf("session_war_guard.go me missing: %q", want)
+			t.Errorf("session_guards.go me missing: %q", want)
 		}
 	}
 
@@ -145,9 +164,9 @@ func TestWarGuardHookStreamReplaced(t *testing.T) {
 // TestWarGuardHookWatchdog: doReconnect + handleDisconnectedEvent me
 // pre-Connect war guard lagna chahiye.
 func TestWarGuardHookWatchdog(t *testing.T) {
-	b, err := os.ReadFile("reconnect_watchdog.go")
+	b, err := os.ReadFile("session_guards.go")
 	if err != nil {
-		t.Fatal("reconnect_watchdog.go missing:", err)
+		t.Fatal("session_guards.go missing:", err)
 	}
 	src := string(b)
 
@@ -183,11 +202,11 @@ func TestWarGuardHookWatchdog(t *testing.T) {
 // TestWarGuardSurrenderSafeOrder: surrender ka local cleanup order —
 // releaseSlot pehle, phir delete(m.sessions), phir Disconnect.
 func TestWarGuardSurrenderSafeOrder(t *testing.T) {
-	b, err := os.ReadFile("session_war_guard.go")
+	b, err := os.ReadFile("session_guards.go")
 	if err != nil {
-		t.Fatal("session_war_guard.go missing:", err)
+		t.Fatal("session_guards.go missing:", err)
 	}
-	src := string(b)
+	src := mergedRegion(string(b), "session_war_guard.go")
 
 	i := strings.Index(src, "func (m *Manager) surrenderSession")
 	if i < 0 {
