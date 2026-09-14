@@ -3,33 +3,34 @@ package main
 // ============================================================================
 // GOLD-MD — GUARD COMPRESSOR (Render bandwidth shield)
 // ============================================================================
-// OWNER ORDER (Render free 5GB/month bandwidth bachao):
-//   Media downloader 50MB ki 52 files bhej deta tha → Render ki free
-//   bandwidth khatam → Render bot band kar deta tha. Ab GUARD har
-//   media send pe lagta hai:
+// OWNER ORDER v2 (FORCE-COMPRESS): "chahye video audio image 5mb ki ho ya
+// 500mb ki ya 1gb ki — jitni marzi mb ki file bot download kre compressor
+// me bhejo compress krwa ker fir whatsapp me bhejo"
 //
-//     1. Size <= LIMIT (default 50MB) → seedha bhejo (zero cost, no msg).
-//     2. Size > LIMIT → GUARD rok leta hai, chat me message:
-//        "bhai itna size hum nahi bhej sakte — compressor room me
-//         bheji ja rahi hai, 5-10MB karke wapas bhejenge"
-//     3. COMPRESSOR ROOM: ffmpeg fast re-encode —
-//          video : smart-bitrate + resolution ladder (720→480→360→240)
-//          audio : 96→64→48→32 kbps mp3
-//          image : scale 1920px + JPEG quality ladder
-//        Target: ~5-10 MB (GOLDMD_GUARD_TARGET_MB, default 8).
-//     4. Compressed media wapas WhatsApp pe — caption me size note:
-//        "GUARD: 52.4 MB → 7.9 MB (-85%)"
-//     5. Compress na ho paye (zip/apk/pdf jaise documents re-encode
-//        nahi hote) → block + clear message (media nahi jati).
+//   1. HAR media (video/audio/image) COMPRESSOR ROOM me jati hai:
+//        - 5MB ho ya 20MB ya 500MB ya 1GB — sab compress hoke hi jati hai
+//        - compressed version original se CHHOTA ho tabhi swap (warna
+//          original hi jata hai — quality nuksan bekar me nahi)
+//        - compress fail ho (<=limit files) → original passthrough
+//   2. FLOOR (default 1MB) se chhoti media seedha pass — thumbnails,
+//      stickers, chhoti profile pics pe ffmpeg spam nahi.
+//   3. LIMIT (default 50MB) se badi media → GUARD rokta hai:
+//      "bhai itna size hum nahi bhej sakte" → compressor room →
+//      compress hua to bhejo, NAHI hua to BLOCK (bandwidth bachani hai).
+//   4. Documents (zip/apk/pdf) re-encode nahi hote: <=limit pass,
+//      >limit BLOCK.
 //
-// ENV KNOBS (sab optional, default ON):
+// ENGINE (owner order): .compress wala FAST engine —
+//   video : FIXED 360p + libx264 ultrafast + bitrate ladder 500→64k
+//   audio : FIXED 128kbps mp3 (ladder 128→96→64→48→32)
+//   image : JPEG quality 80→60→40 + scale 1920→1280→1024
+//
+// ENV KNOBS (sab optional):
 //   GOLDMD_GUARD_DISABLED=1    → guard OFF (emergency / host change)
+//   GOLDMD_GUARD_FORCE=0       → force mode OFF (sirf >limit compress hota)
 //   GOLDMD_GUARD_LIMIT_MB=<n>  → reject limit (default 50)
+//   GOLDMD_GUARD_FLOOR_MB=<n>  → is se chhoti media pass (default 1)
 //   GOLDMD_GUARD_TARGET_MB=<n> → compress target (default 8)
-//
-// FAST hona zaroori hai (owner order): libx264 "veryfast" preset +
-// bitrate-precision targeting (2-pass NAHI — single pass smart bitrate),
-// isliye 50MB video ~30-60s me compress ho jati hai, quality 480p SD.
 // ============================================================================
 
 import (
@@ -42,7 +43,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// ── guard kinds ────────────────────────────────────────────────────────────
+// ── guard kinds ─────────────────────────────────────────────────────────────
 
 type guardKind int
 
@@ -70,14 +71,34 @@ func (k guardKind) label() string {
 	return "MEDIA"
 }
 
-// ── env knobs ──────────────────────────────────────────────────────────────
+// ── env knobs ───────────────────────────────────────────────────────────────
 
 func guardEnabled() bool { return os.Getenv("GOLDMD_GUARD_DISABLED") != "1" }
+
+// guardForceMode: HAR media compressor room me (owner order v2). Default ON.
+// GOLDMD_GUARD_FORCE=0 → purana limit-only mode.
+func guardForceMode() bool {
+	if v := os.Getenv("GOLDMD_GUARD_FORCE"); v != "" {
+		return v != "0"
+	}
+	return true
+}
 
 func guardLimitBytes() int64 {
 	mb := int64(50)
 	if v := os.Getenv("GOLDMD_GUARD_LIMIT_MB"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			mb = n
+		}
+	}
+	return mb * 1024 * 1024
+}
+
+// guardFloorBytes: is se chhoti media compress NAHI hoti (thumbnails/stickers).
+func guardFloorBytes() int64 {
+	mb := int64(1)
+	if v := os.Getenv("GOLDMD_GUARD_FLOOR_MB"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
 			mb = n
 		}
 	}
@@ -98,13 +119,14 @@ func guardFmtMB(n int64) string {
 	return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
 }
 
-// ── result ─────────────────────────────────────────────────────────────────
+// ── result ──────────────────────────────────────────────────────────────────
 
 // guardResult is what the guard hands back to the send helper.
-//   ok=false      → BLOCKED (guard already replied in chat — media NOT sent)
-//   usePath=true  → caller must send g.path instead of original path
-//   len(data)>0   → caller must send g.data instead of original bytes
-//   note          → caption suffix (guard footer) to append when changed
+//
+//	ok=false      → BLOCKED (guard already replied in chat — media NOT sent)
+//	usePath=true  → caller must send g.path instead of original path
+//	len(data)>0   → caller must send g.data instead of original bytes
+//	note          → caption suffix (guard footer) to append when changed
 type guardResult struct {
 	ok      bool
 	usePath bool
@@ -129,17 +151,74 @@ func (g *guardResult) cleanupAll() {
 	}
 }
 
-// pass-through result (small media — no guard action).
+// pass-through result (no guard action — original media as-is).
 func guardPass() guardResult { return guardResult{ok: true} }
 
-// ── public entry points (bridge flows: info available) ────────────────────
+// ── policy core (shared by bytes + path flows) ──────────────────────────────
 
-// guardBytesBytes checks + compresses in-memory media bytes.
+// guardPolicy: 3-tier decision.
+//
+//	0 = pass       (guard OFF / below floor / force OFF & below limit)
+//	1 = force      (<=limit: compress, fail/grew → original passthrough)
+//	2 = overlimit  (>limit: compress, fail → BLOCK)
+func guardPolicy(size int64) int {
+	if !guardEnabled() || size <= guardFloorBytes() {
+		return 0
+	}
+	if size <= guardLimitBytes() {
+		if !guardForceMode() {
+			return 0
+		}
+		return 1
+	}
+	return 2
+}
+
+// ── public entry points (bridge flows: info available) ──────────────────────
+
+// guardBytes checks + compresses in-memory media bytes.
 // When blocked it replies the guard message into info's chat.
 func (b *bridge) guardBytes(info MsgInfoT, kind guardKind, data []byte, caption string) guardResult {
-	if !guardEnabled() || int64(len(data)) <= guardLimitBytes() {
+	switch guardPolicy(int64(len(data))) {
+	case 0:
+		return guardPass()
+	case 2:
+		return b.guardOverLimitBytes(info, kind, data)
+	}
+	// tier 1 — FORCE (owner order v2): chhoti/badi sab compress hoke jayegi
+	orig := int64(len(data))
+	if kind == guardDocument || kind == guardSticker {
+		return guardPass() // docs re-encode nahi hote; <=limit → pass
+	}
+	src, err := writeGuardTemp(data, kind)
+	if err != nil {
+		return guardPass() // temp fail → original (block KAHI nahi)
+	}
+	out, size, note, ok := guardCompressFile(kind, src, guardTargetBytes(), guardLimitBytes())
+	_ = os.Remove(src)
+	if !ok || size >= orig {
+		if out != "" {
+			_ = os.Remove(out)
+		}
+		return guardPass() // compress fail / aur bada → original hi jayegi
+	}
+	comp, err := os.ReadFile(out)
+	_ = os.Remove(out)
+	if err != nil || len(comp) == 0 {
 		return guardPass()
 	}
+	b.guardNotifyDone(info, orig, size)
+	return guardResult{
+		ok:     true,
+		data:   comp,
+		note:   note,
+		origMB: guardFmtMB(orig),
+		newMB:  guardFmtMB(size),
+	}
+}
+
+// guardOverLimitBytes: >limit → compressor room; fail → block + chat message.
+func (b *bridge) guardOverLimitBytes(info MsgInfoT, kind guardKind, data []byte) guardResult {
 	orig := int64(len(data))
 	b.guardNotifyStart(info, kind, orig)
 
@@ -209,19 +288,55 @@ func guardProbeBytes(data []byte) float64 {
 // guardPath checks + compresses a media file on disk (streaming flows).
 // When blocked it replies the guard message into info's chat.
 func (b *bridge) guardPath(info MsgInfoT, kind guardKind, path string, caption string) guardResult {
-	if !guardEnabled() {
+	st, err := os.Stat(path)
+	if err != nil {
 		return guardPass()
 	}
-	st, err := os.Stat(path)
-	if err != nil || st.Size() <= guardLimitBytes() {
+	switch guardPolicy(st.Size()) {
+	case 0:
+		return guardPass()
+	case 2:
+		return b.guardOverLimitPath(info, kind, path, st.Size())
+	}
+	// tier 1 — FORCE: sab media compressor room (owner order v2)
+	if kind == guardDocument || kind == guardSticker {
 		return guardPass()
 	}
 	orig := st.Size()
+	out, outSize, note, ok := guardCompressFile(kind, path, guardTargetBytes(), guardLimitBytes())
+	if !ok || outSize >= orig {
+		if out != "" {
+			_ = os.Remove(out)
+		}
+		return guardPass() // fail/bada → original passthrough (block NAHI)
+	}
+	b.guardNotifyDone(info, orig, outSize)
+	return guardResult{
+		ok:      true,
+		usePath: true,
+		path:    out,
+		note:    note,
+		origMB:  guardFmtMB(orig),
+		newMB:   guardFmtMB(outSize),
+		cleanup: []string{out},
+	}
+}
+
+// guardOverLimitPath: >limit → compressor room; fail → block + chat message.
+func (b *bridge) guardOverLimitPath(info MsgInfoT, kind guardKind, path string, orig int64) guardResult {
 	b.guardNotifyStart(info, kind, orig)
 
 	out, outSize, note, ok := guardCompressFile(kind, path, guardTargetBytes(), guardLimitBytes())
 	if !ok {
 		b.guardNotifyFail(info, kind, orig, "compress nahi ho payi")
+		return guardResult{ok: false}
+	}
+	if outSize >= orig {
+		// compressor hi bada bana raha — over-limit pe original nahi jayegi
+		if out != "" {
+			_ = os.Remove(out)
+		}
+		b.guardNotifyFail(info, kind, orig, "compressor ne chhota nahi banaya")
 		return guardResult{ok: false}
 	}
 	b.guardNotifyDone(info, orig, outSize)
@@ -239,7 +354,7 @@ func (b *bridge) guardPath(info MsgInfoT, kind guardKind, path string, caption s
 // MsgInfoT keeps guard.go decoupled from concrete info type churn.
 type MsgInfoT = interface{}
 
-// ── guard messages (WhatsApp style, owner ke style me) ─────────────────────
+// ── guard messages (WhatsApp style, owner ke style me) ──────────────────────
 
 func guardStartText(kind guardKind, orig int64) string {
 	return "*🛡️ GOLD GUARD — BANDWIDTH SHIELD*\n\n" +
@@ -255,7 +370,7 @@ func guardStartText(kind guardKind, orig int64) string {
 func guardDoneText(orig, comp int64) string {
 	saved := 100 - (comp * 100 / orig)
 	return "*🛡️ GUARD COMPRESS DONE ✅*\n" +
-		"📉 " + guardFmtMB(orig) + " → " + guardFmtMB(comp) + " (-" + strconv.FormatInt(saved, 10) + "%)\n" +
+		"📈 " + guardFmtMB(orig) + " → " + guardFmtMB(comp) + " (-" + strconv.FormatInt(saved, 10) + "%)\n" +
 		"💾 Server bandwidth bach gayi!"
 }
 

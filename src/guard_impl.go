@@ -116,12 +116,17 @@ func guardCompressVideo(src string, target, maxLimit int64) (string, int64, stri
 		br   int
 	}
 	var best cand
-	for _, br := range []int{500, 350, 250, 180, 120} {
+	for _, br := range []int{500, 350, 250, 180, 120, 96, 64} {
 		out, err := guardTempOut(".mp4")
 		if err != nil {
 			break
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		// 1GB tak videos: timeout size ke hisaab se (max 10 min)
+		tmo := 4 * time.Minute
+		if srcSt, e := os.Stat(src); e == nil && srcSt.Size() > int64(200<<20) {
+			tmo = 10 * time.Minute
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), tmo)
 		args := []string{"-y", "-i", src,
 			"-c:v", "libx264",
 			"-b:v", strconv.Itoa(br) + "k",
@@ -245,10 +250,30 @@ func guardCompressAudio(src string, target, maxLimit int64) (string, int64, stri
 	return "", 0, "", false
 }
 
-
 // ── IMAGE ladder (JPEG quality + scale) ────────────────────────────────────
 
 func guardCompressImage(src string, target, maxLimit int64) (string, int64, string, bool) {
+	// force-tier: compressed >= original ho to original hi behtar (caller
+	// guardPass karega). Isliye output size vs SOURCE size bhi compare hota hai.
+	if srcSt, e := os.Stat(src); e == nil {
+		srcSize := srcSt.Size()
+		out, size, note, ok := guardCompressImageRun(src, target, maxLimit, srcSize)
+		if !ok {
+			return "", 0, "", false
+		}
+		if size >= srcSize { // smaller-of-two: bada hua to original behtar
+			if out != "" {
+				os.Remove(out)
+			}
+			return "", 0, "", false
+		}
+		return out, size, note, true
+	}
+	return guardCompressImageRun(src, target, maxLimit, 0)
+}
+
+func guardCompressImageRun(src string, target, maxLimit, srcSize int64) (string, int64, string, bool) {
+
 	for _, q := range []int{80, 60, 40} {
 		for _, w := range []int{1920, 1280, 1024} {
 			out, err := guardTempOut(".jpg")
