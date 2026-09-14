@@ -243,6 +243,27 @@ func TestFleetRefreshSkipsLocalOnly(t *testing.T) {
 	requireContains(t, body, "if s.LocalOnly {", "fleetRefreshBlobs")
 }
 
+// TestMenuFullmenuPointer: .menu caption me HI {pushname} / SEE MY BOT
+// COMMANDS ke baad TYPE ❮ {prefix}FULLMENU ❯ / TO SHOW FULL MENU lines
+// hain (owner order — screenshot format).
+func TestMenuFullmenuPointer(t *testing.T) {
+	b, err := os.ReadFile("manager.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := stripComments2(string(b))
+	requireContains(t, src, `"*HI %s*\n*SEE MY BOT COMMANDS*\n*TYPE ❮ %sFULLMENU ❯*\n*TO SHOW FULL MENU*\n\n"`, "manager.go menu caption")
+	// prefix + pushName dono format args hon
+	i := strings.Index(src, `"*HI %s*\n*SEE MY BOT COMMANDS*\n*TYPE ❮ %sFULLMENU ❯*\n*TO SHOW FULL MENU*\n\n"`)
+	if i < 0 {
+		t.Fatal("menu caption format string not found")
+	}
+	line := src[i : strings.Index(src[i:], "\n")+i]
+	if !strings.Contains(line, "pushName, prefix") {
+		t.Errorf("menu caption must pass pushName, prefix — got: %s", line)
+	}
+}
+
 // TestMainGoRegistersUploadGuard: boot pe guard registration.
 func TestMainGoRegistersUploadGuard(t *testing.T) {
 	b, err := os.ReadFile("main.go")

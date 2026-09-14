@@ -1853,7 +1853,12 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	if pushName == "" {
 		pushName = "User"
 	}
-	b.WriteString(fmt.Sprintf("*HI %s*\n*SEE MY BOT COMMANDS*\n\n", pushName))
+	// OWNER ORDER: HI {pushname} / SEE MY BOT COMMANDS ke BAAD 2 nayi
+	// lines — fullmenu ka pointer taake user ko turant pata chale ke
+	// poora menu kahan hai:
+	//   *TYPE ❮ {prefix}FULLMENU ❯*
+	//   *TO SHOW FULL MENU*
+	b.WriteString(fmt.Sprintf("*HI %s*\n*SEE MY BOT COMMANDS*\n*TYPE ❮ %sFULLMENU ❯*\n*TO SHOW FULL MENU*\n\n", pushName, prefix))
 
 	for _, cat := range orderedCats {
 		list, ok := groups[cat]
