@@ -388,7 +388,7 @@ func handleYTInfo(s SessionBridge, info types.MessageInfo, args []string, prefix
 }
 
 func init() {
-	Register(Command{Name: "yts", Category: "DOWNLOADER", Desc: "Search YouTube videos or paste a YouTube link to download (title, channel, views, link)", Run: handleYTSearch})
+	Register(Command{Name: "yts", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO SEARCH VIDEOS ON YOUTUBE. IT SHOWS A LIST OF RESULTS WITH TITLES.", Run: handleYTSearch})
 	Register(Command{Name: "ytsearch", Hidden: true, Run: handleYTSearch})
-	Register(Command{Name: "ytinfo", Hidden: true, Run: handleYTInfo})
+	Register(Command{Name: "ytinfo", Desc: "THIS COMMAND IS USED TO SHOW FULL DETAILS OF A YOUTUBE VIDEO. USE IT WITH A VIDEO LINK OR NAME.", Category: "DOWNLOADER", Hidden: true, Run: handleYTInfo})
 }

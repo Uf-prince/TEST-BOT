@@ -212,7 +212,7 @@ func GroupBanUserIsBannedExported(s SessionBridge, groupJID, userJID string) boo
 // ── registration ───────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "bangcuser", Category: "GROUP MANAGEMENT", Desc: "Ban a user from bot commands in this group", OwnerOnly: false, Run: handleBangcuser})
+	Register(Command{Name: "bangcuser", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO BAN A USER FROM USING THE BOT IN GROUPS.", OwnerOnly: false, Run: handleBangcuser})
 	Register(Command{Name: "usergcban", OwnerOnly: false, Hidden: true, Run: handleBangcuser})
 	Register(Command{Name: "bcuser", OwnerOnly: false, Hidden: true, Run: handleBangcuser})
 	// Note: "gcban" is already registered as an alias for bangc (lock group).
@@ -220,7 +220,7 @@ func init() {
 	// takes priority in the Node.js code (it appears first in the if-chain),
 	// we keep gcban → bangc and do NOT re-register it here to avoid conflict.
 
-	Register(Command{Name: "unbangcuser", Category: "GROUP MANAGEMENT", Desc: "Unban a user from bot commands in this group", OwnerOnly: false, Run: handleUnbangcuser})
+	Register(Command{Name: "unbangcuser", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO UNBAN A USER SO THEY CAN USE THE BOT IN GROUPS AGAIN.", OwnerOnly: false, Run: handleUnbangcuser})
 	Register(Command{Name: "usergcunban", OwnerOnly: false, Hidden: true, Run: handleUnbangcuser})
 	Register(Command{Name: "unbcuser", OwnerOnly: false, Hidden: true, Run: handleUnbangcuser})
 	Register(Command{Name: "ungcban", OwnerOnly: false, Hidden: true, Run: handleUnbangcuser})

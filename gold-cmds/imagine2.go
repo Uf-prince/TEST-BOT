@@ -398,7 +398,7 @@ func handleImagine2Async(s SessionBridge, info types.MessageInfo, args []string,
 }
 
 func init() {
-	Register(Command{Name: "imagine2", Category: "AI & MEDIA", Desc: "AI text-to-image (Mistral)", Run: handleImagine2})
+	Register(Command{Name: "imagine2", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO MAKE A SECOND STYLE AI IMAGE FROM YOUR TEXT. IT GIVES A DIFFERENT STYLE PICTURE.", Run: handleImagine2})
 	Register(Command{Name: "aiimage2", Hidden: true, Run: handleImagine2})
 	Register(Command{Name: "aiimg2", Hidden: true, Run: handleImagine2})
 	Register(Command{Name: "texttoimg2", Hidden: true, Run: handleImagine2})

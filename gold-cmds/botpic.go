@@ -260,7 +260,7 @@ func init() {
 	Register(Command{
 		Name:      "botpic",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Change bot menu + alive image (upload to ImageKit)",
+		Desc:      "THIS COMMAND IS USED TO CHANGE THE BOT PROFILE PICTURE. REPLY TO A PHOTO AND USE THIS COMMAND.",
 		OwnerOnly: true,
 		Run:       handleBotPic,
 	})

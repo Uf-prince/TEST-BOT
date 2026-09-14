@@ -82,7 +82,7 @@ type WSFastResponse struct {
 
 func init() {
 	// Main video command (visible in menu + count)
-	Register(Command{Name: "video2", Category: "DOWNLOADER", Desc: "Download a YouTube video by name or URL", Run: handleVideo})
+	Register(Command{Name: "video2", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO DOWNLOAD YOUTUBE VIDEOS WITH A QUALITY LIST. IT SHOWS QUALITY OPTIONS AND YOU PICK ONE.", Run: handleVideo})
 	// Aliases — fully functional but Hidden from menu + TOTAL COMMANDS count
 	Register(Command{Name: "v", Hidden: true, Run: handleVideo2})
 	Register(Command{Name: "ytvideo", Hidden: true, Run: handleVideo2})
@@ -290,7 +290,7 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 
 func init() {
 	// Main audio commands (visible in menu + count)
-	Register(Command{Name: "play2", Category: "DOWNLOADER", Desc: "Play / download a song by name from YouTube", Run: handlePlay})
+	Register(Command{Name: "play2", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO PLAY YOUTUBE SONGS WITH A RESULT LIST. IT SHOWS RESULTS AND YOU PICK THE ONE YOU WANT.", Run: handlePlay})
 	Register(Command{Name: "song", Hidden: true, Run: handlePlay2}) // alias of play
 	// Aliases — fully functional but Hidden from menu + TOTAL COMMANDS count
 	Register(Command{Name: "ytaudio", Hidden: true, Run: handlePlay2})

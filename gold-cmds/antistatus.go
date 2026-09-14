@@ -311,6 +311,6 @@ func AntistatusCheckAndEnforce(s SessionBridge, info types.MessageInfo) {
 // ── registration ──────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "antistatus", Category: "ANTI & PROTECTION", Desc: "Block group status mentions (on/off/action/warn)", OwnerOnly: true, Run: handleAntistatus})
+	Register(Command{Name: "antistatus", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO STOP MEMBERS FROM MENTIONING THE BOT IN THEIR STATUS. IT CAN WARN, DELETE OR KICK THEM FROM THE GROUP.", OwnerOnly: true, Run: handleAntistatus})
 	Register(Command{Name: "as", OwnerOnly: true, Hidden: true, Run: handleAntistatus})
 }

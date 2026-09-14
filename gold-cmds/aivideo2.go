@@ -1030,7 +1030,7 @@ func handleAIVideo2Async(s SessionBridge, info types.MessageInfo, args []string,
 
 func init() {
 	av2InitPool(hardcodedAIVideo2Keys, "AVIDEO2_API_KEY")
-	Register(Command{Name: "aivideo2", Category: "AI & MEDIA", Desc: "Generate an AI video (pool #2)", Run: handleAIVideo2})
+	Register(Command{Name: "aivideo2", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO MAKE A SECOND STYLE AI VIDEO FROM YOUR TEXT. IT GIVES A DIFFERENT STYLE VIDEO.", Run: handleAIVideo2})
 }
 
 // hardcodedAIVideo2Keys are defined in aivideo2_keys.go.

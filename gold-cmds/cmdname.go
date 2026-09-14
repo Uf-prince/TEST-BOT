@@ -456,7 +456,7 @@ func init() {
 	Register(Command{
 		Name:      "cmdname",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Rename any command to your own name (cmdname ping to umar — then .umar works and the menu shows .umar; cmdname mine — only your names work, bot silent on its own; cmdname all — yours + bot's both work; cmdname reset — delete all your names)",
+		Desc:      "THIS COMMAND IS USED TO CHANGE THE NAME OF ANY BOT COMMAND. YOU CAN GIVE ANY COMMAND A NEW NAME.",
 		OwnerOnly: true,
 		Run:       handleCmdName,
 	})

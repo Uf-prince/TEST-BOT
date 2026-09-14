@@ -1440,7 +1440,7 @@ func handleAPKSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 }
 
 func init() {
-	Register(Command{Name: "tt", Category: "DOWNLOADER", Desc: "Search TikTok users or paste a TikTok link to download (name, followers, videos, link)", Run: handleTTSearch})
+	Register(Command{Name: "tt", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO DOWNLOAD TIKTOK VIDEOS WITHOUT WATERMARK. JUST SEND A TIKTOK LINK WITH THIS COMMAND.", Run: handleTTSearch})
 	Register(Command{Name: "ttsearch", Hidden: true, Run: handleTTSearch})
 	Register(Command{Name: "tts", Hidden: true, Run: handleTTSearch})
 	Register(Command{Name: "tiktok", Hidden: true, Run: handleTTSearch})
@@ -1448,28 +1448,28 @@ func init() {
 	Register(Command{Name: "ttvideo", Hidden: true, Run: handleTTSearch})
 	Register(Command{Name: "tiktokvideo", Hidden: true, Run: handleTTSearch})
 
-	Register(Command{Name: "fb", Category: "DOWNLOADER", Desc: "Search Facebook videos or paste a Facebook video/reel link to download (name, link)", Run: handleFBSearchV7})
+	Register(Command{Name: "fb", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO DOWNLOAD FACEBOOK VIDEOS. JUST SEND A FACEBOOK VIDEO LINK WITH THIS COMMAND.", Run: handleFBSearchV7})
 	Register(Command{Name: "fbsearch", Hidden: true, Run: handleFBSearchV7})
 	Register(Command{Name: "fbs", Hidden: true, Run: handleFBSearchV7})
 	Register(Command{Name: "fbdl", Hidden: true, Run: handleFBSearchV7})
 	Register(Command{Name: "facebook", Hidden: true, Run: handleFBSearchV7})
 	Register(Command{Name: "reel", Hidden: true, Run: handleFBSearchV7})
 
-	Register(Command{Name: "ig", Category: "DOWNLOADER", Desc: "Search Instagram accounts or paste an Instagram reel/post link to download (name, link)", Run: handleIGSearch})
+	Register(Command{Name: "ig", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO DOWNLOAD INSTAGRAM VIDEOS AND PHOTOS. JUST SEND AN INSTAGRAM LINK WITH THIS COMMAND.", Run: handleIGSearch})
 	Register(Command{Name: "igsearch", Hidden: true, Run: handleIGSearch})
 	Register(Command{Name: "igs", Hidden: true, Run: handleIGSearch})
 	Register(Command{Name: "instagram", Hidden: true, Run: handleIGSearch})
 	Register(Command{Name: "insta", Hidden: true, Run: handleIGSearch})
 	Register(Command{Name: "instavideo", Hidden: true, Run: handleIGSearch})
 
-	Register(Command{Name: "tg", Category: "DOWNLOADER", Desc: "Search Telegram channels/groups or paste a t.me post link to download (name, join link)", Run: handleTGSearch})
+	Register(Command{Name: "tg", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO SEARCH AND DOWNLOAD TELEGRAM VIDEOS. SEND A TELEGRAM LINK OR SEARCH BY NAME.", Run: handleTGSearch})
 	Register(Command{Name: "tgsearch", Hidden: true, Run: handleTGSearch})
 	Register(Command{Name: "tgs", Hidden: true, Run: handleTGSearch})
 	Register(Command{Name: "telegram", Hidden: true, Run: handleTGSearch})
 	Register(Command{Name: "tgdl", Hidden: true, Run: handleTGSearch})
 	Register(Command{Name: "tgvid", Hidden: true, Run: handleTGSearch})
 
-	Register(Command{Name: "twt", Category: "DOWNLOADER", Desc: "Search X / Twitter accounts or paste an X video link to download (name, link)", Run: handleTWTSearch})
+	Register(Command{Name: "twt", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO DOWNLOAD TWITTER VIDEOS. JUST SEND A TWEET LINK WITH THIS COMMAND.", Run: handleTWTSearch})
 	Register(Command{Name: "twtsearch", Hidden: true, Run: handleTWTSearch})
 	Register(Command{Name: "twts", Hidden: true, Run: handleTWTSearch})
 	Register(Command{Name: "twitter", Hidden: true, Run: handleTWTSearch})
@@ -1478,7 +1478,7 @@ func init() {
 	Register(Command{Name: "xvideo", Hidden: true, Run: handleTWTSearch})
 	Register(Command{Name: "x", Hidden: true, Run: handleTWTSearch})
 
-	Register(Command{Name: "apk", Category: "DOWNLOADER", Desc: "Search APK apps or paste an APK store link to download (name, package, rating, size)", Run: handleAPKSearch})
+	Register(Command{Name: "apk", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO SEARCH AND DOWNLOAD ANDROID APPS. TYPE AN APP NAME TO SEARCH AND GET ITS APK FILE.", Run: handleAPKSearch})
 	Register(Command{Name: "apksearch", Hidden: true, Run: handleAPKSearch})
 	Register(Command{Name: "apks", Hidden: true, Run: handleAPKSearch})
 	Register(Command{Name: "apkdl", Hidden: true, Run: handleAPKSearch})

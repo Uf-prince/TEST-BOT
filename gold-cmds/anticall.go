@@ -110,7 +110,7 @@ func init() {
 	Register(Command{
 		Name:      "anticall",
 		Category:  "ANTI & PROTECTION",
-		Desc:      "Auto-reject incoming WhatsApp calls (on/off/msg)",
+		Desc:      "THIS COMMAND IS USED TO AUTO REJECT INCOMING CALLS ON THE BOT. IT CAN ALSO SEND A CUSTOM MESSAGE TO THE CALLER.",
 		OwnerOnly: true,
 		Run:       handleAntiCall,
 	})

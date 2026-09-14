@@ -88,7 +88,7 @@ func init() {
 	Register(Command{
 		Name:      "prefix",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Show prefix info / change the command prefix (owner)",
+		Desc:      "THIS COMMAND IS USED TO CHANGE THE BOT COMMAND PREFIX. USE IT WITH THE NEW PREFIX SYMBOL.",
 		OwnerOnly: true,
 		Run:       handlePrefix,
 	})

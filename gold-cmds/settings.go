@@ -823,7 +823,7 @@ func init() {
 	Register(Command{
 		Name:      "settings",
 		Category:  "TOOLS",
-		Desc:      "Opens a number-based settings panel that lists every bot setting (anticall, antilink, welcome, mode, prefix etc.) with numbers — owner just sends the number to turn that setting on/off or change it. No arguments, e.g. \"settings\". Panel stays open for 2 minutes.",
+		Desc:      "THIS COMMAND IS USED TO OPEN THE BOT SETTINGS PANEL. SEND A NUMBER TO TURN THAT SETTING ON OR OFF.",
 		OwnerOnly: true,
 		Run:       handleSettingsCmd,
 	})

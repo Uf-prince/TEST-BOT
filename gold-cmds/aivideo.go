@@ -1029,7 +1029,7 @@ func errToStr(e error) string {
 
 func init() {
 	avideoInitPool(hardcodedAIVideoKeys, "AVIDEO_API_KEY")
-	Register(Command{Name: "aivideo", Category: "AI & MEDIA", Desc: "Generate an AI video from a prompt", Run: handleAIVideo})
+	Register(Command{Name: "aivideo", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO MAKE AN AI VIDEO FROM YOUR TEXT. TYPE ANY WORDS AND THE BOT MAKES A VIDEO FOR YOU.", Run: handleAIVideo})
 }
 
 // hardcodedAIVideoKeys are defined in aivideo_keys.go (kept separate so the

@@ -227,7 +227,7 @@ func init() {
 	Register(Command{
 		Name:      "autoblock",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Auto-block numbers by country code (on/off/add/del/reset/list)",
+		Desc:      "THIS COMMAND IS USED TO AUTO BLOCK NUMBERS FROM SET COUNTRY CODES. USE IT WITH COUNTRY CODES LIKE 92 1 44.",
 		OwnerOnly: true,
 		Run:       handleAutoBlock,
 	})

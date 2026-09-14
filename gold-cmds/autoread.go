@@ -107,7 +107,7 @@ func AutoReadMode(s SessionBridge) string {
 // ── registration ───────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "autoread", Category: "OWNER & SYSTEM", Desc: "Auto-read messages (on/inbox/groups/all/off)", OwnerOnly: true, Run: handleAutoRead})
+	Register(Command{Name: "autoread", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO TURN ON AUTO READ FOR ALL INCOMING MESSAGES.", OwnerOnly: true, Run: handleAutoRead})
 	Register(Command{Name: "readmsg", OwnerOnly: true, Hidden: true, Run: handleAutoRead})
 	Register(Command{Name: "autoreadmsg", OwnerOnly: true, Hidden: true, Run: handleAutoRead})
 }

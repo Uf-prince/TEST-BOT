@@ -1743,7 +1743,7 @@ func compressedIndexOf(keys []string, k string) int {
 // ── registration ──────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "compress", Category: "AI & MEDIA", Desc: "Compress any replied media (image/video/audio/pdf/file) to reduce size", Run: handleCompress})
+	Register(Command{Name: "compress", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO REDUCE THE SIZE OF ANY IMAGE OR VIDEO. REPLY TO THE MEDIA AND USE THIS COMMAND TO MAKE IT SMALLER.", Run: handleCompress})
 	Register(Command{Name: "comp", Hidden: true, Run: handleCompress})
 	Register(Command{Name: "shrink", Hidden: true, Run: handleCompress})
 }

@@ -115,6 +115,6 @@ func handleRc(s SessionBridge, info types.MessageInfo, args []string, prefix str
 }
 
 func init() {
-	Register(Command{Name: "rc", Category: "PRESENCE & STATUS", Desc: "React to a replied message with any emoji", Run: handleRc})
+	Register(Command{Name: "rc", Category: "PRESENCE & STATUS", Desc: "THIS COMMAND IS USED TO SEND A REACTION TO ANY MESSAGE. REPLY TO A MESSAGE AND USE IT WITH AN EMOJI.", Run: handleRc})
 	Register(Command{Name: "react", Category: "PRESENCE & STATUS", Hidden: true, Run: handleRc})
 }

@@ -521,7 +521,7 @@ func init() {
 	Register(Command{
 		Name:     "save",
 		Category: "AI & MEDIA",
-		Desc:     "Reply to a status, broadcast, or any message — or attach media/text/link directly — to save it into your own inbox. Aliases: .sv .grab .keep",
+		Desc:     "THIS COMMAND IS USED TO DOWNLOAD AND SAVE ANY WHATSAPP STATUS MEDIA. REPLY TO A STATUS OR USE IT WITH A STATUS LINK.",
 		Run:      handleSave,
 	})
 	// Hidden aliases wired to the same handler (Node.js: saved/send/give/safe

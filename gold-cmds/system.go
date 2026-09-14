@@ -17,7 +17,7 @@ import (
 const memoryRestartThreshold uint64 = 500 * 1024 * 1024
 
 func init() {
-	Register(Command{Name: "system", Category: "OWNER & SYSTEM", Desc: "Show bot system / runtime info", Run: handleSystem})
+	Register(Command{Name: "system", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO SHOW THE FULL SYSTEM INFO OF THE SERVER LIKE RAM, CPU AND STORAGE.", Run: handleSystem})
 }
 
 // MemoryRestartThresholdBytes exposes the watchdog threshold to the main package.

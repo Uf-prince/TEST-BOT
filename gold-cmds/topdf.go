@@ -367,7 +367,7 @@ func writeTempPDF(data []byte) (string, string, error) {
 // ──────────────────────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "topdf", Category: "AI & MEDIA", Desc: "Convert media (image/video/document) to PDF", Run: handleToPDF})
+	Register(Command{Name: "topdf", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO CONVERT PHOTOS INTO A PDF FILE. REPLY TO ONE OR MORE PHOTOS AND USE THIS COMMAND.", Run: handleToPDF})
 	Register(Command{Name: "pdf", Hidden: true, Run: handleToPDF})
 	Register(Command{Name: "topdf2", Hidden: true, Run: handleToPDF})
 }

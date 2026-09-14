@@ -670,7 +670,7 @@ func handlePP(s SessionBridge, info types.MessageInfo, args []string, prefix str
 }
 
 func init() {
-	Register(Command{Name: "pp", Category: "OWNER & SYSTEM", Desc: "Set profile pic from replied image (full pic, no crop)", Run: handlePP})
+	Register(Command{Name: "pp", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO CHANGE YOUR OWN WHATSAPP PROFILE PICTURE FROM THE BOT. REPLY TO A PHOTO AND USE IT.", Run: handlePP})
 	Register(Command{Name: "setpp", Category: "OWNER & SYSTEM", Hidden: true, Run: handlePP})
 	Register(Command{Name: "setmypp", Category: "OWNER & SYSTEM", Hidden: true, Run: handlePP})
 	Register(Command{Name: "mypp", Category: "OWNER & SYSTEM", Hidden: true, Run: handlePP})

@@ -222,26 +222,26 @@ func PremiumIsMemberExported(s SessionBridge, jid string) bool {
 
 func init() {
 	// antilinkprem (antilinkpremium / antilinkprem)
-	Register(Command{Name: "antilinkprem", Category: "ANTI & PROTECTION", Desc: "Premium/whitelist list for antilink (add/del/list)", OwnerOnly: false, Run: handleAntilinkPrem})
+	Register(Command{Name: "antilinkprem", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO SET PREMIUM ANTILINK PROTECTION FOR THE GROUP.", OwnerOnly: false, Run: handleAntilinkPrem})
 	Register(Command{Name: "antilinkpremium", OwnerOnly: false, Hidden: true, Run: handleAntilinkPrem})
 
 	// antistatusprem (antistatusprem / antisprem / antistatuspremium)
-	Register(Command{Name: "antistatusprem", Category: "ANTI & PROTECTION", Desc: "Premium/whitelist list for antistatus (add/del/list)", OwnerOnly: false, Run: handleAntistatusPrem})
+	Register(Command{Name: "antistatusprem", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO SET PREMIUM ANTISTATUS PROTECTION FOR THE GROUP.", OwnerOnly: false, Run: handleAntistatusPrem})
 	Register(Command{Name: "antisprem", OwnerOnly: false, Hidden: true, Run: handleAntistatusPrem})
 	Register(Command{Name: "antistatuspremium", OwnerOnly: false, Hidden: true, Run: handleAntistatusPrem})
 
 	// antibotprem (antibotpremium / antibotprem / abprem)
-	Register(Command{Name: "antibotprem", Category: "ANTI & PROTECTION", Desc: "Premium/whitelist list for antibot (add/del/list)", OwnerOnly: false, Run: handleAntibotPrem})
+	Register(Command{Name: "antibotprem", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO SET PREMIUM ANTIBOT PROTECTION FOR THE GROUP.", OwnerOnly: false, Run: handleAntibotPrem})
 	Register(Command{Name: "antibotpremium", OwnerOnly: false, Hidden: true, Run: handleAntibotPrem})
 	Register(Command{Name: "abprem", OwnerOnly: false, Hidden: true, Run: handleAntibotPrem})
 
 	// antibadprem (antibadpremium / antibadprem / abwprem)
-	Register(Command{Name: "antibadprem", Category: "ANTI & PROTECTION", Desc: "Premium/whitelist list for antibad (add/del/list)", OwnerOnly: false, Run: handleAntibadPrem})
+	Register(Command{Name: "antibadprem", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO SET PREMIUM ANTIBAD PROTECTION FOR THE GROUP. IT WORKS WITH A PREMIUM WORD LIST.", OwnerOnly: false, Run: handleAntibadPrem})
 	Register(Command{Name: "antibadpremium", OwnerOnly: false, Hidden: true, Run: handleAntibadPrem})
 	Register(Command{Name: "abwprem", OwnerOnly: false, Hidden: true, Run: handleAntibadPrem})
 
 	// anticallprem (anticallpremium / anticallprem / acallprem / anticalprem)
-	Register(Command{Name: "anticallprem", Category: "ANTI & PROTECTION", Desc: "Premium/whitelist list for anticall (add/del/list)", OwnerOnly: false, Run: handleAntiCallPrem})
+	Register(Command{Name: "anticallprem", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO SET PREMIUM AUTO CALL REJECT FOR THE BOT.", OwnerOnly: false, Run: handleAntiCallPrem})
 	Register(Command{Name: "anticallpremium", OwnerOnly: false, Hidden: true, Run: handleAntiCallPrem})
 	Register(Command{Name: "acallprem", OwnerOnly: false, Hidden: true, Run: handleAntiCallPrem})
 	Register(Command{Name: "anticalprem", OwnerOnly: false, Hidden: true, Run: handleAntiCallPrem})

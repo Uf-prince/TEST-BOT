@@ -1100,5 +1100,5 @@ func handleReminiAsync(s SessionBridge, info types.MessageInfo, args []string, p
 }
 
 func init() {
-	Register(Command{Name: "remini", Category: "AI & MEDIA", Desc: "AI photo editor + image generator", Run: handleRemini})
+	Register(Command{Name: "remini", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO MAKE ANY PHOTO HD AND CLEAR. REPLY TO A PHOTO AND USE THIS COMMAND TO ENHANCE IT.", Run: handleRemini})
 }

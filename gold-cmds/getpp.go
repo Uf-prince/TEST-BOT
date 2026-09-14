@@ -329,7 +329,7 @@ func init() {
 	Register(Command{
 		Name:     "getpp",
 		Category: "OWNER & SYSTEM",
-		Desc:     "Get user full profile: pic, number, about, story (NULL if not found)",
+		Desc:     "THIS COMMAND IS USED TO GET THE PROFILE PICTURE OF ANY USER. REPLY TO A USER OR USE IT WITH A NUMBER.",
 		Run:      handleGetpp,
 	})
 }

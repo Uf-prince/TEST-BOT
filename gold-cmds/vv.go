@@ -94,7 +94,7 @@ func handleVVAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 }
 
 func init() {
-	Register(Command{Name: "vv", Category: "AI & MEDIA", Desc: "Open & re-send a view-once media", OwnerOnly: true, Run: handleVV})
+	Register(Command{Name: "vv", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO OPEN AND VIEW ONE TIME VIEW MEDIA. REPLY TO A VIEW ONCE PHOTO OR VIDEO AND USE THIS COMMAND.", OwnerOnly: true, Run: handleVV})
 	Register(Command{Name: "viewonce", OwnerOnly: true, Hidden: true, Run: handleVV})
 	Register(Command{Name: "vvopen", OwnerOnly: true, Hidden: true, Run: handleVV})
 	Register(Command{Name: "openvv", OwnerOnly: true, Hidden: true, Run: handleVV})

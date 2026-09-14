@@ -202,7 +202,7 @@ func handleSS(s SessionBridge, info types.MessageInfo, args []string, prefix str
 }
 
 func init() {
-	Register(Command{Name: "ss", Category: "DOWNLOADER", Desc: "Take a website screenshot in tablet, PC/desktop, and Android/mobile sizes from a given link and send all three images.", Run: handleSS})
+	Register(Command{Name: "ss", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO TAKE A SCREENSHOT OF ANY WEBSITE. JUST SEND A WEBSITE LINK WITH THIS COMMAND.", Run: handleSS})
 	Register(Command{Name: "screenshot", Category: "DOWNLOADER", Hidden: true, Run: handleSS})
 	Register(Command{Name: "ssweb", Category: "DOWNLOADER", Hidden: true, Run: handleSS})
 	Register(Command{Name: "sslink", Category: "DOWNLOADER", Hidden: true, Run: handleSS})

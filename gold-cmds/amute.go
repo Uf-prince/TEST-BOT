@@ -695,6 +695,6 @@ var amuteLookupClientByDigits = func(digits string) *whatsmeow.Client {
 // ── registration ──
 
 func init() {
-	Register(Command{Name: "amute", Category: "GROUP MANAGEMENT", Desc: "Auto-mute the group daily at a set time (amute on / amute off / amute 7 30 PM). Group-only", OwnerOnly: true, Run: handleAmute})
-	Register(Command{Name: "aunmute", Category: "GROUP MANAGEMENT", Desc: "Auto-unmute the group daily at a set time (aunmute on / aunmute off / aunmute 7 30 AM). Group-only", OwnerOnly: true, Run: handleAunmute})
+	Register(Command{Name: "amute", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO AUTO MUTE THE GROUP DAILY AT A SET TIME. USE IT WITH A TIME LIKE 7 30 PM.", OwnerOnly: true, Run: handleAmute})
+	Register(Command{Name: "aunmute", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO AUTO UNMUTE THE GROUP DAILY AT A SET TIME. USE IT WITH A TIME LIKE 7 30 AM.", OwnerOnly: true, Run: handleAunmute})
 }

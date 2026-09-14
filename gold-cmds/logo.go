@@ -486,12 +486,16 @@ func makeLogoHandler(idx int) func(s SessionBridge, info types.MessageInfo, args
 }
 
 func init() {
+	logoDescs := map[int]string{
+		1: "THIS COMMAND IS USED TO MAKE A ROYAL GOLDEN CROWN STYLE TEXT LOGO. TYPE YOUR NAME AFTER IT.",
+		2: "THIS COMMAND IS USED TO MAKE A NEON CYBERPUNK STYLE TEXT LOGO. TYPE YOUR NAME AFTER IT.",
+	}
 	for i, st := range logoStyles {
 		name := fmt.Sprintf("logo%d", st.Num)
 		Register(Command{
 			Name:     name,
 			Category: "AI & MEDIA",
-			Desc:     fmt.Sprintf("Text logo style %d/2 — %s", st.Num, st.Name),
+			Desc:     logoDescs[st.Num],
 			Run:      makeLogoHandler(i),
 		})
 	}
@@ -499,7 +503,7 @@ func init() {
 	Register(Command{
 		Name:     "logolist",
 		Category: "AI & MEDIA",
-		Desc:     "Show all 2 logo text styles",
+		Desc:     "THIS COMMAND IS USED TO SHOW THE LIST OF ALL TEXT LOGO STYLES. IT SHOWS EVERY STYLE WITH ITS NAME AND LOOK.",
 		Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 			var sb strings.Builder
 			sb.WriteString("*🔰 GOLD-MD LOGO STYLES — 2 DHAMAKEDAR DESIGNS 🔰*\n\n")

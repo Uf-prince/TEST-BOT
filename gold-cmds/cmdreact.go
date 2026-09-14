@@ -447,7 +447,7 @@ func init() {
 	Register(Command{
 		Name:      "cmdreact",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Control the reaction on commands (cmdreact on/off — band chalu, cmdreact set 🔰 — emoji change, cmdreact set 🔰🔰🔰🔰 — multiple random, cmdreact ping 🔰 — per command emoji, cmdreact ping,menu,alive 🔰 — many commands one emoji, cmdreact ping remove — delete one, cmdreact reset — sab delete wapas default 🔰)",
+		Desc:      "THIS COMMAND IS USED TO SET THE REACTION THE BOT GIVES ON EVERY COMMAND. YOU CAN SET ONE EMOJI OR MANY.",
 		OwnerOnly: true,
 		Run:       handleCmdReact,
 	})

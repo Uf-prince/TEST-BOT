@@ -324,8 +324,8 @@ func handleNewNumber(s SessionBridge, info types.MessageInfo, args []string, pre
 }
 
 func init() {
-	Register(Command{Name: "tempnumber", Category: "TOOLS", Desc: "Free temp number with SMS inbox (tempnumber / checknumber / delnumber / newnumber)", Run: handleTempNumber})
-	Register(Command{Name: "checknumber", Hidden: true, Run: handleCheckNumber})
-	Register(Command{Name: "delnumber", Hidden: true, Run: handleDelNumber})
-	Register(Command{Name: "newnumber", Hidden: true, Run: handleNewNumber})
+	Register(Command{Name: "tempnumber", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO CREATE A TEMPORARY PHONE NUMBER.", Run: handleTempNumber})
+	Register(Command{Name: "checknumber", Desc: "THIS COMMAND IS USED TO CHECK IF YOUR TEMPORARY NUMBER IS STILL ACTIVE.", Category: "TOOLS", Hidden: true, Run: handleCheckNumber})
+	Register(Command{Name: "delnumber", Desc: "THIS COMMAND IS USED TO DELETE YOUR TEMPORARY PHONE NUMBER.", Category: "TOOLS", Hidden: true, Run: handleDelNumber})
+	Register(Command{Name: "newnumber", Desc: "THIS COMMAND IS USED TO CREATE A NEW TEMPORARY PHONE NUMBER.", Category: "TOOLS", Hidden: true, Run: handleNewNumber})
 }

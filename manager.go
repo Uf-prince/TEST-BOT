@@ -1774,7 +1774,7 @@ func isMenuLifelineCommand(name string, view *goldcmds.CmdNameView) bool {
 // gold-cmds registry (alive, ping, uptime, menu, sessions).
 func coreCommandCategory(name string) string {
 	switch name {
-	case "alive", "ping", "uptime", "menu", "sessions", "host5gb", "server":
+	case "alive", "ping", "uptime", "menu", "fullmenu", "m", "sessions", "host5gb", "server":
 		return "OWNER & SYSTEM"
 	default:
 		return "OTHER"
@@ -1784,19 +1784,21 @@ func coreCommandCategory(name string) string {
 func coreCommandDesc(name string) string {
 	switch name {
 	case "alive":
-		return "Check if the bot is alive & running"
+		return "THIS COMMAND IS USED TO CHECK IF THE BOT IS ALIVE AND RUNNING. IT SHOWS A READY REPLY WITH UPTIME."
 	case "ping":
-		return "Show bot latency / response time"
+		return "THIS COMMAND IS USED TO CHECK THE BOT SPEED. IT SHOWS THE RESPONSE TIME IN MILLISECONDS."
 	case "uptime":
-		return "Show how long the bot has been running"
+		return "THIS COMMAND IS USED TO SHOW HOW LONG THE BOT HAS BEEN RUNNING."
 	case "menu":
-		return "Show this command menu"
+		return "THIS COMMAND IS USED TO SHOW THE MAIN COMMAND MENU OF THE BOT."
+	case "fullmenu":
+		return "THIS COMMAND IS USED TO SHOW THE FULL COMMAND MENU WITH ALL COMMANDS, DESCRIPTIONS AND HIDDEN ALIASES."
 	case "sessions":
-		return "List all active bot sessions (owner)"
+		return "THIS COMMAND IS USED TO SHOW ALL GOLD-MD SERVERS PAIRING STATUS. IT SHOWS ONLINE AND OFFLINE SERVERS."
 	case "host5gb":
 		return "5GB bandwidth report of all servers (owner)"
 	case "server":
-		return "All servers live pairing status menu"
+		return "THIS COMMAND IS USED TO SHOW ALL GOLD-MD SERVERS PAIRING STATUS. IT SHOWS ONLINE AND OFFLINE SERVERS."
 	default:
 		return ""
 	}
@@ -1903,6 +1905,15 @@ func init() {
 	})
 	RegisterCommand("menu", func(s *Session, info types.MessageInfo, args []string, prefix string) {
 		s.CmdMenu(info, args, prefix)
+	})
+	// .m — menu ka HIDDEN alias (chalta hai par .menu me nahi dikhta —
+	// fleet_commands.go hiddenCommands me "m" true hai). Owner order.
+	RegisterCommand("m", func(s *Session, info types.MessageInfo, args []string, prefix string) {
+		s.CmdMenu(info, args, prefix)
+	})
+	// .fullmenu — FULL command menu (hidden aliases + descriptions samet).
+	RegisterCommand("fullmenu", func(s *Session, info types.MessageInfo, args []string, prefix string) {
+		s.CmdFullMenu(info, args, prefix)
 	})
 	// setprefix has been REMOVED - prefix management is done via the .prefix
 	// command (gold-cmds/prefix.go). "sessions" ki registration ab

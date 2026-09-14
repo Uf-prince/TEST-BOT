@@ -61,7 +61,7 @@ func handleClearAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 }
 
 func init() {
-	Register(Command{Name: "clear", Category: "OWNER & SYSTEM", Desc: "Clear all messages in the current chat", OwnerOnly: true, Run: handleClear})
+	Register(Command{Name: "clear", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO CLEAR ALL MESSAGES OF THE CHAT. USE IT IN THE CHAT YOU WANT TO CLEAR.", OwnerOnly: true, Run: handleClear})
 	Register(Command{Name: "clearchat", OwnerOnly: true, Hidden: true, Run: handleClear})
 	Register(Command{Name: "purge", OwnerOnly: true, Hidden: true, Run: handleClear})
 }

@@ -202,6 +202,6 @@ func handleAntibotAsync(s SessionBridge, info types.MessageInfo, args []string, 
 // ── registration ───────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "antibot", Category: "ANTI & PROTECTION", Desc: "Block bot-forwarded messages in group", OwnerOnly: true, Run: handleAntibot})
+	Register(Command{Name: "antibot", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO STOP FAKE BOT MESSAGES IN THE GROUP. IT CAN WARN, DELETE OR KICK MEMBERS WHO FORWARD BOT MESSAGES.", OwnerOnly: true, Run: handleAntibot})
 	Register(Command{Name: "ab", OwnerOnly: true, Hidden: true, Run: handleAntibot})
 }

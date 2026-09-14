@@ -976,7 +976,7 @@ func init() {
 	Register(Command{
 		Name:      "autoreply",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "AI auto-reply mode (on/groups/inbox/off/delay)",
+		Desc:      "THIS COMMAND IS USED TO SET AUTO REPLIES FOR THE BOT. USE IT WITH YOUR WORD AND REPLY TEXT.",
 		OwnerOnly: true,
 		Run:       handleAutoReply,
 	})
@@ -984,7 +984,7 @@ func init() {
 	Register(Command{
 		Name:     "autoreplyprem",
 		Category: "OWNER & SYSTEM",
-		Desc:     "Autoreply excluded users (add/del/list)",
+		Desc:     "THIS COMMAND IS USED TO SET PREMIUM AUTO REPLY SETTINGS FOR THE BOT.",
 		Run:      handleAutoReplyPrem,
 	})
 	Register(Command{Name: "autoreplypremium", Hidden: true, Run: handleAutoReplyPrem})

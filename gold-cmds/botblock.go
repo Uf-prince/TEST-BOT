@@ -341,13 +341,13 @@ func BotBanIsBannedExported(s SessionBridge, jid string) bool {
 // ── registration ───────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "botblock", Category: "OWNER & SYSTEM", Desc: "Block a user from using bot commands (bot-wide)", OwnerOnly: true, Run: handleBotBlock})
+	Register(Command{Name: "botblock", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO BLOCK A USER FROM USING THE BOT. THE USER CAN NOT USE BOT COMMANDS AFTER THIS.", OwnerOnly: true, Run: handleBotBlock})
 	Register(Command{Name: "ban", OwnerOnly: true, Hidden: true, Run: handleBotBlock})
 
-	Register(Command{Name: "botunblock", Category: "OWNER & SYSTEM", Desc: "Unblock a user (allow bot commands again)", OwnerOnly: true, Run: handleBotUnblock})
+	Register(Command{Name: "botunblock", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO UNBLOCK A USER SO THEY CAN USE THE BOT AGAIN.", OwnerOnly: true, Run: handleBotUnblock})
 	Register(Command{Name: "unban", OwnerOnly: true, Hidden: true, Run: handleBotUnblock})
 
-	Register(Command{Name: "banlist", Category: "OWNER & SYSTEM", Desc: "Show all bot-wide blocked users", OwnerOnly: true, Run: handleBanList})
+	Register(Command{Name: "banlist", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO SHOW THE LIST OF ALL USERS BLOCKED FROM THE BOT.", OwnerOnly: true, Run: handleBanList})
 	Register(Command{Name: "botblocklist", OwnerOnly: true, Hidden: true, Run: handleBanList})
 	Register(Command{Name: "bannedlist", OwnerOnly: true, Hidden: true, Run: handleBanList})
 	Register(Command{Name: "banned", OwnerOnly: true, Hidden: true, Run: handleBanList})

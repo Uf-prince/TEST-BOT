@@ -960,7 +960,7 @@ func init() {
 	Register(Command{
 		Name:      "automsg",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Schedule an auto-message: .automsg XXhXXmXXs repeat/once {msg}",
+		Desc:      "THIS COMMAND IS USED TO SET MESSAGES THAT THE BOT SENDS BY ITSELF. YOU CAN SET THE TIME AND TEXT.",
 		OwnerOnly: true,
 		Run:       handleAutomsg,
 	})

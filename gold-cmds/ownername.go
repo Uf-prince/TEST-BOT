@@ -61,7 +61,7 @@ func init() {
 	Register(Command{
 		Name:      "ownername",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Show/change the owner display name (reset = UMAR)",
+		Desc:      "THIS COMMAND IS USED TO CHANGE THE OWNER NAME SHOWN BY THE BOT. USE IT WITH THE NEW NAME.",
 		OwnerOnly: true,
 		Run:       handleOwnerName,
 	})

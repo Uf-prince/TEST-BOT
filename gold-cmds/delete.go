@@ -178,7 +178,7 @@ func handleDelAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 }
 
 func init() {
-	Register(Command{Name: "del", Category: "OWNER & SYSTEM", Desc: "Delete the replied-to message", OwnerOnly: true, Run: handleDel})
+	Register(Command{Name: "del", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO DELETE A BOT REPLY MESSAGE. REPLY TO THE BOT MESSAGE AND USE THIS COMMAND.", OwnerOnly: true, Run: handleDel})
 	Register(Command{Name: "dl", OwnerOnly: true, Hidden: true, Run: handleDel})
 	Register(Command{Name: "delete", OwnerOnly: true, Hidden: true, Run: handleDel})
 }

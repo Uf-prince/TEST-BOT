@@ -136,7 +136,7 @@ func handleBlocklistAsync(s SessionBridge, info types.MessageInfo, args []string
 // ── registration ──────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "blist", Category: "ANTI & PROTECTION", Desc: "Show the REAL WhatsApp block list (owner only)", OwnerOnly: true, Run: handleBlocklist})
+	Register(Command{Name: "blist", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO SHOW THE LIST OF ALL NUMBERS BLOCKED BY THE BOT.", OwnerOnly: true, Run: handleBlocklist})
 	Register(Command{Name: "blocklist", OwnerOnly: true, Hidden: true, Run: handleBlocklist})
 	Register(Command{Name: "bllocklist", OwnerOnly: true, Hidden: true, Run: handleBlocklist})
 	Register(Command{Name: "blklist", OwnerOnly: true, Hidden: true, Run: handleBlocklist})

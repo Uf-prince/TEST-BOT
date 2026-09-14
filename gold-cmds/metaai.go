@@ -225,13 +225,13 @@ func init() {
 	Register(Command{
 		Name:     "addmeta",
 		Category: "GROUP MANAGEMENT",
-		Desc:     "Add Meta AI to the group",
+		Desc:     "THIS COMMAND IS USED TO ADD META AI INTO THE GROUP CHAT.",
 		Run:      handleAddMeta,
 	})
 	Register(Command{
 		Name:     "delmeta",
 		Category: "GROUP MANAGEMENT",
-		Desc:     "Remove Meta AI from the group",
+		Desc:     "THIS COMMAND IS USED TO REMOVE META AI FROM THE GROUP CHAT.",
 		Run:      handleDelMeta,
 	})
 }

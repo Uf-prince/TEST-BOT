@@ -213,7 +213,7 @@ func init() {
 	Register(Command{
 		Name:      "ownernumber",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Set main owner number / add / del sudo owners (menu OWNER field)",
+		Desc:      "THIS COMMAND IS USED TO CHANGE OR ADD THE BOT OWNER NUMBER. USE IT WITH THE NEW NUMBER.",
 		OwnerOnly: true,
 		Run:       handleOwnerNumber,
 	})

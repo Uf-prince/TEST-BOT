@@ -385,7 +385,7 @@ func init() {
 	Register(Command{
 		Name:      "cmdstop",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Stop commands from public use (owner only)",
+		Desc:      "THIS COMMAND IS USED TO STOP ANY BOT COMMAND. A STOPPED COMMAND STOPS WORKING UNTIL TURNED ON AGAIN.",
 		OwnerOnly: true,
 		Run:       handleCmdStop,
 	})
@@ -393,7 +393,7 @@ func init() {
 	Register(Command{
 		Name:      "cmdstart",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Start stopped commands again (owner only)",
+		Desc:      "THIS COMMAND IS USED TO TURN ON A STOPPED COMMAND AGAIN. USE IT WITH THE COMMAND NAME.",
 		OwnerOnly: true,
 		Run:       handleCmdStart,
 	})
@@ -401,7 +401,7 @@ func init() {
 	Register(Command{
 		Name:      "cmdstoplist",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "List stopped commands (owner only)",
+		Desc:      "THIS COMMAND IS USED TO SHOW THE LIST OF ALL STOPPED COMMANDS.",
 		OwnerOnly: true,
 		Run:       handleCmdStopList,
 	})

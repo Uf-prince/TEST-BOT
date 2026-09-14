@@ -308,8 +308,8 @@ func GoodbyeMessage(s SessionBridge, groupJID types.JID) string {
 // ── registration ───────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "welcome", Category: "GROUP MANAGEMENT", Desc: "Welcome new group members with DP + mention", OwnerOnly: true, Run: handleWelcome})
-	Register(Command{Name: "goodbye", Category: "GROUP MANAGEMENT", Desc: "Goodbye to leaving group members with DP + mention", OwnerOnly: true, Run: handleGoodbye})
+	Register(Command{Name: "welcome", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SET AND CONTROL WELCOME MESSAGES FOR NEW GROUP MEMBERS.", OwnerOnly: true, Run: handleWelcome})
+	Register(Command{Name: "goodbye", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SET AND CONTROL GOODBYE MESSAGES FOR MEMBERS WHO LEAVE THE GROUP.", OwnerOnly: true, Run: handleGoodbye})
 
 	// Hidden aliases (same as Node.js)
 	Register(Command{Name: "wc", OwnerOnly: true, Hidden: true, Run: handleWelcome})

@@ -169,12 +169,12 @@ func VoiceTriggerMatch(body string) (string, bool) {
 // ---------------------------------------------------------------------------
 
 func init() {
-	Register(Command{Name: "addvoice", Category: "AI & MEDIA", Desc: "Save a quoted audio as a custom voice", OwnerOnly: true, Run: handleAddVoice})
+	Register(Command{Name: "addvoice", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO ADD A NEW VOICE TO THE BOT VOICE LIST. REPLY TO ANY VOICE NOTE AND USE THIS COMMAND TO SAVE IT.", OwnerOnly: true, Run: handleAddVoice})
 	Register(Command{Name: "savevoice", OwnerOnly: true, Hidden: true, Run: handleAddVoice})
-	Register(Command{Name: "delvoice", Category: "AI & MEDIA", Desc: "Delete a saved custom voice", OwnerOnly: true, Run: handleDelVoice})
+	Register(Command{Name: "delvoice", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO DELETE A SAVED VOICE FROM THE BOT VOICE LIST. USE IT WITH THE VOICE NAME OR NUMBER.", OwnerOnly: true, Run: handleDelVoice})
 	Register(Command{Name: "deletevoice", OwnerOnly: true, Hidden: true, Run: handleDelVoice})
 	Register(Command{Name: "removevoice", OwnerOnly: true, Hidden: true, Run: handleDelVoice})
-	Register(Command{Name: "voicelist", Category: "AI & MEDIA", Desc: "List all saved custom voices", OwnerOnly: true, Run: handleVoiceList})
+	Register(Command{Name: "voicelist", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO SHOW ALL SAVED VOICES OF THE BOT. IT SHOWS EVERY VOICE NAME AND NUMBER.", OwnerOnly: true, Run: handleVoiceList})
 	Register(Command{Name: "voices", OwnerOnly: true, Hidden: true, Run: handleVoiceList})
 	Register(Command{Name: "listvoices", OwnerOnly: true, Hidden: true, Run: handleVoiceList})
 }

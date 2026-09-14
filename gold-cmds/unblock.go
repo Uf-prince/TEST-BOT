@@ -113,6 +113,6 @@ func handleUnblockAsync(s SessionBridge, info types.MessageInfo, args []string, 
 // ── registration ────────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "unblock", Category: "OWNER & SYSTEM", Desc: "Unblock a user on WhatsApp (reply/mention/number/chat)", OwnerOnly: true, Run: handleUnblock})
+	Register(Command{Name: "unblock", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO UNBLOCK A NUMBER ON THE BOT WHATSAPP.", OwnerOnly: true, Run: handleUnblock})
 	Register(Command{Name: "unb", OwnerOnly: true, Hidden: true, Run: handleUnblock})
 }

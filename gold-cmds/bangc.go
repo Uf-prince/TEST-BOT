@@ -116,12 +116,12 @@ func BangcIsOn(s SessionBridge, groupJID string) bool {
 // ── registration ───────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "bangc", Category: "OWNER & SYSTEM", Desc: "Lock group — disable bot commands for everyone", OwnerOnly: true, Run: handleBangc})
+	Register(Command{Name: "bangc", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO TURN OFF THE BOT IN ALL GROUPS AT ONCE.", OwnerOnly: true, Run: handleBangc})
 	Register(Command{Name: "gcbotoff", OwnerOnly: true, Hidden: true, Run: handleBangc})
 	Register(Command{Name: "bangroup", OwnerOnly: true, Hidden: true, Run: handleBangc})
 	Register(Command{Name: "groupban", OwnerOnly: true, Hidden: true, Run: handleBangc})
 	Register(Command{Name: "gcban", OwnerOnly: true, Hidden: true, Run: handleBangc})
 
-	Register(Command{Name: "unbangc", Category: "OWNER & SYSTEM", Desc: "Unlock group — re-enable bot commands", OwnerOnly: true, Run: handleUnbangc})
+	Register(Command{Name: "unbangc", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO TURN ON THE BOT IN ALL GROUPS AGAIN.", OwnerOnly: true, Run: handleUnbangc})
 	Register(Command{Name: "gcboton", OwnerOnly: true, Hidden: true, Run: handleUnbangc})
 }

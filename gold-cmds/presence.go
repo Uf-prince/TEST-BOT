@@ -178,9 +178,9 @@ func handleAutoRecordingAsync(s SessionBridge, info types.MessageInfo, args []st
 
 func init() {
 	// ── primary commands ──────────────────────────────────────────────────
-	Register(Command{Name: "online", Category: "PRESENCE & STATUS", Desc: "Toggle always-online presence", OwnerOnly: true, Run: handleAlwaysOnline})
-	Register(Command{Name: "typing", Category: "PRESENCE & STATUS", Desc: "Toggle auto typing presence", OwnerOnly: true, Run: handleAutoTyping})
-	Register(Command{Name: "recording", Category: "PRESENCE & STATUS", Desc: "Toggle auto recording presence", OwnerOnly: true, Run: handleAutoRecording})
+	Register(Command{Name: "online", Category: "PRESENCE & STATUS", Desc: "THIS COMMAND IS USED TO TURN ON ALWAYS ONLINE MODE. THE BOT SHOWS ONLINE ALL THE TIME.", OwnerOnly: true, Run: handleAlwaysOnline})
+	Register(Command{Name: "typing", Category: "PRESENCE & STATUS", Desc: "THIS COMMAND IS USED TO TURN ON ALWAYS TYPING MODE. THE BOT SHOWS TYPING ALL THE TIME.", OwnerOnly: true, Run: handleAutoTyping})
+	Register(Command{Name: "recording", Category: "PRESENCE & STATUS", Desc: "THIS COMMAND IS USED TO TURN ON ALWAYS RECORDING MODE. THE BOT SHOWS RECORDING ALL THE TIME.", OwnerOnly: true, Run: handleAutoRecording})
 
 	// ── alwaysonline aliases (5+) ──────────────────────────────────────────
 	Register(Command{Name: "alwaysonline", OwnerOnly: true, Hidden: true, Run: handleAlwaysOnline})

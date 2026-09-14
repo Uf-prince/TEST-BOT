@@ -432,13 +432,13 @@ func init() {
 	Register(Command{
 		Name:      "cmdchange",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Command access guide (cmdowner ❮name❯ — make a command owner-only, cmdpublic ❮name❯ — make it public again, cmdownerpublic reset — reset all commands to normal)",
+		Desc:      "THIS COMMAND IS USED TO SHOW THE GUIDE FOR CHANGING COMMAND NAMES. IT SHOWS HOW TO RENAME BOT COMMANDS.",
 		OwnerOnly: true,
 		Run:       handleCmdOwnerGuide,
 	})
-	Register(Command{Name: "cmdowner", OwnerOnly: true, Hidden: true, Run: handleCmdOwner})
-	Register(Command{Name: "cmdpublic", OwnerOnly: true, Hidden: true, Run: handleCmdPublic})
-	Register(Command{Name: "cmdownerpublic", OwnerOnly: true, Hidden: true, Run: handleCmdOwnerPublic})
+	Register(Command{Name: "cmdowner", Desc: "THIS COMMAND IS USED TO SET A COMMAND SO ONLY THE OWNER CAN USE IT.", Category: "OWNER & SYSTEM", OwnerOnly: true, Hidden: true, Run: handleCmdOwner})
+	Register(Command{Name: "cmdpublic", Desc: "THIS COMMAND IS USED TO SET A COMMAND SO EVERYONE CAN USE IT.", Category: "OWNER & SYSTEM", OwnerOnly: true, Hidden: true, Run: handleCmdPublic})
+	Register(Command{Name: "cmdownerpublic", Desc: "THIS COMMAND IS USED TO SET OWNER ONLY OR PUBLIC MODE FOR ALL COMMANDS AT ONCE.", Category: "OWNER & SYSTEM", OwnerOnly: true, Hidden: true, Run: handleCmdOwnerPublic})
 }
 
 // handleCmdOwnerGuide — .cmdchange → full guide (this is the menu entry too).

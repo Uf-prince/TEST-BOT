@@ -101,7 +101,7 @@ func handleToMP3Async(ctx context.Context, s SessionBridge, info types.MessageIn
 }
 
 func init() {
-	Register(Command{Name: "tomp3", Category: "DOWNLOADER", Desc: "Convert a video/audio to MP3", Run: handleToMP3})
+	Register(Command{Name: "tomp3", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO CONVERT ANY VIDEO INTO AN MP3 AUDIO FILE. REPLY TO A VIDEO AND USE THIS COMMAND.", Run: handleToMP3})
 
 	// aliases (Hidden)
 	Register(Command{Name: "toaudio", Hidden: true, Run: handleToMP3})

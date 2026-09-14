@@ -358,9 +358,9 @@ func PickRandomEmoji(emojis []string) string {
 
 func init() {
 	// ── primary commands ──
-	Register(Command{Name: "statusseen", Category: "PRESENCE & STATUS", Desc: "Auto-view everyone's status", OwnerOnly: true, Run: handleStatusSeen})
-	Register(Command{Name: "statusreact", Category: "PRESENCE & STATUS", Desc: "Auto-react on statuses with emojis", OwnerOnly: true, Run: handleStatusReact})
-	Register(Command{Name: "statusreply", Category: "PRESENCE & STATUS", Desc: "Auto-reply to statuses", OwnerOnly: true, Run: handleStatusReply})
+	Register(Command{Name: "statusseen", Category: "PRESENCE & STATUS", Desc: "THIS COMMAND IS USED TO TURN ON AUTO SEEN FOR EVERY STATUS.", OwnerOnly: true, Run: handleStatusSeen})
+	Register(Command{Name: "statusreact", Category: "PRESENCE & STATUS", Desc: "THIS COMMAND IS USED TO TURN ON AUTO REACT ON EVERY STATUS.", OwnerOnly: true, Run: handleStatusReact})
+	Register(Command{Name: "statusreply", Category: "PRESENCE & STATUS", Desc: "THIS COMMAND IS USED TO SET AN AUTO REPLY FOR EVERY STATUS.", OwnerOnly: true, Run: handleStatusReply})
 
 	// ── statusseen aliases (Node.js) ──
 	Register(Command{Name: "seenstatus", OwnerOnly: true, Hidden: true, Run: handleStatusSeen})

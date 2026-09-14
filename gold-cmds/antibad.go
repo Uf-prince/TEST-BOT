@@ -365,7 +365,7 @@ func handleAntibadAsync(s SessionBridge, info types.MessageInfo, args []string, 
 // ── registration ───────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "antibad", Category: "ANTI & PROTECTION", Desc: "Block bad words in group (on/off/action)", OwnerOnly: true, Run: handleAntibad})
+	Register(Command{Name: "antibad", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO STOP BAD WORDS IN THE GROUP. IT CAN WARN, DELETE OR KICK MEMBERS WHO SEND BAD WORDS.", OwnerOnly: true, Run: handleAntibad})
 	Register(Command{Name: "antibadword", OwnerOnly: true, Hidden: true, Run: handleAntibad})
 	Register(Command{Name: "antibadwords", OwnerOnly: true, Hidden: true, Run: handleAntibad})
 	Register(Command{Name: "abw", OwnerOnly: true, Hidden: true, Run: handleAntibad})

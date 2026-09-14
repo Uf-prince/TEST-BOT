@@ -135,6 +135,7 @@ func isFleetOwnerCommand(s *Session, info types.MessageInfo) bool {
 // command hai. Server-menu family ab PUBLIC hai (koi bhi chala sakta hai) par .menu
 // me ab bhi nahi dikhti (secret rahegi, sirf wahi jaanne wale use karenge).
 var hiddenCommands = map[string]bool{
+	"m":          true, // menu ka hidden alias — kaam karta hai, menu me nahi dikhta
 	"servers":    true,
 	"svr":        true,
 	"svrinfo":    true,

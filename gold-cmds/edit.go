@@ -125,5 +125,5 @@ func stripResource(jid string) string {
 }
 
 func init() {
-	Register(Command{Name: "edit", Category: "OWNER & SYSTEM", Desc: "Edit the bot's own quoted message", OwnerOnly: true, Run: handleEdit})
+	Register(Command{Name: "edit", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO EDIT A BOT REPLY TEXT. REPLY TO THE BOT MESSAGE AND SEND THE NEW TEXT.", OwnerOnly: true, Run: handleEdit})
 }

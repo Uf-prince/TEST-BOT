@@ -92,7 +92,7 @@ func init() {
 	Register(Command{
 		Name:      "mode",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Show/change bot work mode (public/private/groups/inbox)",
+		Desc:      "THIS COMMAND IS USED TO CHANGE THE BOT WORK MODE. IT CAN SET PUBLIC, PRIVATE, GROUPS OR INBOX MODE.",
 		OwnerOnly: true,
 		Run:       handleMode,
 	})

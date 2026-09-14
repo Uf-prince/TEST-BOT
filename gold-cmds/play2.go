@@ -221,7 +221,7 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 
 func init() {
 	// Main turbo audio command (visible in menu + count)
-	Register(Command{Name: "play", Category: "DOWNLOADER", Desc: "Turbo fast YouTube audio download (parallel engine, 128kbps MP3)", Run: handlePlay2})
+	Register(Command{Name: "play", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO PLAY AND DOWNLOAD YOUTUBE SONGS. TYPE A SONG NAME AND THE BOT SENDS THE AUDIO FILE.", Run: handlePlay2})
 	// Hidden aliases — fully functional but not in menu / TOTAL COMMANDS count
 	Register(Command{Name: "p2", Hidden: true, Run: handlePlay})
 	Register(Command{Name: "yta2", Hidden: true, Run: handlePlay})

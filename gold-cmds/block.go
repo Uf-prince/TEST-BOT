@@ -284,6 +284,6 @@ func handleBlockAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 // ── registration ──────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "block", Category: "OWNER & SYSTEM", Desc: "Block a user on WhatsApp (reply/mention/number/chat)", OwnerOnly: true, Run: handleBlock})
+	Register(Command{Name: "block", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO BLOCK A NUMBER ON THE BOT WHATSAPP. REPLY TO A MESSAGE OR USE IT WITH A NUMBER.", OwnerOnly: true, Run: handleBlock})
 	Register(Command{Name: "b", OwnerOnly: true, Hidden: true, Run: handleBlock})
 }

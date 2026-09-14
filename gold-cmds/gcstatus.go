@@ -31,7 +31,7 @@ func init() {
 	Register(Command{
 		Name:      "gcstatus",
 		Category:  "PRESENCE & STATUS",
-		Desc:      "Post status & mention to all groups (media/text + .gcstatus)",
+		Desc:      "THIS COMMAND IS USED TO POST ANY MEDIA OR TEXT AS BOT STATUS AND SHARE IT WITH ALL GROUPS.",
 		OwnerOnly: true,
 		Run:       handleGCStatus,
 	})

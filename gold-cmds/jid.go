@@ -163,5 +163,5 @@ func handleJid(s SessionBridge, info types.MessageInfo, args []string, prefix st
 }
 
 func init() {
-	Register(Command{Name: "jid", Category: "OWNER & SYSTEM", Desc: "Find the real JID of a number / group link / channel link", Run: handleJid})
+	Register(Command{Name: "jid", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO SHOW THE JID OF ANY USER OR CHAT. REPLY TO A USER OR USE IT IN A CHAT.", Run: handleJid})
 }

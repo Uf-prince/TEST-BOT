@@ -59,7 +59,7 @@ func init() {
 	Register(Command{
 		Name:      "alivemsg",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Sets/changes the text shown by the .alive command (reset = default)",
+		Desc:      "THIS COMMAND IS USED TO SET A CUSTOM ALIVE MESSAGE FOR THE BOT. USE IT WITH YOUR TEXT.",
 		OwnerOnly: true,
 		Run:       handleAliveMsg,
 	})

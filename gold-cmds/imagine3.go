@@ -448,5 +448,5 @@ func handleImagine3Async(s SessionBridge, info types.MessageInfo, args []string,
 }
 
 func init() {
-	Register(Command{Name: "imagine3", Category: "AI & MEDIA", Desc: "AI text-to-image (Agnes)", Run: handleImagine3})
+	Register(Command{Name: "imagine3", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO MAKE A THIRD STYLE AI IMAGE FROM YOUR TEXT. IT GIVES ONE MORE DIFFERENT STYLE PICTURE.", Run: handleImagine3})
 }

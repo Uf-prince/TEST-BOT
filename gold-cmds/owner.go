@@ -47,7 +47,7 @@ func init() {
 	Register(Command{
 		Name:     "owner",
 		Category: "OWNER & SYSTEM",
-		Desc:     "Send the owner's contact card (number + name as vCard)",
+		Desc:     "THIS COMMAND IS USED TO SHOW THE BOT OWNER DETAILS.",
 		Run:      handleOwner,
 	})
 }

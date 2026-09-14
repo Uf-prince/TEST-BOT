@@ -106,7 +106,7 @@ func yt2Clients() []yt2Client {
 
 func init() {
 	// Main turbo command (visible in menu + count)
-	Register(Command{Name: "video", Category: "DOWNLOADER", Desc: "Turbo fast YouTube video download (parallel engine)", Run: handleVideo2})
+	Register(Command{Name: "video", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO DOWNLOAD YOUTUBE VIDEOS. TYPE A VIDEO NAME OR LINK AND THE BOT SENDS THE VIDEO FILE.", Run: handleVideo2})
 	// Hidden aliases — fully functional but not in menu / TOTAL COMMANDS count
 	Register(Command{Name: "v2", Hidden: true, Run: handleVideo})
 	Register(Command{Name: "ytv2", Hidden: true, Run: handleVideo})

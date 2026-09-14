@@ -145,7 +145,7 @@ func init() {
 	Register(Command{
 		Name:      "antidelete",
 		Category:  "ANTI & PROTECTION",
-		Desc:      "Resend deleted messages (on/off/inbox/groups; msg here/inbox; no-arg shows status)",
+		Desc:      "THIS COMMAND IS USED TO CATCH DELETED MESSAGES. WHEN SOMEONE DELETES A MESSAGE THE BOT SENDS IT BACK.",
 		OwnerOnly: true,
 		Run:       handleAntiDelete,
 	})

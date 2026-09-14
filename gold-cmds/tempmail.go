@@ -499,28 +499,28 @@ func init() {
 	Register(Command{
 		Name:     "tempmail",
 		Category: "TOOLS",
-		Desc:     "Get a throwaway temp-mail inbox (Guerrilla Mail). One address per user. Hidden short aliases: .tmail .cmail .nmail .dmail",
+		Desc:     "THIS COMMAND IS USED TO CREATE A TEMPORARY EMAIL ADDRESS FOR QUICK USE.",
 		Run:      handleTempMail,
 	})
 	Register(Command{
 		Name:     "checkmail",
 		Category: "TOOLS",
 		Hidden:   true, // menu me nahi dikhta - silently kaam karta hai
-		Desc:     "Check your temp-mail inbox — first 5 mails with full body (OTPs/links visible). Hidden alias: .cmail",
+		Desc:     "THIS COMMAND IS USED TO CHECK THE INBOX OF YOUR TEMPORARY EMAIL.",
 		Run:      handleCheckMail,
 	})
 	Register(Command{
 		Name:     "delmail",
 		Category: "TOOLS",
 		Hidden:   true, // menu me nahi dikhta - silently kaam karta hai
-		Desc:     "Delete your temp-mail address for good — all mail in it is lost. Hidden alias: .dmail",
+		Desc:     "THIS COMMAND IS USED TO DELETE YOUR TEMPORARY EMAIL ADDRESS.",
 		Run:      handleDelMail,
 	})
 	Register(Command{
 		Name:     "newmail",
 		Category: "TOOLS",
 		Hidden:   true, // menu me nahi dikhta - silently kaam karta hai
-		Desc:     "Throw the current temp mail away and generate a fresh address. Hidden alias: .nmail",
+		Desc:     "THIS COMMAND IS USED TO CREATE A NEW TEMPORARY EMAIL ADDRESS.",
 		Run:      handleNewMail,
 	})
 

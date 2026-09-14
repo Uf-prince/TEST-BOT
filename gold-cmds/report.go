@@ -147,6 +147,6 @@ func handleReportAsync(s SessionBridge, info types.MessageInfo, args []string, p
 // ── registration ────────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "report", Category: "OWNER & SYSTEM", Desc: "Report + block a user as spamming (reply/mention/number/chat)", OwnerOnly: true, Run: handleReport})
+	Register(Command{Name: "report", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO SEND A REPORT MESSAGE TO THE BOT OWNER.", OwnerOnly: true, Run: handleReport})
 	Register(Command{Name: "rp", OwnerOnly: true, Hidden: true, Run: handleReport})
 }

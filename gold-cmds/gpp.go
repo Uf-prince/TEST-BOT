@@ -83,7 +83,7 @@ func handleGppAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 }
 
 func init() {
-	Register(Command{Name: "gpp", Category: "GROUP MANAGEMENT", Desc: "Set the group profile picture (icon)", OwnerOnly: true, Run: handleGpp})
+	Register(Command{Name: "gpp", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO CHANGE THE GROUP PROFILE PICTURE. REPLY TO A PHOTO AND USE THIS COMMAND.", OwnerOnly: true, Run: handleGpp})
 	// aliases
 	Register(Command{Name: "setgpp", OwnerOnly: true, Hidden: true, Run: handleGpp})
 	Register(Command{Name: "groupdp", OwnerOnly: true, Hidden: true, Run: handleGpp})

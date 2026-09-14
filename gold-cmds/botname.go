@@ -71,7 +71,7 @@ func init() {
 	Register(Command{
 		Name:      "botname",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "Show/change the bot display name (reset = GOLD-MD branded footer)",
+		Desc:      "THIS COMMAND IS USED TO CHANGE THE BOT NAME. USE IT WITH THE NEW NAME.",
 		OwnerOnly: true,
 		Run:       handleBotName,
 	})

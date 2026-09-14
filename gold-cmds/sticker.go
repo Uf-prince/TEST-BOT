@@ -365,9 +365,9 @@ func handleTakeVidAsync(ctx context.Context, s SessionBridge, info types.Message
 // ---------------------------------------------------------------------------
 
 func init() {
-	Register(Command{Name: "sticker", Category: "AI & MEDIA", Desc: "Convert image/video/GIF to a sticker", Run: handleSticker})
-	Register(Command{Name: "take", Category: "AI & MEDIA", Desc: "Convert a sticker back to an image", Run: handleTake})
-	Register(Command{Name: "takevid", Category: "AI & MEDIA", Desc: "Convert an animated sticker back to video", Run: handleTakeVid})
+	Register(Command{Name: "sticker", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO MAKE A STICKER FROM ANY IMAGE OR VIDEO. REPLY TO THE MEDIA AND USE THIS COMMAND.", Run: handleSticker})
+	Register(Command{Name: "take", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO CONVERT A STICKER BACK INTO A PHOTO. REPLY TO ANY STICKER AND USE THIS COMMAND.", Run: handleTake})
+	Register(Command{Name: "takevid", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO CONVERT AN ANIMATED STICKER INTO A VIDEO. REPLY TO THE STICKER AND USE THIS COMMAND.", Run: handleTakeVid})
 
 	// aliases (Hidden)
 	Register(Command{Name: "s", Hidden: true, Run: handleSticker})

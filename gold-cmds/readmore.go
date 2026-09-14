@@ -89,6 +89,6 @@ func rmUsage(prefix string) string {
 }
 
 func init() {
-	Register(Command{Name: "rm", Category: "AI & MEDIA", Desc: "Create WhatsApp Read More hidden text", Run: handleReadMore})
+	Register(Command{Name: "rm", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO HIDE LONG TEXT BEHIND A READ MORE BUTTON. USE IT WITH YOUR LONG TEXT TO MAKE A READ MORE MESSAGE.", Run: handleReadMore})
 	Register(Command{Name: "readmore", Hidden: true, Run: handleReadMore})
 }

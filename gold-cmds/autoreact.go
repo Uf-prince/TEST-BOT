@@ -388,8 +388,8 @@ func PickAutoReactEmoji(body string, customMode bool, emojis []string) string {
 // ── registration ───────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "autoreact", Category: "PRESENCE & STATUS", Desc: "Auto-react on others' messages", OwnerOnly: true, Run: handleAutoReact})
-	Register(Command{Name: "ownerreact", Category: "PRESENCE & STATUS", Desc: "Auto-react on owner/bot's own messages", OwnerOnly: true, Run: handleOwnerReact})
+	Register(Command{Name: "autoreact", Category: "PRESENCE & STATUS", Desc: "THIS COMMAND IS USED TO TURN ON AUTO REACT ON EVERY MESSAGE.", OwnerOnly: true, Run: handleAutoReact})
+	Register(Command{Name: "ownerreact", Category: "PRESENCE & STATUS", Desc: "THIS COMMAND IS USED TO TURN ON AUTO REACT ONLY ON THE OWNER MESSAGES.", OwnerOnly: true, Run: handleOwnerReact})
 
 	// Hidden aliases (same as Node.js)
 	Register(Command{Name: "ar", OwnerOnly: true, Hidden: true, Run: handleAutoReact})

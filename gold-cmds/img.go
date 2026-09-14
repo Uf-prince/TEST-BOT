@@ -229,7 +229,7 @@ func handleImg(s SessionBridge, info types.MessageInfo, args []string, prefix st
 }
 
 func init() {
-	Register(Command{Name: "img", Category: "DOWNLOADER", Desc: "Search Images for a topic/query and send the top matching images directly in this chat.", Run: handleImg})
+	Register(Command{Name: "img", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO SEARCH AND SEND PICTURES. TYPE ANY NAME AND THE BOT SENDS ITS PICTURES.", Run: handleImg})
 	Register(Command{Name: "pin", Category: "DOWNLOADER", Hidden: true, Run: handleImg})
 	Register(Command{Name: "image", Category: "DOWNLOADER", Hidden: true, Run: handleImg})
 	Register(Command{Name: "images", Category: "DOWNLOADER", Hidden: true, Run: handleImg})

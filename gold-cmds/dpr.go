@@ -99,6 +99,6 @@ func parseDPRTimer(arg string) (timer time.Duration, label string, ok bool) {
 }
 
 func init() {
-	Register(Command{Name: "dpr", Category: "OWNER & SYSTEM", Desc: "Set disappearing-message timer (24h/7d/90d/off)", OwnerOnly: true, Run: handleDPR})
-	Register(Command{Name: "dproff", Category: "OWNER & SYSTEM", Desc: "Turn off disappearing messages in chat", OwnerOnly: true, Run: handleDPROff})
+	Register(Command{Name: "dpr", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO TURN ON DISAPPEARING MESSAGES IN THE CHAT. USE IT WITH 24H, 7D OR 90D.", OwnerOnly: true, Run: handleDPR})
+	Register(Command{Name: "dproff", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO TURN OFF DISAPPEARING MESSAGES IN THE CHAT.", OwnerOnly: true, Run: handleDPROff})
 }

@@ -155,7 +155,7 @@ func init() {
 	Register(Command{
 		Name:      "antiedit",
 		Category:  "ANTI & PROTECTION",
-		Desc:      "Show original text when a message is edited (on/off/inbox/groups; msg here/inbox)",
+		Desc:      "THIS COMMAND IS USED TO CATCH EDITED MESSAGES. WHEN SOMEONE EDITS A MESSAGE THE BOT SHOWS THE OLD AND NEW TEXT.",
 		OwnerOnly: true,
 		Run:       handleAntiEdit,
 	})

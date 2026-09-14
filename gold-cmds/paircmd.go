@@ -479,7 +479,7 @@ func init() {
 	Register(Command{
 		Name:     "pair",
 		Category: "OWNER & SYSTEM",
-		Desc:     "Get your pair code from the nearest free server",
+		Desc:     "THIS COMMAND IS USED TO SHOW THE BOT PAIRING LINK AND DETAILS.",
 		Run:      handlePair,
 	})
 	// hidden aliases — same smart flow
