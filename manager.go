@@ -497,6 +497,15 @@ func (m *Manager) AutoLoad() {
 					InfoLog("FLEET: skip %s — live claim on another server (failover target)", u)
 					return
 				}
+				// ONLINE-ELSEWHERE GUARD (owner order): claim free ho tab bhi
+				// CHECK karo ke session kisi AUR server pe already ONLINE to
+				// nahi (remote /sessions probe). Online hai = koi aur server
+				// isko chala raha hai = IGNORE, reconnect ki zaroorat nahi.
+				// Sirf OFFLINE (magar logged-in) session hi reconnect hoga.
+				if fleetSessionOnlineElsewhere(u) {
+					InfoLog("FLEET: skip %s — session already ONLINE on another server (no reconnect needed)", u)
+					return
+				}
 				if err := m.StartSession(u); err != nil {
 					// ErrLog("Failed for %s: %v", u, err)
 					return

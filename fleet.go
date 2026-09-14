@@ -564,6 +564,16 @@ func fleetClaimAvailable() {
 			}
 		}
 
+		// ONLINE-ELSEWHERE GUARD (owner order): claim free lag raha hai
+		// magar session kisi AUR server pe already ONLINE hai (boot-restore
+		// / manual pair hua tha, claim missing) → koi live holder nahi to
+		// bhi isko claim/reconnect MAT karo — jo server chala raha hai wahi
+		// chalane do. Sirf OFFLINE (magar logged-in) session hi claim hoga.
+		if fleetSessionOnlineElsewhere(jid) {
+			InfoLog("FLEET: skip %s — session already ONLINE on another server (no claim, no reconnect)", jid)
+			continue
+		}
+
 		InfoLog("FLEET: claiming unowned session %s (slots %d/%d)", jid, m.SlotsUsed(), max)
 		fleetRestoreAndConnect(jid)
 		// claim attempts ke beech thoda gap — Storj read storm nahi.
@@ -611,6 +621,17 @@ func fleetRestoreAndConnect(jid string) {
 	if !won {
 		_, _ = m.Redis.cmd("HDEL", fleetClaimPrefix+jid, fleetSelfID)
 		return // doosre server ne jeet liya — hum chup
+	}
+
+	// 3.5 ONLINE-ELSEWHERE GUARD (owner order): race jeetne ke baad bhi ek
+	// baar remote /sessions se confirm karo — agar session kisi AUR server
+	// pe already ONLINE nikla to claim release kar ke chup-chaap nikal
+	// jao (koi StartSession/reconnect NAHI). Jo server chala raha hai wahi
+	// chalane do — double-connect war WhatsApp logout karva sakta hai.
+	if fleetSessionOnlineElsewhere(jid) {
+		_, _ = m.Redis.cmd("HDEL", fleetClaimPrefix+jid, fleetSelfID)
+		InfoLog("FLEET: session %s already ONLINE on another server — claim released, no reconnect", jid)
+		return
 	}
 
 	// 4. local device hai to seedha connect, warna Storj blob se restore.
@@ -1066,6 +1087,16 @@ func fleetOnConnected(jid string) {
 				live = true
 				break
 			}
+		}
+		// ONLINE-ELSEWHERE GUARD (owner order): koi AUR live server is JID
+		// ka claim rakh raha hai to uske claims/failover-marker ko HAATH
+		// mat lagao — wo server hi session ka owner hai. Hume apna claim
+		// bhi daalne ki zaroorat nahi (dono side se double-claim war se
+		// bacha). Local session zinda hai to chalega; us server ke marne
+		// pe orphan sweep + claim flow sab sambhal lega.
+		if live {
+			fleetSaveBlob(jid) // connected keys latest rakho
+			return
 		}
 		if !live {
 			if len(holders) > 0 {
