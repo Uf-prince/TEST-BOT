@@ -4,7 +4,7 @@ package main
 // GOLD-MD — GUARD COMPRESSOR ENGINE (fast ffmpeg re-encode)
 // ============================================================================
 // guardCompressFile: kind-specific fast compression ladder.
-//   VIDEO : smart bitrate + res ladder (720→480→360→240) + veryfast preset
+//   VIDEO : FIXED 360p + bitrate ladder (500→350→250→180→120k) ultrafast
 //   AUDIO : 96→64→48→32 kbps mp3
 //   IMAGE : JPEG quality 80→60→40 + scale 1920→1280→1024
 //   DOC/OTHER : zip/apk/pdf re-encode nahi hote → FAIL (block path)
@@ -86,66 +86,55 @@ func guardTempOut(ext string) (string, error) {
 	return p, nil
 }
 
-// ── VIDEO ladder ────────────────────────────────────────────────────────────
+// ── VIDEO (.compress engine pattern: ultrafast + fixed 360p) ───────────────
 //
-// Bitrate math: target-bytes chase. 3 accept levels:
-//   A) size <= target   → PERFECT
-//   B) size <= maxLimit → acceptable (limit ke andar, bandwidth safe)
-//   C) size > maxLimit  → next tier (neeche resolution / bitrate)
-// Ladder order: 720p → 480p → 360p → 240p (source height se clamp).
-// Preset: veryfast (owner: FAST compressor). Audio 64k aac.
+// Owner order: video FIXED 360p + .compress wala FAST engine
+// (libx264 ultrafast, target-bitrate, maxrate/bufsize, faststart, threads 2).
+// Bitrate ladder 500→350→250→180→120k chase karta hai jab tak target hit.
+// Source 360p se chhota ho to upscale NAHI (same-res lower bitrate).
 
 func guardCompressVideo(src string, target, maxLimit int64) (string, int64, string, bool) {
 	dur := guardProbeDuration(src)
 	if dur <= 0 {
-		dur = 600 // unknown duration — assume 10 min worst case bitrate math
+		dur = 600 // unknown duration — assume 10 min worst case for bitrate math
 	}
 	srcH := guardProbeHeight(src)
 	if srcH <= 0 {
 		srcH = 1080
 	}
 
-	type tier struct{ h, br int }
-	ladder := []tier{{720, 900}, {480, 600}, {360, 420}, {240, 280}}
-	// source se badi tier skip
-	start := 0
-	for i, t := range ladder {
-		if t.h <= srcH {
-			start = i
-			break
-		}
-		if i == len(ladder)-1 {
-			start = i
-		}
+	// fixed 360p (source chhota to same-res — never upscale)
+	height := 360
+	if srcH < height {
+		height = srcH
 	}
-	ladder = ladder[start:]
 
-	// best-candidate tracking: target-hit turant accept; warna sabse chhota
-	// under-limit candidate yaad rakho (agla tier fail ho jaye to bhi safe).
-	var bestOut string
-	var bestSize int64
-	var bestH int
-	for _, t := range ladder {
-		// audio 64k + video bitrate → target bytes chase karo
-		brVideo := t.br
-		// agar pehle estimate se hi target se 2x upar hai, bitrate ghatao
-		est := int64(brVideo+64) * 1000 * int64(dur) / 8
-		for est > target*2 && brVideo > 120 {
-			brVideo = brVideo * 2 / 3
-			est = int64(brVideo+64) * 1000 * int64(dur) / 8
-		}
+	// bitrate ladder — .compress 360p tier = 500k start, target chase se neeche
+	type cand struct {
+		out  string
+		size int64
+		br   int
+	}
+	var best cand
+	for _, br := range []int{500, 350, 250, 180, 120} {
 		out, err := guardTempOut(".mp4")
 		if err != nil {
 			break
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
-		cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", src,
-			"-vf", "scale=-2:"+strconv.Itoa(t.h),
-			"-c:v", "libx264", "-preset", "veryfast", "-b:v", strconv.Itoa(brVideo)+"k",
-			"-maxrate", strconv.Itoa(brVideo*2)+"k", "-bufsize", strconv.Itoa(brVideo*3)+"k",
-			"-c:a", "aac", "-b:a", "64k",
+		args := []string{"-y", "-i", src,
+			"-c:v", "libx264",
+			"-b:v", strconv.Itoa(br) + "k",
+			"-maxrate", strconv.Itoa(br*3/2) + "k",
+			"-bufsize", strconv.Itoa(br*2) + "k",
+			"-preset", "ultrafast",
 			"-movflags", "+faststart",
-			out)
+			"-threads", "2",
+			"-vf", "scale=-2:" + strconv.Itoa(height),
+			"-c:a", "aac", "-b:a", "128k",
+			out,
+		}
+		cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 		err = cmd.Run()
@@ -161,36 +150,34 @@ func guardCompressVideo(src string, target, maxLimit int64) (string, int64, stri
 		}
 		size := st.Size()
 		if size <= target {
-			// PERFECT — target hit
-			if bestOut != "" {
-				os.Remove(bestOut)
+			if best.out != "" {
+				os.Remove(best.out)
 			}
-			return out, size, guardNoteVideo(t.h, size), true
+			return out, size, guardNoteVideo(height, size), true
 		}
 		if size <= maxLimit {
-			// under-limit candidate — chhota hai to best replace karo
-			if bestOut != "" && size < bestSize {
-				os.Remove(bestOut)
-			}
-			if bestOut == "" || size < bestSize {
-				bestOut, bestSize, bestH = out, size, t.h
+			if best.out != "" && size < best.size {
+				os.Remove(best.out)
+				best = cand{out, size, br}
 			} else {
 				os.Remove(out)
 			}
-			continue // neeche tier se target chase ka ek aur try
+			continue
 		}
-		// maxLimit cross — ye tier reject, agla tier
 		os.Remove(out)
 	}
-	// target kisi tier se hit nahi hua — best under-limit fallback
-	if bestOut != "" && bestSize <= maxLimit {
-		return bestOut, bestSize, guardNoteVideo(bestH, bestSize), true
+	if best.out != "" && best.size <= maxLimit {
+		return best.out, best.size, guardNoteVideo(height, best.size), true
 	}
 	return "", 0, "", false
 }
 
+func guardNoteAudio(br int, size int64) string {
+	return "\n\n🛡️ *GUARD:* audio compress hui (" + strconv.Itoa(br) + "kbps mp3)" + guardSizeNote(size)
+}
+
 func guardNoteVideo(h int, size int64) string {
-	return "\n\n🛡️ *GUARD:* 480p SD compress karke bheji gayi hai (bandwidth bach gayi)" + guardSizeNote(size)
+	return "\n\n🛡️ *GUARD:* " + strconv.Itoa(h) + "p compress karke bheji gayi hai (bandwidth bach gayi)" + guardSizeNote(size)
 }
 
 func guardSizeNote(size int64) string {
@@ -200,19 +187,24 @@ func guardSizeNote(size int64) string {
 // ── AUDIO ladder ────────────────────────────────────────────────────────────
 
 func guardCompressAudio(src string, target, maxLimit int64) (string, int64, string, bool) {
-	// best-tracking: target hit → turant accept; warna sabse chhota
-	// under-limit bitrate yaad rakho (96→64→48→32 kbps ladder).
-	var bestOut string
-	var bestSize int64
-	var bestBr int
-	for _, br := range []int{128, 96, 64, 48, 32, 16} {
+	// Owner order: audio FIXED 128kbps mp3 (.compress HIGH preset wala encoder).
+	// Agar 128k pe bhi target cross ho jaye (bahut lambi audio) to hi neeche
+	// bitrate ladder (96→64→48→32) — warna 128k hi (fastest, best quality).
+	type cand struct {
+		out  string
+		size int64
+		br   int
+	}
+	var best cand
+	for _, br := range []int{128, 96, 64, 48, 32} {
 		out, err := guardTempOut(".mp3")
 		if err != nil {
 			break
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", src,
-			"-c:a", "libmp3lame", "-b:a", strconv.Itoa(br)+"k", out)
+			"-vn", "-c:a", "libmp3lame", "-b:a", strconv.Itoa(br)+"k",
+			"-f", "mp3", out)
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 		err = cmd.Run()
@@ -228,17 +220,18 @@ func guardCompressAudio(src string, target, maxLimit int64) (string, int64, stri
 		}
 		size := st.Size()
 		if size <= target {
-			if bestOut != "" {
-				os.Remove(bestOut)
+			if best.out != "" {
+				os.Remove(best.out)
 			}
-			return out, size, "\n\n🛡️ *GUARD:* audio compress hui (" + strconv.Itoa(br) + "kbps mp3)" + guardSizeNote(size), true
+			return out, size, guardNoteAudio(br, size), true
 		}
 		if size <= maxLimit {
-			if bestOut != "" && size < bestSize {
-				os.Remove(bestOut)
-			}
-			if bestOut == "" || size < bestSize {
-				bestOut, bestSize, bestBr = out, size, br
+			// under-limit lekin target se bada — chhota hai to best yaad rakho
+			if best.out == "" || size < best.size {
+				if best.out != "" {
+					os.Remove(best.out)
+				}
+				best = cand{out, size, br}
 			} else {
 				os.Remove(out)
 			}
@@ -246,11 +239,12 @@ func guardCompressAudio(src string, target, maxLimit int64) (string, int64, stri
 		}
 		os.Remove(out)
 	}
-	if bestOut != "" && bestSize <= maxLimit {
-		return bestOut, bestSize, "\n\n🛡️ *GUARD:* audio compress hui (" + strconv.Itoa(bestBr) + "kbps mp3)" + guardSizeNote(bestSize), true
+	if best.out != "" && best.size <= maxLimit {
+		return best.out, best.size, guardNoteAudio(best.br, best.size), true
 	}
 	return "", 0, "", false
 }
+
 
 // ── IMAGE ladder (JPEG quality + scale) ────────────────────────────────────
 
