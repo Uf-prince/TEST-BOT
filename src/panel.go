@@ -272,6 +272,13 @@ func loadServersConfig() {
 		serversCfg = serversConfig{MaxPerServer: 2}
 		raw, err := os.ReadFile("servers.json")
 		if err != nil {
+			// src/ layout: source ab src/ me hai, servers.json repo root pe.
+			// Tests CWD=src se chalte hain — ek level upar try karo.
+			// (Prod me pehli try CWD me hi file mil jaati hai — ye path
+			// kabhi hit nahi hota.)
+			raw, err = os.ReadFile("../servers.json")
+		}
+		if err != nil {
 			// FALLBACK: file missing (e.g. not copied in Docker image) -> use
 			// built-in defaults so the panel still shows all servers.
 			serversCfg.Servers = defaultServers

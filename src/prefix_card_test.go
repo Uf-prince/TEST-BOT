@@ -126,7 +126,7 @@ func TestConnectedCardNoteText(t *testing.T) {
 // implementation) aur dono prefix-change paths usko call karte hain.
 func TestPrefixResendBridge(t *testing.T) {
 	// Interface (gold-cmds/api.go).
-	b, err := os.ReadFile("gold-cmds/api.go")
+	b, err := os.ReadFile("../gold-cmds/api.go")
 	if err != nil {
 		t.Fatal("gold-cmds/api.go missing:", err)
 	}
@@ -148,7 +148,7 @@ func TestPrefixResendBridge(t *testing.T) {
 	}
 
 	// Prefix change paths (gold-cmds/prefix.go).
-	b, err = os.ReadFile("gold-cmds/prefix.go")
+	b, err = os.ReadFile("../gold-cmds/prefix.go")
 	if err != nil {
 		t.Fatal("gold-cmds/prefix.go missing:", err)
 	}

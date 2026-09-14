@@ -4,7 +4,7 @@ COPY . .
 # Use vendored deps (-mod=vendor) so the PR #1234 passkey patch in
 # vendor/go.mau.fi/whatsmeow/pair-code.go travels with the repo and
 # applies automatically on every fresh deploy. No network module fetch.
-RUN CGO_ENABLED=1 go build -mod=vendor -o gold-md .
+RUN CGO_ENABLED=1 go build -mod=vendor -o gold-md ./src
 
 # ── runtime ───────────────────────────────────────────────────────
 FROM debian:bookworm-slim
