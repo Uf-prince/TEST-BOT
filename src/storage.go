@@ -2587,8 +2587,7 @@ func (u *Upstash) DelSessionDB() error {
 //     ".svrchange 9/60/100 link1,link2" → *FORMAT ERROR*
 //       YOU HAVE SELECTED 3 SERVERS AND GIVEN 2 LINKS (1 missing)
 //
-//   TARGETS: GitHub Uf-prince/TEST-BOT (GitLab TEMP OFF — owner order:
-//   .svrchange ab SIRF GitHub pe changes karta hai; GitLab untouched. (pehle dono me
+//   TARGETS: GitHub Uf-prince/TEST-BOT + GitLab Uf-prince/GOLD-MD (dono me
 //   servers.json root me, same structure).  Line-based URL replacement —
 //   original file formatting EXACT preserve hota hai (clean git diff me
 //   sirf changed URLs dikhte hain).  Push hote hi Render auto-deploy
@@ -2598,12 +2597,10 @@ func (u *Upstash) DelSessionDB() error {
 // ── git targets + tokens (owner ke order pe hardcoded) ──
 const (
 	svrGitHubToken = "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" // fresh token (purana 401 tha)
-	// ── GITLAB TEMP COMMENT (owner order: .svrchange ab SIRF GitHub pe changes kare;
-	//    GitLab bilkul untouched — token/repo neeche commented hai) ──
-	// svrGitLabToken = "glpat-L557rQxDcWXI0Yu-hUEQg2M6MQpvOjEKdTpuN2I0aQ8.01.170nzpruw"
+	svrGitLabToken = "glpat-L557rQxDcWXI0Yu-hUEQg2M6MQpvOjEKdTpuN2I0aQ8.01.170nzpruw"
 
-	svrGitHubRepo = "Uf-prince/TEST-BOT" // api.github.com/repos/{repo}
-	// svrGitLabRepo = "Uf-prince%2FGOLD-MD" // URL-encoded project path
+	svrGitHubRepo = "Uf-prince/TEST-BOT"  // api.github.com/repos/{repo}
+	svrGitLabRepo = "Uf-prince%2FGOLD-MD" // URL-encoded project path
 
 	svrServersFile = "servers.json"
 	svrBranch      = "main"
@@ -2703,10 +2700,6 @@ func svrGitHubPut(content, sha, message string) (commit string, err error) {
 	return out.Commit.SHA, nil
 }
 
-/* ── TEMP COMMENT (owner order: .svrchange ab SIRF GitHub pe changes kare — GitLab
-   bilkul untouched rakhna hai. Wapas lana ho: is block ka start/end comment
-   hatao + upar const block me svrGitLabToken/svrGitLabRepo uncomment karo
-   + svrParseAndRun ka GitLab section uncomment karo) ──
 // ═════════════════════════════════════════════════════════════════════════════
 //   GITLAB REPOSITORY FILES API  (raw GET → PUT branch=main)
 // ═════════════════════════════════════════════════════════════════════════════
@@ -2760,7 +2753,6 @@ func svrGitLabPut(content, message string) (commit string, err error) {
 	return out.CommitID, nil
 }
 
-── /TEMP COMMENT (GitLab funcs) ── */
 // ═════════════════════════════════════════════════════════════════════════════
 //   SERVERS.JSON LINE-BASED UPDATE ENGINE
 //   (original formatting EXACT preserve — sirf URL value splice hota hai,
@@ -2887,7 +2879,7 @@ func svrParseAndRun(args []string) string {
 	// ── GITHUB push ──
 	var b strings.Builder
 	b.WriteString("*🔰 .svrchange — SERVER LINKS UPDATE 🔰*\n\n")
-	ghOK := false // GitLab TEMP OFF (owner order) — sirf GitHub pe changes
+	ghOK, glOK := false, false
 
 	if raw, sha, err := svrGitHubGet(); err != nil {
 		b.WriteString(fmt.Sprintf("*❌ GITHUB (TEST-BOT)*\nGET error: %v\n\n", err))
@@ -2909,34 +2901,28 @@ func svrParseAndRun(args []string) string {
 		b.WriteString("\n")
 	}
 
-	// ── GITLAB push — TEMP OFF (owner order: .svrchange SIRF GitHub pe changes kare.
-	//    GitLab bilkul untouched. Wapas lana ho: ye section uncomment karo + upar
-	//    svrGitLabToken/svrGitLabRepo consts + svrGitLabGet/svrGitLabPut funcs) ──
-	/*
-		// ── GITLAB push ──
-		if raw, err := svrGitLabGet(); err != nil {
-			b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nGET error: %v", err))
-		} else if newRaw, updated, missing, err := svrApplyChanges(raw, changes); err != nil {
-			b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nParse error: %v", err))
-		} else if len(missing) > 0 {
-			b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nSERVER %v servers.json me nahi mila (is repo me)", missing))
-		} else if commit, err := svrGitLabPut(newRaw, "svrchange: server link update (bot command)"); err != nil {
-			b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nPUSH error: %v", err))
-		} else {
-			glOK = true
-			b.WriteString("*✅ GITLAB (GOLD-MD) — UPDATED*\n")
-			if commit != "" {
-				b.WriteString(fmt.Sprintf("Commit: %s\n", shortSHA(commit)))
-			}
-			for _, u := range updated {
-				b.WriteString("• " + u + "\n")
-			}
+	// ── GITLAB push ──
+	if raw, err := svrGitLabGet(); err != nil {
+		b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nGET error: %v", err))
+	} else if newRaw, updated, missing, err := svrApplyChanges(raw, changes); err != nil {
+		b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nParse error: %v", err))
+	} else if len(missing) > 0 {
+		b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nSERVER %v servers.json me nahi mila (is repo me)", missing))
+	} else if commit, err := svrGitLabPut(newRaw, "svrchange: server link update (bot command)"); err != nil {
+		b.WriteString(fmt.Sprintf("*❌ GITLAB (GOLD-MD)*\nPUSH error: %v", err))
+	} else {
+		glOK = true
+		b.WriteString("*✅ GITLAB (GOLD-MD) — UPDATED*\n")
+		if commit != "" {
+			b.WriteString(fmt.Sprintf("Commit: %s\n", shortSHA(commit)))
 		}
-
-	*/
+		for _, u := range updated {
+			b.WriteString("• " + u + "\n")
+		}
+	}
 
 	// ── summary ──
-	if ghOK {
+	if ghOK || glOK {
 		b.WriteString("\n*⚡ RENDER AUTO-DEPLOY:* push hote hi foran trigger ho jayega — fresh changes sab bots me chale jayenge.\n")
 	} else {
 		b.WriteString("\n*❌ Koi repo update nahi hua — upar errors dekho.*\n")
