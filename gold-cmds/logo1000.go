@@ -136,18 +136,44 @@ var logoBases = [100]string{
 	"abstract flame of fire swirling with energy sparks",
 }
 
-// ── 10 text treatments (NAME ke letters ka look) ─────────────────────────
+// ── 10 text materials (NAME ke letters KIS CHEEZ se bane hain) ──────────
+// OWNER ORDER: font sab ka same aa raha tha — isliye material aur font
+// alag dimensions hain ab (neeche logoFonts).
 var logoTexts = [10]string{
-	"the name written in massive bold 3D metallic golden letters",
-	"the name written in glowing neon tube letters, cyan and magenta",
-	"the name written in elegant luxury gold calligraphy script letters",
-	"the name written in liquid chrome metal reflective letters",
-	"the name written in fiery burning letters made of living flames",
-	"the name written in frozen ice letters made of crystals and frost",
-	"the name written in graffiti spray paint street art letters",
-	"the name written on an embossed vintage brass metal plate",
-	"the name written in pixel 8-bit retro video game letters",
-	"the name carved in ancient cracked stone letters with moss",
+	"letters made of solid 3D metallic gold with beveled edges and polished shine",
+	"letters made of glowing neon light tubes in cyan and magenta",
+	"letters made of elegant flowing gold calligraphy ink with hand-lettered swashes",
+	"letters made of liquid mirror chrome, reflective and curved like mercury",
+	"letters made of living fire and burning flames with flying embers",
+	"letters made of clear frozen ice crystals with frost and hanging icicles",
+	"letters painted in colorful graffiti spray paint with drips and bold outlines",
+	"letters stamped and embossed on a vintage brass metal plate",
+	"letters built from chunky 8-bit pixel blocks like a retro video game",
+	"letters carved deep into ancient cracked grey stone with moss and dust",
+}
+
+// ── 10 FONT STYLES (har design ka letterform alag — owner order) ─────────
+var logoFonts = [10]string{
+	"heavy blocky sans-serif letterforms with thick wide strokes",
+	"thin elegant rounded futuristic letterforms",
+	"flowing cursive script letterforms with long swash tails",
+	"wide stretched geometric letterforms, modern and minimal",
+	"sharp aggressive angular letterforms with jagged spikes and metal edges",
+	"tall condensed serif letterforms with sharp pointed serifs",
+	"bubbly rounded cartoon letterforms with bold outlines and playful curves",
+	"classic engraved roman capital letterforms in letterpress stamp style",
+	"chunky square pixel letterforms, blocky and retro",
+	"rough hand-chiseled capital letterforms in ancient carved style",
+}
+
+// ── 6 FONT SIZES (chota se bara tak variety — owner order) ───────────────
+var logoSizes = [6]string{
+	"small crisp lettering, neat and minimal",
+	"medium-sized lettering, clean and balanced",
+	"large lettering dominating the center",
+	"extra-large massive lettering filling most of the image width",
+	"giant oversized lettering stretching edge to edge",
+	"bold big lettering with strong powerful presence",
 }
 
 // ── 10 lighting moods (poore scene ka mood) ──────────────────────────────
@@ -198,6 +224,16 @@ var logoTextNames = [10]string{
 	"Pixel 8-Bit", "Ancient Stone",
 }
 
+var logoFontNames = [10]string{
+	"Heavy Blocky", "Thin Futuristic", "Script Swash", "Wide Geometric",
+	"Sharp Angular", "Condensed Serif", "Bubbly Cartoon", "Engraved Roman",
+	"Pixel Blocky", "Chiseled Ancient",
+}
+
+var logoSizeNames = [6]string{
+	"Small", "Medium", "Large", "Extra-Large", "Giant", "Bold Big",
+}
+
 var logoLightNames = [10]string{
 	"Cinematic Dark", "Golden Hour", "Moonlight Blue", "Noir Red Accent",
 	"Neon Rainbow", "Dreamy Bokeh", "Explosive Contrast", "Synthwave Glow",
@@ -212,13 +248,16 @@ func LogoPromptForN(n int, name string) string {
 	}
 	b := (n - 1) % 100
 	t := (n - 1) / 100
-	l := (b + t) % 10
+	f := (b + 3*t) % 10 // font style — har design ka letterform alag
+	l := (b + t) % 10   // lighting mood
+	sz := (b + 5*t) % 6 // font size — chota se bara tak variety
 	return fmt.Sprintf(
-		"Epic premium logo design, %s. Centered main title: %s spelling exactly \"%s\", "+
-			"perfectly readable, large and prominent, centered composition. Scene: %s. %s. "+
+		"Epic premium logo design. Main title typography: the name %s spelled exactly \"%s\", "+
+			"written in %s, %s, %s, perfectly readable and clearly legible, the name is the "+
+			"main focal point of the design. Background scene: %s. Lighting mood: %s. "+
 			"Hyper-detailed professional 8K logo art, strong depth, sharp focus on the name, "+
 			"no other text or watermark anywhere",
-		logoTexts[t], name, strings.ToUpper(name), logoBases[b], logoLights[l])
+		name, strings.ToUpper(name), logoFonts[f], logoTexts[t], logoSizes[sz], logoBases[b], logoLights[l])
 }
 
 // LogoDesignName returns the human-readable design name for caption.
@@ -228,8 +267,10 @@ func LogoDesignName(n int) string {
 	}
 	b := (n - 1) % 100
 	t := (n - 1) / 100
+	f := (b + 3*t) % 10
 	l := (b + t) % 10
-	return fmt.Sprintf("%s + %s + %s", logoBaseNames[b], logoTextNames[t], logoLightNames[l])
+	sz := (b + 5*t) % 6
+	return fmt.Sprintf("%s + %s Font %s + %s + %s", logoBaseNames[b], logoFontNames[f], logoSizeNames[sz], logoTextNames[t], logoLightNames[l])
 }
 
 // ── .logo — list command (OWNER SPEC format, akela message) ──────────────
@@ -281,7 +322,8 @@ func logoRunNAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 	}
 	nameUp := strings.ToUpper(name)
 
-	waitID := s.ReplyWithID(info, fmt.Sprintf("*⬛ LOGO %d BAN RAHA HAI........*", n))
+	// OWNER ORDER: waiting message EXACT ye text ho
+	waitID := s.ReplyWithID(info, "*CREATING LOGO PLEASE WAIT.....*")
 
 	deadline := time.Now().Add(logoTimeout)
 	for time.Now().Before(deadline) {
@@ -292,34 +334,25 @@ func logoRunNAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 			return
 		}
 		if imgData != nil {
+			// OWNER ORDER: image par KUCH caption nahi — SIRF image
 			s.DeleteMessage(info, waitID)
-			caption := fmt.Sprintf(
-				"*⬛ LOGO %d — DHAMAKEDAR NAME LOGO ⬛*\n\n"+
-					"*⬛ NAME:* %s\n"+
-					"*⬛ DESIGN:* %s\n"+
-					"*⬛ TIME:* %.1fs\n"+
-					"*⬛ SIZE:* 2K\n\n"+
-					"*❯❯ DHAMAKEDAR LOGO READY ⬛⬛*",
-				n, nameUp, LogoDesignName(n), time.Since(deadline.Add(-logoTimeout)).Seconds())
-			if sendErr := s.SendImage(info, imgData, caption); sendErr != nil {
+			if sendErr := s.SendImage(info, imgData, ""); sendErr != nil {
 				s.Reply(info, "⬛ *LOGO SEND ERROR* ⬛\n"+strings.ToUpper(sendErr.Error()))
 			}
 			return
 		}
 		// All keys busy/resting — edit wait message, sleep, retry
-		var waitText string
-		if busyOnly {
-			waitText = "*LOGO AI SERVER BUSY HAI, THODI DER ME BANEGA........*"
-		} else {
-			waitText = fmt.Sprintf("*LOGO AI SERVER BUSY HAI — %s ME RETRY HO RAHA HAI........*", formatWaitMs(totalWaitMs))
+		_ = totalWaitMs
+		if busyOnly || totalWaitMs > 0 {
+			// OWNER ORDER: waiting text hi rehta hai — bas aur thoda rukna hai
+			s.EditMessage(info, waitID, "*CREATING LOGO PLEASE WAIT.....*")
 		}
-		s.EditMessage(info, waitID, waitText)
 		waitDuration := time.Duration(waitMs+500) * time.Millisecond
 		if waitDuration < 1*time.Second {
 			waitDuration = 1 * time.Second
 		}
 		time.Sleep(waitDuration)
-		s.EditMessage(info, waitID, fmt.Sprintf("*⬛ LOGO %d BAN RAHA HAI........*", n))
+		s.EditMessage(info, waitID, "*CREATING LOGO PLEASE WAIT.....*")
 	}
 	s.DeleteMessage(info, waitID)
 	s.Reply(info, "*TRY AGAIN LATER*")
