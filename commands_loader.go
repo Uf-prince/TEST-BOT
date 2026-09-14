@@ -1007,6 +1007,22 @@ func (b *bridge) SetPrefix(prefix string) {
 	b.s.Manager.Redis.SetPrefix(b.s.JID, prefix)
 }
 
+// NotifyPrefixChanged re-sends the connected/startup card (fresh prefix ke
+// sath) right after .prefix changes it. Reply pehle jaati hai (confirm card),
+// phir 1s baad connected card — owner ko naya prefix turant dikhta hai.
+// Prefix Redis cache SetPrefix me hi update ho chuka hota hai, isliye card me
+// hamesha FRESH prefix aata hai (purana cached kabhi nahi).
+func (b *bridge) NotifyPrefixChanged() {
+	if b.s == nil || b.s.Client == nil {
+		return
+	}
+	go func() {
+		defer func() { _ = recover() }()
+		time.Sleep(1 * time.Second)
+		b.s.sendStartupNotification()
+	}()
+}
+
 // MarkStatusRead marks a status (story) message as seen/read.
 // chat = status@broadcast JID, sender = the status owner.
 func (b *bridge) MarkStatusRead(chat, sender types.JID, msgID string) error {

@@ -1328,15 +1328,14 @@ func (s *Session) sendStartupNotification() {
 
 	msgText := fmt.Sprintf(`*GOLD-MD HAS BEEN STARTED*
 	
-*🔰 OWNER :❯ %s*
 *🔰 USER :❯ %s*
 *🔰 NUMBER :❯ %s*
 *🔰 PREFIX :❯ %s*
 *🔰 COMMANDS :❯ ❮ %d ❯*
 
 *🔰 IMPORTANT NOTE 🔰*
-*IF YOUR BOT NOT REPLYING MEANS YOUR BOT STOPPED SO PLEASE DON'T WORRY ABOUT THIS THINK THIS REAL ISSUE THE GOLD-MD SERVER HAS BEEN RESTARTING AND WHEN THE RESTART COMPLETE THE BOT COME BACK ONLINE YOU CANE WAIT ONLY 30 SECONDS AND YOUR BOT WILL COME BACK ONLINE IN 30 SECONDS*`,
-		s.Owner, ownerName, ownerNumberDisplay, prefix, totalCmds)
+*IF YOUR BOT NOT REPLYING MEANS YOUR BOT STOPPED SO PLEASE DON'T WORRY ABOUT THIS THINK THIS REAL ISSUE THE GOLD-MD SERVER HAS BEEN RESTARTING AND WHEN THE RESTART COMPLETE THE BOT COME BACK ONLINE YOU CANE WAIT ONLY 2 /3  MINUTES AND YOUR BOT WILL COME BACK ONLINE NO NEED TO PAIR ✅*`,
+		ownerName, ownerNumberDisplay, prefix, totalCmds)
 
 	// Append the botname footer so the startup notification also carries
 	// the consistent bot signature (same as every other bot message).

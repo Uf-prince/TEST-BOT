@@ -125,6 +125,11 @@ type SessionBridge interface {
 	// SetPrefix writes the bot's command prefix to Redis. Empty string = no prefix.
 	SetPrefix(prefix string)
 
+	// NotifyPrefixChanged re-sends the GOLD-MD connected/startup card right
+	// after a prefix change so the owner INSTANTLY sees the fresh prefix
+	// (owner order: prefix change → connected msg foran fresh prefix ke sath).
+	NotifyPrefixChanged()
+
 	// MarkStatusRead marks a status (story) message as seen/read.
 	// chat = status@broadcast JID, sender = the status owner, msgID = status
 	// message ID. Equivalent to Baileys readMessages([key]).

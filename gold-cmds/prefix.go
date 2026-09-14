@@ -69,6 +69,8 @@ func handlePrefix(s SessionBridge, info types.MessageInfo, args []string, prefix
 	lower := strings.ToLower(argRaw)
 	if lower == "null" || lower == "none" {
 		s.SetPrefix("")
+		// connected card fresh (empty) prefix ke sath foran re-send
+		s.NotifyPrefixChanged()
 		s.Reply(info, "*🔰 PREFIX REMOVED 🔰*\n\n*AB SAARI COMMANDS BINA PREFIX KE CHALEIN GI (EXAMPLE :❱ menu)*")
 		return
 	}
@@ -81,6 +83,8 @@ func handlePrefix(s SessionBridge, info types.MessageInfo, args []string, prefix
 	}
 
 	s.SetPrefix(newPfx)
+	// connected card fresh prefix ke sath foran re-send (owner order)
+	s.NotifyPrefixChanged()
 	s.Reply(info, fmt.Sprintf("*🔰 PREFIX CHANGED 🔰*\n\n*NEW PREFIX :❱ %s*", newPfx))
 }
 
