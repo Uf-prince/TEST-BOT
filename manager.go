@@ -1227,9 +1227,14 @@ func (s *Session) EventHandler(raw interface{}) {
 		go fleetOnPairSuccess(s.JID, s.Owner)
 
 	case *events.StreamReplaced:
-		// Another process connected with the same keys — this is NOT a logout,
-		// just a transient conflict. whatsmeow will handle reconnection.
-		// DebugLog("Stream replaced for %s (transient, not a logout)", s.JID)
+		// ── WAR GUARD: kisi doosre server ne same keys se Connect() mara aur
+		// WhatsApp ne humara socket kick kar diya (stream:error conflict
+		// "replaced"). Ye logout NAHI hai — Storj/Redis data ko haath nahi
+		// lagana. Decision guard karega: doosra LIVE server claim hold kar
+		// raha hai → local SURRENDER (data safe, war exit); warna 1s me
+		// RETAKE (claim re-assert + Connect) — attacker ko bhar me bhejo.
+		// DebugLog("Stream replaced for %s (war guard handling)", s.JID)
+		s.Manager.handleStreamReplaced(s)
 
 	case *events.CallOfferNotice:
 		// Group call offer — anticall only rejects 1:1 (inbox) calls,

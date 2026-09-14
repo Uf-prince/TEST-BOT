@@ -204,6 +204,16 @@ func (m *Manager) doReconnect(s *Session) bool {
 		m.resetAttempts(s.JID)
 		return true
 	}
+	// ── WAR GUARD (pre-Connect): koi DOOSRA live server is JID ka claim
+	// hold kar raha hai (usi ne same keys se Connect() maara hoga — ye
+	// disconnect usi ka asar hai). Ab yahan se Connect() karke war me
+	// hissa lena fazul hai: local SURRENDER (slot release + session drop,
+	// Storj/Redis bilkul safe) aur connect skip. Attacker ke marne ke
+	// baad fleet scan/AutoLoad session wapas ghar le aayega.
+	if m.warGuardShouldSkipConnect(s.JID) {
+		m.resetAttempts(s.JID)
+		return true
+	}
 	// Attempts counter maintain — consecutive failures ka hisaab.
 	attempts := m.bumpAttempts(s.JID)
 
@@ -280,6 +290,12 @@ func (m *Manager) handleDisconnectedEvent(s *Session) {
 	}
 	// Pending pairing sessions skip karo.
 	if !s.Paired || s.Client.Store == nil || s.Client.Store.ID == nil {
+		return
+	}
+	// ── WAR GUARD: doosra live server owner nikla (StreamReplaced wala
+	// attacker) → 1s fast-reconnect skip + local surrender — war ko
+	// yahin khatam karo, Connect() race mat karo.
+	if m.warGuardShouldSkipConnect(s.JID) {
 		return
 	}
 	if !m.tryAcquireReconnect(s.JID) {
