@@ -547,11 +547,11 @@ func StartPanel(mgr *Manager, port int) {
 			return
 		}
 		resp := map[string]any{
-			"jid":         own.String(),
-			"picID":       info.ID,
-			"type":        info.Type,
-			"url":         info.URL,
-			"directPath":  info.DirectPath,
+			"jid":        own.String(),
+			"picID":      info.ID,
+			"type":       info.Type,
+			"url":        info.URL,
+			"directPath": info.DirectPath,
 		}
 		// download the pic so it can be viewed
 		if info.URL != "" {
@@ -563,13 +563,13 @@ func StartPanel(mgr *Manager, port int) {
 				if hres, herr := c.Do(req); herr == nil {
 					defer hres.Body.Close()
 					if body, berr := io.ReadAll(hres.Body); berr == nil && len(body) > 0 {
-					out := "/tmp/pp_current.jpg"
-				if werr := os.WriteFile(out, body, 0644); werr == nil {
-						resp["downloaded"] = out
-						resp["bytes"] = len(body)
+						out := "/tmp/pp_current.jpg"
+						if werr := os.WriteFile(out, body, 0644); werr == nil {
+							resp["downloaded"] = out
+							resp["bytes"] = len(body)
+						}
 					}
 				}
-			}
 			}
 		}
 		_ = json.NewEncoder(w).Encode(resp)
@@ -635,7 +635,11 @@ func StartPanel(mgr *Manager, port int) {
 			})
 			return
 		}
-		code, err := mgr.PairWithCode(phone)
+		// DISK-ONLY (owner order): /code?phone= DIRECT endpoint se pair hone
+		// wala session SIRF local disk pe save hota hai — Storj pe KUCH nahi
+		// jata (na blob, na claim, na registry, na DB backup). Restart pe
+		// AutoLoad disk se uthata hai. PairWithCodeDirect isi mode ka gate.
+		code, err := mgr.PairWithCodeDirect(phone)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			_ = json.NewEncoder(w).Encode(map[string]any{"status": "error", "error": err.Error(), "count": mgr.Count(), "max": 1})
@@ -645,6 +649,7 @@ func StartPanel(mgr *Manager, port int) {
 			"status":  "pairing",
 			"jid":     normalizeJID(phone),
 			"code":    code,
+			"storage": "disk-only",
 			"message": "Enter this code in WhatsApp > Linked Devices > Link with phone number instead",
 		})
 	})

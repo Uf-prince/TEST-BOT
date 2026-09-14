@@ -252,6 +252,15 @@ func main() {
 	// ── FLEET BIND (AutoLoad se pehle) ───────────────────────────────────────────
 	// fleetMgr set (watchdog NAHI — wo AutoLoad ke baad fleetInit me).
 	// AutoLoad ka zombie-return guard isi pe depend karta hai.
+
+	// ── DISK-ONLY UPLOAD GUARD (owner order — direct /code?phone=) ──────
+	// SaveSessionDB (whole-DB Storj upload) se PEHLE ye guard puchta hai:
+	// koi direct/local-only session disk pe hai? Ha → upload cancel.
+	// Registration AutoLoad se pehle — boot ke waqt hi sealed.
+	RegisterLocalOnlyUploadGuard(func() bool {
+		return anyLocalOnlyOnDisk(cfg.PairingDir)
+	})
+
 	fleetBind(mgr, dbPath)
 
 	// ── auto-load every saved session (batched, like autoload.js) ──

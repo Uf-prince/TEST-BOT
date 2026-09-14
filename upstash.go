@@ -1677,6 +1677,15 @@ func trimQuotes(s, fb string) string {
 //  2. GZIP — base64 blob ab kvSet me transparent gzip hota hai (GZ1:),
 //     ~8-15x chhota PUT body. Value/read path bilkul same.
 func (u *Upstash) SaveSessionDB(path string) error {
+	// DISK-ONLY GUARD (owner order): agar is server ke disk pe koi bhi
+	// direct /code?phone= (local-only) session pada hai, to ye DB upload
+	// KABHI nahi hoga — goldmd.db me us session ke creds hote hain, aur
+	// owner ka order hai ke direct session Storj pe na jaye. Central gate
+	// yahan hi hai taake main.go ticker / graceful shutdown / reconnect
+	// path — koi bhi future caller leak na kar sake.
+	if localOnlyUploadBlocked() {
+		return nil
+	}
 	if _, err := os.Stat(path); err != nil {
 		return err
 	}

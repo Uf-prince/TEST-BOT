@@ -68,6 +68,13 @@ type Session struct {
 	// in WhatsApp yet. Pending sessions are NOT counted and NOT saved to Redis.
 	Paired bool
 
+	// LocalOnly = DISK-ONLY session (owner order): direct /code?phone= se
+	// pair hua. Session creds SIRF disk pe (goldmd.db + pairing folder) —
+	// Storj pe kabhi nahi jata (SaveSessionDB upload-guard isi se block
+	// hota hai). Restart pe AutoLoad disk se uthata hai, fleet guards
+	// bypass. Disk data KABHI delete nahi hota (khabardar rule).
+	LocalOnly bool
+
 	// msgCache holds recent incoming message protos keyed by message ID, so
 	// command handlers (e.g. the aivideo multi-image flow) can download media
 	// attached to a message after it has been routed. Entries expire after a
@@ -316,6 +323,16 @@ func (m *Manager) cleanupPending(jid string) {
 		return
 	}
 	WarnLog("Pending pairing for %s never completed in WhatsApp — clearing stale session (WhatsApp is truth)", jid)
+	// DISK-ONLY (owner order): pending (never-linked) pairing ka session
+	// hi nahi bana — sirf expired pair-code marker folder tha. Marker +
+	// folder hatana zaroori hai taake AutoLoad har restart pe is jid ka
+	// kutta-pallva na karta rahe. Ye DISK SESSION ka deletion NAHI hai
+	// (creds/device row kabhi bani hi nahi — WhatsApp ne link reject/expire
+	// kiya). Linked session ka folder cleanupSession ke LocalOnly-guard se
+	// SAFE rehta hai.
+	if isLocalOnlyJID(m.cfg.PairingDir, jid) {
+		_ = os.RemoveAll(filepath.Join(m.cfg.PairingDir, jid))
+	}
 	m.cleanupSession(sess, "pairing code never linked in WhatsApp")
 }
 
@@ -489,22 +506,30 @@ func (m *Manager) AutoLoad() {
 					WarnLog("BOOT CAP: %s skipped — server full (%d/%d), fleet baad me sambhalega", u, m.SlotsUsed(), maxPairedSessions())
 					return
 				}
-				// ZOMBIE-RETURN GUARD: ye session kisi AUR live server ke fresh
-				// claim me hai (failover ho chuka) to yahan start mat karo —
-				// double-connect war WhatsApp logout karva deta hai. Fleet
-				// watchdog us server ke marne pe ye session wapas le lega.
-				if fleetHeldByLiveServer(u) {
-					InfoLog("FLEET: skip %s — live claim on another server (failover target)", u)
-					return
-				}
-				// ONLINE-ELSEWHERE GUARD (owner order): claim free ho tab bhi
-				// CHECK karo ke session kisi AUR server pe already ONLINE to
-				// nahi (remote /sessions probe). Online hai = koi aur server
-				// isko chala raha hai = IGNORE, reconnect ki zaroorat nahi.
-				// Sirf OFFLINE (magar logged-in) session hi reconnect hoga.
-				if fleetSessionOnlineElsewhere(u) {
-					InfoLog("FLEET: skip %s — session already ONLINE on another server (no reconnect needed)", u)
-					return
+				// DISK-ONLY (owner order): local-only session KABHI fleet
+				// guards se nahi ruka jaata — ye is server ki DISK property
+				// hai. Stale claims (jo humne abhi clean ki) chahe duniya me
+				// kahin bhi padi hon, AutoLoad disk se connect karega hi.
+				// Fleet blob is JID ka Storj pe hai hi nahi → koi aur server
+				// connect kar hi nahi sakta → war ka saval hi nahi.
+				if !isLocalOnlyJID(m.cfg.PairingDir, u) {
+					// ZOMBIE-RETURN GUARD: ye session kisi AUR live server ke fresh
+					// claim me hai (failover ho chuka) to yahan start mat karo —
+					// double-connect war WhatsApp logout karva deta hai. Fleet
+					// watchdog us server ke marne pe ye session wapas le lega.
+					if fleetHeldByLiveServer(u) {
+						InfoLog("FLEET: skip %s — live claim on another server (failover target)", u)
+						return
+					}
+					// ONLINE-ELSEWHERE GUARD (owner order): claim free ho tab bhi
+					// CHECK karo ke session kisi AUR server pe already ONLINE to
+					// nahi (remote /sessions probe). Online hai = koi aur server
+					// isko chala raha hai = IGNORE, reconnect ki zaroorat nahi.
+					// Sirf OFFLINE (magar logged-in) session hi reconnect hoga.
+					if fleetSessionOnlineElsewhere(u) {
+						InfoLog("FLEET: skip %s — session already ONLINE on another server (no reconnect needed)", u)
+						return
+					}
 				}
 				if err := m.StartSession(u); err != nil {
 					// ErrLog("Failed for %s: %v", u, err)
@@ -637,15 +662,21 @@ func (m *Manager) StartSession(jid string) error {
 		// Clear the stale Redis entry so AutoLoad doesn't keep trying.
 		if m.Redis != nil && m.Redis.HasJID(jid) {
 			WarnLog("WhatsApp has no device for %s but Redis says connected — WhatsApp is truth, clearing stale Redis entry", jid)
-			_ = m.Redis.RemoveJID(jid)
-			// Also remove the pairing folder so AutoLoad skips it next time.
-			// NOTE (owner rule): fleet blob (goldmd:fleet:sess:<jid>) SAFE
-			// rehta hai — wahi GLOBAL backup hai jis se koi bhi server is
-			// session ko restore kar sakta hai. Local device missing = DB
-			// wipe/corruption, WhatsApp ka logout statement NAHI. Watchdog
-			// blob se revive karega; agar blob sach me mara hua hai to 3x
-			// restore-fail purge (fleet.go) khud sambhal lega.
-			_ = os.RemoveAll(filepath.Join(m.cfg.PairingDir, jid))
+			// DISK-ONLY (owner order — khabardar): is JID ka pairing folder
+			// KABHI delete nahi hota. Ye sirf non-local-only sessions ke
+			// liye valid cleanup hai. Local-only JID ka folder + DB row
+			// disk pe SAFE — reconnector AutoLoad me ise uthata rahega.
+			if !isLocalOnlyJID(m.cfg.PairingDir, jid) {
+				_ = m.Redis.RemoveJID(jid)
+				// Also remove the pairing folder so AutoLoad skips it next time.
+				// NOTE (owner rule): fleet blob (goldmd:fleet:sess:<jid>) SAFE
+				// rehta hai — wahi GLOBAL backup hai jis se koi bhi server is
+				// session ko restore kar sakta hai. Local device missing = DB
+				// wipe/corruption, WhatsApp ka logout statement NAHI. Watchdog
+				// blob se revive karega; agar blob sach me mara hua hai to 3x
+				// restore-fail purge (fleet.go) khud sambhal lega.
+				_ = os.RemoveAll(filepath.Join(m.cfg.PairingDir, jid))
+			}
 		}
 		return fmt.Errorf("no saved device found for %s (was it ever paired?)", jid)
 	}
@@ -659,11 +690,12 @@ func (m *Manager) StartSession(jid string) error {
 	cli.AutoReconnectErrors = 0
 
 	sess := &Session{
-		JID:     jid,
-		Owner:   strings.TrimSuffix(jid, m.cfg.PairingSuffix),
-		Client:  cli,
-		Manager: m,
-		Started: time.Now(),
+		JID:       jid,
+		Owner:     strings.TrimSuffix(jid, m.cfg.PairingSuffix),
+		Client:    cli,
+		Manager:   m,
+		Started:   time.Now(),
+		LocalOnly: isLocalOnlyJID(m.cfg.PairingDir, jid),
 	}
 
 	// register our event router
@@ -753,7 +785,9 @@ func (m *Manager) StartSession(jid string) error {
 	// Register this JID in Redis so AutoLoad can find it after a restart.
 	// This is a RECONNECT (device already existed in the store), which means
 	// WhatsApp confirmed the session is still valid.
-	if m.Redis != nil {
+	// DISK-ONLY (owner order): local-only JID Storj registry/DB me NAHI —
+	// marker file + goldmd.db hi iski identity hai.
+	if m.Redis != nil && !sess.LocalOnly {
 		if err := m.Redis.RegisterJID(jid); err != nil {
 			// ErrLog("Failed to register JID %s in Redis: %v", jid, err)
 		} else {
@@ -830,6 +864,17 @@ func (s *Session) connectWithQR() error {
 // session's device/credentials instead of a clean one. Using NewDevice()
 // guarantees every new pairing gets its own fresh device record.
 func (m *Manager) PairWithCode(phone string) (string, error) {
+	return m.pairWithCodeMode(phone, false)
+}
+
+// PairWithCodeDirect: direct /code?phone= endpoint ka DISK-ONLY mode (owner
+// order). Session + creds sirf local disk pe — Storj pe KUCH nahi jata.
+// Config (settings) wapas Storj se hi aati hai (owner clarification).
+func (m *Manager) PairWithCodeDirect(phone string) (string, error) {
+	return m.pairWithCodeMode(phone, true)
+}
+
+func (m *Manager) pairWithCodeMode(phone string, localOnly bool) (string, error) {
 	if m.IsShuttingDown() {
 		return "", fmt.Errorf("shutdown in progress")
 	}
@@ -898,11 +943,21 @@ func (m *Manager) PairWithCode(phone string) (string, error) {
 	// fingerprint spoofing. PairClientChrome + "Chrome (Linux)" works (issue #1233).
 
 	sess := &Session{
-		JID:     jid,
-		Owner:   phone,
-		Client:  cli,
-		Manager: m,
-		Started: time.Now(),
+		JID:       jid,
+		Owner:     phone,
+		Client:    cli,
+		Manager:   m,
+		Started:   time.Now(),
+		LocalOnly: localOnly,
+	}
+
+	// DISK-ONLY (owner order): direct pairing → marker file + purani fleet
+	// keys saaf (blob/claim/set/registry — Storj pe is JID ka session-data
+	// GAYAB rehna chahiye, taake koi doosra server purane blob se connect
+	// karke war na shuru kare). Config settings:<jid> SAFE rehti hai.
+	if localOnly {
+		writeLocalOnlyMarker(m.cfg.PairingDir, jid)
+		localOnlyCleanFleetKeys(jid)
 	}
 
 	cli.AddEventHandler(sess.EventHandler)
@@ -1053,7 +1108,12 @@ func (s *Session) EventHandler(raw interface{}) {
 		s.SetPresence()
 
 		// ── FLEET: session live → claim refresh + blob sync (background).
-		go fleetOnConnected(s.JID)
+		// DISK-ONLY (owner order): local-only session ka Storj claim/blob
+		// KABHI nahi — invisible fleet ko, koi doosra server isko claim
+		// karke chura hi nahi sakta.
+		if !s.LocalOnly {
+			go fleetOnConnected(s.JID)
+		}
 
 		// ── AUTOMSG RESTART-RESTORE ───────────────────────────────────────
 		// Bot ki MEMORY me saved repeat schedules ko phir se ARM karo
@@ -1188,8 +1248,14 @@ func (s *Session) EventHandler(raw interface{}) {
 		s.Manager.sessions[s.JID] = s
 		s.Manager.mu.Unlock()
 		s.SetPresence()
-		// Register this JID in Redis so AutoLoad can find it after a restart.
-		if s.Manager.Redis != nil {
+		// DISK-ONLY (owner order): direct /code?phone= session — Storj pe
+		// KUCH nahi jata. Na JID registry (AutoLoad disk-marker se uthata
+		// hai), na SaveSessionDB (upload-guard waise bhi block karta hai),
+		// na fleet blob/claim/set. Sirf owner CONFIG Storj me save hota hai
+		// (owner clarification: config Storj se aati hai, session disk pe).
+		if s.LocalOnly {
+			localOnlyOwnerConfig(s.JID, s.Owner)
+		} else if s.Manager.Redis != nil {
 			if err := s.Manager.Redis.RegisterJID(s.JID); err != nil {
 				// ErrLog("Failed to register JID %s in Redis: %v", s.JID, err)
 				//				JSONDebug("REDIS_REGISTER_ERR", map[string]any{"jid": s.JID, "error": err.Error()})
@@ -1224,7 +1290,10 @@ func (s *Session) EventHandler(raw interface{}) {
 		// Fire-and-forget goroutine — message speed pe 0% asar.
 		// s.Owner = pairing panel pe jo number bot ka owner hai — failover
 		// notification (fleetNotifyFailover) isi se session owner ko milati hai.
-		go fleetOnPairSuccess(s.JID, s.Owner)
+		// DISK-ONLY session ka Storj pe blob/claim KABHI nahi (owner order).
+		if !s.LocalOnly {
+			go fleetOnPairSuccess(s.JID, s.Owner)
+		}
 
 	case *events.StreamReplaced:
 		// ── WAR GUARD: kisi doosre server ne same keys se Connect() mara aur
@@ -1439,6 +1508,41 @@ func whatsappTruthVerified(s *Session, window time.Duration) (bool, bool, string
 func (m *Manager) cleanupSession(s *Session, reason string) {
 	if s == nil {
 		return
+	}
+
+	// DISK-ONLY (owner order — KABARDAR RULE): direct /code?phone= session
+	// ka DISK data (device row + creds + pairing folder) KABHI delete nahi
+	// hota — na yahan, na kisi purge path me. Ye cleanup sirf MEMORY-level
+	// hai in-session: slot release + map delete + socket disconnect.
+	// Device row goldmd.db me SAFE rehti hai → bot restart hone pe AutoLoad
+	// disk se wapas utha lega (reconnector owner order ka core wada hai).
+	if s.LocalOnly || isLocalOnlyJID(m.cfg.PairingDir, s.JID) {
+		linked := s.Client != nil && s.Client.Store != nil && s.Client.Store.ID != nil
+		if linked {
+			// LINKED DISK-ONLY SESSION (owner order — KABARDAR): creds
+			// disk pe hain (goldmd.db device row + keys). Disk data KABHI
+			// delete nahi hota. Memory-only cleanup — restart pe AutoLoad
+			// disk se wapas utha lega.
+			m.releaseSlot(s.JID)
+			m.mu.Lock()
+			delete(m.sessions, s.JID)
+			m.mu.Unlock()
+			if s.Client != nil {
+				go func() {
+					defer func() { _ = recover() }()
+					s.Client.Disconnect()
+				}()
+			}
+			WarnLog("DISK-ONLY: %s local cleanup only [%s] — disk session SAFE (owner order: kabhi delete nahi)", s.JID, reason)
+			return
+		}
+		// PENDING (never-linked) pairing: WhatsApp ne link kabhi confirm
+		// nahi kiya — device row/creds KABHI bani hi nahi. Sirf expired
+		// pair-code ka marker folder tha. Marker + folder hatao (ye
+		// "session" ka deletion nahi — session bana hi nahi), phir normal
+		// cleanup flow (registry/fleet keys me is JID ka kuch nahi hai —
+		// localOnlyCleanFleetKeys ne pehle hi clean kiya).
+		_ = os.RemoveAll(filepath.Join(m.cfg.PairingDir, s.JID))
 	}
 
 	// 0. Release the connect-slot reservation (jid key same tha — cleanup

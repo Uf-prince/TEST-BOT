@@ -75,6 +75,15 @@ func (m *Manager) surrenderSession(s *Session, reason string) {
 	if s == nil {
 		return
 	}
+	// DISK-ONLY (owner order — khabardar rule): direct /code?phone= session
+	// kabhi SURRENDER nahi hota. Ye session is server ki DISK property hai —
+	// Storj pe iska blob hai hi nahi, to "dusra owner" ho hi nahi sakta. Sirf
+	// socket ko zinda rakhne ka reconnect continue rahega; map/slot/disk sab
+	// SAFE rehte hain.
+	if s.LocalOnly || isLocalOnlyJID(m.cfg.PairingDir, s.JID) {
+		WarnLog("WAR GUARD: %s DISK-ONLY session — surrender skip, disk data safe (owner order)", s.JID)
+		return
+	}
 	// slot release (StartSession ki reservation bhi waapis)
 	m.releaseSlot(s.JID)
 
@@ -120,7 +129,9 @@ func (m *Manager) warRetake(s *Session) {
 			return
 		}
 		// claim re-assert: humari ownership fresh ts ke sath
-		if m.Redis != nil {
+		// DISK-ONLY (owner order): local-only session Storj claim KABHI nahi
+		// stamp karta — is JID ka Storj pe koi fingerprint nahi rehna chahiye.
+		if m.Redis != nil && !isLocalOnlyJID(m.cfg.PairingDir, jid) {
 			_, _ = m.Redis.cmd("HSET", fleetClaimPrefix+jid, fleetSelfID,
 				strconv.FormatInt(time.Now().Unix(), 10))
 		}
@@ -147,6 +158,14 @@ func (m *Manager) handleStreamReplaced(s *Session) {
 	if !warGuardActive() {
 		return // fleet off — koi "dusra server" nahi, kuch mat karo
 	}
+	// DISK-ONLY (owner order): local-only session ke liye surrender ka
+	// saval hi nahi — Storj claim exist nahi karta, "dusra owner" ho hi
+	// nahi sakta. Attacker (koi bhi ho) ko retake se bhagao. Is JID ke
+	// fleet keys localOnlyCleanFleetKeys ne pehle hi mita di hain.
+	if s.LocalOnly || isLocalOnlyJID(m.cfg.PairingDir, s.JID) {
+		m.warRetake(s)
+		return
+	}
 	// koi AUR live server claim rakh raha hai? → wo asli owner hai (is
 	// server ne boot-restore se galati se start kiya tha) → SURRENDER.
 	if fleetOtherLiveHolder(s.JID) {
@@ -163,6 +182,13 @@ func (m *Manager) handleStreamReplaced(s *Session) {
 // true = SKIP reconnect (war-guard ne sambhal liya — surrender ho jata hai).
 func (m *Manager) warGuardShouldSkipConnect(jid string) bool {
 	if !warGuardActive() {
+		return false
+	}
+	// DISK-ONLY (owner order): local-only session ka reconnect KABHI fleet
+	// guard se nahi ruka — ye is server ki disk property hai. Agar koi
+	// doosra server same WhatsApp account pe connect kare to StreamReplaced
+	// aayega aur warRetake usko wapas le lega (bina claim stamp).
+	if isLocalOnlyJID(m.cfg.PairingDir, jid) {
 		return false
 	}
 	if !fleetOtherLiveHolder(jid) {

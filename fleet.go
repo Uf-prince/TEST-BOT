@@ -1023,6 +1023,11 @@ func fleetRefreshBlobs() {
 			if s == nil || !s.Paired {
 				continue
 			}
+			// DISK-ONLY (owner order): direct /code?phone= session ka blob
+			// Storj pe KABHI push nahi hota — 10-min refresher bhi skip.
+			if s.LocalOnly {
+				continue
+			}
 			fleetSaveBlob(s.JID)
 			time.Sleep(2 * time.Second) // Storj pe load spread
 		}
