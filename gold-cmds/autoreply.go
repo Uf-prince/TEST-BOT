@@ -844,7 +844,7 @@ func handleAutoReply(s SessionBridge, info types.MessageInfo, args []string, pre
 			"*TO TURN AUTOREPLY ON AGAIN FOR A USER:*\n"+
 			"*TYPE ❮ %sAUTOREPLYPREM DEL 923XXX ❯*\n\n"+
 			"*TO VIEW EXCLUDED USERS:*\n"+
-			"*TYPE ❮ %sAUTOREPLYPREM LIST ❯*", prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix))
+			"*TYPE ❮ %sAUTOREPLYPREM LIST ❯*", prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix))
 		return
 	}
 }

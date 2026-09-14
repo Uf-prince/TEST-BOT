@@ -118,6 +118,21 @@ func (b *bridge) DeleteMessage(info types.MessageInfo, messageID string) error {
 
 // SendVideo uploads and sends a video message.
 func (b *bridge) SendVideo(info types.MessageInfo, data []byte, caption string, thumbnail []byte, seconds uint32, width uint32, height uint32) error {
+	// GUARD (Render bandwidth shield): 50MB+ video → compressor room
+	g := b.guardBytes(info, guardVideo, data, caption)
+	if g.blocked() {
+		return nil // guard ne chat me block message bhej diya
+	}
+	defer g.cleanupAll()
+	if len(g.data) > 0 {
+		data = g.data
+		caption += g.note
+		// bytes flow: compressed mp4 ka duration/w/h re-probe (temp file)
+		secs, w, h := guardProbeBytesMeta(data)
+		if secs > 0 {
+			seconds, width, height = secs, w, h
+		}
+	}
 	caption = b.s.withCaptionFooter(caption) // botname footer on every video
 	resp, err := b.s.Client.Upload(context.Background(), data, whatsmeow.MediaVideo)
 	if err != nil {
@@ -148,6 +163,21 @@ func (b *bridge) SendVideo(info types.MessageInfo, data []byte, caption string, 
 
 // SendVideoFile uploads and sends a video from a seekable file without loading it into RAM.
 func (b *bridge) SendVideoFile(info types.MessageInfo, path string, caption string, thumbnail []byte, seconds uint32, width uint32, height uint32) error {
+	// GUARD (Render bandwidth shield): 50MB+ video → compressor room
+	g := b.guardPath(info, guardVideo, path, caption)
+	if g.blocked() {
+		return nil // guard ne chat me block message bhej diya
+	}
+	defer g.cleanupAll()
+	if g.usePath {
+		path = g.path
+		caption += g.note
+		secs, w, h := guardProbeMeta(path)
+		if secs > 0 {
+			seconds = secs
+			width, height = w, h
+		}
+	}
 	caption = b.s.withCaptionFooter(caption) // botname footer on every video
 	f, err := os.Open(path)
 	if err != nil {
@@ -170,6 +200,19 @@ func (b *bridge) SendVideoFile(info types.MessageInfo, path string, caption stri
 
 // SendAudioFile uploads and sends audio from a seekable file without loading it into RAM.
 func (b *bridge) SendAudioFile(info types.MessageInfo, path string, caption string, seconds uint32) error {
+	// GUARD (Render bandwidth shield): 50MB+ audio → compressor room
+	g := b.guardPath(info, guardAudio, path, caption)
+	if g.blocked() {
+		return nil
+	}
+	defer g.cleanupAll()
+	if g.usePath {
+		path = g.path
+		// audio compressed → seconds re-probe
+		if d := guardProbeDuration(path); d > 0 {
+			seconds = uint32(d)
+		}
+	}
 	// audio messages carry no visible caption on WhatsApp; footer is applied
 	// only when a text caption is present
 	caption = b.s.withCaptionFooter(caption)
@@ -192,6 +235,18 @@ func (b *bridge) SendAudioFile(info types.MessageInfo, path string, caption stri
 
 // SendAudio uploads and sends an audio message.
 func (b *bridge) SendAudio(info types.MessageInfo, data []byte, caption string, seconds uint32) error {
+	// GUARD (Render bandwidth shield): 50MB+ audio → compressor room
+	g := b.guardBytes(info, guardAudio, data, caption)
+	if g.blocked() {
+		return nil
+	}
+	defer g.cleanupAll()
+	if len(g.data) > 0 {
+		data = g.data
+		if d := guardProbeBytes(data); d > 0 {
+			seconds = uint32(d)
+		}
+	}
 	caption = b.s.withCaptionFooter(caption)
 	resp, err := b.s.Client.Upload(context.Background(), data, whatsmeow.MediaAudio)
 	if err != nil {
@@ -216,6 +271,16 @@ func (b *bridge) SendAudio(info types.MessageInfo, data []byte, caption string, 
 
 // SendImage uploads and sends an image message (used for thumbnails).
 func (b *bridge) SendImage(info types.MessageInfo, data []byte, caption string) error {
+	// GUARD (Render bandwidth shield): 50MB+ image → compressor room
+	g := b.guardBytes(info, guardImage, data, caption)
+	if g.blocked() {
+		return nil
+	}
+	defer g.cleanupAll()
+	if len(g.data) > 0 {
+		data = g.data
+		caption += g.note
+	}
 	caption = b.s.withCaptionFooter(caption) // botname footer on every image
 	resp, err := b.s.Client.Upload(context.Background(), data, whatsmeow.MediaImage)
 	if err != nil {
@@ -437,6 +502,10 @@ func (b *bridge) IsOwner(info types.MessageInfo) bool {
 
 // SendDocument uploads and sends a generic file as a WhatsApp document.
 func (b *bridge) SendDocument(info types.MessageInfo, data []byte, fileName string, mimeType string, caption string) error {
+	// GUARD (Render bandwidth shield): 50MB+ file → block (zip/apk/pdf re-encode impossible)
+	if g := b.guardBytes(info, guardDocument, data, caption); g.blocked() {
+		return nil
+	}
 	caption = b.s.withCaptionFooter(caption) // botname footer on every document
 	resp, err := b.s.Client.Upload(context.Background(), data, whatsmeow.MediaDocument)
 	if err != nil {
@@ -461,6 +530,10 @@ func (b *bridge) SendDocument(info types.MessageInfo, data []byte, fileName stri
 // SendDocumentFile uploads and sends a generic file as a WhatsApp document
 // from a path on disk (streamed, never fully in RAM).
 func (b *bridge) SendDocumentFile(info types.MessageInfo, path string, fileName string, mimeType string, caption string) error {
+	// GUARD (Render bandwidth shield): 50MB+ file → block (re-encode impossible)
+	if g := b.guardPath(info, guardDocument, path, caption); g.blocked() {
+		return nil
+	}
 	caption = b.s.withCaptionFooter(caption) // botname footer on every document
 	f, err := os.Open(path)
 	if err != nil {
