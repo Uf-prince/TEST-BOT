@@ -235,6 +235,13 @@ func main() {
 		InfoLog("Pairing panel → http://0.0.0.0:%d (POST /pair , GET /sessions)", cfg.PanelPort)
 	}
 
+	// ── Render self-ping keep-alive (keepalive.go) ──
+	// Har deploy pe RENDER_EXTERNAL_URL auto-milta hai → bot khud apni
+	// server URL ko har 5 min me /health se ping karta hai → Render
+	// free-tier 15-min idle sleep kabhi trigger nahi hota. Local run
+	// pe URL nahi hota → keep-alive fully OFF (zero goroutine).
+	StartSelfPingKeepAlive()
+
 	// ── Pair bridge REMOVED (owner order) ──
 	// Purana ntfy/gist/hb.json + Telegram relay system khatam. Ab sirf
 	// panel.go ka built-in HTTP panel chalta hai (POST /pair, GET /sessions)
