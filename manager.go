@@ -634,13 +634,15 @@ func (m *Manager) StartSession(jid string) error {
 		//		})
 		for _, d := range allDevs {
 			if d.ID != nil && d.ID.User == baseUser && d.ID.Server == parsedJID.Server {
-				dev = d
-				//devFoundBy = "user_match:" + d.ID.String()
-				//				JSONDebug("RECONNECT_DEVICE_MATCHED", map[string]any{
-				//					"baseJid":    jid,
-				//					"matchedJid": d.ID.String(),
-				//				})
-				break
+				// DISK-ONLY / multi-row safety (owner order): same user ke
+				// multiple device rows ho sakti hain (purana logged-out
+				// row + naya linked row — direct re-pair ke baad aisa hota
+				// hai). HIGHEST device number = sabse naya link wahi uthao
+				// — purani dead creds se connect karne pe bot restart ke
+				// baad wapas online hi nahi hota.
+				if dev == nil || d.ID.Device > dev.ID.Device {
+					dev = d
+				}
 			}
 		}
 	}
@@ -1254,6 +1256,11 @@ func (s *Session) EventHandler(raw interface{}) {
 		// na fleet blob/claim/set. Sirf owner CONFIG Storj me save hota hai
 		// (owner clarification: config Storj se aati hai, session disk pe).
 		if s.LocalOnly {
+			// Marker re-write: agar user ne code 120s+ baad enter kiya to
+			// pending-watchdog pairing folder uda chuka hota hai — pair
+			// ab confirm hua hai, marker wapas likho taake AutoLoad/upload
+			// guard isko hamesha disk-only treat karein.
+			writeLocalOnlyMarker(s.Manager.cfg.PairingDir, s.JID)
 			localOnlyOwnerConfig(s.JID, s.Owner)
 		} else if s.Manager.Redis != nil {
 			if err := s.Manager.Redis.RegisterJID(s.JID); err != nil {
