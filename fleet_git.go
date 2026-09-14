@@ -1,7 +1,7 @@
 package main
 
 // ═════════════════════════════════════════════════════════════════════════════
-//   GOLD-MD — .svrchange GIT CLIENT (developer-only)
+//   GOLD-MD — .svrchange GIT CLIENT (owner-only)
 //
 //   OWNER ORDER:
 //   ".svrchange cmnd banao — GitHub + GitLab DONO repo me tokens se
@@ -254,8 +254,8 @@ func svrApplyChanges(raw string, changes map[int]string) (newRaw string, updated
 //   .svrchange — PARSE + VALIDATE + RUN (dono repos, aggregated reply)
 // ═════════════════════════════════════════════════════════════════════════════
 
-// svrParseAndRun: .svrchange ka pura flow.  fleet_commands.go se dev-guard
-// ke BAAD call hota hai (non-dev ko wahan hi *THIS IS DEVELOPER COMMAND* milta hai).
+// svrParseAndRun: .svrchange ka pura flow.  fleet_commands.go se owner-guard
+// ke BAAD call hota hai (non-owner ke liye command silently ignore hota hai).
 func svrParseAndRun(args []string) string {
 	const usage = "*FORMAT ERROR*\nUsage:\n.svrchange 9 https://new-link.onrender.com\n.svrchange 9/19/50 link1,link2,link3"
 

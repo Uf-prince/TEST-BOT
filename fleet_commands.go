@@ -13,15 +13,16 @@ package main
 //     .server / .servers / .svr / .svrinfo / .serverinfo / .session /
 //     .sessions → PUBLIC servers menu (koi bhi chala sakta hai — pairing
 //                 status sabko dikhta hai). .menu me ab bhi hidden.
-//     .host5gb  → 5GB bandwidth report — DEVELOPER-ONLY (sirf
-//                 923158930864 / 923276650623), inke elava koi b likhe to
-//                 *THIS IS DEVELOPER COMMAND* (menu me visible).
+//     .host5gb  → 5GB bandwidth report — OWNER-ONLY command,
+//                 bilkul baaki owner commands jaisa (sirf owner / sudo
+//                 owner / bot ka apna account). Non-owner: silent ignore
+//                 (menu me visible).
 //
 //   PUBLIC vs PRIVATE split:
 //     • Pairing/status data (servers.json ke 200 servers ka /health) →
 //       PUBLIC — koi b dekh sakta hai.
-//     • LOCAL SESSIONS detail (asli WhatsApp JIDs / phone numbers) → SIRF
-//       developers — public users ko private numbers leak nahi hote.
+//     • LOCAL SESSIONS detail (asli WhatsApp JIDs / phone numbers) →
+//       server report me KABHI nahi — private numbers leak nahi hote.
 //
 //   OFFLINE FORMAT (owner ka exact order): online servers ke full INFO
 //   blocks ke baad \n\n\n (3 enter) lagta hai, phir har offline server sirf
@@ -35,71 +36,103 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// developerNumbers: GOLD-MD developer numbers (BARE number form — JID ka
-// User part, device suffix nahi). Sirf ye 2 numbers .host5gb aur private
-// LOCAL SESSIONS detail dekh sakte hain.
-var developerNumbers = map[string]bool{
-	"923158930864": true,
-	"923276650623": true,
-}
+// isFleetOwnerCommand: .host5gb / .svrchange ka owner-check — bilkul
+// handler.go ke owner-check ke SAARE layers (owner order: "dusre cmnds
+// jese"):
+//  1. cfg.IsOwner(sender)  — GOLDMD_OWNER_NUMBERS + paired owner set
+//  2. sender == bot JID    — bot ka apna account (exact JID)
+//  3. bare-number match    — bot ka apna number (device-suffix strip,
+//     multi-device safe)
+//  4. Redis sudo owners    — .ownernumber add / .sudo add wale numbers
+//  5. SenderAlt layers     — LID chat me alt form = phone JID (sab
+//     upar wale checks alt form pe bhi)
+//  6. IsFromMe             — bot owner ke apne device se bheja message
+//
+// Nil-safe: Manager/cfg/Redis nil ho (tests / edge cases) to sirf layers
+// 2/3/5/6 chalete hain — panic kabhi nahi.
+func isFleetOwnerCommand(s *Session, info types.MessageInfo) bool {
+	sender := ""
+	if !info.Sender.IsEmpty() {
+		sender = info.Sender.String()
+	}
 
-// devCommandReply: non-developer ko milne wala fixed reply (owner order).
-const devCommandReply = "*THIS IS DEVELOPER COMMAND*"
-
-// isDeveloperCommand: sender developer list me hai? — handler.go ke owner-check
-// ke SAARE layers yahan bhi (LID/PN masla fix, owner request: "baki commands
-// kese owner number match kr lete hai ye b to same hai").
-//
-// Pehle sirf 2 layers the (Sender + SenderAlt number lookup) — LID chat me
-// Sender bot/sender ka LID-form hota hai (e.g. 123456789@lid) jo
-// developerNumbers map me nahi milta → *THIS IS DEVELOPER COMMAND* fail.
-//
-// Ab handler.go ke barabar 5 layers:
-//   1. Sender bare-number lookup (PN chat: sender = phone JID)
-//   2. SenderAlt bare-number lookup (LID chat: alt = phone JID)
-//   3. Bot ka APNA number developer list me hai + message usi account se
-//      aaya (IsFromMe) — paired phone se self-chat/command bhejne pe
-//      message FromMe hota hai, handler.go isko owner maanta hai (line 711)
-//   4. sender == bot ka JID (same account, PN form)
-//   5. SenderAlt == bot ka JID (LID chat me alt form = bot ka phone JID)
-//
-// Layer 3/4/5 tabhi allow karte hain jab bot ka apna number developer ho —
-// kisi random user ka paired account dev powers nahi paayega.
-func isDeveloperCommand(s *Session, info types.MessageInfo) bool {
-	// 1) PN-form sender
-	if !info.Sender.IsEmpty() && developerNumbers[info.Sender.User] {
-		return true
-	}
-	// 2) LID chat me alt form (phone JID)
-	if !info.SenderAlt.IsEmpty() && developerNumbers[info.SenderAlt.User] {
-		return true
-	}
-	if s == nil {
-		return false
-	}
-	// Ye bot account khud developer ka hai? (warna FromMe bhi dev nahi)
-	botNum := botOwnNumber(s.JID)
-	if !developerNumbers[botNum] {
-		return false
-	}
-	// 3) message bot ke APNE paired phone se (self-chat / own device)
+	// 6) bot owner ke apne device se (self-chat / own device)
 	if info.IsFromMe {
 		return true
 	}
-	// 4) sender bot ka hi JID hai (PN form, device suffix strip)
-	if !info.Sender.IsEmpty() && botOwnNumber(info.Sender.String()) == botNum {
+
+	if s == nil {
+		return false
+	}
+
+	// 2) sender bot ka hi JID hai (exact form)
+	if sender != "" && sender == s.JID {
 		return true
 	}
-	// 5) LID chat: SenderAlt bot ka phone JID form hai
-	if !info.SenderAlt.IsEmpty() && botOwnNumber(info.SenderAlt.String()) == botNum {
+
+	// 3) sender bot ka hi number hai (device-suffix tolerant —
+	//    bot ke dusre device se bheja ho to bhi owner)
+	botNum := botOwnNumber(s.JID)
+	if botNum != "" && sender != "" && botOwnNumber(sender) == botNum {
 		return true
+	}
+
+	// 5a) LID chat: SenderAlt bot ka hi phone JID hai (alt form bina
+	//     :device suffix ke, s.JID me suffix ho sakta hai)
+	if info.SenderAlt.Server != "" {
+		alt := info.SenderAlt.String()
+		if alt == s.JID || (botNum != "" && botOwnNumber(alt) == botNum) {
+			return true
+		}
+	}
+
+	// Manager ke bina layers 1/4 nahi chale sakte
+	if s.Manager == nil || s.Manager.cfg == nil {
+		return false
+	}
+
+	// 1) owner set (GOLDMD_OWNER_NUMBERS env + paired owner normalization)
+	if sender != "" && s.Manager.cfg.IsOwner(sender) {
+		return true
+	}
+
+	// 4) Redis sudo owners (.ownernumber add / .sudo add)
+	if sender != "" && s.Manager.Redis != nil {
+		num := botOwnNumber(sender)
+		rawSudo := s.Manager.Redis.GetSetting(s.JID, "sudowners", "")
+		if num != "" && rawSudo != "" {
+			for _, n := range strings.Split(rawSudo, ",") {
+				if strings.TrimSpace(n) == num {
+					return true
+				}
+			}
+		}
+	}
+
+	// 5b) SenderAlt (LID <-> phone JID mapping) — owner-set + sudo lookup
+	if info.SenderAlt.Server != "" {
+		alt := info.SenderAlt.String()
+		if s.Manager.cfg.IsOwner(alt) {
+			return true
+		}
+		if s.Manager.Redis != nil {
+			altNum := botOwnNumber(alt)
+			rawSudo := s.Manager.Redis.GetSetting(s.JID, "sudowners", "")
+			if altNum != "" && rawSudo != "" {
+				for _, n := range strings.Split(rawSudo, ",") {
+					if strings.TrimSpace(n) == altNum {
+						return true
+					}
+				}
+			}
+		}
 	}
 	return false
 }
 
 // hiddenCommands: Commands-map me registered par .menu me KABHI nahi dikhne
-// wale secret commands. .host5gb MENU ME VISIBLE hai — isliye yahan NAHI
-// hai. Server-menu family ab PUBLIC hai (koi bhi chala sakta hai) par .menu
+// wale secret commands. .host5gb MENU ME VISIBLE hai — owner-only
+// command hai. Server-menu family ab PUBLIC hai (koi bhi chala sakta hai) par .menu
 // me ab bhi nahi dikhti (secret rahegi, sirf wahi jaanne wale use karenge).
 var hiddenCommands = map[string]bool{
 	"servers":    true,
@@ -108,14 +141,19 @@ var hiddenCommands = map[string]bool{
 	"serverinfo": true,
 	"session":    true,
 	"sessions":   true,
-	"svrchange":  true, // git-token command — hidden (dev-only)
+	"svrchange":  true, // git-token command — hidden (owner-only)
 }
 
 func init() {
-	// .host5gb — bandwidth report (MENU VISIBLE, developer-only).
+	// OWNER-ONLY: .host5gb / .svrchange handler.go ke ownerOnlyCommands
+	// set me bhi — non-owner ke liye silently ignored, bilkul baaki
+	// owner-only commands jaisa (in-guard owner-check ke saath double lock).
+	ownerOnlyCommands["host5gb"] = true
+	ownerOnlyCommands["svrchange"] = true
+
+	// .host5gb — bandwidth report (MENU VISIBLE, owner-only).
 	RegisterCommand("host5gb", func(s *Session, info types.MessageInfo, args []string, prefix string) {
-		if !isDeveloperCommand(s, info) {
-			s.Reply(info, devCommandReply)
+		if !isFleetOwnerCommand(s, info) {
 			return
 		}
 		s.CmdHost5GB(info, args, prefix)
@@ -130,12 +168,11 @@ func init() {
 		})
 	}
 
-	// .svrchange — git-token servers.json update (DEVELOPER-ONLY, hidden).
+	// .svrchange — git-token servers.json update (owner-only, hidden).
 	// GitHub + GitLab dono repos me server links badal ke push — Render
 	// auto-deploy foran trigger hota hai (owner ko git pe jana nahi prega).
 	RegisterCommand("svrchange", func(s *Session, info types.MessageInfo, args []string, prefix string) {
-		if !isDeveloperCommand(s, info) {
-			s.Reply(info, devCommandReply)
+		if !isFleetOwnerCommand(s, info) {
 			return
 		}
 		s.Reply(info, svrParseAndRun(args))
@@ -197,7 +234,7 @@ func (s *Session) CmdServerMenu(info types.MessageInfo, args []string, prefix st
 
 	// OWNER ORDER: LOCAL SESSIONS / THIS SERVER block REMOVED — server
 	// report me koi bhi private JID / local session detail NAHI dikhega
-	// (sirf fleet-wide pairing counts). Developers ke liye bhi nahi.
+	// (sirf fleet-wide pairing counts).
 
 	s.Reply(info, b.String())
 }

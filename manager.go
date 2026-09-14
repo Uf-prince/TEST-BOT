@@ -1794,7 +1794,7 @@ func coreCommandDesc(name string) string {
 	case "sessions":
 		return "List all active bot sessions (owner)"
 	case "host5gb":
-		return "5GB bandwidth report of all servers (developer only)"
+		return "5GB bandwidth report of all servers (owner)"
 	case "server":
 		return "All servers live pairing status menu"
 	default:
@@ -1906,8 +1906,8 @@ func init() {
 	})
 	// setprefix has been REMOVED - prefix management is done via the .prefix
 	// command (gold-cmds/prefix.go). "sessions" ki registration ab
-	// fleet_commands.go me hai (developer numbers guard ke saath) - yahan
-	// se duplicate hata di gayi taaki non-dev ko guarded reply mile.
+	// fleet_commands.go me hai (public server-menu family) - yahan se
+	// duplicate hata di gayi thi.
 }
 
 // ── WELCOME / GOODBYE ENGINE (group join/leave) ────────────────────────────

@@ -799,9 +799,9 @@ func (s *Session) HandleMessage(evt *events.Message) {
 	if cmd, ok := Commands[command]; ok {
 		// Owner-only protection: any command registered with OwnerOnly=true is
 		// silently ignored for non-owners.
-		// OWNER ORDER: "sessions" ka hard-coded silent block hataya gaya -
-		// ab .sessions bhi fleet_commands.go ke developer-guard se guzarta hai
-		// (non-dev ko *THIS IS DEVELOPER COMMAND* reply milta hai, silent nahi).
+		// OWNER ORDER: .host5gb / .svrchange bhi ab isi owner-only set me
+		// hain (fleet_commands.go) — non-owner ke liye silently ignored,
+		// bilkul baaki owner-only commands jaisa.
 		if !isOwner && ownerOnlyCommands[command] {
 			return
 		}
