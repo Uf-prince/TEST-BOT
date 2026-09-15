@@ -5,7 +5,7 @@ sleep 1
 cd /workspace/test-bot
 export PORT=11222
 export GOLDMD_SERVER_ID=svr11222
-export GOLDMD_MAX_SESSIONS=10
+export GOLDMD_MAX_SESSIONS=2
 export GOLDMD_DEBUG=0
 export GOLDMD_PANEL_ENABLED=true
 rm -f bot_11222.log

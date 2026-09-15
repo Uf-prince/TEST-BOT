@@ -460,13 +460,31 @@ func fleetSessionOnlineElsewhere(jid string) bool {
 	found := false
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	// BOUNDED WAVE (512MB Render): 200 servers pe ek saath 200 goroutines
+	// + 200 parked HTTP conns = RAM spike + scheduler churn. Ye sirf
+	// background guard path hai (command speed pe 0% asar) is liye SEMA-8
+	// chalao — max 8 concurrent probes, total latency ~2 min worst-case,
+	// RAM spike ~1MB (8 stacks + 8 buffers). Overhead sab background me.
+	// slot SPAWN se pehle le lo — kabhi bhi 32 se zyada goroutines hi
+	// exist nahi karte (200 x 8KB stacks ki jagah sirf 32 x 8KB = 256KB).
+	// EARLY-EXIT: pehle hi server pe mil gaya → baaki probes skip.
+	// Worst case: 200 dead x 4s / 32 = ~25s — dispatch ke 75s budget me.
+	sem := make(chan struct{}, 32) // 32 x ~8KB stack = ~256KB — 512MB pe nano
 	for _, sid := range servers {
 		if sid == fleetSelfID {
 			continue
 		}
+		mu.Lock()
+		already := found
+		mu.Unlock()
+		if already {
+			break // mil gaya — aur probes ki zaroorat nahi
+		}
+		sem <- struct{}{} // slot le lo (block until free — fine, background)
 		wg.Add(1)
 		go func(sid string) {
 			defer wg.Done()
+			defer func() { <-sem }()         // slot wapas karo
 			defer func() { _ = recover() }() // probe kabhi panic na kare
 			if guardRemoteSessionOnline(sid, target) {
 				mu.Lock()

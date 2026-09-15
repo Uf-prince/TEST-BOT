@@ -76,6 +76,16 @@ func resurrectRetryAfter(jid string) bool {
 	if t, ok := resurrectLastTry[jid]; ok && time.Since(t) < 5*time.Minute {
 		return false
 	}
+	// RAM GUARD (512MB Render): map kabhi unlimited na badhe — cap cross
+	// hote hi 5min+ purani (ab irrelevant) entries saaf karo. Max ~512
+	// entries x ~120B = ~60KB — guaranteed bounded memory.
+	if len(resurrectLastTry) >= 512 {
+		for j, t := range resurrectLastTry {
+			if time.Since(t) >= 5*time.Minute {
+				delete(resurrectLastTry, j)
+			}
+		}
+	}
 	resurrectLastTry[jid] = time.Now()
 	return true
 }
