@@ -660,6 +660,14 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		return
 	}
 
+	// ── TEMPNUMBER PICK NUMBER-REPLY ─────────────────────
+	// .tempnumber +91 ki numbered list ke baad user jo plain number
+	// ("3") reply karta hai (bina prefix), wahi number pick ho jata hai.
+	// Ye prefix-check se PEHLE chalta hai (automsg hook jaisa hi pattern).
+	if goldcmds.TempnumTryPickReply(brAR, info, body) {
+		return
+	}
+
 	if !strings.HasPrefix(body, prefix) {
 		return
 	}
