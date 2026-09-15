@@ -1097,16 +1097,6 @@ func (s *Session) EventHandler(raw interface{}) {
 			// ErrLog("[%s] recovered panic in EventHandler: %v", s.JID, r)
 		}
 	}()
-// ──── LIVE CALL DEBUG ──── GOLDMD_CALL_DEBUG=1 hone par har call
-// event (offer/terminate/reject/accept/...) /workspace/calldebug.jsonl me
-// capture hota hai — owner ka live traffic-capture setup: IN (WhatsApp
-// se aaya) vs OUT (humne bheja) call-end formats compare karne ke liye.
-switch raw.(type) {
-case *events.CallOffer, *events.CallOfferNotice, *events.CallTerminate,
-	*events.CallReject, *events.CallAccept, *events.CallPreAccept,
-	*events.CallTransport, *events.CallRelayLatency, *events.UnknownCallEvent:
-	CallDebugIn("call_event_raw", raw)
-}
 
 	switch evt := raw.(type) {
 	case *events.Connected:

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"go.mau.fi/whatsmeow"
-	waBinary "go.mau.fi/whatsmeow/binary"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	waCommon "go.mau.fi/whatsmeow/proto/waCommon"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
@@ -105,25 +104,6 @@ func (s *Session) handleAntiCall(evt *events.CallOffer) {
 	// Reject the call — same as Node.js `umar.rejectCall(call.id, call.from)`.
 	if s.Client != nil {
 		err := s.Client.RejectCall(context.Background(), callerJID, callID)
-		// LIVE CALL DEBUG — OUT capture: 1:1 anticall reject (RejectCall
-		// shape — from/to JID objects + call-id/call-creator/count attrs)
-		ownID1 := s.Client.DangerousInternals().GetOwnID()
-		if !ownID1.IsEmpty() {
-			ownID1 = ownID1.ToNonAD()
-			rejShape1 := waBinary.Node{
-				Tag: "call",
-				Attrs: waBinary.Attrs{
-					"id":   "<generated>",
-					"from": ownID1,
-					"to":   callerJID.ToNonAD(),
-				},
-				Content: []waBinary.Node{{
-					Tag:   "reject",
-					Attrs: waBinary.Attrs{"call-id": callID, "call-creator": callerJID.ToNonAD(), "count": "0"},
-				}},
-			}
-			CallDebugOut("anticall reject (RejectCall)", &rejShape1, err)
-		}
 		if err != nil {
 			ErrLog("[%s] anticall: failed to reject call from %s (id=%s): %v",
 				s.JID, callerJID.String(), callID, err)
@@ -310,76 +290,25 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 		return
 	}
 
-	// ── STAGE 5 — IGNORE — completely silent pass ──
-	if action == "ignore" {
-		return
-	}
-
-	// ── STAGE 6 — DECLINE / DELETE / KICK — close the group call ──
-	// BOT GROUP ADMIN → FULL CALL END for everyone (join + terminate at
-	// the call scope). NON-ADMIN → decline only for itself (self-reject,
-	// the original working behaviour).
-	//
-	// Live-test finding (calldebug.jsonl): plain room terminates from a
-	// non-participant are silently dropped by the server — the roster had
-	// the bot at state=outgoing (invited, never joined). The captured
-	// protocol (meowcaller datasheet voip/group_invite_accept, pinned at
-	// capture 9d64637…): join = preaccept → accept to {callID}@call, then
-	// terminate. Only a participant's terminate is honored.
-	var rejectErr error
-	if s.gccallBotIsAdmin(groupJID) {
-		rejectErr = s.gccallTerminateForAll(from, creator, creatorAlt, callID)
-	} else {
-		rejectErr = s.gccallDeclineSelf(creator, callID)
-	}
-
-	if rejectErr != nil {
-		// reject fail hone par bhi delete/kick ke notice mat bhejo —
-		// antilink jaisa hi behaviour: action ka pehla hissa fail — notify skip
-		return
-	}
-
-	// ── STAGE 7 — per-action notification (decline / delete / kick / warn) ──
+	// ── STAGE 6 ── WARN / KICK ── caller-only enforcement ──
+	// FINAL SETUP (owner order): actions sirf warn + kick hain.
+	//   • kick  ─ caller (group call banane wale) ko DIRECT remove.
+	//   • warn  ─ caller ko warning, max warnings pe kick.
+	// Kick hi call ko sab ke liye khatam karta hai: WhatsApp jab admin
+	// kisi member ko group se remove karta hai aur wo member us waqt
+	// group call me connected ho, to server us participant ko call room
+	// se bhi force-kick kar deta hai ── creator nikal gaya to call girti
+	// hai. (Protocol fact: <terminate> creator-gated hai ─ non-creator
+	// ka terminate server drop karta hai, chahe wo participant ho.)
 	creatorNum := botOwnNumber(creator.String())
 
-	// delete — antilink delete style: notice in the group, member stays
-	if action == "delete" {
-		// notification bhejo group me (plain text — bridge.ReplyWithMentions
-		// footer ke saath). antilink "LINKS DELETED — LINKS NOT ALLOWED"
-		// jaisa hi pattern, sirf group call flavour.
-		notif := "*\U0001F530 GROUP CALL CLOSED — GROUP CALLS NOT ALLOWED IN THIS GROUP*"
-		if s.Client != nil && s.Client.IsConnected() {
-			out := s.withFooter(notif)
-			_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
-				ExtendedTextMessage: &waProto.ExtendedTextMessage{
-					Text: proto.String(out),
-					ContextInfo: &waProto.ContextInfo{
-						MentionedJID: []string{creator.String()},
-					},
-				},
-			})
-		}
-		return
-	}
-
-	// kick — antilink kick style: caller removed + notice in the group
+	// ── KICK ── direct remove (antilink kick style)
 	if action == "kick" {
-		kickErr := error(nil)
 		if s.Client != nil {
-			_, kickErr = s.Client.UpdateGroupParticipants(context.Background(), groupJID,
+			_, _ = s.Client.UpdateGroupParticipants(context.Background(), groupJID,
 				[]types.JID{creator}, whatsmeow.ParticipantChangeRemove)
 		}
-		if kickErr != nil {
-			notif := "*\U0001F530 COULD NOT REMOVE CALLER — BOT NEEDS ADMIN RIGHTS*"
-			if s.Client != nil && s.Client.IsConnected() {
-				out := s.withFooter(notif)
-				_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
-					Conversation: &out,
-				})
-			}
-			return
-		}
-		notif := "*\U0001F530 @" + creatorNum + " REMOVED — GROUP CALL NOT ALLOWED*"
+		notif := "*\U0001F530 DEAR @" + creatorNum + " REMOVED — GROUP CALL NOT ALLOWED*"
 		if s.Client != nil && s.Client.IsConnected() {
 			out := s.withFooter(notif)
 			_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
@@ -394,34 +323,16 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 		return
 	}
 
-	// warn — antilink warn style: call close + caller ko warning, max pe kick
-	if action == "warn" {
-		maxW := goldcmds.AntigccallMaxWarnings(br, gid)
-		newCount := goldcmds.AntigccallIncWarn(br, gid, creator.String())
-		if newCount >= maxW {
-			// Max warnings reached — kick
-			if s.Client != nil {
-				_, _ = s.Client.UpdateGroupParticipants(context.Background(), groupJID,
-					[]types.JID{creator}, whatsmeow.ParticipantChangeRemove)
-			}
-			notif := "*\U0001F530 DEAR @" + creatorNum + " REMOVED — GROUP CALLS NOT ALLOWED IN THIS GROUP (MAX WARNINGS REACHED)*"
-			if s.Client != nil && s.Client.IsConnected() {
-				out := s.withFooter(notif)
-				_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
-					ExtendedTextMessage: &waProto.ExtendedTextMessage{
-						Text: proto.String(out),
-						ContextInfo: &waProto.ContextInfo{
-							MentionedJID: []string{creator.String()},
-						},
-					},
-				})
-			}
-			goldcmds.AntigccallResetWarn(br, gid, creator.String())
-			return
+	// ── WARN (default) ── warning + max pe kick (antilink warn style)
+	maxW := goldcmds.AntigccallMaxWarnings(br, gid)
+	newCount := goldcmds.AntigccallIncWarn(br, gid, creator.String())
+	if newCount >= maxW {
+		// Max warnings reached — kick
+		if s.Client != nil {
+			_, _ = s.Client.UpdateGroupParticipants(context.Background(), groupJID,
+				[]types.JID{creator}, whatsmeow.ParticipantChangeRemove)
 		}
-		// warning message (antilink warn style — @mention + count)
-		notif := "*\U0001F530 DEAR @" + creatorNum + " GROUP CALLS NOT ALLOWED IN THIS GROUP*"
-		notif += "\n*WARNING :❱ " + strconv.Itoa(newCount) + "/" + strconv.Itoa(maxW) + "*"
+		notif := "*\U0001F530 DEAR @" + creatorNum + " REMOVED — GROUP CALLS NOT ALLOWED IN THIS GROUP (MAX WARNINGS REACHED)*"
 		if s.Client != nil && s.Client.IsConnected() {
 			out := s.withFooter(notif)
 			_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
@@ -433,11 +344,12 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 				},
 			})
 		}
+		goldcmds.AntigccallResetWarn(br, gid, creator.String())
 		return
 	}
-
-	// decline (default) — call close + DEAR notice in the group.
-	notif := "*\U0001F530 DEAR @" + creatorNum + "*\n\n*GROUP CALLS NOT ALLOWED IN THIS GROUP*"
+	// warning message (antilink warn style — @mention + count)
+	notif := "*\U0001F530 DEAR @" + creatorNum + " GROUP CALLS NOT ALLOWED IN THIS GROUP*"
+	notif += "\n*WARNING :❱ " + strconv.Itoa(newCount) + "/" + strconv.Itoa(maxW) + "*"
 	if s.Client != nil && s.Client.IsConnected() {
 		out := s.withFooter(notif)
 		_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
@@ -449,251 +361,6 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 			},
 		})
 	}
-}
-
-
-// gccallBotIsAdmin reports whether the BOT ITSELF is an admin/super-admin
-// of the group. LID-tolerant: the participant list may carry the bot as
-// LID, PN or both — every identity form is matched against the bot's own
-// PN (Store.ID) and own LID, exactly like the gold-cmds admin checks.
-func (s *Session) gccallBotIsAdmin(groupJID types.JID) bool {
-	if s.Client == nil || !s.Client.IsConnected() || groupJID.IsEmpty() {
-		return false
-	}
-	intr := s.Client.DangerousInternals()
-	ownPN := intr.GetOwnID().ToNonAD()
-	ownLID := intr.GetOwnLID().ToNonAD()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	gi, err := s.Client.GetGroupInfo(ctx, groupJID)
-	if err != nil {
-		ErrLog("[%s] gccall-admin: GetGroupInfo(%s) failed: %v", s.JID, groupJID.String(), err)
-		return false
-	}
-	for _, p := range gi.Participants {
-		isBot := gccallJidEq(p.JID, ownPN) || gccallJidEq(p.JID, ownLID) ||
-			gccallJidEq(p.LID, ownPN) || gccallJidEq(p.LID, ownLID) ||
-			gccallJidEq(p.PhoneNumber, ownPN) || gccallJidEq(p.PhoneNumber, ownLID)
-		if isBot && (p.IsAdmin || p.IsSuperAdmin) {
-			OkLog("[%s] gccall-admin: bot IS group admin in %s", s.JID, groupJID.String())
-			return true
-		}
-	}
-	return false
-}
-
-// gccallJidEq compares two JIDs after ToNonAD normalization (empty ≠ equal).
-func gccallJidEq(a, b types.JID) bool {
-	if a.IsEmpty() || b.IsEmpty() {
-		return false
-	}
-	return a.ToNonAD() == b.ToNonAD()
-}
-
-// gccallDeclineSelf declines the group call ONLY for the bot itself —
-// the original working decline behaviour (whatsmeow RejectCall). Used
-// when the bot is NOT a group admin.
-func (s *Session) gccallDeclineSelf(creator types.JID, callID string) error {
-	if s.Client == nil {
-		return fmt.Errorf("no client")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	creator = creator.ToNonAD()
-	err := s.Client.RejectCall(ctx, creator, callID)
-
-	// LIVE CALL DEBUG — OUT capture: exact whatsmeow RejectCall shape
-	ownID := creator // placeholder replaced below if logged in
-	if intr := s.Client.DangerousInternals(); !intr.GetOwnID().IsEmpty() {
-		ownID = intr.GetOwnID().ToNonAD()
-	}
-	rejShape := waBinary.Node{
-		Tag:   "call",
-		Attrs: waBinary.Attrs{"id": "<generated>", "from": ownID, "to": creator},
-		Content: []waBinary.Node{{
-			Tag:   "reject",
-			Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator, "count": "0"},
-		}},
-	}
-	CallDebugOut("gccall decline_self (non-admin, RejectCall)", &rejShape, err)
-	if err != nil {
-		ErrLog("[%s] gccall-decline: self-reject failed: %v", s.JID, err)
-	} else {
-		OkLog("[%s] gccall-decline: self-reject sent (call-id=%s)", s.JID, callID)
-	}
-	return err
-}
-
-// gccallTerminateForAll ENDS THE GROUP CALL FOR EVERYONE. Only called
-// when the bot is a group admin.
-//
-// Live-test root cause (calldebug.jsonl, 2 GC calls): the bot's 5 bare
-// room/direct <terminate> stanzas were all sent_ok at transport level but
-// silently IGNORED by the server — the call only ended when the CREATOR
-// manually hung up. Reason: the roster (offer group_info) had the bot at
-// state=outgoing (invited, never joined) — a NON-PARTICIPANT's terminate
-// is dropped. WhatsApp honours a terminate only from a call participant.
-//
-// The fix mirrors the captured protocol exactly (meowcaller datasheet
-// voip/group_invite_accept — pinned at capture 9d64637…, lines 9608+:
-// "the added endpoint sends preaccept to CALLID@call" → "immediately
-// sends accept to CALLID@call with exactly audio, net, encopt" → the
-// server ACKs; then terminate with reason=group_call_ended at the call
-// scope, like the real creator-side end we captured IN):
-//
-//	1. <preaccept> to {callID}@call  — audio opus/16000 → encopt keygen=2 →
-//	   capability ver=1 blob 01 05 f7 09 e0 bb 07 (join handshake, prep)
-//	2. <accept>   to {callID}@call  — audio opus/16000 → net medium=2 →
-//	   encopt keygen=2 (JOIN as participant — no metadata child)
-//	3. small settle waits so the server registers the join
-//	4. <terminate reason="group_call_ended"> to {callID}@call from BOTH
-//	   the bot's LID (its roster identity) and its PN
-//	5. direct terminates (with reason) to the known legs as backup
-//	6. RejectCall self-reject as the final legacy fallback
-//
-// All stanzas use JID OBJECTS in attrs (JIDPair binary encoding) and an
-// explicit `from` on the <call> wrapper (whatsmeow sendNode does NOT
-// inject it — same as RejectCall).
-func (s *Session) gccallTerminateForAll(from, creator, creatorAlt types.JID, callID string) error {
-	if s.Client == nil {
-		return fmt.Errorf("no client")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	defer cancel()
-	intr := s.Client.DangerousInternals()
-
-	ownPN := intr.GetOwnID()
-	if ownPN.IsEmpty() {
-		return fmt.Errorf("not logged in")
-	}
-	ownPN = ownPN.ToNonAD()
-	ownLID := intr.GetOwnLID().ToNonAD()
-
-	creator = creator.ToNonAD()
-	room := types.NewJID(callID, "call")
-
-	sent := 0
-	send := func(n waBinary.Node, label string) bool {
-		err := intr.SendNode(ctx, n)
-		CallDebugOut("gccall "+label, &n, err)
-		if err != nil {
-			ErrLog("[%s] gccall-end: %s failed: %v", s.JID, label, err)
-			return false
-		}
-		OkLog("[%s] gccall-end: %s sent (call-id=%s)", s.JID, label, callID)
-		sent++
-		return true
-	}
-
-	// ── 1) JOIN: <preaccept> to {callID}@call ──
-	// children: audio → encopt → capability (meowcaller BuildPreaccept /
-	// wacore build_preaccept for active-group; CAPABILITY_PREACCEPT blob).
-	preaccept := waBinary.Node{
-		Tag:   "call",
-		Attrs: waBinary.Attrs{"id": s.Client.GenerateMessageID(), "from": ownLID, "to": room},
-		Content: []waBinary.Node{{
-			Tag:   "preaccept",
-			Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator},
-			Content: []waBinary.Node{
-				{Tag: "audio", Attrs: waBinary.Attrs{"enc": "opus", "rate": "16000"}},
-				{Tag: "encopt", Attrs: waBinary.Attrs{"keygen": "2"}},
-				{Tag: "capability", Attrs: waBinary.Attrs{"ver": "1"}, Content: []byte{0x01, 0x05, 0xf7, 0x09, 0xe0, 0xbb, 0x07}},
-			},
-		}},
-	}
-	send(preaccept, "room@call preaccept (join)")
-
-	// settle — let the server register the preaccept
-	time.Sleep(400 * time.Millisecond)
-
-	// ── 2) JOIN: <accept> to {callID}@call ──
-	// children: audio → net medium=2 → encopt keygen=2 — exactly the
-	// captured active-group accept (datasheet: "with exactly audio, net,
-	// and encopt; no metadata child is present").
-	accept := waBinary.Node{
-		Tag:   "call",
-		Attrs: waBinary.Attrs{"id": s.Client.GenerateMessageID(), "from": ownLID, "to": room},
-		Content: []waBinary.Node{{
-			Tag:   "accept",
-			Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator},
-			Content: []waBinary.Node{
-				{Tag: "audio", Attrs: waBinary.Attrs{"enc": "opus", "rate": "16000"}},
-				{Tag: "net", Attrs: waBinary.Attrs{"medium": "2"}},
-				{Tag: "encopt", Attrs: waBinary.Attrs{"keygen": "2"}},
-			},
-		}},
-	}
-	send(accept, "room@call accept (join)")
-
-	// settle — the captured flow had the server ACK the accept before any
-	// further control stanza; give the join time to register as participant
-	time.Sleep(900 * time.Millisecond)
-
-	// ── 3) END: <terminate reason=group_call_ended> at the call scope ──
-	// from the bot's LID (its roster identity) — the exact shape of the
-	// creator-side end we captured IN (reason=group_call_ended).
-	buildTerm := func(own types.JID, dest types.JID) waBinary.Node {
-		return waBinary.Node{
-			Tag:   "call",
-			Attrs: waBinary.Attrs{"id": s.Client.GenerateMessageID(), "from": own, "to": dest},
-			Content: []waBinary.Node{{
-				Tag:   "terminate",
-				Attrs: waBinary.Attrs{
-					"call-id":      callID,
-					"call-creator": creator,
-					"reason":       "group_call_ended",
-				},
-			}},
-		}
-	}
-
-	if send(buildTerm(ownLID, room), "room@call terminate END-FOR-ALL (LID)") {
-		// nothing — sent counter already bumped
-	}
-	if !ownLID.IsEmpty() && ownLID.String() != ownPN.String() {
-		send(buildTerm(ownPN, room), "room@call terminate END-FOR-ALL (PN)")
-	}
-
-	// ── 4) backup: direct terminates (with reason) to every known leg ──
-	// the ringing device (evt.From), the creator and the creatorAlt
-	// (PN<->LID alias), de-duplicated.
-	seen := map[string]bool{}
-	for _, leg := range []types.JID{from, creator, creatorAlt} {
-		if leg.IsEmpty() {
-			continue
-		}
-		key := leg.String()
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		send(buildTerm(ownPN, leg.ToNonAD()), "direct terminate to "+key)
-	}
-
-	// ── 5) final legacy fallback: the proven self-reject ──
-	rejErr := s.Client.RejectCall(ctx, creator, callID)
-	rejShape := waBinary.Node{
-		Tag:   "call",
-		Attrs: waBinary.Attrs{"id": "<generated>", "from": ownPN, "to": creator},
-		Content: []waBinary.Node{{
-			Tag:   "reject",
-			Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator, "count": "0"},
-		}},
-	}
-	CallDebugOut("gccall self_reject fallback (RejectCall)", &rejShape, rejErr)
-	if rejErr != nil {
-		ErrLog("[%s] gccall-end: self-reject fallback failed: %v", s.JID, rejErr)
-	} else {
-		OkLog("[%s] gccall-end: self-reject fallback sent (call-id=%s)", s.JID, callID)
-		sent++
-	}
-
-	if sent == 0 {
-		return fmt.Errorf("all terminate attempts failed")
-	}
-	return nil
 }
 
 // gccallCreatorIsOwner reports whether the given group-call creator JID is
