@@ -925,7 +925,9 @@ func AutomsgRestoreSavedSchedules(s SessionBridge) {
 		restored++
 	}
 	if restored > 0 {
-		fmt.Printf("[automsg] restart-restore: %d repeat schedule(s) re-armed from bot memory\n", restored)
+		// SILENT (owner request): console log off
+		// fmt.Printf("[automsg] restart-restore: %d repeat schedule(s) re-armed from bot memory\n", restored)
+		_ = restored
 	}
 }
 

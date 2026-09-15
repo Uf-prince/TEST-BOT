@@ -47,7 +47,10 @@ func compressDebug(tag string, kv ...interface{}) {
 	if !compressDebugLogs {
 		return
 	}
-	fmt.Println("[COMPRESS]", tag, fmt.Sprint(kv...))
+	// SILENT (owner request): console log off
+	_ = tag
+	_ = kv
+	// fmt.Println("[COMPRESS]", tag, fmt.Sprint(kv...))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
