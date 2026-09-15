@@ -184,17 +184,6 @@ type SessionBridge interface {
 	// GroupSetClear removes an entire per-group Redis SET (used on reset).
 	GroupSetClear(groupJID, setName string) error
 
-	// ── ANTIGCCALL JSON debug (file: nexstore/gccall_debug.jsonl) ─────
-	// GCCallDebugLog appends one JSON debug line to the gccall debug file
-	// (nexstore/gccall_debug.jsonl) AND to the process stdout/bot.log, so
-	// the owner can watch how group calls arrive and which action applies.
-	// doc = the full event document (map with jid/group/callID/... fields).
-	GCCallDebugLog(stage string, doc map[string]any)
-	// GCCallDebugTail returns the last n JSON lines from the debug file.
-	GCCallDebugTail(n int) []string
-	// GCCallDebugClear truncates the debug file (zero events).
-	GCCallDebugClear()
-
 	// ── GROUP ADMIN / MODERATION actions ──
 	// KickGroupMember removes the given user JIDs from the group.
 	KickGroupMember(groupJID types.JID, targets []types.JID) error

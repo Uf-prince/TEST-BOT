@@ -3,8 +3,8 @@ package goldcmds
 // ============================================================================
 // GOLD-MD — .antigccall command (aliases: .antigcall, .antgccall)
 //
-// Group-call control — same-to-same .antilink style. Controls GROUP CALLS
-// started by group members (events.CallOfferNotice in manager.go):
+// Group-call control — same-to-same .antilink style. NO debug system — direct action only. Controls GROUP CALLS
+// started by group members (CallOfferNotice + CallOffer ring in manager.go):
 //   .antigccall                   → full command info
 //   .antigccall on / off          → enable / disable group-call control
 //   .antigccall action            → action info (decline / ignore / delete / kick)
@@ -12,10 +12,9 @@ package goldcmds
 //   .antigccall action ignore     → SILENTLY ignore (no action, no notification)
 //   .antigccall action delete     → close group call + notice in group (antilink delete style)
 //   .antigccall action kick       → close group call + remove caller (antilink kick style)
-//   .antigccall debug             → last 15 JSON debug lines (how calls arrive + action)
-//   .antigccall debug <n>         → last n lines (max 100)
-//   .antigccall debug clear       → clear the debug file
-//   .antigccall reset             → full reset (off + decline)
+//   .antigccall action warn       → close group call + warn caller (max warnings pe kick)
+//   .antigccall action warn <n>   → set action=warn + max-warnings=n (1-50)
+//   .antigccall action warn reset → reset max-warnings + clear all warnings//   .antigccall reset             → full reset (off + decline)
 //
 // Per-group config in Redis (settings:<groupJID>) — same pattern as antilink:
 //   field "antigccall"         = on/off
@@ -28,11 +27,7 @@ package goldcmds
 //   - kick    → RejectCall + caller removed + notice (antilink kick style)
 //   - Owner bypass: the owner's own group calls pass silently
 //   - Premium bypass (.antigccallprem add): premium calls pass silently
-//
-// FULL JSON DEBUG — every group-call event is logged stage-by-stage to
-// nexstore/gccall_debug.jsonl + bot.log (GCCALL_EVENT / GCCALL_CONFIG /
-// GCCALL_BYPASS / GCCALL_DECLINE / GCCALL_KICK ...). View via .antigccall debug.
-//
+////
 // NOTE: 🔰 emoji style, ❰ ❱ markers — same as antilink.
 // ============================================================================
 
@@ -58,10 +53,25 @@ func AntigccallIsOn(s SessionBridge, groupJID string) bool {
 // "decline" (default) / "ignore" / "delete" / "kick".
 func AntigccallAction(s SessionBridge, groupJID string) string {
 	v := strings.ToLower(s.GetGroupSetting(groupJID, antigccallFeature+":action", antigccallDefaultAction))
-	if v != "decline" && v != "ignore" && v != "delete" && v != "kick" {
+	if v != "decline" && v != "ignore" && v != "delete" && v != "kick" && v != "warn" {
 		return antigccallDefaultAction
 	}
 	return v
+}
+
+// AntigccallMaxWarnings returns the max-warnings limit for the warn action.
+func AntigccallMaxWarnings(s SessionBridge, groupJID string) int {
+	return antiMaxWarnings(s, groupJID, antigccallFeature)
+}
+
+// AntigccallIncWarn increments the caller's warning count and returns the new value.
+func AntigccallIncWarn(s SessionBridge, groupJID, userJID string) int {
+	return antiIncWarning(s, groupJID, antigccallFeature, userJID)
+}
+
+// AntigccallResetWarn clears the caller's warning count (after max-warnings kick).
+func AntigccallResetWarn(s SessionBridge, groupJID, userJID string) {
+	antiResetWarning(s, groupJID, antigccallFeature, userJID)
 }
 
 // ── info text builders ─────────────────────────────────────────────────────
@@ -77,19 +87,19 @@ func gccallFullInfo(prefix string, enabled bool, curAction string) string {
 		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION \u2771*\n" +
 		"*YOU WILL GET INFO OF ANTIGCCALL ACTIONS*\n\n\n" +
 		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION DECLINE \u2771*\n" +
-		"*WHEN ACTION IS DECLINE THEN GROUP CALLS WILL BE DETECTED AND SILENTLY CLOSED NO NOTIFICATION WILL BE SENT*\n\n\n" +
+		"*WHEN ACTION IS DECLINE THEN GROUP CALLS WILL BE DETECTED AND CLOSED AND A NOTICE WILL BE SENT IN THE GROUP*\n\n\n" +
 		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION IGNORE \u2771*\n" +
 		"*WHEN ACTION IS IGNORE THEN GROUP CALLS WILL BE SILENTLY IGNORED NO ACTION NO NOTIFICATION AT ALL*\n\n\n" +
 		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION DELETE \u2771*\n" +
 		"*WHEN ACTION IS DELETE THEN GROUP CALLS WILL BE DETECTED AND CLOSED AND A NOTICE WILL BE SENT IN THE GROUP*\n\n\n" +
 		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION KICK \u2771*\n" +
 		"*WHEN ACTION IS KICK THEN AS SOON AS GROUP CALL IS DETECTED THE CALLER WILL BE REMOVED AND CALL WILL BE CLOSED*\n\n\n" +
+		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION WARN \u2771*\n" +
+		"*WHEN ACTION IS WARN THEN GROUP CALLS WILL BE CLOSED AND THE CALLER WILL GET WARNINGS AS SOON AS WARNINGS ARE FINISHED THE CALLER WILL BE AUTO REMOVED FROM GROUP*\n\n\n" +
+		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION WARN \u277040\u2771 \u2771*\n" +
+		"*SET YOUR WARNINGS AS MANY AS YOU WANT 5 10 15 25 AS YOU WISH MAX \u2770 50 \u2771 ONLY*\n\n" +
 		"*TYPE \u2770 " + prefix + "ANTIGCCALL RESET \u2771*\n" +
-		"*TO RESET FULL ANTIGCCALL COMMAND*\n\n\n" +
-		"*TYPE \u2770 " + prefix + "ANTIGCCALL DEBUG \u2771*\n" +
-		"*SHOWS LAST GROUP CALL EVENTS WITH FULL JSON DEBUG — HOW CALLS ARRIVE AND WHICH ACTION APPLIES*\n\n" +
-		"*TYPE \u2770 " + prefix + "ANTIGCCALL DEBUG CLEAR \u2771*\n" +
-		"*TO CLEAR THE DEBUG LOG*\n\n\n" +
+		"*TO RESET FULL ANTIGCCALL COMMAND*\n\n" +
 		"*ANTIGCCALL NOW :\u2771 \u2770 " + boolOnOff(enabled) + " \u2771*\n" +
 		"*ACTION :\u2771 \u2770 " + strings.ToUpper(curAction) + " \u2771*"
 }
@@ -98,13 +108,19 @@ func gccallFullInfo(prefix string, enabled bool, curAction string) string {
 func gccallActionsInfo(prefix string, curAction string) string {
 	return "*\U0001F530 ANTIGCCALL ACTIONS INFO \U0001F530*\n\n" +
 		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION DECLINE \u2771*\n" +
-		"*WHEN ACTION IS DECLINE THEN GROUP CALLS WILL BE DETECTED AND SILENTLY CLOSED NO NOTIFICATION WILL BE SENT*\n\n\n" +
+		"*WHEN ACTION IS DECLINE THEN GROUP CALLS WILL BE DETECTED AND CLOSED AND A NOTICE WILL BE SENT IN THE GROUP*\n\n\n" +
 		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION IGNORE \u2771*\n" +
 		"*WHEN ACTION IS IGNORE THEN GROUP CALLS WILL BE SILENTLY IGNORED NO ACTION NO NOTIFICATION AT ALL*\n\n\n" +
 		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION DELETE \u2771*\n" +
 		"*WHEN ACTION IS DELETE THEN GROUP CALLS WILL BE DETECTED AND CLOSED AND A NOTICE WILL BE SENT IN THE GROUP*\n\n\n" +
 		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION KICK \u2771*\n" +
 		"*WHEN ACTION IS KICK THEN AS SOON AS GROUP CALL IS DETECTED THE CALLER WILL BE REMOVED AND CALL WILL BE CLOSED*\n\n\n" +
+		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION WARN \u2771*\n" +
+		"*WHEN ACTION IS WARN THEN GROUP CALLS WILL BE CLOSED AND THE CALLER WILL GET WARNINGS AS SOON AS WARNINGS ARE FINISHED THE CALLER WILL BE AUTO REMOVED FROM GROUP*\n\n\n" +
+		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION WARN \u277040\u2771 \u2771*\n" +
+		"*SET YOUR WARNINGS AS MANY AS YOU WANT 5 10 15 25 AS YOU WISH MAX \u2770 50 \u2771 ONLY*\n\n" +
+		"*TYPE \u2770 " + prefix + "ANTIGCCALL ACTION WARN RESET \u2771*\n" +
+		"*TO RESET WARNINGS*\n\n" +
 		"*CURRENT ACTION :\u2771 \u2770 " + strings.ToUpper(curAction) + " \u2771*"
 }
 
@@ -155,11 +171,6 @@ func handleAntiGcCallAsync(s SessionBridge, info types.MessageInfo, args []strin
 		return
 	}
 
-	// DEBUG — last JSON debug lines (how calls arrive + which action applied)
-	if sub == "debug" {
-		handleAntiGcCallDebug(s, info, args[1:])
-		return
-	}
 
 	// RESET — full reset (off + action back to decline)
 	if sub == "reset" {
@@ -217,36 +228,40 @@ func handleAntiGcCallAction(s SessionBridge, info types.MessageInfo, args []stri
 		return
 	}
 
+	// WARN — antilink warn style: close call + warn caller, max pe kick
+	if actionArg == "warn" {
+		if len(args) >= 2 {
+			warnSubArg := strings.ToLower(strings.TrimSpace(args[1]))
+			if warnSubArg == "reset" {
+				antiResetMaxWarnings(s, groupJID, antigccallFeature)
+				antiSetAction(s, groupJID, antigccallFeature, "warn")
+				antiClearAllWarnings(s, groupJID, antigccallFeature)
+				s.Reply(info, "*\U0001F530 ANTIGCCALL WARN LIMIT RESET TO DEFAULT ("+strconv.Itoa(defaultAntiMaxWarnings)+")*\n*ALL USERS' WARNINGS CLEARED*")
+				return
+			}
+			if isAllDigits(warnSubArg) {
+				requested, _ := strconv.Atoi(warnSubArg)
+				clamped := antiSetMaxWarnings(s, groupJID, antigccallFeature, requested)
+				antiSetAction(s, groupJID, antigccallFeature, "warn")
+				note := ""
+				if requested > absoluteAntiMaxWarnings {
+					note = "\n*(Max limit " + strconv.Itoa(absoluteAntiMaxWarnings) + " hai, isi pe clamp kar diya gaya)*"
+				}
+				s.Reply(info, "*\U0001F530 ANTIGCCALL ACTION SET TO :\u2771 \u2770 WARN \u2771*\n*MAX WARNINGS :\u2771 "+strconv.Itoa(clamped)+"*"+note)
+				return
+			}
+		}
+		antiSetAction(s, groupJID, antigccallFeature, "warn")
+		maxW := antiMaxWarnings(s, groupJID, antigccallFeature)
+		s.Reply(info, "*\U0001F530 ANTIGCCALL ACTION SET TO :\u2771 \u2770 WARN \u2771*\n*MAX WARNINGS :\u2771 "+strconv.Itoa(maxW)+"*\n\n*\U0001F530 ACTION INFO \U0001F530*\n"+gccallActionInfo("warn"))
+		return
+	}
+
 	// Unknown action arg → action info again
 	curAction := AntigccallAction(s, groupJID)
 	s.Reply(info, gccallActionsInfo(prefix, curAction))
 }
 
-// handleAntiGcCallDebug — ".antigccall debug [n | clear]" — shows the last
-// JSON debug lines from nexstore/gccall_debug.jsonl (written by the
-// enforcement handler on every group-call event).
-func handleAntiGcCallDebug(s SessionBridge, info types.MessageInfo, args []string) {
-	if len(args) > 0 && strings.ToLower(strings.TrimSpace(args[0])) == "clear" {
-		s.GCCallDebugClear()
-		s.Reply(info, "*\U0001F530 ANTIGCCALL DEBUG LOG CLEARED \U0001F530*")
-		return
-	}
-
-	n := 15
-	if len(args) > 0 {
-		if v, err := strconv.Atoi(strings.TrimSpace(args[0])); err == nil && v > 0 && v <= 100 {
-			n = v
-		}
-	}
-
-	lines := s.GCCallDebugTail(n)
-	if len(lines) == 0 {
-		s.Reply(info, "*\U0001F530 ANTIGCCALL DEBUG EMPTY \U0001F530*\n\n*NO GROUP CALL EVENTS SEEN YET — WAIT FOR A GROUP CALL THEN CHECK AGAIN*")
-		return
-	}
-
-	s.Reply(info, "*\U0001F530 ANTIGCCALL DEBUG \u2014 LAST "+strconv.Itoa(len(lines))+" EVENTS \U0001F530*\n\n```\n"+strings.Join(lines, "\n")+"\n```")
-}
 
 // gccallActionInfo returns the ACTION INFO line shown when the feature is
 // turned ON or the action is set (same pattern as antiActionInfo).
@@ -258,8 +273,10 @@ func gccallActionInfo(action string) string {
 		return "*ACTION IS DELETE — NOW BOT WILL CLOSE ALL GROUP CALLS AND SEND A NOTICE IN THE GROUP*"
 	case "kick":
 		return "*ACTION IS KICK — NOW BOT WILL REMOVE THE CALLER AS SOON AS GROUP CALL IS DETECTED AND CALL WILL BE CLOSED*"
+	case "warn":
+		return "*ACTION IS WARN — NOW BOT WILL CLOSE ALL GROUP CALLS AND GIVE WARNINGS TO THE CALLER AS SOON AS WARNINGS ARE FINISHED THE CALLER WILL BE REMOVED FROM GROUP*"
 	default:
-		return "*ACTION IS DECLINE — NOW BOT WILL SILENTLY CLOSE ALL GROUP CALLS NO NOTIFICATION WILL BE SENT*"
+		return "*ACTION IS DECLINE — NOW BOT WILL CLOSE ALL GROUP CALLS AND SEND A NOTICE IN THE GROUP*"
 	}
 }
 

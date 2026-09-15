@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"go.mau.fi/whatsmeow"
-	waBinary "go.mau.fi/whatsmeow/binary"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	waCommon "go.mau.fi/whatsmeow/proto/waCommon"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
@@ -15,6 +14,7 @@ import (
 	"math/rand"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -55,8 +55,8 @@ func (s *Session) handleAntiCall(evt *events.CallOffer) {
 	// sirf CallOfferNotice nahi. Routing SABSE PEHLE yahan hai:
 	//   • anticall OFF ho tab bhi group ring antigccall ko jaye
 	//   • anticall ON ho to bhi group ring antigccall se handle ho
-	// Per-group on/off + action check gccallEnforce me hoti hai;
-	// antigccall OFF group → GCCALL_SKIP_OFF (silent).
+	// Per-group on/off + action check gccallEnforce me hoti hai —
+	// antigccall OFF group me silent skip hota hai.
 	if !evt.GroupJID.IsEmpty() {
 		s.handleAntiGcCallRing(evt)
 		return
@@ -207,69 +207,7 @@ func callerNumberTail(jid string) string {
 }
 
 // ══════════════════ (antigccall handler) ══════════════════
-// ============================================================================
-// GOLD-MD — ANTIGCCALL group-call enforcement handler (FULL JSON DEBUG)
-// ----------------------------------------------------------------------------
-// When a GROUP call offer arrives (*events.CallOfferNotice from manager.go):
-//   1. Check if antigccall is ON for the group (settings:<groupJID>)
-//   2. Read the action: decline (default) / ignore / delete / kick
-//   3. Owner bypass — the owner's own group calls pass SILENTLY
-//   4. Premium bypass (.antigccallprem add) — premium calls pass SILENTLY
-//   5. decline → RejectCall — group call CLOSED SILENTLY, zero notification
-//   6. ignore  → completely silent pass — nothing at all happens
-//   7. delete  → RejectCall + group notice "*GROUP CALL CLOSED*" (antilink
-//      delete style — notification YES, like antilink action delete)
-//   8. kick    → RejectCall + caller REMOVED from the group + notice
-//      (antilink kick style — notification YES)
-//
-// EVERY stage logs a full JSON debug line (stage / event / config / bypass /
-// action applied / result) to nexstore/gccall_debug.jsonl + bot.log
-// (prefix "GCCALL ") — owner can watch live via:
-//   .antigccall debug      — last 15 events on the phone
-//   .antigccall debug 50   — last 50 events
-//   .antigccall debug clear— wipe the log
-//   tail -f bot.log        — live JSON stream in console
-//
-// NO admin check, NO member check, NO permission check — DIRECT ACTION.
-// Called from Session.EventHandler in manager.go.
-// ============================================================================
 
-// gccallNodeToJSON renders a binary.Node tree as compact JSON (for the
-// full RAW event debug line — we log the whole call node contents).
-func gccallNodeToJSON(n *waBinary.Node) map[string]any {
-	if n == nil {
-		return nil
-	}
-	m := map[string]any{"tag": n.Tag}
-	attrs := map[string]any{}
-	for k, v := range n.Attrs {
-		if jid, ok := v.(types.JID); ok {
-			attrs[k] = jid.String()
-		} else {
-			attrs[k] = fmt.Sprintf("%v", v)
-		}
-	}
-	if len(attrs) > 0 {
-		m["attrs"] = attrs
-	}
-	switch c := n.Content.(type) {
-	case []waBinary.Node:
-		kids := []map[string]any{}
-		for _, k := range c {
-			kids = append(kids, gccallNodeToJSON(&k))
-		}
-		if len(kids) > 0 {
-			m["children"] = kids
-		}
-	case []byte:
-		if len(c) > 128 {
-			m["bytes"] = fmt.Sprintf("%d bytes", len(c))
-		} else {
-			m["bytes"] = string(c)
-		}
-	}
-	return m
-}
 
 // handleAntiGcCall processes an incoming GROUP call OFFER NOTICE and applies
 // the configured antigccall action — with FULL JSON DEBUG at every stage.
@@ -279,17 +217,10 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 	defer func() {
 		if r := recover(); r != nil {
 			ErrLog("[%s] recovered panic in handleAntiGcCall: %v", s.JID, r)
-			br := &bridge{s: s}
-			br.GCCallDebugLog("GCCALL_PANIC", map[string]any{"error": fmt.Sprintf("%v", r)})
 		}
 	}()
 
-	s.gccallEnforce(
-		evt.From, evt.CallCreator, evt.CallCreatorAlt,
-		evt.CallID, evt.GroupJID,
-		evt.Media, evt.Type, evt.Timestamp.Unix(),
-		"offer_notice", evt.Data,
-	)
+	s.gccallEnforce(evt.From, evt.CallCreator, evt.CallCreatorAlt, evt.CallID, evt.GroupJID)
 }
 
 // handleAntiGcCallRing processes an incoming GROUP call RING (the NEW
@@ -300,129 +231,71 @@ func (s *Session) handleAntiGcCallRing(evt *events.CallOffer) {
 	defer func() {
 		if r := recover(); r != nil {
 			ErrLog("[%s] recovered panic in handleAntiGcCallRing: %v", s.JID, r)
-			br := &bridge{s: s}
-			br.GCCallDebugLog("GCCALL_PANIC", map[string]any{"error": fmt.Sprintf("%v", r)})
 		}
 	}()
 
-	s.gccallEnforce(
-		evt.From, evt.CallCreator, evt.CallCreatorAlt,
-		evt.CallID, evt.GroupJID,
-		"", "ring", evt.Timestamp.Unix(),
-		"call_offer_ring", evt.Data,
-	)
+	s.gccallEnforce(evt.From, evt.CallCreator, evt.CallCreatorAlt, evt.CallID, evt.GroupJID)
 }
 
 // gccallEnforce is the SHARED enforcement core — both entry points
 // (CallOfferNotice notice + CallOffer ring) call this. It:
-//   1. logs the FULL RAW event (JSON debug — stage 1)
-//   2. checks antigccall on/off + action for the group
-//   3. applies owner/premium bypass (silent pass)
-//   4. applies the action: decline/ignore = silent, delete/kick = notify
-func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID string,
-	groupJID types.JID, media, evtType string, ts int64,
-	eventKind string, data *waBinary.Node) {
-
+//   1. checks antigccall on/off + action for the group
+//   2. applies owner/premium bypass (silent pass)
+//   3. applies the action: decline/ignore = silent, delete/kick = notify
+func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID string, groupJID types.JID) {
 	br := &bridge{s: s}
 
-	// ── STAGE 1 — FULL RAW EVENT (how the call arrived) ──────────────
-	// Yeh line dikhati hai call EXACTLY kaise aayi — saare fields + raw node.
-	br.GCCallDebugLog("GCCALL_EVENT", map[string]any{
-		"eventKind":     eventKind,
-		"from":          from.String(),
-		"callCreator":   creator.String(),
-		"callCreatorAlt": creatorAlt.String(),
-		"callID":        callID,
-		"groupJID":      groupJID.String(),
-		"media":         media,
-		"type":          evtType,
-		"timestamp":     ts,
-		"rawNode":       gccallNodeToJSON(data),
-	})
-
-	// Only group calls carry a GroupJID — double-check (1:1 calls come as
-	// *events.CallOffer with empty GroupJID and stay in handleAntiCall).
+	// Only group calls carry a GroupJID — 1:1 calls stay in handleAntiCall.
 	if groupJID.IsEmpty() {
-		br.GCCallDebugLog("GCCALL_SKIP_NOT_GROUP", map[string]any{
-			"callID": callID, "from": from.String(),
-		})
 		return
 	}
 
 	gid := groupJID.String()
 
-	// Is antigccall ON for this group? Off → nothing, silent.
+	// Is antigccall ON for this group? Off — nothing, silent.
 	on := goldcmds.AntigccallIsOn(br, gid)
 	action := goldcmds.AntigccallAction(br, gid)
-
-	// ── STAGE 2 — CONFIG (what the bot read for this group) ───────
-	br.GCCallDebugLog("GCCALL_CONFIG", map[string]any{
-		"groupJID": gid, "antigccall_on": on, "action": action,
-	})
-
 	if !on {
-		br.GCCallDebugLog("GCCALL_SKIP_OFF", map[string]any{
-			"groupJID": gid, "reason": "antigccall off for this group",
-		})
 		return
 	}
 
 	// The call creator — param se aata hai (CallCreator; empty
-	// ho to From fallback). gccallEnforce ke params hi source of truth
-	// hain — yahan koi evt re-declaration NAHI (compile fix).
+	// ho to From fallback).
 	if creator.IsEmpty() {
 		creator = from
 	}
 	if creator.IsEmpty() {
-		br.GCCallDebugLog("GCCALL_SKIP_EMPTY_CREATOR", map[string]any{
-			"callID": callID, "groupJID": gid,
-		})
 		return
 	}
 
 	if callID == "" {
-		br.GCCallDebugLog("GCCALL_SKIP_EMPTY_CALLID", map[string]any{
-			"groupJID": gid, "creator": creator.String(),
-		})
 		return
 	}
 
-	// ── STAGE 3 — OWNER BYPASS ─────────────────────────────────────────
+	// ── STAGE 3 — OWNER BYPASS ──
 	// The owner's own group calls ALWAYS pass SILENTLY — no decline,
 	// no notification. LID-tolerant via normalized JID + number-tail match.
 	creatorIsOwner := s.gccallCreatorIsOwner(creator.String()) ||
 		(!creatorAlt.IsEmpty() && s.gccallCreatorIsOwner(creatorAlt.String()))
 	if creatorIsOwner {
-		br.GCCallDebugLog("GCCALL_BYPASS_OWNER", map[string]any{
-			"groupJID": gid, "creator": creator.String(),
-			"reason": "owner group call — silent pass",
-		})
 		return
 	}
 
-	// ── STAGE 4 — PREMIUM BYPASS (.antigccallprem add) ────────────
+	// ── STAGE 4 — PREMIUM BYPASS (.antigccallprem add) ──
 	// Premium members' group calls are silently ignored — LID-tolerant
 	// (exact JID + number-tail), exactly like anticallCallerIsPremium.
 	creatorIsPremium := anticallCallerIsPremium(br, creator.String()) ||
 		(!creatorAlt.IsEmpty() && anticallCallerIsPremium(br, creatorAlt.String()))
 	if creatorIsPremium {
-		br.GCCallDebugLog("GCCALL_BYPASS_PREMIUM", map[string]any{
-			"groupJID": gid, "creator": creator.String(),
-			"reason": "premium member (.antigccallprem) — silent pass",
-		})
 		return
 	}
 
-	// ── STAGE 5 — IGNORE — completely silent pass ─────────────────
+	// ── STAGE 5 — IGNORE — completely silent pass ──
 	if action == "ignore" {
-		br.GCCallDebugLog("GCCALL_IGNORED", map[string]any{
-			"groupJID": gid, "creator": creator.String(), "callID": callID,
-			"reason": "action=ignore — silent pass, no notification",
-		})
 		return
 	}
 
-	// ── STAGE 6 — DECLINE / DELETE / KICK — close the group call ─────
+	// ── STAGE 6 — DECLINE / DELETE / KICK — close the group call ──
 	// RejectCall sends the WhatsApp reject node — the call is closed.
 	rejectErr := error(nil)
 	if s.Client != nil {
@@ -430,21 +303,12 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 	}
 
 	if rejectErr != nil {
-		br.GCCallDebugLog("GCCALL_REJECT_ERR", map[string]any{
-			"groupJID": gid, "creator": creator.String(), "callID": callID,
-			"action": action, "error": rejectErr.Error(),
-		})
 		// reject fail hone par bhi delete/kick ke notice mat bhejo —
-		// antilink jaisa hi behaviour: action ka pehla hissa fail → notify skip
+		// antilink jaisa hi behaviour: action ka pehla hissa fail — notify skip
 		return
 	}
 
-	br.GCCallDebugLog("GCCALL_REJECT_OK", map[string]any{
-		"groupJID": gid, "creator": creator.String(), "callID": callID,
-		"action": action,
-	})
-
-	// ── STAGE 7 — per-action notification (delete / kick only) ───────
+	// ── STAGE 7 — per-action notification (decline / delete / kick / warn) ──
 	creatorNum := botOwnNumber(creator.String())
 
 	// delete — antilink delete style: notice in the group, member stays
@@ -452,7 +316,7 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 		// notification bhejo group me (plain text — bridge.ReplyWithMentions
 		// footer ke saath). antilink "LINKS DELETED — LINKS NOT ALLOWED"
 		// jaisa hi pattern, sirf group call flavour.
-		notif := "*🔰 GROUP CALL CLOSED — GROUP CALLS NOT ALLOWED IN THIS GROUP*"
+		notif := "*\U0001F530 GROUP CALL CLOSED — GROUP CALLS NOT ALLOWED IN THIS GROUP*"
 		if s.Client != nil && s.Client.IsConnected() {
 			out := s.withFooter(notif)
 			_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
@@ -464,9 +328,6 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 				},
 			})
 		}
-		br.GCCallDebugLog("GCCALL_DELETE_NOTICE_SENT", map[string]any{
-			"groupJID": gid, "creator": creator.String(), "callID": callID,
-		})
 		return
 	}
 
@@ -478,11 +339,7 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 				[]types.JID{creator}, whatsmeow.ParticipantChangeRemove)
 		}
 		if kickErr != nil {
-			br.GCCallDebugLog("GCCALL_KICK_ERR", map[string]any{
-				"groupJID": gid, "creator": creator.String(), "callID": callID,
-				"error": kickErr.Error(),
-			})
-			notif := "*🔰 COULD NOT REMOVE CALLER — BOT NEEDS ADMIN RIGHTS*"
+			notif := "*\U0001F530 COULD NOT REMOVE CALLER — BOT NEEDS ADMIN RIGHTS*"
 			if s.Client != nil && s.Client.IsConnected() {
 				out := s.withFooter(notif)
 				_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
@@ -491,7 +348,7 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 			}
 			return
 		}
-		notif := "*🔰 @" + creatorNum + " REMOVED — GROUP CALL NOT ALLOWED*"
+		notif := "*\U0001F530 @" + creatorNum + " REMOVED — GROUP CALL NOT ALLOWED*"
 		if s.Client != nil && s.Client.IsConnected() {
 			out := s.withFooter(notif)
 			_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
@@ -503,18 +360,64 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 				},
 			})
 		}
-		br.GCCallDebugLog("GCCALL_KICK_OK", map[string]any{
-			"groupJID": gid, "creator": creator.String(), "callID": callID,
-			"kicked": true,
-		})
 		return
 	}
 
-	// decline (default) — SILENT close. NO notification anywhere.
-	br.GCCallDebugLog("GCCALL_DECLINE_SILENT", map[string]any{
-		"groupJID": gid, "creator": creator.String(), "callID": callID,
-		"reason": "action=decline — call closed silently, zero notification",
-	})
+	// warn — antilink warn style: call close + caller ko warning, max pe kick
+	if action == "warn" {
+		maxW := goldcmds.AntigccallMaxWarnings(br, gid)
+		newCount := goldcmds.AntigccallIncWarn(br, gid, creator.String())
+		if newCount >= maxW {
+			// Max warnings reached — kick
+			if s.Client != nil {
+				_, _ = s.Client.UpdateGroupParticipants(context.Background(), groupJID,
+					[]types.JID{creator}, whatsmeow.ParticipantChangeRemove)
+			}
+			notif := "*\U0001F530 DEAR @" + creatorNum + " REMOVED — GROUP CALLS NOT ALLOWED IN THIS GROUP (MAX WARNINGS REACHED)*"
+			if s.Client != nil && s.Client.IsConnected() {
+				out := s.withFooter(notif)
+				_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
+					ExtendedTextMessage: &waProto.ExtendedTextMessage{
+						Text: proto.String(out),
+						ContextInfo: &waProto.ContextInfo{
+							MentionedJID: []string{creator.String()},
+						},
+					},
+				})
+			}
+			goldcmds.AntigccallResetWarn(br, gid, creator.String())
+			return
+		}
+		// warning message (antilink warn style — @mention + count)
+		notif := "*\U0001F530 DEAR @" + creatorNum + " GROUP CALLS NOT ALLOWED IN THIS GROUP*"
+		notif += "\n*WARNING :❱ " + strconv.Itoa(newCount) + "/" + strconv.Itoa(maxW) + "*"
+		if s.Client != nil && s.Client.IsConnected() {
+			out := s.withFooter(notif)
+			_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
+				ExtendedTextMessage: &waProto.ExtendedTextMessage{
+					Text: proto.String(out),
+					ContextInfo: &waProto.ContextInfo{
+						MentionedJID: []string{creator.String()},
+					},
+				},
+			})
+		}
+		return
+	}
+
+	// decline (default) — call close + DEAR notice in the group.
+	notif := "*\U0001F530 DEAR @" + creatorNum + "*\n\n*GROUP CALLS NOT ALLOWED IN THIS GROUP*"
+	if s.Client != nil && s.Client.IsConnected() {
+		out := s.withFooter(notif)
+		_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
+			ExtendedTextMessage: &waProto.ExtendedTextMessage{
+				Text: proto.String(out),
+				ContextInfo: &waProto.ContextInfo{
+					MentionedJID: []string{creator.String()},
+				},
+			},
+		})
+	}
 }
 
 // gccallCreatorIsOwner reports whether the given group-call creator JID is
