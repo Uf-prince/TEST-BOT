@@ -368,10 +368,11 @@ func guardStartText(kind guardKind, orig int64) string {
 }
 
 func guardDoneText(orig, comp int64) string {
-	saved := 100 - (comp * 100 / orig)
-	return "*🛡️ GUARD COMPRESS DONE ✅*\n" +
-		"📈 " + guardFmtMB(orig) + " → " + guardFmtMB(comp) + " (-" + strconv.FormatInt(saved, 10) + "%)\n" +
-		"💾 Server bandwidth bach gayi!"
+	// SILENT MODE (owner order): compress hone pe koi follow-up reply NAHI —
+	// "GUARD COMPRESS DONE" message hata diya gaya hai. Sab silently hota hai.
+	_ = orig
+	_ = comp
+	return ""
 }
 
 func guardFailText(kind guardKind, orig int64, why string) string {
@@ -396,11 +397,12 @@ func (b *bridge) guardNotifyStart(info MsgInfoT, kind guardKind, orig int64) {
 }
 
 func (b *bridge) guardNotifyDone(info MsgInfoT, orig, comp int64) {
+	// SILENT MODE: done pe koi reply nahi bhejta — sirf log (user ko pata nahi chalega).
 	if b == nil || b.s == nil {
 		return
 	}
-	if mi, ok := info.(InfoT); ok {
-		b.s.Reply(mi, guardDoneText(orig, comp))
+	if orig > 0 && comp > 0 {
+		InfoLog("[GUARD] silent compress done %s -> %s", guardFmtMB(orig), guardFmtMB(comp))
 	}
 }
 

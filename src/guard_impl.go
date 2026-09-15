@@ -178,11 +178,11 @@ func guardCompressVideo(src string, target, maxLimit int64) (string, int64, stri
 }
 
 func guardNoteAudio(br int, size int64) string {
-	return "\n\n🛡️ *GUARD:* audio compress hui (" + strconv.Itoa(br) + "kbps mp3)" + guardSizeNote(size)
+	return "" // SILENT: audio compress note hata diya
 }
 
 func guardNoteVideo(h int, size int64) string {
-	return "\n\n🛡️ *GUARD:* " + strconv.Itoa(h) + "p compress karke bheji gayi hai (bandwidth bach gayi)" + guardSizeNote(size)
+	return "" // SILENT: video compress note hata diya
 }
 
 func guardSizeNote(size int64) string {
@@ -299,7 +299,7 @@ func guardCompressImageRun(src string, target, maxLimit, srcSize int64) (string,
 				continue
 			}
 			if st.Size() <= maxLimit {
-				return out, st.Size(), "\n\n🛡️ *GUARD:* image compress hui" + guardSizeNote(st.Size()), true
+				return out, st.Size(), "" /* SILENT: image compress note hata diya */, true
 			}
 			os.Remove(out)
 		}
