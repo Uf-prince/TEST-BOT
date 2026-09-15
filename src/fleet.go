@@ -288,8 +288,13 @@ func fleetHeartbeat() {
 	}
 	fleetLastHeartbeat = time.Now()
 	fleetHeartbeatMu.Unlock()
-	_, _ = fleetMgr.Redis.cmd("HSET", fleetServersHash, fleetSelfID,
-		strconv.FormatInt(time.Now().Unix(), 10))
+	// NAYA format: "<ts>|<sessions>|<max>" — Session Resurrector isse pata
+	// lagata hai kaunsa server FREE hai (sessions < max) bina kisi HTTP
+	// probe ke. Purana "<ts>" format bhi parse hota rehta hai (niche).
+	val := strconv.FormatInt(time.Now().Unix(), 10) + "|" +
+		strconv.Itoa(fleetMgr.SlotsUsed()) + "|" +
+		strconv.Itoa(maxPairedSessions())
+	_, _ = fleetMgr.Redis.cmd("HSET", fleetServersHash, fleetSelfID, val)
 }
 
 // fleetOrphanSweep releases claims held by dead servers so their sessions
@@ -353,7 +358,13 @@ func fleetHeartbeatMap() map[string]int64 {
 		return out
 	}
 	for i := 0; i+1 < len(pairs); i += 2 {
-		ts, err := strconv.ParseInt(strings.TrimSpace(pairs[i+1]), 10, 64)
+		// Backward-compatible: "<ts>|<sessions>|<max>" (naya) ya "<ts>"
+		// (purana) — sirf pehla segment hi ts hai.
+		v := strings.TrimSpace(pairs[i+1])
+		if i := strings.IndexByte(v, '|'); i >= 0 {
+			v = v[:i]
+		}
+		ts, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			continue
 		}

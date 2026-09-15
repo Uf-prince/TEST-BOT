@@ -281,6 +281,14 @@ func main() {
 	fleetInit(mgr, dbPath)
 	fleetLoadEgress()
 
+	// ── Session Resurrector (owner's watchdog enhancement) ───────────────
+	// Disk + Storj dono side ke saare sessions hamesha monitor: jo session
+	// WhatsApp se logged-in hai magar kahin bhi OFFLINE hai, use ek FREE
+	// server (servers.json) pe dispatch kar ke dobara ONLINE kar deta hai.
+	// Logged-out ignore, online-elsewhere skip, local-only revive-only.
+	// Pure background goroutine — bot speed / RAM / disk pe 0% asar.
+	StartSessionResurrector(mgr)
+
 	// ── Always-on reconnect watchdog ────────────────────────────────────────────────
 	// WhatsApp idle-disconnects sessions (login zinda, socket band). Ye
 	// watchdog har 30s sab sessions check karta hai aur dead socket ko

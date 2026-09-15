@@ -332,6 +332,17 @@ func StartPanel(mgr *Manager, port int) {
 
 	mux.HandleFunc("/health", mgr.HealthHandler)
 
+	// ── /fleetdispatch : cross-server session dispatch (Session Resurrector)
+	// ────────────────────────────────────────────────────────────────────
+	// POST {"jid":"923...@s.whatsapp.net","dispatch_id":"..."}
+	// Dusra (resurrector wala) server is endpoint pe offline session ka JID
+	// bhejta hai; ye server check karta hai ki slot free hai + session
+	// wakai offline hai, phir usko restore karke connect kar deta hai.
+	// Response: {"status":"connected|online_elsewhere|logged_out|full|busy|error"}
+	mux.HandleFunc("/fleetdispatch", func(w http.ResponseWriter, r *http.Request) {
+		handleFleetDispatch(mgr, w, r)
+	})
+
 	mux.HandleFunc("/sessions", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		sessions := mgr.List()
