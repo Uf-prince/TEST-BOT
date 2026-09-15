@@ -76,12 +76,6 @@ func (cli *Client) getStatusBroadcastRecipients(ctx context.Context) ([]types.JI
 		}
 		// TODO should there be a better way to separate contacts and found push names in the db?
 		if len(contact.FullName) > 0 {
-			// FIX (error 479 on status broadcast): WhatsApp server @lid-only
-			// JIDs ko status@broadcast fan-out recipients ke roop reject karta
-			// hai (whatsmeow issue #859). Sirf proper phone JIDs allow karo.
-			if jid.Server != types.DefaultUserServer {
-				continue
-			}
 			contactsArray = append(contactsArray, jid)
 		}
 	}

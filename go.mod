@@ -6,8 +6,7 @@ require (
 	github.com/minio/minio-go/v7 v7.3.0
 	go.mau.fi/libsignal v0.2.2
 	go.mau.fi/util v0.10.1-0.20260820140024-eb612d936fde
-	go.mau.fi/whatsmeow v0.0.0-20260904121843-28bfe537ea6a
-	golang.org/x/image v0.45.0
+	go.mau.fi/whatsmeow v0.0.0-20260914150520-0d3b644136bf
 	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.58.0
 )
