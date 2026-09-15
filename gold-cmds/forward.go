@@ -206,13 +206,14 @@ func fwdSuccessText(groups, chats int) string {
 		"*❮ " + strconv.Itoa(chats) + " ❯ CHATS*"
 }
 
-func fwdNoMentionText(prefix string) string {
-	return "*YOU HAVEN'T MENTION ANY MESSAGE*\n" +
-		"*THIS IS IMPORTANT FIRST MENTION THE MESSAGE*\n\n" +
-		"*AFTER MENTION TYPE SAME*\n" +
-		"*" + strings.ToUpper(prefix) + "FORWARD CHATS-NUMBER,GROUP-NUMBER*\n\n" +
-		"*EXAMPLE SAME LIKE THAT*\n" +
-		"*" + strings.ToUpper(prefix) + "FORWARD 6,7*"
+func fwdNoMentionText(prefix string, query string) string {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		q = strings.ToUpper(prefix) + "FORWARD 6,7"
+	}
+	return "*YOU HAVEN'T MENTIONED ANY MESSAGE*\n\n" +
+		"*FIRST MENTION THE MESSAGE AND TYPE*\n" +
+		q
 }
 
 func fwdWrongCmdText(prefix string) string {
@@ -290,7 +291,7 @@ func handleForward(s SessionBridge, info types.MessageInfo, args []string, prefi
 	// resolve the payload (quoted message first, then free text)
 	payload := fwdResolvePayload(s, info, rest)
 	if payload == nil {
-		s.Reply(info, fwdNoMentionText(prefix))
+		s.Reply(info, fwdNoMentionText(prefix, strings.TrimSpace(prefix+"forward "+rawArg)))
 		return
 	}
 
