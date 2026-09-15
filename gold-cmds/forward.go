@@ -185,6 +185,10 @@ func fwdResolvePayload(s SessionBridge, info types.MessageInfo, freeText string)
 func fwdGuideText(prefix string, groups, chats int) string {
 	g := strconv.Itoa(groups)
 	c := strconv.Itoa(chats)
+	// example numbers fit INSIDE the real totals, so typing the example
+	// as-is always works (no exceed-error loop for small accounts).
+	exChats := fwdClampExample(3, chats)
+	exGroups := fwdClampExample(6, groups)
 	return "*🔰 FORWARD COMMAND GUIDE 🔰*\n\n" +
 		"*WITH THIS COMMAND YOU CAN FORWARD YOUR MESSAGE WITHOUT GOING TO ANY GROUP / CHAT*\n\n" +
 		"*ALL YOUR WHATSAPP GROUPS / CHATS HAVE BEEN COUNTED*\n\n" +
@@ -196,7 +200,7 @@ func fwdGuideText(prefix string, groups, chats int) string {
 		"*" + strings.ToUpper(prefix) + "FORWARD CHATS-NUMBER,GROUP-NUMBER*\n\n" +
 		"YOU HAVE TO WRITE THE NUMBER IN PLACE OF *\"CHATS\"* AND THE NUMBER IN PLACE OF *GROUP* OF HOW MANY CHATS HOW MANY GROUPS YOU WANT TO SEND THE MESSAGE TO OK\n\n" +
 		"FOR EXAMPLE\n" +
-		"*" + strings.ToUpper(prefix) + "FORWARD 3,6*\n\n" +
+		"*" + strings.ToUpper(prefix) + "FORWARD " + strconv.Itoa(exChats) + "," + strconv.Itoa(exGroups) + "*\n\n" +
 		"FIRST YOU WILL WRITE THE NUMBER OF *\"CHATS\"* THEN THE NUMBER OF *\"GROUPS\"* OK THEN WHEN YOU WRITE IT LIKE THIS THE MESSAGE WILL BE FORWARDED TO THAT MANY *\"CHATS\"* AND THAT MANY *\"GROUPS\"* *INSTANT*"
 }
 
@@ -216,20 +220,39 @@ func fwdNoMentionText(prefix string, query string) string {
 		q
 }
 
-func fwdWrongCmdText(prefix string) string {
+// fwdClampExample clamps a default example number to the user's real total.
+// If the total is 0 (collection failed / empty account) the default is kept.
+func fwdClampExample(def, total int) int {
+	if total > 0 && total < def {
+		return total
+	}
+	return def
+}
+
+func fwdWrongCmdText(prefix string, groups, chats int) string {
+	// example numbers fit INSIDE the user's real totals, so the owner can
+	// type the example line as-is and it works (no exceed-error loop).
+	exChats := fwdClampExample(6, chats)
+	exGroups1 := fwdClampExample(8, groups)
+	exGroups2 := fwdClampExample(7, groups)
 	return "*YOU HAVE TYPED WRONG COMMAND*\n\n" +
 		"*TYPE SAME LIKE THAT*\n" +
-		"*" + strings.ToUpper(prefix) + "FORWARD 6,8*\n\n" +
-		"*" + strings.ToUpper(prefix) + "FORWARD 6,7 YOUR MESSAGE*\n\n" +
+		"*" + strings.ToUpper(prefix) + "FORWARD " + strconv.Itoa(exChats) + "," + strconv.Itoa(exGroups1) + "*\n\n" +
+		"*" + strings.ToUpper(prefix) + "FORWARD " + strconv.Itoa(exChats) + "," + strconv.Itoa(exGroups2) + " YOUR MESSAGE*\n\n" +
 		"*BY TYPING IT LIKE THIS YOUR MESSAGE WILL BE DIRECTLY FORWARDED*"
 }
 
 func fwdExceedText(prefix string, groups, chats int) string {
+	// example numbers must fit INSIDE the user's real totals:
+	// the owner wants the sample line to be typed-as-is and work,
+	// so clamp each number to the actual available count.
+	exChats := fwdClampExample(6, chats)
+	exGroups := fwdClampExample(8, groups)
 	return "*YOUR TOTAL GROUPS ❮ " + strconv.Itoa(groups) + " ❯*\n" +
 		"*YOUR TOTAL CHATS ❮ " + strconv.Itoa(chats) + " ❯*\n\n" +
 		"*YOUR WHATSAPP ONLY HAS THIS MANY GROUPS AND CHATS. YOU HAVE TYPED MORE THAN THAT. PLEASE TYPE THEM CORRECTLY ACCORDING TO THESE CHATS AND GROUPS*\n\n" +
 		"*TYPE SAME LIKE THAT*\n" +
-		"*" + strings.ToUpper(prefix) + "FORWARD 6,8*"
+		"*" + strings.ToUpper(prefix) + "FORWARD " + strconv.Itoa(exChats) + "," + strconv.Itoa(exGroups) + "*"
 }
 
 // ── command handler ─────────────────────────────────────────────────────────
@@ -258,6 +281,12 @@ func handleForward(s SessionBridge, info types.MessageInfo, args []string, prefi
 	}
 
 	// MODE 2 — .forward N,M [text] → instant forward
+	// collect the user's real totals ONCE — every error example below
+	// (wrong-command / exceed) uses numbers clamped to these totals, so
+	// typing the shown example always works instead of looping errors.
+	groups := fwdCollectGroups(cli)
+	chats := fwdCollectChats(cli)
+
 	// strict shape: "N,M" followed by optional free text
 	first := rawArg
 	rest := ""
@@ -270,13 +299,13 @@ func handleForward(s SessionBridge, info types.MessageInfo, args []string, prefi
 	first = strings.ReplaceAll(first, "}", "")
 	parts := strings.Split(first, ",")
 	if len(parts) != 2 {
-		s.Reply(info, fwdWrongCmdText(prefix))
+		s.Reply(info, fwdWrongCmdText(prefix, len(groups), len(chats)))
 		return
 	}
 	chatN, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
 	groupN, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
 	if err1 != nil || err2 != nil || chatN < 0 || groupN < 0 || (chatN == 0 && groupN == 0) {
-		s.Reply(info, fwdWrongCmdText(prefix))
+		s.Reply(info, fwdWrongCmdText(prefix, len(groups), len(chats)))
 		return
 	}
 
@@ -289,9 +318,7 @@ func handleForward(s SessionBridge, info types.MessageInfo, args []string, prefi
 		return
 	}
 
-	// collect totals and check limits (only when there IS a payload)
-	groups := fwdCollectGroups(cli)
-	chats := fwdCollectChats(cli)
+	// check limits (totals already collected at MODE 2 entry)
 	if chatN > len(chats) || groupN > len(groups) {
 		s.Reply(info, fwdExceedText(prefix, len(groups), len(chats)))
 		return
@@ -306,7 +333,7 @@ func handleForward(s SessionBridge, info types.MessageInfo, args []string, prefi
 		dests = append(dests, groups[:groupN]...)
 	}
 	if len(dests) == 0 {
-		s.Reply(info, fwdWrongCmdText(prefix))
+		s.Reply(info, fwdWrongCmdText(prefix, len(groups), len(chats)))
 		return
 	}
 
