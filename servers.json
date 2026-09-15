@@ -4,15 +4,15 @@
   "servers": [
     {
       "name": "SERVER 1",
-      "url": "https://gold-md-xsvr1.onrender.com"
+      "url": "https://gold-md-xsvrr1.onrender.com"
     },
     {
       "name": "SERVER 2",
-      "url": "https://gold-md-xsvr2.onrender.com"
+      "url": "https://gold-md-xsvrr2.onrender.com"
     },
     {
       "name": "SERVER 3",
-      "url": "https://gold-md-xsvr3.onrender.com"
+      "url": "https://gold-md-xsvrr3.onrender.com"
     },
     {
       "name": "SERVER 4",
@@ -32,11 +32,11 @@
     },
     {
       "name": "SERVER 8",
-      "url": "https://gold-md-svrr12.onrender.com"
+      "url": "https://gold-md-xsvrr4.onrender.com"
     },
     {
       "name": "SERVER 9",
-      "url": "https://gold-md-svrr7.onrender.com"
+      "url": "https://gold-md-xsvrr5.onrender.com"
     },
     {
       "name": "SERVER 10",
@@ -44,7 +44,7 @@
     },
     {
       "name": "SERVER 11",
-      "url": "https://gold-md-svrr9.onrender.com"
+      "url": "https://gold-md-xsvrr6.onrender.com"
     },
     {
       "name": "SERVER 12",
@@ -64,7 +64,7 @@
     },
     {
       "name": "SERVER 16",
-      "url": "https://gold-md-xsvr7.onrender.com"
+      "url": "https://gold-md-xsvrr7.onrender.com"
     },
     {
       "name": "SERVER 17",
@@ -116,11 +116,11 @@
     },
     {
       "name": "SERVER 29",
-      "url": "https://gold-md-xsvr20.onrender.com"
+      "url": "https://gold-md-xsvrr8.onrender.com"
     },
     {
       "name": "SERVER 30",
-      "url": "https://gold-md-xsvr21.onrender.com"
+      "url": "https://gold-md-xsvrr9.onrender.com"
     },
     {
       "name": "SERVER 31",
