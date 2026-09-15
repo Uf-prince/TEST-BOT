@@ -97,7 +97,7 @@ var (
 	tnRowRe        = regexp.MustCompile(`(?s)<tr[^>]*data-message[^>]*>(.*?)</tr>`)
 	tnCellRe       = regexp.MustCompile(`(?s)<t[dh][^>]*>(.*?)</t[dh]>`)
 	tnTagRe        = regexp.MustCompile(`<[^>]+>`)
-	tnOTPRe        = regexp.MustCompile(`\b(\d{4,8})\b`)
+	tnOTPRe        = regexp.MustCompile(`(?i)\b(?:code|otp|pin|token|password|passcode|verification|verif|confirm[a-z]*|security|login)\b[^\d]{0,40}?(\d{4,8}|\d{3}[- \.]\d{3})\b|\b(\d{4,8}|\d{3}[- \.]\d{3})\b[^\d]{0,40}?\b(?:is your|code|otp)\b`)
 	tnCountryRe    = regexp.MustCompile(`(?s)<h1[^>]*>[^<]*</h1>\s*<[^>]*>\s*([A-Za-z][A-Za-z ()&.'-]{2,30})`)
 )
 
@@ -166,7 +166,12 @@ func tnParseInbox(html string) []tnInboxSMS {
 		if len(cells) >= 3 && cells[0] != "" && cells[1] != "" {
 			otp := ""
 			if m := tnOTPRe.FindStringSubmatch(cells[1]); m != nil {
-				otp = m[1]
+				// 2-group regex: group1 = "code/otp/pin ... 1234", group2 = "1234 is your code"
+				if len(m) > 1 && m[1] != "" {
+					otp = m[1]
+				} else if len(m) > 2 && m[2] != "" {
+					otp = m[2]
+				}
 			}
 			out = append(out, tnInboxSMS{From: cells[0], Text: cells[1], Date: cells[2], OTP: otp})
 		}
@@ -197,7 +202,84 @@ func tnGetRandom() (string, string, error) {
 	return num, html, nil
 }
 
+// tnGetRandomWithInbox — OTP FIX (owner request): AnonymSMS ka random endpoint
+// aksar AISE fresh numbers deta hai jinke inbox me KUCH bhi nahi (0 SMS) —
+// us number pe koi OTP/verification SMS kabhi nahi aayi thi, is liye user
+// ko number milta tha lekin .checknumber pe hamesha "no SMS" milta tha.
+// FIX: random numbers tab tak try karo (max tnRandomTries) jab tak ek aisa
+// number na mile jiske inbox me KAM SE KAM EK SMS ho. Aise number pe naya
+// OTP aane ka chance bhi zyada hai (number active hai, SMS receive karta hai).
+const tnRandomTries = 8
+
+func tnGetRandomWithInbox() (string, []tnInboxSMS, error) {
+	var lastNum, lastHTML string
+	var lastSms []tnInboxSMS
+	for i := 0; i < tnRandomTries; i++ {
+		num, html, err := tnGetRandom()
+		if err != nil {
+			time.Sleep(300 * time.Millisecond)
+			continue
+		}
+		lastNum, lastHTML = num, html
+		smsList, _, err2 := tnGetInbox(num)
+		if err2 != nil {
+			time.Sleep(300 * time.Millisecond)
+			continue
+		}
+		lastSms = smsList
+		if len(smsList) > 0 {
+			_ = lastHTML
+			return num, smsList, nil // ACTIVE number mil gaya — inbox me SMS hai
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	// koi active number nahi mila — last wala (empty inbox) fallback me de do
+	_ = lastHtmlFallback{}
+	if lastNum != "" {
+		return lastNum, lastSms, nil
+	}
+	return "", nil, fmt.Errorf("no usable random number")
+}
+
+type lastHtmlFallback struct{}
+
 // ── reply builders ────────────────────────────────────────────────────
+
+// tnDownMsg — service down reply (shared).
+func tnDownMsg(prefix string) string {
+	return "*\U0001f530 TEMP NUMBER SERVICE DOWN :\u2771*\n\n*SITE NOT RESPONDING \u2014 TRY AGAIN IN A FEW MINUTES*"
+}
+
+// tnCardWithInbox — OTP FIX: card ke sath CHOTA inbox preview bhi do
+// (latest 3 SMS + unke OTP codes) taake user ko turant pata chale ye
+// number active hai aur purane codes/OTP pattern dikhe.
+func tnCardWithInbox(num string, smsList []tnInboxSMS, prefix string) string {
+	var b strings.Builder
+	b.WriteString("*\U0001f530 FREE TEMP NUMBER \U0001f530*\n\n")
+	b.WriteString("*NUMBER :\u2771 +" + num + "*\n")
+	b.WriteString("*STATUS :\u2771 ACTIVE \u2014 INBOX LIVE (RECEIVES SMS)*\n")
+	if len(smsList) > 0 {
+		b.WriteString("\n*\U0001f530 RECENT SMS (LAST " + fmt.Sprint(min(3, len(smsList))) + ") :\u2771*\n")
+		n := smsList
+		if len(n) > 3 {
+			n = n[:3]
+		}
+		for i, sms := range n {
+			b.WriteString("*\u276f FROM :\u2771 " + sms.From + "*\n*" + sms.Text + "*")
+			if sms.OTP != "" {
+				b.WriteString("\n*\U0001f530 LAST CODE :\u2771 " + sms.OTP + "*")
+			}
+			b.WriteString("\n\n")
+			_ = i
+		}
+	} else {
+		b.WriteString("\n*INBOX IS EMPTY RIGHT NOW \u2014 SMS WILL APPEAR WHEN SOMEONE SENDS ONE*\n\n")
+	}
+	b.WriteString("*\U0001f530 READ THE SMS :\u2771*\n*" + prefix + "checknumber +" + num + "*\n\n")
+	b.WriteString("*\U0001f530 WANT A DIFFERENT ONE :\u2771*\n*" + prefix + "newnumber*\n\n")
+	b.WriteString("*\U0001f530 MORE :\u2771*\n*" + prefix + "delnumber \u276e NUMBER \u276f \u2014 DROP A NUMBER AND GET A NEW ONE*\n*" + prefix + "tempnumber \u2014 FRESH TEMP NUMBER*")
+	return b.String()
+}
 
 // tnCard renders a temp-number reply with country + how to use it.
 func tnCard(num, html string, prefix string) string {
@@ -254,12 +336,12 @@ func tnGuide(prefix string) string {
 
 // handleTempNumber — fresh temp number (menu entry).
 func handleTempNumber(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	num, html, err := tnGetRandom()
+	num, smsList, err := tnGetRandomWithInbox()
 	if err != nil {
-		s.Reply(info, "*🔰 TEMP NUMBER SERVICE DOWN :❱*\n\n*SITE NOT RESPONDING — TRY AGAIN IN A FEW MINUTES*")
+		s.Reply(info, tnDownMsg(prefix))
 		return
 	}
-	s.Reply(info, tnCard(num, html, prefix))
+	s.Reply(info, tnCardWithInbox(num, smsList, prefix))
 }
 
 // handleCheckNumber — read a number's inbox.
@@ -281,7 +363,7 @@ func handleCheckNumber(s SessionBridge, info types.MessageInfo, args []string, p
 func handleDelNumber(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	// old number (if any) is simply dropped — public site numbers are
 	// server-managed, "delete" means forget it and pull a new one.
-	num, html, err := tnGetRandom()
+	num, smsList, err := tnGetRandomWithInbox()
 	if err != nil {
 		s.Reply(info, "*🔰 TEMP NUMBER SERVICE DOWN :❱*\n\n*SITE NOT RESPONDING — TRY AGAIN IN A FEW MINUTES*")
 		return
@@ -296,7 +378,7 @@ func handleDelNumber(s SessionBridge, info types.MessageInfo, args []string, pre
 		b.WriteString("*DROPPED :❱ +" + dropped + "*\n")
 	}
 	b.WriteString("\n")
-	b.WriteString(tnCard(num, html, prefix))
+	b.WriteString(tnCardWithInbox(num, smsList, prefix))
 	s.Reply(info, b.String())
 }
 
@@ -315,12 +397,12 @@ func tnDigits(args []string) string {
 
 // handleNewNumber — random fresh number (hidden alias).
 func handleNewNumber(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	num, html, err := tnGetRandom()
+	num, smsList, err := tnGetRandomWithInbox()
 	if err != nil {
-		s.Reply(info, "*🔰 TEMP NUMBER SERVICE DOWN :❱*\n\n*SITE NOT RESPONDING — TRY AGAIN IN A FEW MINUTES*")
+		s.Reply(info, tnDownMsg(prefix))
 		return
 	}
-	s.Reply(info, tnCard(num, html, prefix))
+	s.Reply(info, tnCardWithInbox(num, smsList, prefix))
 }
 
 func init() {
