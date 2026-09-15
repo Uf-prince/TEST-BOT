@@ -78,6 +78,7 @@ func AntigccallResetWarn(s SessionBridge, groupJID, userJID string) {
 // gccallFullInfo is the full .antigccall command info (antilink style).
 func gccallFullInfo(prefix string, enabled bool, curAction string) string {
 	return "*\U0001F530 ANTIGCCALL COMMAND INFO \U0001F530*\n\n" +
+		"*TYPE ❰ " + prefix + "ANTIGCCALLPREM ❱ FOR INFO*\n\n" +
 		"*TYPE ❰ " + prefix + "ANTIGCCALL ON ❱*\n" +
 		"*WHEN ANTIGCCALL IS ON THEN IF ANY MEMBER STARTS A GROUP CALL IN THIS GROUP THE BOT WILL DETECT THE GROUP CALL AND ACTION WILL APPLY ON THE CALLER*\n\n\n" +
 		"*TYPE ❰ " + prefix + "ANTIGCCALL OFF ❱*\n" +

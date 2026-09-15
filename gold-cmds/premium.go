@@ -251,7 +251,10 @@ func init() {
 	Register(Command{Name: "anticalprem", OwnerOnly: false, Hidden: true, Run: handleAntiCallPrem})
 
 	// antigccallprem (antigccallpremium / antigccallprem / antigcallprem)
-	Register(Command{Name: "antigccallprem", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO SET PREMIUM GROUP CALL CONTROL FOR THE GROUP.", OwnerOnly: false, Run: handleAntiGcCallPrem})
+	// Owner order: .menu se GAYAB — par command kaam karta rahega (Hidden sirf
+	// menu listing ko hataata hai, dispatch par koi asar nahi). Premium bypass
+	// ab sirf uske jaanne walon ke liye — iska hint .antigccall info me hai.
+	Register(Command{Name: "antigccallprem", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO SET PREMIUM GROUP CALL CONTROL FOR THE GROUP.", OwnerOnly: false, Hidden: true, Run: handleAntiGcCallPrem})
 	Register(Command{Name: "antigccallpremium", OwnerOnly: false, Hidden: true, Run: handleAntiGcCallPrem})
 	Register(Command{Name: "antigcallprem", OwnerOnly: false, Hidden: true, Run: handleAntiGcCallPrem})
 }
