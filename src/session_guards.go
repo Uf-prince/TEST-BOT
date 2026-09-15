@@ -550,6 +550,51 @@ func guardRemoteSessionOnline(serverURL, jid string) bool {
 	}
 	return false
 }
+// guardRemoteSessionPresent: holder ke /sessions me ye JID mojood hai ya
+// nahi — ONLINE ya OFFLINE dono gin lo (fleetHolderRunsSession isko use
+// karta hai). OFFLINE-bhi-mojood = device us holder ke paas hai, bas
+// reconnect-backoff me hai = sahi holder, respect. NAHI mila = holder
+// ke paas session hai hi nahi = ZOMBIE claim (owner ke 2347067958986 wala
+// case: server zinda tha, session wahan chal nahi raha tha).
+//
+// SAFE-SIDE RULE: network fail / 4xx-5xx / decode fail = zombie CONFIRM
+// nahi hua = claim respect (true). Ye path sirf 10min+ STALE claim pe
+// chalta hai — ghalat "present" hone se sirf takeover 10min der se hoga,
+// ghalat "absent" hone se double-connect WAR (stream-replace = logout)
+// ho sakta hai. Owner ka purana order: war kabhi nahi.
+//
+// Payload 1MB tak limit (panel list chhota hota hai — ek server max 2
+// sessions + chhote pending entries, ~1-2KB hi hota hai).
+func guardRemoteSessionPresent(serverURL, jid string) bool {
+	if serverURL == "" || jid == "" {
+		return false
+	}
+	cl := &http.Client{Timeout: guardProbeTimeout}
+	resp, err := cl.Get(serverURL + "/sessions")
+	if err != nil {
+		return true // network fail = confirm nahi = safe side (respect)
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusOK {
+		return true // 4xx/5xx = process zinda, layer issue = safe side
+	}
+	var seen guardSessionsSeen
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&seen); err != nil {
+		return true // decode fail = safe side
+	}
+	for _, s := range seen.Sessions {
+		// ONLINE ya OFFLINE — dono me se koi bhi match kaafi hai
+		// (device holder ke paas hai; offline sirf backoff hai).
+		if s.JID == jid {
+			return true
+		}
+	}
+	// JID holder ke /sessions me NAHI mila — zombie claim confirm.
+	return false
+}
 
 // ══════════════════ (merged from reconnect_watchdog.go) ══════════════════
 // ============================================================================

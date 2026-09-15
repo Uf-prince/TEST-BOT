@@ -658,6 +658,32 @@ func (m *Manager) StartSession(jid string) error {
 	//		"devJid":   devJidStr,
 	//	})
 	if dev == nil {
+		// OWNER FIX ("old sessions load hi nahi hote"): device disk pe nahi
+		// mila — LEKIN fleet blob Storj pe ho sakta hai (ye session kisi
+		// aur server pe pair hua tha). Pehle WALI Storj se restore karo —
+		// 45s verify-window ke andar hi WhatsApp truth bhi mil jayega.
+		// BLOB MISSING = sach me purge/mara hua → neeche wala purana path.
+		// (local-only direct pair ka blob hota hi nahi — restore no-op.)
+		if !isLocalOnlyJID(m.cfg.PairingDir, jid) && fleetRestoreBlobFromStorj(jid) {
+			// restore ho gaya — ab dobara device lookup
+			parsed2, perr := types.ParseJID(jid)
+			if perr == nil {
+				if d2, derr := m.container.GetDevice(context.Background(), parsed2); derr == nil && d2 != nil {
+					dev = d2
+				} else {
+					allDevs2, _ := m.container.GetAllDevices(context.Background())
+					for _, d := range allDevs2 {
+						if d.ID != nil && d.ID.User == parsed2.User && d.ID.Server == parsed2.Server {
+							if dev == nil || d.ID.Device > dev.ID.Device {
+								dev = d
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if dev == nil {
 		// WhatsApp has no saved device for this JID.
 		// Check Redis: if Redis says this JID is registered, Redis is lying
 		// (WhatsApp is the source of truth — no device = logged out or never paired).

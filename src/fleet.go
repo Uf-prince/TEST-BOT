@@ -84,6 +84,7 @@ const (
 	fleetFailCooldown = 10 * time.Minute // failed restore retry cooldown
 	fleetHTTPTimeout  = 4 * time.Second  // remote /health timeout (quick public .server)
 	fleetProbeAfter   = 2 * time.Minute  // heartbeat stale = ACTIVE /health probe start
+	fleetClaimFreshTrust = 10 * time.Minute // fresh claim = trust, probe nahi (race window)
 )
 
 // fleetBudgetMB: Render free monthly egress budget (5GB). .render5gb iske
@@ -428,12 +429,63 @@ func fleetHeldByLiveServer(jid string) bool {
 		return false
 	}
 	hb := fleetHeartbeatMap()
-	for sid := range holders {
-		if sid != fleetSelfID && fleetHolderAlive(sid, hb) {
-			return true // koi aur live server isko chala raha hai
+	for sid, ts := range holders {
+		if sid == fleetSelfID {
+			continue
+		}
+		if !fleetHolderAlive(sid, hb) {
+			continue // dead holder — claim stale, ignore (orphan sweep)
+		}
+		// LIVE holder mila. Magar ye ZOMBIE-CLAIM ho sakta hai: server
+		// process zinda hai magar ye session uspe chal hi nahi raha
+		// (claim connect ke waqt EK baar likha jata hai, phir kabhi
+		// refresh nahi hota — session chala gaya / restore aadha raha
+		// / disk wipe ho gaya). Asli check: holder ke /sessions me ye
+		// JID mojood hai ya nahi (online YA offline — offline = device
+		// uske paas hai, backoff/reconnect-loop me hai = sahi holder).
+		if fleetHolderRunsSession(sid, ts, jid) {
+			return true // waqai is live server ke paas ye session hai
 		}
 	}
 	return false
+}
+
+// fleetHolderRunsSession: live claim-holder ke paas ye JID ka session
+// WAQAI hai? LIVE server + missing session = ZOMBIE CLAIM (owner ke
+// 2347067958986 wala case: gold-md-botx zinda tha, session wahan tha hi
+// nahi — takeover hamesha ke liye block tha).
+//
+// RULES (bandwidth-safe, war-safe):
+//   claim FRESH (<10min) → holder ne abhi connect/boot kiya hai — race
+//     window me hai, probe ki zaroorat nahi — RESPECT (steal karne pe
+//     double-connect war = stream-replace = logout).
+//   claim STALE (10min+) → holder ke /sessions me JID dhoondo:
+//     mojood (online ya offline) → holder device rakh raha hai → RESPECT.
+//     NAHI mila → ZOMBIE → takeover allowed (ye function false deta hai).
+func fleetHolderRunsSession(sid string, claimTS int64, jid string) bool {
+	if sid == "" {
+		return false
+	}
+	// hum khud: device disk pe hai ya nahi — direct check.
+	if sid == fleetSelfID {
+		return fleetDeviceExists(jid)
+	}
+	// fresh claim → trust (boot/restore race window). Isi window me
+	// probing karna race me hi ghusna hai — bilkul nahi.
+	if claimTS > 0 && time.Now().Unix()-claimTS < int64(fleetClaimFreshTrust/time.Second) {
+		return true
+	}
+	url := fleetServerURL(sid)
+	if url == "" {
+		// URL hi resolve nahi hua — full server-ID/URL nahi pata.
+		// Err on the SAFE side: agar claim fresh nahi hai aur probe
+		// possible hi nahi hai to zombie confirm nahi kar sakte.
+		return claimTS > 0
+	}
+	// stale claim → holder ke /sessions me JID mojood hai ya nahi.
+	// Present (online/offline) = device holder ke paas = respect.
+	// Absent = zombie claim → takeover allowed.
+	return guardRemoteSessionPresent(url, jid)
 }
 
 // fleetServerURL resolves a serverID → base URL (https://{sid}/health).
@@ -551,7 +603,7 @@ func fleetClaimAvailable() {
 			// tie-break me hum hi jeetenge, HDEL ka intezar nahi)
 			hb := fleetHeartbeatMap()
 			taken := false
-			for sid := range holders {
+			for sid, ts := range holders {
 				if sid == fleetSelfID {
 					// SELF-CLAIM HEAL: claim humare naam hai magar local
 					// device nahi (ephemeral redeploy / disk wipe + per-sid
@@ -566,8 +618,16 @@ func fleetClaimAvailable() {
 					continue
 				}
 				if fleetHolderAlive(sid, hb) {
-					taken = true
-					break
+					// LIVE holder — magar ZOMBIE-CLAIM check bhi (owner fix
+					// 2347067958986 wala case): server zinda magar ye session
+					// uspe chal nahi raha → purana claim → takeover ALLOWED.
+					// Fresh-claim trust window (fleetClaimFreshTrust) race-safe.
+					if fleetHolderRunsSession(sid, ts, jid) {
+						taken = true
+						break
+					}
+					// zombie claim — ONLINE-ELSEWHERE guard neeche dobara
+					// verify karega, phir takeover chalega.
 				}
 			}
 			if taken {
@@ -825,6 +885,14 @@ func fleetUserPart(jid string) string {
 // fleetJIDTables: whatsmeow ke wo tables jinme session-scoped rows hain.
 // Pattern: "9231...:%" matches "9231...:5@s.whatsapp.net" (ad-JID form)
 // aur "9231...:@..." (device 0) — phone numbers me %/_ nahi hote, safe.
+//
+// BANDWIDTH FIX (owner order — Render 5GB): whatsmeow_message_secrets
+// blob se NIKALA GAYA. Ek purane session ka ye table 212,983 rows tak
+// badh chuka tha → per-JID blob 44.8MB → 10-min refresh 6GB+/day egress.
+// Connection ke liye ye table zaroori NAHI (sirf purane msgs re-decrypt
+// ke liye). Naye messages bilkul theek decrypt hote hain. event_buffer /
+// retry_buffer (transient retry queues) bhi hata diye — whatsmeow inhe
+// khud rebuild kar leta hai.
 var fleetJIDTables = []struct{ table, col string }{
 	{"whatsmeow_device", "jid"},
 	{"whatsmeow_pre_keys", "jid"},
@@ -836,11 +904,9 @@ var fleetJIDTables = []struct{ table, col string }{
 	{"whatsmeow_app_state_mutation_macs", "jid"},
 	{"whatsmeow_contacts", "our_jid"},
 	{"whatsmeow_chat_settings", "our_jid"},
-	{"whatsmeow_message_secrets", "our_jid"},
 	{"whatsmeow_privacy_tokens", "our_jid"},
 	{"whatsmeow_nct_salt", "our_jid"},
-	{"whatsmeow_event_buffer", "our_jid"},
-	{"whatsmeow_retry_buffer", "our_jid"},
+	{"whatsmeow_lid_map", "jid"},
 }
 
 // fleetDeviceExists checks the local sqlite store for this JID's device
@@ -864,6 +930,13 @@ func fleetDeviceExists(jid string) bool {
 	err = db.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM whatsmeow_device WHERE jid LIKE ?", user+":%").Scan(&n)
 	return err == nil && n > 0
+}
+
+// fleetRestoreBlobFromStorj: StartSession/AutoLoad ka public wrapper —
+// device local disk pe nahi mila to Storj fleet blob se restore karke
+// true return. Restore fail / blob missing → false (caller purana path).
+func fleetRestoreBlobFromStorj(jid string) bool {
+	return fleetRestoreBlob(jid) == nil
 }
 
 // fleetRestoreBlob downloads the per-JID sqlite blob from Storj and merges
@@ -1040,6 +1113,15 @@ func fleetRefreshBlobs() {
 				continue
 			}
 			fleetSaveBlob(s.JID)
+			// CLAIM RE-STAMP (owner fix — zombie-claim ka ROOT source):
+			// claim connect pe EK baar likha jata tha, phir hamesha stale.
+			// Har 10-min refresh pe claim fresh → doosre servers
+			// fresh-trust window me asli owner ko bina probe respect
+			// karte hain → /sessions probe traffic near-zero + stale
+			// claims ka source hi khatam. (HSET chhota hai — bandwidth
+			// cost negligible, blob upload to hash-skip ho hi jata hai.)
+			_, _ = m.Redis.cmd("HSET", fleetClaimPrefix+s.JID, fleetSelfID,
+				strconv.FormatInt(time.Now().Unix(), 10))
 			time.Sleep(2 * time.Second) // Storj pe load spread
 		}
 	}()
@@ -1095,11 +1177,13 @@ func fleetOnConnected(jid string) {
 		// (dead server ka data delete + owner ko msg) kabhi nahi chalta.
 		holders := fleetClaimHolders(jid)
 		live := false
-		for sid := range holders {
+		for sid, ts := range holders {
 			if sid == fleetSelfID {
 				continue
 			}
-			if fleetHolderAlive(sid, fleetHeartbeatMap()) {
+			if fleetHolderAlive(sid, fleetHeartbeatMap()) && fleetHolderRunsSession(sid, ts, jid) {
+				// live holder + session uske paas WAQAI hai (zombie claim
+				// nahi) — usi ko chalane do, hum chup (war-safe).
 				live = true
 				break
 			}

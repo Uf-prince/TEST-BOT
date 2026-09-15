@@ -298,21 +298,37 @@ func main() {
 	// ── periodic session-DB backup so mid-session key updates aren't lost ──
 	if redis != nil {
 		go func() {
-			ticker := time.NewTicker(10 * time.Minute)
-			defer ticker.Stop()
-			for range ticker.C {
-				if mgr.IsShuttingDown() {
-					return
+			// BANDWIDTH FIX (owner order — Render 5GB): per-SID poora-DB
+			// backup (goldmd.db ~62MB base64 ≈ 83MB) ab 24 GHANTE me EK
+			// baar. Failover/restore per-JID fleet blobs se hota hai (wo
+			// har 10-min slim hoti hain) — poora-DB sirf last-resort
+			// safety net hai, daily snapshot kaafi hai.
+			backupTick := time.NewTicker(24 * time.Hour)
+			defer backupTick.Stop()
+			// FLEET: connected sessions ke per-JID blobs refresh (key
+			// rotation / prekey updates fleet-wide available rahein).
+			// Per-JID blob ab SLIM hai (message_secrets/buffers out) —
+			// purana 44.8MB → naya ~300KB, 10-min refresh ab safe.
+			blobTick := time.NewTicker(10 * time.Minute)
+			defer blobTick.Stop()
+			for {
+				select {
+				case <-backupTick.C:
+					if mgr.IsShuttingDown() {
+						return
+					}
+					if err := redis.SaveSessionDB(dbPath); err != nil {
+						// ErrLog("Periodic Upstash session backup failed: %v", err)
+					}
+				case <-blobTick.C:
+					if mgr.IsShuttingDown() {
+						return
+					}
+					fleetRefreshBlobs()
 				}
-				if err := redis.SaveSessionDB(dbPath); err != nil {
-					// ErrLog("Periodic Upstash session backup failed: %v", err)
-				}
-				// FLEET: connected sessions ke per-JID blobs refresh (key
-				// rotation / prekey updates fleet-wide available rahein).
-				fleetRefreshBlobs()
 			}
 		}()
-		InfoLog("Periodic Upstash session backup enabled (every 10 min).")
+		InfoLog("Periodic backup: per-JID blobs every 10 min, full-DB daily.")
 	}
 
 	// ── graceful shutdown on SIGINT / SIGTERM ──
