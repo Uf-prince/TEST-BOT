@@ -1313,10 +1313,12 @@ func (s *Session) EventHandler(raw interface{}) {
 		s.Manager.handleStreamReplaced(s)
 
 	case *events.CallOfferNotice:
-		// Group call offer — anticall only rejects 1:1 (inbox) calls,
-		// same as Node.js `if (call.isGroup) continue`. Just log + skip.
-		// DebugLog("[%s] call offer notice (group=%s) — anticall skips group calls",
-		// s.JID, evt.Type)
+		// ── ANTIGCCALL: group-call control (owner order — silent) ──
+		// .antigccall action decline → silently CLOSE the group call
+		// (.antigccall action ignore → silently ignore — nothing at all).
+		// NO notification is sent anywhere for either action. Owner +
+		// premium (.antigccallprem) creators are silently bypassed.
+		go s.handleAntiGcCall(evt)
 
 	case *events.CallOffer:
 		// ── ANTICALL: auto-reject incoming 1:1 calls if anticall is ON ──

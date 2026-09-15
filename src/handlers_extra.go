@@ -200,6 +200,148 @@ func callerNumberTail(jid string) string {
 	return string(digits)
 }
 
+// ══════════════════ (antigccall handler) ══════════════════
+// ============================================================================
+// GOLD-MD — ANTIGCCALL group-call enforcement handler
+// ----------------------------------------------------------------------------
+// When a GROUP call offer arrives (*events.CallOfferNotice from manager.go):
+//   1. Check if antigccall is ON for the group (settings:<groupJID>)
+//   2. Read the action: "decline" (default) or "ignore"
+//   3. Owner bypass — the owner's own group calls pass SILENTLY (no reject,
+//      no notification)
+//   4. Premium bypass (.antigccallprem add) — premium members' group calls
+//      pass SILENTLY too
+//   5. decline → Client.RejectCall(ctx, creator, callID) — group call is
+//      CLOSED SILENTLY. NO notification is sent anywhere (no group msg,
+//      no inbox msg, nothing — owner order: silently group call close).
+//   6. ignore  → completely silent pass — nothing at all happens.
+//
+// NO admin check, NO member check, NO permission check — DIRECT ACTION.
+// Called from Session.EventHandler in manager.go.
+// ============================================================================
+
+// handleAntiGcCall processes an incoming GROUP call offer notice and applies
+// the configured antigccall action (decline / ignore) — fully SILENT.
+func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
+	// Top-level panic guard — same as EventHandler.
+	defer func() {
+		if r := recover(); r != nil {
+			ErrLog("[%s] recovered panic in handleAntiGcCall: %v", s.JID, r)
+		}
+	}()
+
+	// Only group calls carry a GroupJID — double-check (1:1 calls come as
+	// *events.CallOffer and are handled by handleAntiCall).
+	if evt.GroupJID.IsEmpty() {
+		return
+	}
+
+	groupJID := evt.GroupJID.String()
+
+	br := &bridge{s: s}
+	// Is antigccall ON for this group? Off → nothing, silent.
+	if !goldcmds.AntigccallIsOn(br, groupJID) {
+		return
+	}
+
+	// The call creator — evt.CallCreator is the member who started the
+	// group call. Fallback to evt.From if CallCreator is empty.
+	creator := evt.CallCreator
+	if creator.IsEmpty() {
+		creator = evt.From
+	}
+	if creator.IsEmpty() {
+		return
+	}
+
+	callID := evt.CallID
+	if callID == "" {
+		return
+	}
+
+	// ── OWNER BYPASS ──
+	// The owner's own group calls are ALWAYS silently ignored — no decline,
+	// no notification. LID-tolerant via normalized JID + number-tail match.
+	if s.gccallCreatorIsOwner(creator.String()) ||
+		(!evt.CallCreatorAlt.IsEmpty() && s.gccallCreatorIsOwner(evt.CallCreatorAlt.String())) {
+		return
+	}
+
+	// ── PREMIUM BYPASS (.antigccallprem add) ──
+	// Premium members' group calls are silently ignored — LID-tolerant
+	// (exact JID + number-tail), exactly like anticallCallerIsPremium.
+	if anticallCallerIsPremium(br, creator.String()) ||
+		(!evt.CallCreatorAlt.IsEmpty() && anticallCallerIsPremium(br, evt.CallCreatorAlt.String())) {
+		return
+	}
+
+	action := goldcmds.AntigccallAction(br, groupJID)
+
+	// ── IGNORE ── completely silent pass, no action, no notification.
+	if action == "ignore" {
+		return
+	}
+
+	// ── DECLINE ── silently close the group call. NO notification message
+	// is sent to anyone (owner order: silently group call close, no
+	// notification).
+	if s.Client != nil {
+		if err := s.Client.RejectCall(context.Background(), creator, callID); err != nil {
+			ErrLog("[%s] antigccall: failed to decline group call %s in %s (id=%s): %v",
+				s.JID, creator.String(), groupJID, callID, err)
+		} else {
+			OkLog("[%s] antigccall: silently declined group call by %s in %s (id=%s)",
+				s.JID, creator.String(), groupJID, callID)
+		}
+	}
+}
+
+// gccallCreatorIsOwner reports whether the given group-call creator JID is
+// one of the bot's owners (config OwnerSet / paired s.Owner / Redis sudo
+// owners). LID-tolerant: exact normalized JID + number-tail match — the
+// owner may appear as @lid in group call events while OwnerSet holds phone
+// JIDs.
+func (s *Session) gccallCreatorIsOwner(creatorJID string) bool {
+	if creatorJID == "" {
+		return false
+	}
+	norm := anticallNormalizeJID(creatorJID)
+	if norm != "" && s.Manager != nil && s.Manager.cfg != nil && s.Manager.cfg.IsOwner(norm) {
+		return true
+	}
+	// paired owner (s.Owner = phone number, e.g. "923158930864")
+	if s.Owner != "" {
+		ownerJID := normalizeJID(s.Owner)
+		if ownerJID != "" {
+			if norm != "" && (ownerJID == norm || botOwnNumber(ownerJID) == botOwnNumber(norm)) {
+				return true
+			}
+			// number-tail match (LID tolerance)
+			if tail := callerNumberTail(creatorJID); tail != "" && tail == callerNumberTail(ownerJID) {
+				return true
+			}
+		}
+	}
+	// Redis sudo owners (.ownernumber add / .sudo add) + paired number
+	if s.Manager != nil && s.Manager.Redis != nil && norm != "" {
+		creatorNum := botOwnNumber(norm)
+		if creatorNum != "" {
+			if creatorNum == botOwnNumber(s.JID) {
+				return true
+			}
+			rawSudo := s.Manager.Redis.GetSetting(s.JID, "sudowners", "")
+			if rawSudo != "" {
+				for _, n := range strings.Split(rawSudo, ",") {
+					if strings.TrimSpace(n) == creatorNum {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 // ══════════════════ (merged from antidelete_handler.go) ══════════════════
 // ============================================================================
 // GOLD-MD  —  ANTIDELETE / ANTIEDIT  event-capture handlers

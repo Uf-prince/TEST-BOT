@@ -210,6 +210,10 @@ func handleAntiCallPrem(s SessionBridge, info types.MessageInfo, args []string, 
 	handlePremium(s, info, args, prefix, "ANTICALL", "ANTICALLPREMIUM", "CALLS", "ANTICALL", "MAKE CALLS")
 }
 
+func handleAntiGcCallPrem(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+        handlePremium(s, info, args, prefix, "ANTIGCCALL", "ANTIGCCALLPREM", "GROUP CALLS", "ANTIGCCALL", "START GROUP CALLS")
+}
+
 // ── exported helper for handler.go ─────────────────────────────────────────
 
 // PremiumIsMemberExported checks whether a JID is in the premium whitelist.
@@ -245,4 +249,9 @@ func init() {
 	Register(Command{Name: "anticallpremium", OwnerOnly: false, Hidden: true, Run: handleAntiCallPrem})
 	Register(Command{Name: "acallprem", OwnerOnly: false, Hidden: true, Run: handleAntiCallPrem})
 	Register(Command{Name: "anticalprem", OwnerOnly: false, Hidden: true, Run: handleAntiCallPrem})
+
+	// antigccallprem (antigccallpremium / antigccallprem / antigcallprem)
+	Register(Command{Name: "antigccallprem", Category: "ANTI & PROTECTION", Desc: "THIS COMMAND IS USED TO SET PREMIUM GROUP CALL CONTROL FOR THE GROUP.", OwnerOnly: false, Run: handleAntiGcCallPrem})
+	Register(Command{Name: "antigccallpremium", OwnerOnly: false, Hidden: true, Run: handleAntiGcCallPrem})
+	Register(Command{Name: "antigcallprem", OwnerOnly: false, Hidden: true, Run: handleAntiGcCallPrem})
 }
