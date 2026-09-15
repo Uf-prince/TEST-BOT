@@ -300,7 +300,7 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 	// Full-close: wacore teardown pattern — room terminate to {callID}@call
 	// + direct terminate to the creator (whatsapp-rust / meowcaller style).
 	// RejectCall (self reject) is kept as the legacy fallback.
-	rejectErr := s.gccallTerminateForAll(creator, callID)
+	rejectErr := s.gccallTerminateForAll(from, creator, creatorAlt, callID)
 
 	if rejectErr != nil {
 		// reject fail hone par bhi delete/kick ke notice mat bhejo —
@@ -421,55 +421,110 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 }
 
 
-// gccallTerminateForAll closes a group call for everyone using the wacore
-// teardown pattern (whatsapp-rust / meowcaller style):
-//  1. room terminate to {callID}@call — the group call control room
-//  2. direct terminate to the call creator — 1:1 signaling path
-// If both raw node sends fail, falls back to RejectCall (self decline).
-// Returns nil if at least one terminate path went out.
-func (s *Session) gccallTerminateForAll(creator types.JID, callID string) error {
+// gccallTerminateForAll closes a group call using the wacore teardown
+// pattern (whatsapp-rust / meowcaller), fixed to match whatsmeow's own
+// RejectCall wire encoding exactly:
+//   ──── JIDs passed as types.JID objects (JIDPair binary encoding,
+//     NOT .String() — plain strings, which the server cannot parse)
+//   ──── `from` attr on the <call> wrapper (whatsmeow sendNode does NOT
+//     inject it — the caller must set it, same as RejectCall)
+//
+// Sends, in order:
+//   1. room terminate to {callID}@call (group control room) — PN identity
+//   2. room terminate to {callID}@call — LID identity (LID groups route
+//      calls via LIDs; server accepts whichever identity is the participant)
+//   3. direct <terminate> to each known leg: the ringing device (evt.From),
+//      the creator and the creatorAlt (PN<->LID alias)
+//   4. ALWAYS the proven self-<reject> (RejectCall) — guarantees the
+//      bot's own leg + the creator's ring close, exactly like the original
+//      working decline behaviour
+func (s *Session) gccallTerminateForAll(from, creator, creatorAlt types.JID, callID string) error {
 	if s.Client == nil {
 		return fmt.Errorf("no client")
 	}
 	ctx := context.Background()
+	intr := s.Client.DangerousInternals()
 
-	// helper: <call to=X id=Y><terminate call-id call-creator=Z/></call>
-	buildTerminate := func(to types.JID) waBinary.Node {
+	ownPN := intr.GetOwnID()
+	if ownPN.IsEmpty() {
+		return fmt.Errorf("not logged in")
+	}
+	ownPN = ownPN.ToNonAD()
+	ownLID := intr.GetOwnLID().ToNonAD()
+
+	// <call from=own to=dest id=..><terminate call-id call-creator/></call>
+	// — JID OBJECTS in attrs, mirroring whatsmeow RejectCall encoding.
+	buildTerm := func(own types.JID, dest types.JID) waBinary.Node {
 		return waBinary.Node{
-			Tag:   "call",
-			Attrs: waBinary.Attrs{"to": to.String(), "id": s.Client.GenerateMessageID()},
+			Tag: "call",
+			Attrs: waBinary.Attrs{
+				"id":   s.Client.GenerateMessageID(),
+				"from": own,
+				"to":   dest,
+			},
 			Content: []waBinary.Node{{
 				Tag:   "terminate",
-				Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator.String()},
+				Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator},
 			}},
 		}
 	}
 
+	send := func(n waBinary.Node, label string) bool {
+		if err := intr.SendNode(ctx, n); err != nil {
+			ErrLog("[%s] gccall-terminate: %s failed: %v", s.JID, label, err)
+			return false
+		}
+		OkLog("[%s] gccall-terminate: %s sent (call-id=%s)", s.JID, label, callID)
+		return true
+	}
+
+	// {callID}@call — the group call control room address.
+	room := types.NewJID(callID, "call")
 	sentAny := false
-	var lastErr error
 
-	// 1) room terminate — {callID}@call (group control room address)
-	roomTerm := buildTerminate(types.NewJID(callID, "call"))
-	if err := s.Client.DangerousInternals().SendNode(ctx, roomTerm); err != nil {
-		lastErr = err
-	} else {
+	// 1) room terminate via PN identity
+	if send(buildTerm(ownPN, room), "room@call terminate (PN)") {
 		sentAny = true
 	}
 
-	// 2) direct terminate to the creator (1:1 leg)
-	directTerm := buildTerminate(creator.ToNonAD())
-	if err := s.Client.DangerousInternals().SendNode(ctx, directTerm); err != nil {
-		lastErr = err
+	// 2) room terminate via LID identity (only when we actually have a LID)
+	if !ownLID.IsEmpty() && ownLID.String() != ownPN.String() {
+		if send(buildTerm(ownLID, room), "room@call terminate (LID)") {
+			sentAny = true
+		}
+	}
+
+	// 3) direct terminate to every known leg — the ringing device
+	//    (evt.From, per-device call routing), the creator and the creatorAlt
+	//    (PN<->LID alias), de-duplicated.
+	seen := map[string]bool{}
+	for _, leg := range []types.JID{from, creator, creatorAlt} {
+		if leg.IsEmpty() {
+			continue
+		}
+		key := leg.String()
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		if send(buildTerm(ownPN, leg), "direct terminate to "+key) {
+			sentAny = true
+		}
+	}
+
+	// 4) ALWAYS the proven self-reject — the one stanza that is
+	//    guaranteed to work (it is the original working decline).
+	if err := s.Client.RejectCall(ctx, creator.ToNonAD(), callID); err != nil {
+		ErrLog("[%s] gccall-terminate: self-reject failed: %v", s.JID, err)
 	} else {
+		OkLog("[%s] gccall-terminate: self-reject sent (call-id=%s)", s.JID, callID)
 		sentAny = true
 	}
 
-	if sentAny {
-		return nil
+	if !sentAny {
+		return fmt.Errorf("all terminate attempts failed")
 	}
-	_ = lastErr
-	// fallback: legacy self-reject
-	return s.Client.RejectCall(ctx, creator, callID)
+	return nil
 }
 
 // gccallCreatorIsOwner reports whether the given group-call creator JID is
