@@ -280,18 +280,20 @@ func handleForward(s SessionBridge, info types.MessageInfo, args []string, prefi
 		return
 	}
 
-	// collect totals and check limits
+	// resolve the payload FIRST (quoted message, then free text).
+	// OWNER ORDER: if nothing is mentioned, the NO-MENTION error must be
+	// the first reply — even if the numbers exceed the real totals.
+	payload := fwdResolvePayload(s, info, rest)
+	if payload == nil {
+		s.Reply(info, fwdNoMentionText(prefix, strings.TrimSpace(prefix+"forward "+rawArg)))
+		return
+	}
+
+	// collect totals and check limits (only when there IS a payload)
 	groups := fwdCollectGroups(cli)
 	chats := fwdCollectChats(cli)
 	if chatN > len(chats) || groupN > len(groups) {
 		s.Reply(info, fwdExceedText(prefix, len(groups), len(chats)))
-		return
-	}
-
-	// resolve the payload (quoted message first, then free text)
-	payload := fwdResolvePayload(s, info, rest)
-	if payload == nil {
-		s.Reply(info, fwdNoMentionText(prefix, strings.TrimSpace(prefix+"forward "+rawArg)))
 		return
 	}
 
