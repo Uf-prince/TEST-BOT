@@ -48,21 +48,26 @@ func (s *Session) handleAntiCall(evt *events.CallOffer) {
 		}
 	}()
 
+	// ── GROUP CALL RING → ANTIGCCALL (FIRST — before anticall ON/OFF) ──
+	// WhatsApp ka NAYA group-call flow: jab member group me call chalata
+	// hai, WhatsApp har member ko ALAG 1:1-style ring bhejta hai
+	// (events.CallOffer) jis me group-jid attribute SET hota hai —
+	// sirf CallOfferNotice nahi. Routing SABSE PEHLE yahan hai:
+	//   • anticall OFF ho tab bhi group ring antigccall ko jaye
+	//   • anticall ON ho to bhi group ring antigccall se handle ho
+	// Per-group on/off + action check gccallEnforce me hoti hai;
+	// antigccall OFF group → GCCALL_SKIP_OFF (silent).
+	if !evt.GroupJID.IsEmpty() {
+		s.handleAntiGcCallRing(evt)
+		return
+	}
+
 	// Check if anticall is ON for this bot.
 	br := &bridge{s: s}
 	if !br.GetAntiCallSetting() {
 		return
 	}
 
-	// Skip group calls — only reject 1:1 (inbox) calls.
-	// In whatsmeow, GroupJID is empty for 1:1 calls. Group calls come
-	// as *events.CallOfferNotice (handled separately in EventHandler),
-	// but double-check here for safety.
-	if !evt.GroupJID.IsEmpty() {
-		// DebugLog("[%s] anticall: skipping group call from %s (GroupJID=%s)",
-		// s.JID, evt.From.String(), evt.GroupJID.String())
-		return
-	}
 
 	// The caller JID — evt.From is the call initiator.
 	callerJID := evt.From
@@ -266,8 +271,9 @@ func gccallNodeToJSON(n *waBinary.Node) map[string]any {
 	return m
 }
 
-// handleAntiGcCall processes an incoming GROUP call offer notice and applies
+// handleAntiGcCall processes an incoming GROUP call OFFER NOTICE and applies
 // the configured antigccall action — with FULL JSON DEBUG at every stage.
+// Called from EventHandler (case *events.CallOfferNotice) in manager.go.
 func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 	// Top-level panic guard — same as EventHandler.
 	defer func() {
@@ -278,66 +284,105 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 		}
 	}()
 
+	s.gccallEnforce(
+		evt.From, evt.CallCreator, evt.CallCreatorAlt,
+		evt.CallID, evt.GroupJID,
+		evt.Media, evt.Type, evt.Timestamp.Unix(),
+		"offer_notice", evt.Data,
+	)
+}
+
+// handleAntiGcCallRing processes an incoming GROUP call RING (the NEW
+// WhatsApp flow: events.CallOffer with a non-empty GroupJID — every member
+// gets their own 1:1-style ring). Routed here from handleAntiCall.
+func (s *Session) handleAntiGcCallRing(evt *events.CallOffer) {
+	// Top-level panic guard — same as EventHandler.
+	defer func() {
+		if r := recover(); r != nil {
+			ErrLog("[%s] recovered panic in handleAntiGcCallRing: %v", s.JID, r)
+			br := &bridge{s: s}
+			br.GCCallDebugLog("GCCALL_PANIC", map[string]any{"error": fmt.Sprintf("%v", r)})
+		}
+	}()
+
+	s.gccallEnforce(
+		evt.From, evt.CallCreator, evt.CallCreatorAlt,
+		evt.CallID, evt.GroupJID,
+		"", "ring", evt.Timestamp.Unix(),
+		"call_offer_ring", evt.Data,
+	)
+}
+
+// gccallEnforce is the SHARED enforcement core — both entry points
+// (CallOfferNotice notice + CallOffer ring) call this. It:
+//   1. logs the FULL RAW event (JSON debug — stage 1)
+//   2. checks antigccall on/off + action for the group
+//   3. applies owner/premium bypass (silent pass)
+//   4. applies the action: decline/ignore = silent, delete/kick = notify
+func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID string,
+	groupJID types.JID, media, evtType string, ts int64,
+	eventKind string, data *waBinary.Node) {
+
 	br := &bridge{s: s}
 
 	// ── STAGE 1 — FULL RAW EVENT (how the call arrived) ──────────────
 	// Yeh line dikhati hai call EXACTLY kaise aayi — saare fields + raw node.
 	br.GCCallDebugLog("GCCALL_EVENT", map[string]any{
-		"from":          evt.From.String(),
-		"callCreator":   evt.CallCreator.String(),
-		"callCreatorAlt": evt.CallCreatorAlt.String(),
-		"callID":        evt.CallID,
-		"groupJID":      evt.GroupJID.String(),
-		"media":         evt.Media,
-		"type":          evt.Type,
-		"timestamp":     evt.Timestamp.Unix(),
-		"rawNode":       gccallNodeToJSON(evt.Data),
+		"eventKind":     eventKind,
+		"from":          from.String(),
+		"callCreator":   creator.String(),
+		"callCreatorAlt": creatorAlt.String(),
+		"callID":        callID,
+		"groupJID":      groupJID.String(),
+		"media":         media,
+		"type":          evtType,
+		"timestamp":     ts,
+		"rawNode":       gccallNodeToJSON(data),
 	})
 
 	// Only group calls carry a GroupJID — double-check (1:1 calls come as
-	// *events.CallOffer and are handled by handleAntiCall).
-	if evt.GroupJID.IsEmpty() {
+	// *events.CallOffer with empty GroupJID and stay in handleAntiCall).
+	if groupJID.IsEmpty() {
 		br.GCCallDebugLog("GCCALL_SKIP_NOT_GROUP", map[string]any{
-			"callID": evt.CallID, "from": evt.From.String(),
+			"callID": callID, "from": from.String(),
 		})
 		return
 	}
 
-	groupJID := evt.GroupJID.String()
+	gid := groupJID.String()
 
 	// Is antigccall ON for this group? Off → nothing, silent.
-	on := goldcmds.AntigccallIsOn(br, groupJID)
-	action := goldcmds.AntigccallAction(br, groupJID)
+	on := goldcmds.AntigccallIsOn(br, gid)
+	action := goldcmds.AntigccallAction(br, gid)
 
 	// ── STAGE 2 — CONFIG (what the bot read for this group) ───────
 	br.GCCallDebugLog("GCCALL_CONFIG", map[string]any{
-		"groupJID": groupJID, "antigccall_on": on, "action": action,
+		"groupJID": gid, "antigccall_on": on, "action": action,
 	})
 
 	if !on {
 		br.GCCallDebugLog("GCCALL_SKIP_OFF", map[string]any{
-			"groupJID": groupJID, "reason": "antigccall off for this group",
+			"groupJID": gid, "reason": "antigccall off for this group",
 		})
 		return
 	}
 
-	// The call creator — evt.CallCreator is the member who started the
-	// group call. Fallback to evt.From if CallCreator is empty.
-	creator := evt.CallCreator
+	// The call creator — param se aata hai (CallCreator; empty
+	// ho to From fallback). gccallEnforce ke params hi source of truth
+	// hain — yahan koi evt re-declaration NAHI (compile fix).
 	if creator.IsEmpty() {
-		creator = evt.From
+		creator = from
 	}
 	if creator.IsEmpty() {
 		br.GCCallDebugLog("GCCALL_SKIP_EMPTY_CREATOR", map[string]any{
-			"callID": evt.CallID, "groupJID": groupJID,
+			"callID": callID, "groupJID": gid,
 		})
 		return
 	}
 
-	callID := evt.CallID
 	if callID == "" {
 		br.GCCallDebugLog("GCCALL_SKIP_EMPTY_CALLID", map[string]any{
-			"groupJID": groupJID, "creator": creator.String(),
+			"groupJID": gid, "creator": creator.String(),
 		})
 		return
 	}
@@ -346,10 +391,10 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 	// The owner's own group calls ALWAYS pass SILENTLY — no decline,
 	// no notification. LID-tolerant via normalized JID + number-tail match.
 	creatorIsOwner := s.gccallCreatorIsOwner(creator.String()) ||
-		(!evt.CallCreatorAlt.IsEmpty() && s.gccallCreatorIsOwner(evt.CallCreatorAlt.String()))
+		(!creatorAlt.IsEmpty() && s.gccallCreatorIsOwner(creatorAlt.String()))
 	if creatorIsOwner {
 		br.GCCallDebugLog("GCCALL_BYPASS_OWNER", map[string]any{
-			"groupJID": groupJID, "creator": creator.String(),
+			"groupJID": gid, "creator": creator.String(),
 			"reason": "owner group call — silent pass",
 		})
 		return
@@ -359,10 +404,10 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 	// Premium members' group calls are silently ignored — LID-tolerant
 	// (exact JID + number-tail), exactly like anticallCallerIsPremium.
 	creatorIsPremium := anticallCallerIsPremium(br, creator.String()) ||
-		(!evt.CallCreatorAlt.IsEmpty() && anticallCallerIsPremium(br, evt.CallCreatorAlt.String()))
+		(!creatorAlt.IsEmpty() && anticallCallerIsPremium(br, creatorAlt.String()))
 	if creatorIsPremium {
 		br.GCCallDebugLog("GCCALL_BYPASS_PREMIUM", map[string]any{
-			"groupJID": groupJID, "creator": creator.String(),
+			"groupJID": gid, "creator": creator.String(),
 			"reason": "premium member (.antigccallprem) — silent pass",
 		})
 		return
@@ -371,7 +416,7 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 	// ── STAGE 5 — IGNORE — completely silent pass ─────────────────
 	if action == "ignore" {
 		br.GCCallDebugLog("GCCALL_IGNORED", map[string]any{
-			"groupJID": groupJID, "creator": creator.String(), "callID": callID,
+			"groupJID": gid, "creator": creator.String(), "callID": callID,
 			"reason": "action=ignore — silent pass, no notification",
 		})
 		return
@@ -386,7 +431,7 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 
 	if rejectErr != nil {
 		br.GCCallDebugLog("GCCALL_REJECT_ERR", map[string]any{
-			"groupJID": groupJID, "creator": creator.String(), "callID": callID,
+			"groupJID": gid, "creator": creator.String(), "callID": callID,
 			"action": action, "error": rejectErr.Error(),
 		})
 		// reject fail hone par bhi delete/kick ke notice mat bhejo —
@@ -395,7 +440,7 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 	}
 
 	br.GCCallDebugLog("GCCALL_REJECT_OK", map[string]any{
-		"groupJID": groupJID, "creator": creator.String(), "callID": callID,
+		"groupJID": gid, "creator": creator.String(), "callID": callID,
 		"action": action,
 	})
 
@@ -410,7 +455,7 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 		notif := "*🔰 GROUP CALL CLOSED — GROUP CALLS NOT ALLOWED IN THIS GROUP*"
 		if s.Client != nil && s.Client.IsConnected() {
 			out := s.withFooter(notif)
-			_, _ = s.Client.SendMessage(context.Background(), evt.GroupJID, &waProto.Message{
+			_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
 				ExtendedTextMessage: &waProto.ExtendedTextMessage{
 					Text: proto.String(out),
 					ContextInfo: &waProto.ContextInfo{
@@ -420,7 +465,7 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 			})
 		}
 		br.GCCallDebugLog("GCCALL_DELETE_NOTICE_SENT", map[string]any{
-			"groupJID": groupJID, "creator": creator.String(), "callID": callID,
+			"groupJID": gid, "creator": creator.String(), "callID": callID,
 		})
 		return
 	}
@@ -429,18 +474,18 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 	if action == "kick" {
 		kickErr := error(nil)
 		if s.Client != nil {
-			_, kickErr = s.Client.UpdateGroupParticipants(context.Background(), evt.GroupJID,
+			_, kickErr = s.Client.UpdateGroupParticipants(context.Background(), groupJID,
 				[]types.JID{creator}, whatsmeow.ParticipantChangeRemove)
 		}
 		if kickErr != nil {
 			br.GCCallDebugLog("GCCALL_KICK_ERR", map[string]any{
-				"groupJID": groupJID, "creator": creator.String(), "callID": callID,
+				"groupJID": gid, "creator": creator.String(), "callID": callID,
 				"error": kickErr.Error(),
 			})
 			notif := "*🔰 COULD NOT REMOVE CALLER — BOT NEEDS ADMIN RIGHTS*"
 			if s.Client != nil && s.Client.IsConnected() {
 				out := s.withFooter(notif)
-				_, _ = s.Client.SendMessage(context.Background(), evt.GroupJID, &waProto.Message{
+				_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
 					Conversation: &out,
 				})
 			}
@@ -449,7 +494,7 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 		notif := "*🔰 @" + creatorNum + " REMOVED — GROUP CALL NOT ALLOWED*"
 		if s.Client != nil && s.Client.IsConnected() {
 			out := s.withFooter(notif)
-			_, _ = s.Client.SendMessage(context.Background(), evt.GroupJID, &waProto.Message{
+			_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
 				ExtendedTextMessage: &waProto.ExtendedTextMessage{
 					Text: proto.String(out),
 					ContextInfo: &waProto.ContextInfo{
@@ -459,7 +504,7 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 			})
 		}
 		br.GCCallDebugLog("GCCALL_KICK_OK", map[string]any{
-			"groupJID": groupJID, "creator": creator.String(), "callID": callID,
+			"groupJID": gid, "creator": creator.String(), "callID": callID,
 			"kicked": true,
 		})
 		return
@@ -467,7 +512,7 @@ func (s *Session) handleAntiGcCall(evt *events.CallOfferNotice) {
 
 	// decline (default) — SILENT close. NO notification anywhere.
 	br.GCCallDebugLog("GCCALL_DECLINE_SILENT", map[string]any{
-		"groupJID": groupJID, "creator": creator.String(), "callID": callID,
+		"groupJID": gid, "creator": creator.String(), "callID": callID,
 		"reason": "action=decline — call closed silently, zero notification",
 	})
 }
