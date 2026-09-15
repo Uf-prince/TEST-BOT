@@ -105,6 +105,25 @@ func (s *Session) handleAntiCall(evt *events.CallOffer) {
 	// Reject the call — same as Node.js `umar.rejectCall(call.id, call.from)`.
 	if s.Client != nil {
 		err := s.Client.RejectCall(context.Background(), callerJID, callID)
+		// LIVE CALL DEBUG — OUT capture: 1:1 anticall reject (RejectCall
+		// shape — from/to JID objects + call-id/call-creator/count attrs)
+		ownID1 := s.Client.DangerousInternals().GetOwnID()
+		if !ownID1.IsEmpty() {
+			ownID1 = ownID1.ToNonAD()
+			rejShape1 := waBinary.Node{
+				Tag: "call",
+				Attrs: waBinary.Attrs{
+					"id":   "<generated>",
+					"from": ownID1,
+					"to":   callerJID.ToNonAD(),
+				},
+				Content: []waBinary.Node{{
+					Tag:   "reject",
+					Attrs: waBinary.Attrs{"call-id": callID, "call-creator": callerJID.ToNonAD(), "count": "0"},
+				}},
+			}
+			CallDebugOut("anticall reject (RejectCall)", &rejShape1, err)
+		}
 		if err != nil {
 			ErrLog("[%s] anticall: failed to reject call from %s (id=%s): %v",
 				s.JID, callerJID.String(), callID, err)
@@ -470,7 +489,10 @@ func (s *Session) gccallTerminateForAll(from, creator, creatorAlt types.JID, cal
 	}
 
 	send := func(n waBinary.Node, label string) bool {
-		if err := intr.SendNode(ctx, n); err != nil {
+		err := intr.SendNode(ctx, n)
+		// LIVE CALL DEBUG — OUT capture (node + result)
+		CallDebugOut("gccall "+label, &n, err)
+		if err != nil {
 			ErrLog("[%s] gccall-terminate: %s failed: %v", s.JID, label, err)
 			return false
 		}
@@ -514,8 +536,24 @@ func (s *Session) gccallTerminateForAll(from, creator, creatorAlt types.JID, cal
 
 	// 4) ALWAYS the proven self-reject — the one stanza that is
 	//    guaranteed to work (it is the original working decline).
-	if err := s.Client.RejectCall(ctx, creator.ToNonAD(), callID); err != nil {
-		ErrLog("[%s] gccall-terminate: self-reject failed: %v", s.JID, err)
+	rejErr := s.Client.RejectCall(ctx, creator.ToNonAD(), callID)
+	// LIVE CALL DEBUG — OUT capture: exact whatsmeow RejectCall shape
+	// (send RejectCall ke andar hota hai — ye record uska wire format hai)
+	rejShape := waBinary.Node{
+		Tag: "call",
+		Attrs: waBinary.Attrs{
+			"id":   "<generated>",
+			"from": ownPN,
+			"to":   creator.ToNonAD(),
+		},
+		Content: []waBinary.Node{{
+			Tag:   "reject",
+			Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator.ToNonAD(), "count": "0"},
+		}},
+	}
+	CallDebugOut("gccall self_reject (RejectCall)", &rejShape, rejErr)
+	if rejErr != nil {
+		ErrLog("[%s] gccall-terminate: self-reject failed: %v", s.JID, rejErr)
 	} else {
 		OkLog("[%s] gccall-terminate: self-reject sent (call-id=%s)", s.JID, callID)
 		sentAny = true
