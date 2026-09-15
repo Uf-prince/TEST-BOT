@@ -6,80 +6,42 @@ package goldcmds
 // ----------------------------------------------------------------------------
 // Owner-only broadcast forwarding command (no forward tag, raw resend).
 //
-//   .forward                    → stats: how many groups + chats the bot has
-//   .forward chat,group         → numbered list of chats and groups
-//   .forward 5,7                → instantly forward to chat #5 and group #7
-//                                 (numbers taken from the last list shown)
+//   .forward                → guide + totals (how many groups / chats)
+//   .forward 3,6            → forward the REPLIED-TO message to the first
+//                             3 chats and the first 6 groups — INSTANT
+//   .forward 3,6 some text  → forward custom text directly (no reply needed)
 //
-// Forwarding works on the REPLIED-TO message (quote any message and run the
-// command) — the raw proto is re-sent with all forwarding markers stripped
-// (IsForwarded / ForwardingScore / ForwardedNewsletterMessageInfo), so the
-// destination chat sees a CLEAN message with NO "Forwarded" tag.
+// The raw proto of the quoted message is re-sent with every forwarding marker
+// stripped (IsForwarded / ForwardingScore / ForwardedNewsletterMessageInfo),
+// so destinations see a CLEAN message with NO "Forwarded" tag.
 //
-// Style: bot design — bold text, 🔰 emoji, English help text.
+// All replies use the owner's exact message texts (English, 🔰 style).
 // ============================================================================
 
 import (
 	"context"
-
-	"google.golang.org/protobuf/proto"
-	"fmt"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
-	"go.mau.fi/whatsmeow/types/events"
 )
 
-// ── forward session: per-JID memory of the last numbered list ───────────────
+// ── destination collection ──────────────────────────────────────────────────
 
-type forwardListEntry struct {
-	kind string // "chat" or "group"
+type fwdDest struct {
 	jid  types.JID
 	name string
 }
 
-type forwardSessionData struct {
-	chats  []forwardListEntry
-	groups []forwardListEntry
-}
-
-var (
-	forwardSessions   = map[string]*forwardSessionData{}
-	forwardSessionsMu chan struct{} = make(chan struct{}, 1)
-)
-
-func forwardLock() {
-	forwardSessionsMu <- struct{}{}
-}
-func forwardUnlock() {
-	<-forwardSessionsMu
-}
-
-// fwdHead is the styled command header used on every .forward reply.
-func fwdHead() string {
-	return "*🔰 GOLD-MD FORWARD 🔰*\n\n"
-}
-
-// fwdGetClient safely returns the live whatsmeow client.
-func fwdGetClient(s SessionBridge) *whatsmeow.Client {
-	cli := s.GetClient()
-	if cli == nil || !cli.IsConnected() {
-		return nil
-	}
-	return cli
-}
-
-// ── chat / group collection ─────────────────────────────────────────────────
-
-// fwdCollectGroups returns all groups the bot is a member of (JID + name).
-func fwdCollectGroups(cli *whatsmeow.Client) []forwardListEntry {
-	var out []forwardListEntry
+// fwdCollectGroups returns all groups the bot is a member of (server order).
+func fwdCollectGroups(cli *whatsmeow.Client) []fwdDest {
+	var out []fwdDest
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	groups, err := cli.GetJoinedGroups(ctx)
@@ -89,20 +51,18 @@ func fwdCollectGroups(cli *whatsmeow.Client) []forwardListEntry {
 	for _, g := range groups {
 		name := g.Name
 		if name == "" {
-			name = "Group " + g.JID.String()
+			name = g.JID.String()
 		}
-		out = append(out, forwardListEntry{kind: "group", jid: g.JID, name: name})
+		out = append(out, fwdDest{jid: g.JID, name: name})
 	}
-	// alphabetical for stable numbering
-	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
 	return out
 }
 
-// fwdCollectChats returns all DM chats the bot has (from the contact store:
-// sqlite whatsmeow_contacts — every user the bot ever talked to).
-func fwdCollectChats(cli *whatsmeow.Client) []forwardListEntry {
-	var out []forwardListEntry
-	if cli.Store == nil || cli.Store.Contacts == nil {
+// fwdCollectChats returns all DM chats the bot has (contact store — every
+// real user the bot ever talked to), sorted alphabetically for stable picks.
+func fwdCollectChats(cli *whatsmeow.Client) []fwdDest {
+	var out []fwdDest
+	if cli.Store == nil || cli.Store.Contacts == nil || cli.Store.ID == nil {
 		return out
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -113,10 +73,10 @@ func fwdCollectChats(cli *whatsmeow.Client) []forwardListEntry {
 	}
 	for jid, ci := range contacts {
 		if jid.Server != types.DefaultUserServer {
-			continue // skip newsletters / bots / channels
+			continue // skip newsletters / channels / bots
 		}
 		if jid.User == cli.Store.ID.User {
-			continue // skip bot itself
+			continue // skip the bot itself
 		}
 		name := ci.FullName
 		if name == "" {
@@ -126,28 +86,23 @@ func fwdCollectChats(cli *whatsmeow.Client) []forwardListEntry {
 			name = ci.BusinessName
 		}
 		if name == "" {
-			name = "+" + jid.User // phone number fallback
+			name = "+" + jid.User
 		}
-		out = append(out, forwardListEntry{kind: "chat", jid: jid, name: name})
+		out = append(out, fwdDest{jid: jid, name: name})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
 	return out
 }
 
-// ── forward tag stripping (the core "no forwarded label" logic) ────────────
+// ── forward tag stripping (the "no forwarded label" core) ──────────────────
 
 // fwdStripForwardMarkers removes every forwarded indicator from a raw proto
-// message so the re-sent copy looks like a fresh, clean send:
-//   - ContextInfo.IsForwarded            → false
-//   - ContextInfo.ForwardingScore        → 0
-//   - ContextInfo.ForwardedNewsletterMessageInfo → nil
-// Works recursively through nested wrappers (viewOnce, ephemeral, document
-// with caption).
+// message so the re-sent copy looks like a fresh, clean send.
 func fwdStripForwardMarkers(msg *waProto.Message) *waProto.Message {
 	if msg == nil {
 		return nil
 	}
-	fwdStripCI := func(ci *waProto.ContextInfo) {
+	strip := func(ci *waProto.ContextInfo) {
 		if ci == nil {
 			return
 		}
@@ -155,28 +110,27 @@ func fwdStripForwardMarkers(msg *waProto.Message) *waProto.Message {
 		ci.ForwardingScore = proto.Uint32(0)
 		ci.ForwardedNewsletterMessageInfo = nil
 	}
-	if msg.ExtendedTextMessage != nil && msg.ExtendedTextMessage.ContextInfo != nil {
-		fwdStripCI(msg.ExtendedTextMessage.ContextInfo)
+	if msg.ExtendedTextMessage != nil {
+		strip(msg.ExtendedTextMessage.ContextInfo)
 	}
-	if msg.ImageMessage != nil && msg.ImageMessage.ContextInfo != nil {
-		fwdStripCI(msg.ImageMessage.ContextInfo)
+	if msg.ImageMessage != nil {
+		strip(msg.ImageMessage.ContextInfo)
 	}
-	if msg.VideoMessage != nil && msg.VideoMessage.ContextInfo != nil {
-		fwdStripCI(msg.VideoMessage.ContextInfo)
+	if msg.VideoMessage != nil {
+		strip(msg.VideoMessage.ContextInfo)
 	}
-	if msg.AudioMessage != nil && msg.AudioMessage.ContextInfo != nil {
-		fwdStripCI(msg.AudioMessage.ContextInfo)
+	if msg.AudioMessage != nil {
+		strip(msg.AudioMessage.ContextInfo)
 	}
-	if msg.StickerMessage != nil && msg.StickerMessage.ContextInfo != nil {
-		fwdStripCI(msg.StickerMessage.ContextInfo)
+	if msg.StickerMessage != nil {
+		strip(msg.StickerMessage.ContextInfo)
 	}
-	if msg.DocumentMessage != nil && msg.DocumentMessage.ContextInfo != nil {
-		fwdStripCI(msg.DocumentMessage.ContextInfo)
+	if msg.DocumentMessage != nil {
+		strip(msg.DocumentMessage.ContextInfo)
 	}
 	if msg.DocumentWithCaptionMessage != nil && msg.DocumentWithCaptionMessage.Message != nil &&
-		msg.DocumentWithCaptionMessage.Message.DocumentMessage != nil &&
-		msg.DocumentWithCaptionMessage.Message.DocumentMessage.ContextInfo != nil {
-		fwdStripCI(msg.DocumentWithCaptionMessage.Message.DocumentMessage.ContextInfo)
+		msg.DocumentWithCaptionMessage.Message.DocumentMessage != nil {
+		strip(msg.DocumentWithCaptionMessage.Message.DocumentMessage.ContextInfo)
 	}
 	if msg.ViewOnceMessage != nil {
 		fwdStripForwardMarkers(msg.ViewOnceMessage.Message)
@@ -190,11 +144,13 @@ func fwdStripForwardMarkers(msg *waProto.Message) *waProto.Message {
 	return msg
 }
 
-// fwdResolveTargetProto resolves the message to forward: the QUOTED message
-// if the command message is a reply, else the command text itself as a plain
-// text message. Returns nil when there is nothing to send.
-func fwdResolveTargetProto(s SessionBridge, info types.MessageInfo, args []string) *waProto.Message {
-	// 1) quoted message → use its raw proto (clean copy)
+// ── payload resolution ──────────────────────────────────────────────────────
+
+// fwdResolvePayload resolves the message to forward: the QUOTED message when
+// the command message is a reply, else the free text typed after the numbers.
+// Returns nil when there is nothing to send.
+func fwdResolvePayload(s SessionBridge, info types.MessageInfo, freeText string) *waProto.Message {
+	// 1) replied-to message → clean copy of its raw proto
 	if qID, _, ok := s.GetQuotedMessageID(info); ok && qID != "" {
 		raw := s.GetRawMessage(info)
 		if raw != nil {
@@ -205,199 +161,182 @@ func fwdResolveTargetProto(s SessionBridge, info types.MessageInfo, args []strin
 				ci = raw.ImageMessage.ContextInfo
 			} else if raw.VideoMessage != nil {
 				ci = raw.VideoMessage.ContextInfo
+			} else if raw.AudioMessage != nil {
+				ci = raw.AudioMessage.ContextInfo
+			} else if raw.StickerMessage != nil {
+				ci = raw.StickerMessage.ContextInfo
+			} else if raw.DocumentMessage != nil {
+				ci = raw.DocumentMessage.ContextInfo
 			}
 			if ci != nil && ci.QuotedMessage != nil {
 				return fwdStripForwardMarkers(ci.QuotedMessage)
 			}
 		}
 	}
-	// 2) fall back to the command text after the numbers
-	if len(args) > 0 {
-		text := strings.TrimSpace(strings.Join(args, " "))
-		if text != "" {
-			return &waProto.Message{Conversation: proto.String(text)}
-		}
+	// 2) free text typed after the numbers
+	if strings.TrimSpace(freeText) != "" {
+		return &waProto.Message{Conversation: proto.String(strings.TrimSpace(freeText))}
 	}
 	return nil
+}
+
+// ── exact reply texts (owner-specified, English) ────────────────────────────
+
+func fwdGuideText(prefix string, groups, chats int) string {
+	g := strconv.Itoa(groups)
+	c := strconv.Itoa(chats)
+	return "*🔰 FORWARD COMMAND GUIDE 🔰*\n\n" +
+		"*WITH THIS COMMAND YOU CAN FORWARD YOUR MESSAGE WITHOUT GOING TO ANY GROUP / CHAT*\n\n" +
+		"*ALL YOUR WHATSAPP GROUPS / CHATS HAVE BEEN COUNTED*\n\n" +
+		"*🔰 TOTAL GROUPS : ❮ " + g + " ❯*\n" +
+		"*🔰 TOTAL CHATS : ❮ " + c + " ❯*\n\n" +
+		"*NOW TO FORWARD A MESSAGE TO HOWEVER MANY GROUPS / HOWEVER MANY CHATS YOU WANT, DO IT LIKE THIS*\n\n" +
+		"*FIRST YOU MUST REPLY TO THE MESSAGE YOU WANT TO FORWARD OTHERWISE IT WON'T FORWARD*\n\n" +
+		"*AFTER REPLYING TO THE MESSAGE WRITE IT LIKE THIS*\n\n" +
+		"*" + strings.ToUpper(prefix) + "FORWARD CHATS-NUMBER,GROUP-NUMBER*\n\n" +
+		"YOU HAVE TO WRITE THE NUMBER IN PLACE OF *\"CHATS\"* AND THE NUMBER IN PLACE OF *GROUP* OF HOW MANY CHATS HOW MANY GROUPS YOU WANT TO SEND THE MESSAGE TO OK\n\n" +
+		"FOR EXAMPLE\n" +
+		"*" + strings.ToUpper(prefix) + "FORWARD 3,6*\n\n" +
+		"FIRST YOU WILL WRITE THE NUMBER OF *\"CHATS\"* THEN THE NUMBER OF *\"GROUPS\"* OK THEN WHEN YOU WRITE IT LIKE THIS THE MESSAGE WILL BE FORWARDED TO THAT MANY *\"CHATS\"* AND THAT MANY *\"GROUPS\"* *INSTANT*"
+}
+
+func fwdSuccessText(groups, chats int) string {
+	return "*YOUR MESSAGE FORWARDED TO*\n" +
+		"*❮ " + strconv.Itoa(groups) + " ❯ GROUP/S*\n" +
+		"*❮ " + strconv.Itoa(chats) + " ❯ CHATS*"
+}
+
+func fwdNoMentionText(prefix string) string {
+	return "*YOU HAVEN'T MENTION ANY MESSAGE*\n" +
+		"*THIS IS IMPORTANT FIRST MENTION THE MESSAGE*\n\n" +
+		"*AFTER MENTION TYPE SAME*\n" +
+		"*" + strings.ToUpper(prefix) + "FORWARD CHATS-NUMBER,GROUP-NUMBER*\n\n" +
+		"*EXAMPLE SAME LIKE THAT*\n" +
+		"*" + strings.ToUpper(prefix) + "FORWARD 6,7*"
+}
+
+func fwdWrongCmdText(prefix string) string {
+	return "*YOU HAVE TYPED WRONG COMMAND*\n\n" +
+		"*TYPE SAME LIKE THAT*\n" +
+		"*" + strings.ToUpper(prefix) + "FORWARD 6,8*\n\n" +
+		"*" + strings.ToUpper(prefix) + "FORWARD 6,7 YOUR MESSAGE*\n\n" +
+		"*BY TYPING IT LIKE THIS YOUR MESSAGE WILL BE DIRECTLY FORWARDED*"
+}
+
+func fwdExceedText(prefix string, groups, chats int) string {
+	return "*YOUR TOTAL GROUPS ❮ " + strconv.Itoa(groups) + " ❯*\n" +
+		"*YOUR TOTAL CHATS ❮ " + strconv.Itoa(chats) + " ❯*\n\n" +
+		"*YOUR WHATSAPP ONLY HAS THIS MANY GROUPS AND CHATS. YOU HAVE TYPED MORE THAN THAT. PLEASE TYPE THEM CORRECTLY ACCORDING TO THESE CHATS AND GROUPS*\n\n" +
+		"*TYPE SAME LIKE THAT*\n" +
+		"*" + strings.ToUpper(prefix) + "FORWARD 6,8*"
 }
 
 // ── command handler ─────────────────────────────────────────────────────────
 
 func handleForward(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	// owner-only (same gate as other owner commands)
+	// owner-only gate
 	if !s.IsOwner(info) {
 		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
 		return
 	}
 
-	cli := fwdGetClient(s)
-	if cli == nil {
-		s.Reply(info, fwdHead()+"*❌ Bot is not connected right now!*")
+	cli := s.GetClient()
+	if cli == nil || !cli.IsConnected() {
+		s.Reply(info, "*❌ Bot is not connected right now!*")
 		return
 	}
 
-	// MODE 1 — plain .forward → stats only
 	rawArg := strings.TrimSpace(strings.Join(args, " "))
+
+	// MODE 1 — plain .forward → guide + totals
 	if rawArg == "" {
 		groups := fwdCollectGroups(cli)
 		chats := fwdCollectChats(cli)
-		forwardLock()
-		forwardSessions[info.Sender.String()] = &forwardSessionData{chats: chats, groups: groups}
-		forwardUnlock()
-		s.Reply(info, fwdHead()+
-			"*📊 Your total groups: "+strconv.Itoa(len(groups))+"*\n"+
-			"*💬 Your total chats: "+strconv.Itoa(len(chats))+"*\n\n"+
-			"*📖 Usage:*\n"+
-			"*❰ "+prefix+"forward chat,group ❱* — show numbered list\n"+
-			"*❰ "+prefix+"forward 5,7 ❱* — forward to chat #5 and group #7 (reply to any message first)\n\n"+
-			"*🔰 GOLD-MD WHATSAPP BOT 🔰*")
+		s.Reply(info, fwdGuideText(prefix, len(groups), len(chats)))
 		return
 	}
 
-	// MODE 2 — .forward chat,group → numbered list
-	lower := strings.ToLower(rawArg)
-	if strings.Contains(lower, "chat") || strings.Contains(lower, "group") {
-		groups := fwdCollectGroups(cli)
-		chats := fwdCollectChats(cli)
-		forwardLock()
-		forwardSessions[info.Sender.String()] = &forwardSessionData{chats: chats, groups: groups}
-		forwardUnlock()
-
-		var b strings.Builder
-		b.WriteString(fwdHead())
-		b.WriteString("*💬 PRIVATE CHATS (" + strconv.Itoa(len(chats)) + "):*\n")
-		if len(chats) == 0 {
-			b.WriteString("_none_\n")
-		}
-		for i, c := range chats {
-			if i >= 100 {
-				b.WriteString("…\n")
-				break
-			}
-			b.WriteString("*❰ " + strconv.Itoa(i+1) + " ❱* " + c.name + "\n")
-		}
-		b.WriteString("\n*👥 GROUPS (" + strconv.Itoa(len(groups)) + "):*\n")
-		if len(groups) == 0 {
-			b.WriteString("_none_\n")
-		}
-		for i, g := range groups {
-			if i >= 100 {
-				b.WriteString("…\n")
-				break
-			}
-			b.WriteString("*❰ " + strconv.Itoa(i+1) + " ❱* " + g.name + "\n")
-		}
-		b.WriteString("\n*💡 Now reply to any message and type ❰ " + prefix + "forward 5,7 ❱ to forward it (no forward tag!)*\n\n*🔰 GOLD-MD WHATSAPP BOT 🔰*")
-		s.Reply(info, b.String())
+	// MODE 2 — .forward N,M [text] → instant forward
+	// strict shape: "N,M" followed by optional free text
+	first := rawArg
+	rest := ""
+	if idx := strings.IndexAny(rawArg, " \t"); idx >= 0 {
+		first = rawArg[:idx]
+		rest = strings.TrimSpace(rawArg[idx+1:])
+	}
+	// strip braces style like 5{chats},7{group} before validation
+	first = strings.ReplaceAll(first, "{", "")
+	first = strings.ReplaceAll(first, "}", "")
+	parts := strings.Split(first, ",")
+	if len(parts) != 2 {
+		s.Reply(info, fwdWrongCmdText(prefix))
+		return
+	}
+	chatN, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	groupN, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil || chatN < 0 || groupN < 0 || (chatN == 0 && groupN == 0) {
+		s.Reply(info, fwdWrongCmdText(prefix))
 		return
 	}
 
-	// MODE 3 — .forward 5,7 → instant forward
-	forwardLock()
-	sess := forwardSessions[info.Sender.String()]
-	forwardUnlock()
-	if sess == nil {
-		s.Reply(info, fwdHead()+
-			"*❌ No list loaded yet!*\n\n"+
-			"*📖 First type ❰ "+prefix+"forward chat,group ❱ to load the numbered list, then pick numbers.*\n\n"+
-			"*🔰 GOLD-MD WHATSAPP BOT 🔰*")
+	// collect totals and check limits
+	groups := fwdCollectGroups(cli)
+	chats := fwdCollectChats(cli)
+	if chatN > len(chats) || groupN > len(groups) {
+		s.Reply(info, fwdExceedText(prefix, len(groups), len(chats)))
 		return
 	}
 
-	// parse numbers (split on comma / space)
-	numRe := regexp.MustCompile(`\d+`)
-	var chatNums, groupNums []int
-	// preserve position: chats first set, then groups set — user types
-	// ".forward 5{chats},7{group}" style; simplest robust parse: each token
-	// maps in order — first number(s) before comma = chats, after = groups.
-	tokens := strings.FieldsFunc(rawArg, func(r rune) bool {
-		return r == ',' || r == ' ' || r == '+' || r == '{' || r == '}' || r == ':'
-	})
-	parts := strings.Split(rawArg, ",")
-	if len(parts) == 2 {
-		// "5,7" — chats part, groups part
-		for _, t := range numRe.FindAllString(parts[0], -1) {
-			if n, err := strconv.Atoi(t); err == nil {
-				chatNums = append(chatNums, n)
-			}
-		}
-		for _, t := range numRe.FindAllString(parts[1], -1) {
-			if n, err := strconv.Atoi(t); err == nil {
-				groupNums = append(groupNums, n)
-			}
-		}
-	} else {
-		// single token list — apply all numbers to groups (most common use)
-		for _, t := range numRe.FindAllString(rawArg, -1) {
-			if n, err := strconv.Atoi(t); err == nil {
-				groupNums = append(groupNums, n)
-			}
-		}
-	}
-	_ = tokens
-
-	// resolve the payload (quoted message or text after the numbers)
-	payload := fwdResolveTargetProto(s, info, args)
+	// resolve the payload (quoted message first, then free text)
+	payload := fwdResolvePayload(s, info, rest)
 	if payload == nil {
-		s.Reply(info, fwdHead()+
-			"*❌ Nothing to forward!*\n\n"+
-			"*💡 Reply to any message and then type ❰ "+prefix+"forward 5,7 ❱*\n"+
-			"*💡 Or add text: ❰ "+prefix+"forward 5,7 your message here ❱*\n\n"+
-			"*🔰 GOLD-MD WHATSAPP BOT 🔰*")
+		s.Reply(info, fwdNoMentionText(prefix))
 		return
 	}
 
-	// build the destination list
-	var dests []forwardListEntry
-	for _, n := range chatNums {
-		if n >= 1 && n <= len(sess.chats) {
-			dests = append(dests, sess.chats[n-1])
-		}
+	// build destination list — first N chats + first M groups
+	var dests []fwdDest
+	if chatN > 0 && chatN <= len(chats) {
+		dests = append(dests, chats[:chatN]...)
 	}
-	for _, n := range groupNums {
-		if n >= 1 && n <= len(sess.groups) {
-			dests = append(dests, sess.groups[n-1])
-		}
+	if groupN > 0 && groupN <= len(groups) {
+		dests = append(dests, groups[:groupN]...)
 	}
 	if len(dests) == 0 {
-		s.Reply(info, fwdHead()+
-			"*❌ No valid destinations selected!*\n\n"+
-			"*💡 Type ❰ "+prefix+"forward chat,group ❱ to see the list first.*\n\n"+
-			"*🔰 GOLD-MD WHATSAPP BOT 🔰*")
+		s.Reply(info, fwdWrongCmdText(prefix))
 		return
 	}
 
-	// send to each destination — clean, no forward tag
-	var sent, failed int
+	// send to every destination — clean, no forward tag
+	sentChats, sentGroups, failed := 0, 0, 0
 	for _, d := range dests {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_, err := cli.SendMessage(ctx, d.jid, payload)
 		cancel()
 		if err != nil {
 			failed++
+			continue
+		}
+		if d.jid.Server == types.GroupServer {
+			sentGroups++
 		} else {
-			sent++
+			sentChats++
 		}
 	}
+	if failed > 0 && sentChats == 0 && sentGroups == 0 {
+		s.Reply(info, "*❌ FORWARD FAILED! TRY AGAIN IN A MOMENT*")
+		return
+	}
 
-	s.Reply(info, fwdHead()+
-		"*✅ Forward complete!*\n"+
-		"*📤 Delivered: "+strconv.Itoa(sent)+" chat(s)*\n"+
-		"*❌ Failed: "+strconv.Itoa(failed)+" chat(s)*\n\n"+
-		"*🛡️ Sent clean — no forward tag!*\n\n"+
-		"*🔰 GOLD-MD WHATSAPP BOT 🔰*")
+	s.Reply(info, fwdSuccessText(sentGroups, sentChats))
 }
 
 func init() {
 	Register(Command{
 		Name:      "forward",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "THIS COMMAND IS USED TO FORWARD ANY MESSAGE TO SELECTED CHATS AND GROUPS WITHOUT A FORWARD TAG. REPLY TO A MESSAGE AND USE .forward 5,7 TO SEND IT CLEAN.",
+		Desc:      "THIS COMMAND IS USED TO FORWARD ANY MESSAGE TO MANY CHATS AND GROUPS AT ONCE WITHOUT A FORWARD TAG. REPLY TO A MESSAGE THEN USE .forward 3,6 TO SEND IT TO 3 CHATS AND 6 GROUPS INSTANTLY.",
 		OwnerOnly: true,
 		Run:       handleForward,
 	})
 }
-
-// keep unused imports referenced (fmt / events compiled out on some builds)
-var _ = fmt.Sprintf
-var _ events.Message
