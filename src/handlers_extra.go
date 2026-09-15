@@ -316,10 +316,22 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 	}
 
 	// ── STAGE 6 — DECLINE / DELETE / KICK — close the group call ──
-	// Full-close: wacore teardown pattern — room terminate to {callID}@call
-	// + direct terminate to the creator (whatsapp-rust / meowcaller style).
-	// RejectCall (self reject) is kept as the legacy fallback.
-	rejectErr := s.gccallTerminateForAll(from, creator, creatorAlt, callID)
+	// BOT GROUP ADMIN → FULL CALL END for everyone (join + terminate at
+	// the call scope). NON-ADMIN → decline only for itself (self-reject,
+	// the original working behaviour).
+	//
+	// Live-test finding (calldebug.jsonl): plain room terminates from a
+	// non-participant are silently dropped by the server — the roster had
+	// the bot at state=outgoing (invited, never joined). The captured
+	// protocol (meowcaller datasheet voip/group_invite_accept, pinned at
+	// capture 9d64637…): join = preaccept → accept to {callID}@call, then
+	// terminate. Only a participant's terminate is honored.
+	var rejectErr error
+	if s.gccallBotIsAdmin(groupJID) {
+		rejectErr = s.gccallTerminateForAll(from, creator, creatorAlt, callID)
+	} else {
+		rejectErr = s.gccallDeclineSelf(creator, callID)
+	}
 
 	if rejectErr != nil {
 		// reject fail hone par bhi delete/kick ke notice mat bhejo —
@@ -440,28 +452,116 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 }
 
 
-// gccallTerminateForAll closes a group call using the wacore teardown
-// pattern (whatsapp-rust / meowcaller), fixed to match whatsmeow's own
-// RejectCall wire encoding exactly:
-//   ──── JIDs passed as types.JID objects (JIDPair binary encoding,
-//     NOT .String() — plain strings, which the server cannot parse)
-//   ──── `from` attr on the <call> wrapper (whatsmeow sendNode does NOT
-//     inject it — the caller must set it, same as RejectCall)
+// gccallBotIsAdmin reports whether the BOT ITSELF is an admin/super-admin
+// of the group. LID-tolerant: the participant list may carry the bot as
+// LID, PN or both — every identity form is matched against the bot's own
+// PN (Store.ID) and own LID, exactly like the gold-cmds admin checks.
+func (s *Session) gccallBotIsAdmin(groupJID types.JID) bool {
+	if s.Client == nil || !s.Client.IsConnected() || groupJID.IsEmpty() {
+		return false
+	}
+	intr := s.Client.DangerousInternals()
+	ownPN := intr.GetOwnID().ToNonAD()
+	ownLID := intr.GetOwnLID().ToNonAD()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	gi, err := s.Client.GetGroupInfo(ctx, groupJID)
+	if err != nil {
+		ErrLog("[%s] gccall-admin: GetGroupInfo(%s) failed: %v", s.JID, groupJID.String(), err)
+		return false
+	}
+	for _, p := range gi.Participants {
+		isBot := gccallJidEq(p.JID, ownPN) || gccallJidEq(p.JID, ownLID) ||
+			gccallJidEq(p.LID, ownPN) || gccallJidEq(p.LID, ownLID) ||
+			gccallJidEq(p.PhoneNumber, ownPN) || gccallJidEq(p.PhoneNumber, ownLID)
+		if isBot && (p.IsAdmin || p.IsSuperAdmin) {
+			OkLog("[%s] gccall-admin: bot IS group admin in %s", s.JID, groupJID.String())
+			return true
+		}
+	}
+	return false
+}
+
+// gccallJidEq compares two JIDs after ToNonAD normalization (empty ≠ equal).
+func gccallJidEq(a, b types.JID) bool {
+	if a.IsEmpty() || b.IsEmpty() {
+		return false
+	}
+	return a.ToNonAD() == b.ToNonAD()
+}
+
+// gccallDeclineSelf declines the group call ONLY for the bot itself —
+// the original working decline behaviour (whatsmeow RejectCall). Used
+// when the bot is NOT a group admin.
+func (s *Session) gccallDeclineSelf(creator types.JID, callID string) error {
+	if s.Client == nil {
+		return fmt.Errorf("no client")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	creator = creator.ToNonAD()
+	err := s.Client.RejectCall(ctx, creator, callID)
+
+	// LIVE CALL DEBUG — OUT capture: exact whatsmeow RejectCall shape
+	ownID := creator // placeholder replaced below if logged in
+	if intr := s.Client.DangerousInternals(); !intr.GetOwnID().IsEmpty() {
+		ownID = intr.GetOwnID().ToNonAD()
+	}
+	rejShape := waBinary.Node{
+		Tag:   "call",
+		Attrs: waBinary.Attrs{"id": "<generated>", "from": ownID, "to": creator},
+		Content: []waBinary.Node{{
+			Tag:   "reject",
+			Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator, "count": "0"},
+		}},
+	}
+	CallDebugOut("gccall decline_self (non-admin, RejectCall)", &rejShape, err)
+	if err != nil {
+		ErrLog("[%s] gccall-decline: self-reject failed: %v", s.JID, err)
+	} else {
+		OkLog("[%s] gccall-decline: self-reject sent (call-id=%s)", s.JID, callID)
+	}
+	return err
+}
+
+// gccallTerminateForAll ENDS THE GROUP CALL FOR EVERYONE. Only called
+// when the bot is a group admin.
 //
-// Sends, in order:
-//   1. room terminate to {callID}@call (group control room) — PN identity
-//   2. room terminate to {callID}@call — LID identity (LID groups route
-//      calls via LIDs; server accepts whichever identity is the participant)
-//   3. direct <terminate> to each known leg: the ringing device (evt.From),
-//      the creator and the creatorAlt (PN<->LID alias)
-//   4. ALWAYS the proven self-<reject> (RejectCall) — guarantees the
-//      bot's own leg + the creator's ring close, exactly like the original
-//      working decline behaviour
+// Live-test root cause (calldebug.jsonl, 2 GC calls): the bot's 5 bare
+// room/direct <terminate> stanzas were all sent_ok at transport level but
+// silently IGNORED by the server — the call only ended when the CREATOR
+// manually hung up. Reason: the roster (offer group_info) had the bot at
+// state=outgoing (invited, never joined) — a NON-PARTICIPANT's terminate
+// is dropped. WhatsApp honours a terminate only from a call participant.
+//
+// The fix mirrors the captured protocol exactly (meowcaller datasheet
+// voip/group_invite_accept — pinned at capture 9d64637…, lines 9608+:
+// "the added endpoint sends preaccept to CALLID@call" → "immediately
+// sends accept to CALLID@call with exactly audio, net, encopt" → the
+// server ACKs; then terminate with reason=group_call_ended at the call
+// scope, like the real creator-side end we captured IN):
+//
+//	1. <preaccept> to {callID}@call  — audio opus/16000 → encopt keygen=2 →
+//	   capability ver=1 blob 01 05 f7 09 e0 bb 07 (join handshake, prep)
+//	2. <accept>   to {callID}@call  — audio opus/16000 → net medium=2 →
+//	   encopt keygen=2 (JOIN as participant — no metadata child)
+//	3. small settle waits so the server registers the join
+//	4. <terminate reason="group_call_ended"> to {callID}@call from BOTH
+//	   the bot's LID (its roster identity) and its PN
+//	5. direct terminates (with reason) to the known legs as backup
+//	6. RejectCall self-reject as the final legacy fallback
+//
+// All stanzas use JID OBJECTS in attrs (JIDPair binary encoding) and an
+// explicit `from` on the <call> wrapper (whatsmeow sendNode does NOT
+// inject it — same as RejectCall).
 func (s *Session) gccallTerminateForAll(from, creator, creatorAlt types.JID, callID string) error {
 	if s.Client == nil {
 		return fmt.Errorf("no client")
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
 	intr := s.Client.DangerousInternals()
 
 	ownPN := intr.GetOwnID()
@@ -471,54 +571,94 @@ func (s *Session) gccallTerminateForAll(from, creator, creatorAlt types.JID, cal
 	ownPN = ownPN.ToNonAD()
 	ownLID := intr.GetOwnLID().ToNonAD()
 
-	// <call from=own to=dest id=..><terminate call-id call-creator/></call>
-	// — JID OBJECTS in attrs, mirroring whatsmeow RejectCall encoding.
+	creator = creator.ToNonAD()
+	room := types.NewJID(callID, "call")
+
+	sent := 0
+	send := func(n waBinary.Node, label string) bool {
+		err := intr.SendNode(ctx, n)
+		CallDebugOut("gccall "+label, &n, err)
+		if err != nil {
+			ErrLog("[%s] gccall-end: %s failed: %v", s.JID, label, err)
+			return false
+		}
+		OkLog("[%s] gccall-end: %s sent (call-id=%s)", s.JID, label, callID)
+		sent++
+		return true
+	}
+
+	// ── 1) JOIN: <preaccept> to {callID}@call ──
+	// children: audio → encopt → capability (meowcaller BuildPreaccept /
+	// wacore build_preaccept for active-group; CAPABILITY_PREACCEPT blob).
+	preaccept := waBinary.Node{
+		Tag:   "call",
+		Attrs: waBinary.Attrs{"id": s.Client.GenerateMessageID(), "from": ownLID, "to": room},
+		Content: []waBinary.Node{{
+			Tag:   "preaccept",
+			Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator},
+			Content: []waBinary.Node{
+				{Tag: "audio", Attrs: waBinary.Attrs{"enc": "opus", "rate": "16000"}},
+				{Tag: "encopt", Attrs: waBinary.Attrs{"keygen": "2"}},
+				{Tag: "capability", Attrs: waBinary.Attrs{"ver": "1"}, Content: []byte{0x01, 0x05, 0xf7, 0x09, 0xe0, 0xbb, 0x07}},
+			},
+		}},
+	}
+	send(preaccept, "room@call preaccept (join)")
+
+	// settle — let the server register the preaccept
+	time.Sleep(400 * time.Millisecond)
+
+	// ── 2) JOIN: <accept> to {callID}@call ──
+	// children: audio → net medium=2 → encopt keygen=2 — exactly the
+	// captured active-group accept (datasheet: "with exactly audio, net,
+	// and encopt; no metadata child is present").
+	accept := waBinary.Node{
+		Tag:   "call",
+		Attrs: waBinary.Attrs{"id": s.Client.GenerateMessageID(), "from": ownLID, "to": room},
+		Content: []waBinary.Node{{
+			Tag:   "accept",
+			Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator},
+			Content: []waBinary.Node{
+				{Tag: "audio", Attrs: waBinary.Attrs{"enc": "opus", "rate": "16000"}},
+				{Tag: "net", Attrs: waBinary.Attrs{"medium": "2"}},
+				{Tag: "encopt", Attrs: waBinary.Attrs{"keygen": "2"}},
+			},
+		}},
+	}
+	send(accept, "room@call accept (join)")
+
+	// settle — the captured flow had the server ACK the accept before any
+	// further control stanza; give the join time to register as participant
+	time.Sleep(900 * time.Millisecond)
+
+	// ── 3) END: <terminate reason=group_call_ended> at the call scope ──
+	// from the bot's LID (its roster identity) — the exact shape of the
+	// creator-side end we captured IN (reason=group_call_ended).
 	buildTerm := func(own types.JID, dest types.JID) waBinary.Node {
 		return waBinary.Node{
-			Tag: "call",
-			Attrs: waBinary.Attrs{
-				"id":   s.Client.GenerateMessageID(),
-				"from": own,
-				"to":   dest,
-			},
+			Tag:   "call",
+			Attrs: waBinary.Attrs{"id": s.Client.GenerateMessageID(), "from": own, "to": dest},
 			Content: []waBinary.Node{{
 				Tag:   "terminate",
-				Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator},
+				Attrs: waBinary.Attrs{
+					"call-id":      callID,
+					"call-creator": creator,
+					"reason":       "group_call_ended",
+				},
 			}},
 		}
 	}
 
-	send := func(n waBinary.Node, label string) bool {
-		err := intr.SendNode(ctx, n)
-		// LIVE CALL DEBUG — OUT capture (node + result)
-		CallDebugOut("gccall "+label, &n, err)
-		if err != nil {
-			ErrLog("[%s] gccall-terminate: %s failed: %v", s.JID, label, err)
-			return false
-		}
-		OkLog("[%s] gccall-terminate: %s sent (call-id=%s)", s.JID, label, callID)
-		return true
+	if send(buildTerm(ownLID, room), "room@call terminate END-FOR-ALL (LID)") {
+		// nothing — sent counter already bumped
 	}
-
-	// {callID}@call — the group call control room address.
-	room := types.NewJID(callID, "call")
-	sentAny := false
-
-	// 1) room terminate via PN identity
-	if send(buildTerm(ownPN, room), "room@call terminate (PN)") {
-		sentAny = true
-	}
-
-	// 2) room terminate via LID identity (only when we actually have a LID)
 	if !ownLID.IsEmpty() && ownLID.String() != ownPN.String() {
-		if send(buildTerm(ownLID, room), "room@call terminate (LID)") {
-			sentAny = true
-		}
+		send(buildTerm(ownPN, room), "room@call terminate END-FOR-ALL (PN)")
 	}
 
-	// 3) direct terminate to every known leg — the ringing device
-	//    (evt.From, per-device call routing), the creator and the creatorAlt
-	//    (PN<->LID alias), de-duplicated.
+	// ── 4) backup: direct terminates (with reason) to every known leg ──
+	// the ringing device (evt.From), the creator and the creatorAlt
+	// (PN<->LID alias), de-duplicated.
 	seen := map[string]bool{}
 	for _, leg := range []types.JID{from, creator, creatorAlt} {
 		if leg.IsEmpty() {
@@ -529,37 +669,28 @@ func (s *Session) gccallTerminateForAll(from, creator, creatorAlt types.JID, cal
 			continue
 		}
 		seen[key] = true
-		if send(buildTerm(ownPN, leg), "direct terminate to "+key) {
-			sentAny = true
-		}
+		send(buildTerm(ownPN, leg.ToNonAD()), "direct terminate to "+key)
 	}
 
-	// 4) ALWAYS the proven self-reject — the one stanza that is
-	//    guaranteed to work (it is the original working decline).
-	rejErr := s.Client.RejectCall(ctx, creator.ToNonAD(), callID)
-	// LIVE CALL DEBUG — OUT capture: exact whatsmeow RejectCall shape
-	// (send RejectCall ke andar hota hai — ye record uska wire format hai)
+	// ── 5) final legacy fallback: the proven self-reject ──
+	rejErr := s.Client.RejectCall(ctx, creator, callID)
 	rejShape := waBinary.Node{
-		Tag: "call",
-		Attrs: waBinary.Attrs{
-			"id":   "<generated>",
-			"from": ownPN,
-			"to":   creator.ToNonAD(),
-		},
+		Tag:   "call",
+		Attrs: waBinary.Attrs{"id": "<generated>", "from": ownPN, "to": creator},
 		Content: []waBinary.Node{{
 			Tag:   "reject",
-			Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator.ToNonAD(), "count": "0"},
+			Attrs: waBinary.Attrs{"call-id": callID, "call-creator": creator, "count": "0"},
 		}},
 	}
-	CallDebugOut("gccall self_reject (RejectCall)", &rejShape, rejErr)
+	CallDebugOut("gccall self_reject fallback (RejectCall)", &rejShape, rejErr)
 	if rejErr != nil {
-		ErrLog("[%s] gccall-terminate: self-reject failed: %v", s.JID, rejErr)
+		ErrLog("[%s] gccall-end: self-reject fallback failed: %v", s.JID, rejErr)
 	} else {
-		OkLog("[%s] gccall-terminate: self-reject sent (call-id=%s)", s.JID, callID)
-		sentAny = true
+		OkLog("[%s] gccall-end: self-reject fallback sent (call-id=%s)", s.JID, callID)
+		sent++
 	}
 
-	if !sentAny {
+	if sent == 0 {
 		return fmt.Errorf("all terminate attempts failed")
 	}
 	return nil
