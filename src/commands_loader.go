@@ -1740,6 +1740,87 @@ func (b *bridge) SetGroupSetting(groupJID, field, val string) {
 	b.s.Manager.Redis.SetSetting(groupJID, field, val)
 }
 
+// ── ANTIGCCALL JSON debug (file: nexstore/gccall_debug.jsonl) ──────────
+
+// gccallDebugPath returns the gccall debug file path. Falls back to
+// "gccall_debug.jsonl" in the current directory if the data dir is unknown.
+func (b *bridge) gccallDebugPath() string {
+	if b.s.Manager != nil && b.s.Manager.cfg != nil && b.s.Manager.cfg.DataDir != "" {
+		return filepath.Join(b.s.Manager.cfg.DataDir, "gccall_debug.jsonl")
+	}
+	return "gccall_debug.jsonl"
+}
+
+// gccallDebugMut serializes all writes/reads on the debug file.
+var gccallDebugMut sync.Mutex
+
+// GCCallDebugLog appends one JSON debug line to the gccall debug file AND
+// prints the same line to stdout (bot.log) so the owner can tail both.
+// The JSON document always carries the stage + ts + the passed fields.
+func (b *bridge) GCCallDebugLog(stage string, doc map[string]any) {
+	defer func() { _ = recover() }()
+	if doc == nil {
+		doc = map[string]any{}
+	}
+	out := map[string]any{"stage": stage, "ts": time.Now().UTC().Format(time.RFC3339Nano), "bot": b.s.JID}
+	for k, v := range doc {
+		out[k] = v
+	}
+	buf, err := json.Marshal(out)
+	if err != nil {
+		// best-effort fallback — marshal the stage only
+		buf = []byte(fmt.Sprintf("{\"stage\":\"%s\",\"ts\":\"%s\",\"bot\":\"%s\",\"marshal_err\":\"%v\"}",
+			stage, time.Now().UTC().Format(time.RFC3339Nano), b.s.JID, err))
+	}
+
+	gccallDebugMut.Lock()
+	defer gccallDebugMut.Unlock()
+
+	// 1) append to the file (owner can .antigccall debug anytime)
+	f, err := os.OpenFile(b.gccallDebugPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err == nil {
+		_, _ = f.Write(append(buf, '\n'))
+		_ = f.Close()
+	}
+	// 2) mirror to stdout (bot.log) — full JSON debug in console too
+	fmt.Println("GCCALL " + string(buf))
+}
+
+// GCCallDebugTail returns the last n lines from the gccall debug file.
+func (b *bridge) GCCallDebugTail(n int) []string {
+	defer func() { _ = recover() }()
+	if n <= 0 {
+		n = 15
+	}
+	gccallDebugMut.Lock()
+	defer gccallDebugMut.Unlock()
+
+	data, err := os.ReadFile(b.gccallDebugPath())
+	if err != nil || len(data) == 0 {
+		return nil
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	// keep only non-empty lines
+	var out []string
+	for _, l := range lines {
+		if strings.TrimSpace(l) != "" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// GCCallDebugClear truncates the debug file to zero events.
+func (b *bridge) GCCallDebugClear() {
+	defer func() { _ = recover() }()
+	gccallDebugMut.Lock()
+	defer gccallDebugMut.Unlock()
+	_ = os.WriteFile(b.gccallDebugPath(), nil, 0o644)
+}
+
 // groupSetKey builds the Redis key for a per-group SET, namespaced under the
 // bot JID so different bots on the same Upstash don't collide.
 func (b *bridge) groupSetKey(groupJID, setName string) string {
