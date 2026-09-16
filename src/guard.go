@@ -419,6 +419,75 @@ func (b *bridge) guardNotifyFail(info MsgInfoT, kind guardKind, orig int64, why 
 // InfoT mirrors types.MessageInfo (guarded import lives in guard_impl.go).
 type InfoT = types.MessageInfo
 
+// ── ANTIDELETE MEDIA SHIELD (owner: jani, 2026-09-16) ───────────────────────
+//
+// OWNER ORDER: "antidelete k media ko b is shield me add krwao ... compress kr
+// ke bheje ... take storage ka size bache render ka free 5gb bandwidth outbound
+// b bache".
+//
+// Antidelete recovery flow:
+//
+//      WhatsApp (media) ──download──▶ bot ──compress──▶ WhatsApp (re-upload)
+//                                        ▲
+//                          Render ka metered OUTBOUND yahan kharch hota hai
+//
+// Storadera me sirf chhota proto (~5-15KB: URL + mediaKey + hashes) store hota
+// hai — asli media bytes NAHI. Is liye bandwidth ka asli kharch recovery ke
+// SEND (re-upload) pe hota hai. guardAntideleteBytes wahi media bytes ko
+// compressor room se guzaar kar chhota karta hai, taake Render ka free 5GB
+// outbound bache.
+//
+// guardAntideleteBytes compresses in-memory antidelete media bytes using the
+// SAME fast engine as the download-command shield (guardCompressFile). Returns
+// (compressedBytes, note). On any failure / no-gain it returns the ORIGINAL
+// bytes unchanged (never blocks a recovery).
+func guardAntideleteBytes(kind guardKind, data []byte) ([]byte, string) {
+        if !guardEnabled() || len(data) == 0 {
+                return data, ""
+        }
+        // docs/stickers re-encode nahi hote; floor se chhoti media skip.
+        if kind == guardDocument || kind == guardSticker {
+                return data, ""
+        }
+        if int64(len(data)) <= guardFloorBytes() {
+                return data, ""
+        }
+        src, err := writeGuardTemp(data, kind)
+        if err != nil {
+                return data, ""
+        }
+        defer os.Remove(src)
+        out, size, note, ok := guardCompressFile(kind, src, guardTargetBytes(), guardLimitBytes())
+        if !ok || size <= 0 || size >= int64(len(data)) {
+                if out != "" {
+                        os.Remove(out)
+                }
+                return data, "" // compress fail / bada bana → original hi bhejo
+        }
+        comp, rerr := os.ReadFile(out)
+        os.Remove(out)
+        if rerr != nil || len(comp) == 0 {
+                return data, ""
+        }
+        InfoLog("[GUARD-AD] antidelete media compressed %s -> %s (outbound saved)",
+                guardFmtMB(int64(len(data))), guardFmtMB(int64(len(comp))))
+        return comp, note
+}
+
+// guardAntideleteKind maps an antidelete media-type string to a guardKind.
+// Returns (kind, true) when the type is compressible media.
+func guardAntideleteKind(mtype string) (guardKind, bool) {
+        switch mtype {
+        case "videoMessage":
+                return guardVideo, true
+        case "audioMessage":
+                return guardAudio, true
+        case "imageMessage":
+                return guardImage, true
+        }
+        return guardVideo, false
+}
+
 // guardProbeBytesMeta: video duration+w+h from in-memory bytes (temp probe).
 func guardProbeBytesMeta(data []byte) (secs, w, h uint32) {
 	f, err := os.CreateTemp("", "goldguard-probe-*")

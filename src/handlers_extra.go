@@ -1430,6 +1430,16 @@ func (s *Session) downloadMediaFromProto(msg *waProto.Message) ([]byte, string, 
 		ErrLog("[%s] antidelete media download failed: %v", s.JID, err)
 		return nil, "", false
 	}
+	// ── ANTIDELETE MEDIA SHIELD (owner: jani, 2026-09-16) ──
+	// Recovered media ko compressor room se guzaar kar chhota karo, taake
+	// Render ka free 5GB outbound (re-upload) bache. Fail/no-gain → original.
+	if _, mtype := mediaTypeLabel(msg); mtype != "" {
+		if kind, okKind := guardAntideleteKind(mtype); okKind {
+			if comp, _ := guardAntideleteBytes(kind, data); len(comp) > 0 {
+				data = comp
+			}
+		}
+	}
 	//JSONDebug("ANTIDELETE_SEND", map[string]any{
 	//"botJID": s.JID, "stage": "download_ok",
 	//"dataLen": len(data), "mime": mime,
