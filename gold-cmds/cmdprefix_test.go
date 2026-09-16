@@ -233,3 +233,109 @@ func TestCmdPrefixRewriteNoPrefixMode(t *testing.T) {
 		t.Fatalf("rewrite should be no-op when prefix is empty")
 	}
 }
+
+// TestCmdPrefixStopAll — "stop all" makes EVERY known command prefixless.
+func TestCmdPrefixStopAll(t *testing.T) {
+	b := newCPBridge()
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "all"}, ".")
+	st := cpLoad(b)
+	known := cmdNameKnownSet()
+	if len(st) != len(known) {
+		t.Fatalf("stop all: stopped=%d known=%d", len(st), len(known))
+	}
+	for n := range known {
+		if !st[n] {
+			t.Errorf("stop all: %s not prefixless", n)
+		}
+	}
+	if !strings.Contains(b.lastReply(), "ALL") {
+		t.Errorf("reply missing ALL: %q", b.lastReply())
+	}
+}
+
+// TestCmdPrefixStartAll — "start all" clears the whole stopped set.
+func TestCmdPrefixStartAll(t *testing.T) {
+	b := newCPBridge()
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "all"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"start", "all"}, ".")
+	if len(cpLoad(b)) != 0 {
+		t.Fatalf("start all did not clear: %v", cpLoad(b))
+	}
+	if !strings.Contains(b.lastReply(), "STARTED") {
+		t.Errorf("reply missing STARTED: %q", b.lastReply())
+	}
+}
+
+// TestCmdPrefixStopAllThenStartSingle — after stop all, start one command
+// leaves the rest still prefixless.
+func TestCmdPrefixStopAllThenStartSingle(t *testing.T) {
+	b := newCPBridge()
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "all"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"start", "ping"}, ".")
+	st := cpLoad(b)
+	if st["ping"] {
+		t.Fatalf("ping should be prefix-only after start ping")
+	}
+	if !st["menu"] {
+		t.Fatalf("menu should still be prefixless")
+	}
+}
+
+// TestCmdPrefixStartAllWhenEmpty — start all with nothing stopped is a no-op.
+func TestCmdPrefixStartAllWhenEmpty(t *testing.T) {
+	b := newCPBridge()
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"start", "all"}, ".")
+	if len(cpLoad(b)) != 0 {
+		t.Fatalf("start all on empty changed state")
+	}
+	if !strings.Contains(b.lastReply(), "NO PREFIXLESS") {
+		t.Errorf("reply = %q, want NO PREFIXLESS", b.lastReply())
+	}
+}
+
+// TestCmdPrefixAllRewrite — after stop all, a bare command is rewritten.
+func TestCmdPrefixAllRewrite(t *testing.T) {
+	b := newCPBridge()
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "all"}, ".")
+	got, ok := CmdPrefixRewrite(b, "menu", ".")
+	if !ok || got != ".menu" {
+		t.Fatalf("CmdPrefixRewrite(menu) after stop all = %q,%v want .menu,true", got, ok)
+	}
+}
+
+// TestCmdPrefixListEmpty — .cmdprefix list with nothing stopped.
+func TestCmdPrefixListEmpty(t *testing.T) {
+	b := newCPBridge()
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"list"}, ".")
+	if !strings.Contains(b.lastReply(), "NO PREFIXLESS") {
+		t.Errorf("reply = %q, want NO PREFIXLESS", b.lastReply())
+	}
+}
+
+// TestCmdPrefixListShowsStopped — .cmdprefix list shows the stopped commands.
+func TestCmdPrefixListShowsStopped(t *testing.T) {
+	b := newCPBridge()
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping,menu"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"list"}, ".")
+	r := b.lastReply()
+	if !strings.Contains(r, "CMDPREFIX LIST") {
+		t.Errorf("reply missing header: %q", r)
+	}
+	if !strings.Contains(r, "ping") || !strings.Contains(r, "menu") {
+		t.Errorf("reply missing stopped commands: %q", r)
+	}
+	if !strings.Contains(r, "TOTAL") {
+		t.Errorf("reply missing total: %q", r)
+	}
+}
+
+// TestCmdPrefixListAfterStartAll — list is empty again after start all.
+func TestCmdPrefixListAfterStartAll(t *testing.T) {
+	b := newCPBridge()
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"start", "all"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"list"}, ".")
+	if !strings.Contains(b.lastReply(), "NO PREFIXLESS") {
+		t.Errorf("reply = %q, want NO PREFIXLESS after start all", b.lastReply())
+	}
+}

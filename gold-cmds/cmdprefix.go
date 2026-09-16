@@ -11,9 +11,11 @@ package goldcmds
 //   .cmdprefix stop ping,menu,alive  → ek sath kai commands (comma/space)
 //   .cmdprefix start ping            → ping wapas sirf prefix ke sath
 //   .cmdprefix start alive,menu,ping → ek sath kai commands
+//   .cmdprefix stop all              → SAARE commands prefixless (bulk)
+//   .cmdprefix start all             → SAARE commands wapas prefix-only (bulk)
 //   .cmdprefix reset                 → saare commands wapas prefix-only
 //
-// ORDER: action (stop/start) PEHLE, phir command name(s).
+// ORDER: action (stop/start) PEHLE, phir command name(s) ya "all".
 //
 // Storage (Redis settings:<botJID> hash — cmdname/cmdreact jaisa hi Redis-safe
 // pattern, GetSetting/SetSetting full-value overwrite, koi orphan key nahi):
@@ -34,6 +36,7 @@ package goldcmds
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -91,14 +94,7 @@ func cpSave(s SessionBridge, st map[string]bool) {
 	for n := range st {
 		names = append(names, n)
 	}
-	// stable order (alphabetical) so the stored value is deterministic
-	for i := 0; i < len(names); i++ {
-		for j := i + 1; j < len(names); j++ {
-			if names[j] < names[i] {
-				names[i], names[j] = names[j], names[i]
-			}
-		}
-	}
+	sort.Strings(names) // stable order so the stored value is deterministic
 	s.SetStatusSetting(cpStopField, strings.Join(names, ","))
 	cpInvalidate(s.GetJID())
 }
@@ -160,6 +156,14 @@ func cpArrowList(names []string, prefix string) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// cpSample returns at most n names from the list (for compact "all" output).
+func cpSample(names []string, n int) []string {
+	if len(names) <= n {
+		return names
+	}
+	return names[:n]
+}
+
 // cpEnglishHelp — pure-English mode descriptions (har mode ki 3-4 line) taake
 // English expert user khud samajh jaye, ya user Meta AI ko bhej kar pooch le
 // to Meta AI ko bhi samajhne me asani ho: kya hoga, kaise chalega.
@@ -167,6 +171,8 @@ func cpEnglishHelp(prefix string) string {
 	return "*🔰 ENGLISH DESCRIPTION 🔰*\n\n" +
 		"*STOP :❵ Example " + prefix + "cmdprefix stop ping — the ping command now works BOTH ways: with the prefix (" + prefix + "ping) and also WITHOUT the prefix (just type ping). You can stop the prefix for as many commands as you want at once by separating them with commas, like " + prefix + "cmdprefix stop ping,menu,alive.*\n\n" +
 		"*START :❵ Example " + prefix + "cmdprefix start ping — the ping command goes back to prefix-only mode. From now on it ONLY works with the prefix (" + prefix + "ping) and typing just ping without the prefix does nothing. You can start several commands at once, like " + prefix + "cmdprefix start alive,menu,ping.*\n\n" +
+		"*STOP ALL :❵ Example " + prefix + "cmdprefix stop all — EVERY bot command becomes prefixless in one shot. From now on you can run any command with OR without the prefix. Use this to make the whole bot prefix-free at once.*\n\n" +
+		"*START ALL :❵ Example " + prefix + "cmdprefix start all — EVERY command you had made prefixless is restored at once and the whole bot goes back to prefix-only mode. This is the bulk undo of STOP ALL.*\n\n" +
 		"*RESET :❵ Example " + prefix + "cmdprefix reset — every command you stopped is restored at once and the bot goes back to prefix-only for all commands.*"
 }
 
@@ -189,20 +195,17 @@ func handleCmdPrefix(s SessionBridge, info types.MessageInfo, args []string, pre
 		for n := range st {
 			names = append(names, n)
 		}
-		for i := 0; i < len(names); i++ {
-			for j := i + 1; j < len(names); j++ {
-				if names[j] < names[i] {
-					names[i], names[j] = names[j], names[i]
-				}
-			}
-		}
+		sort.Strings(names)
 		var b strings.Builder
 		b.WriteString("*🔰 CMDPREFIX INFO 🔰*\n\n")
 		b.WriteString("*MAKE ANY COMMAND WORK WITHOUT THE PREFIX TOO.*\n\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX STOP PING ❳* — " + prefix + "ping AND ping both work\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX STOP PING,MENU,ALIVE ❳* — many commands at once\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX STOP ALL ❳* — EVERY command becomes prefixless\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX START PING ❳* — " + prefix + "ping back to prefix-only\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX START ALIVE,MENU,PING ❳* — many commands at once\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX START ALL ❳* — EVERY command back to prefix-only\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX LIST ❳* — show the prefixless command list\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX RESET ❳* — all commands back to prefix-only\n\n")
 		b.WriteString(cpEnglishHelp(prefix) + "\n\n")
 		b.WriteString("*CURRENT PREFIXLESS COMMANDS :❵ ❰ " + itoa(len(names)) + " ❱*\n")
@@ -232,12 +235,36 @@ func handleCmdPrefix(s SessionBridge, info types.MessageInfo, args []string, pre
 		return
 	}
 
-	// ── parse: <stop|start> <cmds>  (action FIRST) ──
+	// ── list ──
+	if raw == "list" {
+		st := cpLoad(s)
+		names := make([]string, 0, len(st))
+		for n := range st {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		var b strings.Builder
+		b.WriteString("*🔰 CMDPREFIX LIST 🔰*\n\n")
+		if len(names) == 0 {
+			b.WriteString("*NO PREFIXLESS COMMANDS*\n")
+			b.WriteString("*ALL COMMANDS NEED THE PREFIX*")
+			s.Reply(info, strings.TrimSpace(b.String()))
+			return
+		}
+		b.WriteString("*THESE COMMANDS WORK WITH AND WITHOUT THE PREFIX*\n\n")
+		b.WriteString("*TOTAL :❵ ❰ " + itoa(len(names)) + " ❱*\n")
+		b.WriteString(cpArrowList(names, prefix))
+		s.Reply(info, strings.TrimSpace(b.String()))
+		return
+	}
+
+	// ── parse: <stop|start> <cmds|all>  (action FIRST) ──
 	fields := strings.Fields(raw)
 	if len(fields) < 2 {
 		s.Reply(info, "*WRONG FORMAT*\n\n"+
 			"*TYPE ❲ "+prefix+"CMDPREFIX STOP PING ❳ TO MAKE A COMMAND PREFIXLESS*\n"+
 			"*TYPE ❲ "+prefix+"CMDPREFIX START PING ❳ TO MAKE IT PREFIX-ONLY AGAIN*\n"+
+			"*TYPE ❲ "+prefix+"CMDPREFIX STOP ALL ❳ / ❲ "+prefix+"CMDPREFIX START ALL ❳ FOR EVERY COMMAND*\n"+
 			"*TYPE ❲ "+prefix+"CMDPREFIX ❳ FOR FULL HELP*")
 		return
 	}
@@ -258,6 +285,12 @@ func handleCmdPrefix(s SessionBridge, info types.MessageInfo, args []string, pre
 	if len(names) == 0 {
 		s.Reply(info, "*NO COMMAND NAME GIVEN*\n\n"+
 			"*TYPE ❲ "+prefix+"CMDPREFIX STOP PING ❳*")
+		return
+	}
+
+	// ── "all" keyword: apply to EVERY known command (bulk) ──
+	if len(names) == 1 && names[0] == "all" {
+		cpHandleAll(s, info, action, prefix)
 		return
 	}
 
@@ -329,13 +362,84 @@ func handleCmdPrefix(s SessionBridge, info types.MessageInfo, args []string, pre
 	s.Reply(info, strings.TrimSpace(b.String()))
 }
 
+// cpHandleAll implements the bulk "stop all" / "start all" modes.
+//
+//	stop all  → every known command is added to the stopped set (prefixless)
+//	start all → the whole stopped set is cleared (all back to prefix-only)
+func cpHandleAll(s SessionBridge, info types.MessageInfo, action, prefix string) {
+	known := cmdNameKnownSet()
+	st := cpLoad(s)
+	next := map[string]bool{}
+	for k := range st {
+		next[k] = true
+	}
+
+	var applied, already []string
+	if action == "stop" {
+		for n := range known {
+			if next[n] {
+				already = append(already, n)
+				continue
+			}
+			next[n] = true
+			applied = append(applied, n)
+		}
+	} else { // start all → clear everything
+		for n := range next {
+			applied = append(applied, n)
+		}
+		next = map[string]bool{}
+	}
+	sort.Strings(applied)
+	sort.Strings(already)
+
+	if len(applied) > 0 {
+		cpSave(s, next)
+	}
+
+	var b strings.Builder
+	if action == "stop" {
+		b.WriteString("*🔰 CMDPREFIX STOPPED — ALL 🔰*\n\n")
+		b.WriteString("*EVERY COMMAND NOW WORKS WITH AND WITHOUT THE PREFIX*\n\n")
+	} else {
+		b.WriteString("*🔰 CMDPREFIX STARTED — ALL 🔰*\n\n")
+		b.WriteString("*EVERY COMMAND NOW WORKS ONLY WITH THE PREFIX*\n\n")
+	}
+	// "all" mode touches hundreds of commands — never dump the full list
+	// (WhatsApp message would be enormous). Show counts + a short sample.
+	const cpAllSample = 15
+	if len(applied) > 0 {
+		b.WriteString("*UPDATED :❵ ❰ " + itoa(len(applied)) + " ❱*\n")
+		b.WriteString(cpArrowList(cpSample(applied, cpAllSample), prefix))
+		if len(applied) > cpAllSample {
+			b.WriteString("\n*… AND " + itoa(len(applied)-cpAllSample) + " MORE*")
+		}
+		b.WriteString("\n\n")
+	}
+	if len(already) > 0 {
+		if action == "stop" {
+			b.WriteString("*ALREADY PREFIXLESS :❵ ❰ " + itoa(len(already)) + " ❱*\n\n")
+		} else {
+			b.WriteString("*ALREADY PREFIX-ONLY :❵ ❰ " + itoa(len(already)) + " ❱*\n\n")
+		}
+	}
+	if len(applied) == 0 && len(already) == 0 {
+		if action == "stop" {
+			b.WriteString("*NO COMMANDS FOUND TO STOP*")
+		} else {
+			b.WriteString("*NO PREFIXLESS COMMANDS TO START*\n*ALL COMMANDS ALREADY NEED THE PREFIX*")
+		}
+	}
+	s.Reply(info, strings.TrimSpace(b.String()))
+}
+
 // ── registration ──
 
 func init() {
 	Register(Command{
 		Name:      "cmdprefix",
 		Category:  "OWNER & SYSTEM",
-		Desc:      "THIS COMMAND IS USED TO MAKE ANY COMMAND WORK WITHOUT THE PREFIX TOO. STOP OR START THE PREFIX PER COMMAND.",
+		Desc:      "THIS COMMAND IS USED TO MAKE ANY COMMAND WORK WITHOUT THE PREFIX TOO. STOP OR START THE PREFIX PER COMMAND, OR USE STOP ALL / START ALL FOR EVERY COMMAND AT ONCE.",
 		OwnerOnly: true,
 		Run:       handleCmdPrefix,
 	})

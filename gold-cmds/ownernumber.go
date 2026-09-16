@@ -66,6 +66,8 @@ func handleOwnerNumber(s SessionBridge, info types.MessageInfo, args []string, p
 		b.WriteString("*MULTIPLE :❯ ❮ " + prefix + "OWNERNUMBER DEL 923xxx,923xxx ❯*\n\n")
 		b.WriteString("*TO RESET EVERYTHING :❯*\n")
 		b.WriteString("*TYPE ❮ " + prefix + "OWNERNUMBER RESET ❯*\n\n")
+		b.WriteString("*TO SHOW SUDO OWNERS LIST :❵*\n")
+		b.WriteString("*TYPE ❮ " + prefix + "SUDO LIST ❯*\n\n")
 		b.WriteString("*NUMBER FORMAT: Country Code + Number*\n")
 		b.WriteString("*NO + OR SPACES*")
 		s.Reply(info, b.String())
@@ -85,6 +87,25 @@ func handleOwnerNumber(s SessionBridge, info types.MessageInfo, args []string, p
 		// best-effort: if bridge exposes Del, use it; otherwise empty string is fine
 		s.SetSudoOwners(nil)
 		s.Reply(info, "*🔰 OWNER NUMBER RESET 🔰*\n\n*MAIN OWNER RESET TO PAIRED NUMBER :❯ "+permanentNum+"*\n*ALL SUDO OWNERS CLEARED*")
+		return
+	}
+
+	// ── list → show all sudo owners ──
+	if lower == "list" {
+		var b strings.Builder
+		b.WriteString("*🔰 SUDO OWNERS LIST 🔰*\n\n")
+		b.WriteString("*MAIN OWNER :❵ ❰ " + mainOwner + " ❱*\n\n")
+		if len(sudoList) == 0 {
+			b.WriteString("*NO SUDO OWNERS*\n")
+			b.WriteString("*ADD WITH :❵ ❰ " + prefix + "SUDO ADD 923001234567 ❱*")
+			s.Reply(info, strings.TrimSpace(b.String()))
+			return
+		}
+		b.WriteString("*TOTAL SUDO :❵ ❰ " + itoa(len(sudoList)) + " ❱*\n")
+		for i, n := range sudoList {
+			b.WriteString("*" + itoa(i+1) + ". ❲ " + n + " ❳*\n")
+		}
+		s.Reply(info, strings.TrimSpace(b.String()))
 		return
 	}
 
