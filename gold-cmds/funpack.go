@@ -15,9 +15,7 @@ package goldcmds
 //   .fact             -> random useless fact
 //   .quote            -> random quote
 //   .dadjoke          -> random dad joke
-//   .cat              -> random cat photo
-//   .dog              -> random dog photo
-//   .shorten <url>    -> short URL (tinyurl)
+//   .shorten <url>    -> short URL (tinyurl)  [aliases: tiny, shorturl, urltiny, smalllink, smallurl, shortlink, tinyurl]
 //   .crypto <coin>    -> live crypto price (USD + PKR)
 //   .ip <ip|empty>    -> IP geolocation lookup
 // ============================================================================
@@ -371,61 +369,9 @@ func handleDadJoke(s SessionBridge, info types.MessageInfo, args []string, prefi
 
 // ============================================================================
 // .CAT — RANDOM CAT PHOTO
-// ============================================================================
-
-func handleCat(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "*FETCHING CAT....*")
-		defer func() { _ = s.DeleteMessage(info, waitID) }()
-
-		img, err := funGetBytes(ctx, "https://cataas.com/cat")
-		if err != nil {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "CAT PHOTO")
-			}
-			return
-		}
-		if err := s.SendImage(info, img, "*🔰 RANDOM CAT 🔰*"); err != nil {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "CAT PHOTO")
-			}
-		}
-	})
-}
 
 // ============================================================================
 // .DOG — RANDOM DOG PHOTO
-// ============================================================================
-
-func handleDog(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "*FETCHING DOG....*")
-		defer func() { _ = s.DeleteMessage(info, waitID) }()
-
-		var res struct {
-			Message string `json:"message"`
-			Status  string `json:"status"`
-		}
-		if err := funGetJSON(ctx, "https://dog.ceo/api/breeds/image/random", &res); err != nil || res.Message == "" {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "DOG PHOTO")
-			}
-			return
-		}
-		img, err := funGetBytes(ctx, res.Message)
-		if err != nil {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "DOG PHOTO")
-			}
-			return
-		}
-		if err := s.SendImage(info, img, "*🔰 RANDOM DOG 🔰*"); err != nil {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "DOG PHOTO")
-			}
-		}
-	})
-}
 
 // ============================================================================
 // .SHORTEN — URL SHORTENER
@@ -436,7 +382,11 @@ func shortenGuide(prefix string) string {
 		"*MAKE ANY LONG LINK SHORT*\n\n" +
 		"*HOW TO USE:*\n" +
 		"*❮ " + prefix + "SHORTEN <LINK> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "SHORTEN HTTPS://GITHUB.COM/Uf-prince/TEST-BOT ❯*"
+		"*EXAMPLE ❮ " + prefix + "SHORTEN HTTPS://FACEBOOK.COM/sjbdnnd2eekekdi ❯*\n\n" +
+		"*SHORT ALIAS:*\n" +
+		"*❮ " + prefix + "TINY <LINK> ❯*\n" +
+		"*EXAMPLE ❮ " + prefix + "TINY HTTPS://FACEBOOK.COM/sjbdnnd2eekekdi ❯*\n\n" +
+		"*🔰 GOLD-MD WHATSAPP BOT 🔰*"
 }
 
 func handleShorten(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -603,8 +553,6 @@ func init() {
 	Register(Command{Name: "fact", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM INTERESTING FACT. JUST TYPE .FACT.", Run: handleFact})
 	Register(Command{Name: "quote", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM MOTIVATIONAL QUOTE. JUST TYPE .QUOTE.", Run: handleQuote})
 	Register(Command{Name: "dadjoke", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM DAD JOKE. JUST TYPE .DADJOKE.", Run: handleDadJoke})
-	Register(Command{Name: "cat", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO GET A RANDOM CAT PHOTO. JUST TYPE .CAT.", Run: handleCat})
-	Register(Command{Name: "dog", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO GET A RANDOM DOG PHOTO. JUST TYPE .DOG.", Run: handleDog})
 	Register(Command{Name: "shorten", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO SHORTEN ANY LONG LINK. USE IT AS .SHORTEN <LINK>.", Run: handleShorten})
 	Register(Command{Name: "crypto", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE LIVE PRICE OF ANY CRYPTO COIN IN USD AND PKR. USE IT AS .CRYPTO <COIN>.", Run: handleCrypto})
 	Register(Command{Name: "ip", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO LOOK UP THE DETAILS OF ANY IP ADDRESS. USE IT AS .IP <IP ADDRESS>.", Run: handleIP})
@@ -613,7 +561,12 @@ func init() {
 	Register(Command{Name: "qrcode", Hidden: true, Run: handleQR})
 	Register(Command{Name: "wthr", Hidden: true, Run: handleWeather})
 	Register(Command{Name: "wikipedia", Hidden: true, Run: handleWiki})
+	Register(Command{Name: "tiny", Hidden: true, Run: handleShorten})
 	Register(Command{Name: "shorturl", Hidden: true, Run: handleShorten})
+	Register(Command{Name: "urltiny", Hidden: true, Run: handleShorten})
+	Register(Command{Name: "smalllink", Hidden: true, Run: handleShorten})
+	Register(Command{Name: "smallurl", Hidden: true, Run: handleShorten})
+	Register(Command{Name: "shortlink", Hidden: true, Run: handleShorten})
 	Register(Command{Name: "tinyurl", Hidden: true, Run: handleShorten})
 	Register(Command{Name: "ipinfo", Hidden: true, Run: handleIP})
 	Register(Command{Name: "coin", Hidden: true, Run: handleCrypto})

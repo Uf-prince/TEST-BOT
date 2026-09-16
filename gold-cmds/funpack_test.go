@@ -11,7 +11,7 @@ import (
 // funPackNames are the 12 visible commands added by funpack.go.
 var funPackNames = []string{
 	"qr", "weather", "wiki", "joke", "fact", "quote",
-	"dadjoke", "cat", "dog", "shorten", "crypto", "ip",
+	"dadjoke", "shorten", "crypto", "ip",
 }
 
 // TestFunPackRegistered verifies all 12 commands are registered, visible,
@@ -50,7 +50,7 @@ func TestFunPackAliasesHidden(t *testing.T) {
 	for _, c := range all {
 		byName[c.Name] = c
 	}
-	for _, name := range []string{"qrcode", "wthr", "wikipedia", "shorturl", "tinyurl", "ipinfo", "coin"} {
+	for _, name := range []string{"qrcode", "wthr", "wikipedia", "tiny", "shorturl", "urltiny", "smalllink", "smallurl", "shortlink", "tinyurl", "ipinfo", "coin"} {
 		c, ok := byName[name]
 		if !ok {
 			t.Errorf("alias %q not registered", name)
@@ -81,8 +81,6 @@ func TestFunPackLive(t *testing.T) {
 		{"fact", "https://uselessfacts.jsph.pl/api/v2/facts/random?language=en"},
 		{"quote", "https://zenquotes.io/api/random"},
 		{"dadjoke", "https://icanhazdadjoke.com/"},
-		{"cat", "https://cataas.com/cat"},
-		{"dog", "https://dog.ceo/api/breeds/image/random"},
 		{"shorten", "https://tinyurl.com/api-create.php?url=https://github.com/Uf-prince/TEST-BOT"},
 		{"crypto", "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,pkr"},
 		{"ip", "http://ip-api.com/json/8.8.8.8"},
