@@ -84,24 +84,28 @@ func timedAdminKey(botJID, chat, target, kind string) string {
 // ── flexible time parsing ────────────────────────────────────────────────────
 //
 // The owner can write the time in ANY of these shapes (case-insensitive):
-//   00h05m00s   (canonical, same as .automsg)
-//   5m          (minutes only)
-//   1h30m       (hours + minutes)
-//   45s         (seconds only)
-//   1h          (hours only)
-//   00:05:00    (colon form)
-//   5           (bare number = minutes)
+//
+//	00h05m00s   (canonical, same as .automsg)
+//	5m          (minutes only)
+//	1h30m       (hours + minutes)
+//	45s         (seconds only)
+//	1h          (hours only)
+//	00:05:00    (colon form)
+//	5           (bare number = minutes)
+//
 // The token may appear ANYWHERE in the command (before or after the @mention),
 // so we scan every arg and pick the first one that parses as a duration.
 var (
-	timedAdminHMSRe = regexp.MustCompile(`^(\d+)h(\d+)m(\d+)s$`)
-	timedAdminHMRe  = regexp.MustCompile(`^(\d+)h(\d+)m$`)
-	timedAdminHSRe  = regexp.MustCompile(`^(\d+)h(\d+)s$`)
-	timedAdminHRe   = regexp.MustCompile(`^(\d+)h$`)
-	timedAdminMRe   = regexp.MustCompile(`^(\d+)m$`)
-	timedAdminSRe   = regexp.MustCompile(`^(\d+)s$`)
-	timedAdminColon = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
-	timedAdminBare  = regexp.MustCompile(`^(\d+)$`)
+	timedAdminHMSRe  = regexp.MustCompile(`^(\d+)h(\d+)m(\d+)s$`)
+	timedAdminHMRe   = regexp.MustCompile(`^(\d+)h(\d+)m$`)
+	timedAdminHSRe   = regexp.MustCompile(`^(\d+)h(\d+)s$`)
+	timedAdminHRe    = regexp.MustCompile(`^(\d+)h(?:r|rs|our|ours)?$`)
+	timedAdminMRe    = regexp.MustCompile(`^(\d+)m(?:in|ins|inute|inutes)?$`)
+	timedAdminSRe    = regexp.MustCompile(`^(\d+)s(?:ec|ecs|econd|econds)?$`)
+	timedAdminDRe    = regexp.MustCompile(`^(\d+)d(?:ay|ays)?$`)
+	timedAdminColon  = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+	timedAdminColon2 = regexp.MustCompile(`^(\d+):(\d+)$`)
+	timedAdminBare   = regexp.MustCompile(`^(\d+)$`)
 )
 
 // parseTimedAdminDuration accepts the flexible shapes above and returns the
@@ -109,6 +113,16 @@ var (
 // XXhXXmXXs form keeps working exactly like .automsg.
 func parseTimedAdminDuration(token string) (time.Duration, bool) {
 	t := strings.ToLower(strings.TrimSpace(token))
+	// strip zero-width / invisible chars WhatsApp sometimes injects, plus
+	// surrounding punctuation, so "00h05m00s\u200b" or "`5m`" still parse.
+	t = strings.Map(func(r rune) rune {
+		switch r {
+		case '\u200b', '\u200c', '\u200d', '\u2060', '\ufeff', '\u00a0':
+			return -1
+		}
+		return r
+	}, t)
+	t = strings.Trim(t, "`'\".,;!?()[]{}<>*_~ ")
 	if t == "" {
 		return 0, false
 	}
@@ -121,6 +135,12 @@ func parseTimedAdminDuration(token string) (time.Duration, bool) {
 		mn, _ := strconv.ParseInt(m[2], 10, 64)
 		sec, _ := strconv.ParseInt(m[3], 10, 64)
 		return timedAdminBuildDur(h, mn, sec)
+	}
+	// MM:SS form (e.g. 05:00 = 5 minutes)
+	if m := timedAdminColon2.FindStringSubmatch(t); m != nil {
+		mn, _ := strconv.ParseInt(m[1], 10, 64)
+		sec, _ := strconv.ParseInt(m[2], 10, 64)
+		return timedAdminBuildDur(0, mn, sec)
 	}
 	if m := timedAdminHMRe.FindStringSubmatch(t); m != nil {
 		h, _ := strconv.ParseInt(m[1], 10, 64)
@@ -143,6 +163,11 @@ func parseTimedAdminDuration(token string) (time.Duration, bool) {
 	if m := timedAdminSRe.FindStringSubmatch(t); m != nil {
 		sec, _ := strconv.ParseInt(m[1], 10, 64)
 		return timedAdminBuildDur(0, 0, sec)
+	}
+	// days (e.g. 1d, 2days) → hours
+	if m := timedAdminDRe.FindStringSubmatch(t); m != nil {
+		d, _ := strconv.ParseInt(m[1], 10, 64)
+		return timedAdminBuildDur(d*24, 0, 0)
 	}
 	// bare number → treat as MINUTES (e.g. ".admintime 5 @user" = 5 minutes)
 	if m := timedAdminBare.FindStringSubmatch(t); m != nil {
@@ -168,9 +193,21 @@ func timedAdminBuildDur(h, mn, sec int64) (time.Duration, bool) {
 // parses as a duration, plus its index. This makes the command work whether
 // the owner writes the time BEFORE or AFTER the @mention.
 func timedAdminFindDuration(args []string) (time.Duration, int, bool) {
+	// 1) single token (most common: 00h05m00s / 5m / 1h30m / 00:05:00 / 5)
 	for i, a := range args {
 		if d, ok := parseTimedAdminDuration(a); ok {
 			return d, i, true
+		}
+	}
+	// 2) space-separated parts (e.g. "00h 05m 00s" or "1h 30m") — join up to
+	//    3 consecutive tokens and try to parse the concatenation.
+	for i := 0; i < len(args); i++ {
+		joined := ""
+		for j := i; j < len(args) && j < i+3; j++ {
+			joined += strings.TrimSpace(args[j])
+			if d, ok := parseTimedAdminDuration(joined); ok {
+				return d, i, true
+			}
 		}
 	}
 	return 0, -1, false
@@ -308,6 +345,23 @@ func handleTimedAdminAsync(s SessionBridge, info types.MessageInfo, args []strin
 		return
 	}
 
+	// ── IMMEDIATE ACTION for .admintime ──
+	// Owner order: as soon as the time is set the bot must make the member
+	// admin RIGHT AWAY (foran). The timer then only DEMOTES them when the
+	// time is up. For .dissmisstime nothing happens now — the demote is
+	// applied when the timer fires.
+	if kind == "admin" {
+		if _, perr := client.UpdateGroupParticipants(context.Background(), info.Chat, []types.JID{target}, whatsmeow.ParticipantChangePromote); perr != nil {
+			s.Reply(info, "🔰 *ADMIN TIME Error*\n\n*Bot could not make the member admin:*\n"+perr.Error())
+			// roll back the saved timer so we don't demote a non-admin later
+			timedAdminCancel(key)
+			if s.MemoryReady() {
+				_ = s.MemoryDeleteNS(timedAdminNS, key)
+			}
+			return
+		}
+	}
+
 	// arm the timer (0% speed impact — runs fully in background via AfterFunc)
 	armTimedAdminTimer(s, key, cfg, dur)
 
@@ -316,7 +370,7 @@ func handleTimedAdminAsync(s SessionBridge, info types.MessageInfo, args []strin
 	actionLine := "*WILL BE DISMISSED (ADMIN REMOVED) AFTER:*"
 	if kind == "admin" {
 		title = "🔰 *ADMIN TIMER SET* 🔰"
-		actionLine = "*WILL BE MADE ADMIN FOR:*"
+		actionLine = "*IS NOW ADMIN — WILL BE DEMOTED AFTER:*"
 	}
 	s.Reply(info, fmt.Sprintf(
 		"%s\n\n"+
@@ -387,13 +441,16 @@ func timedAdminFire(s SessionBridge, key string, cfg timedAdminConfig) {
 	info := types.MessageInfo{}
 	info.Chat = chat
 
+	// At FIRE time BOTH commands DEMOTE the target:
+	//   • dismiss → the admin's power is removed after the set time
+	//   • admin   → the temporary admin's power is removed when the time is up
+	//     (the promote already happened IMMEDIATELY when the command was run)
 	change := whatsmeow.ParticipantChangeDemote
 	title := "🔰 *MEMBER DISMISSED* 🔰"
 	body := "*IS NO LONGER AN ADMIN*\n*NOW A REGULAR MEMBER*"
 	if cfg.Kind == "admin" {
-		change = whatsmeow.ParticipantChangePromote
-		title = "🔰 *NEW ADMIN* 🔰"
-		body = "*IS NOW AN ADMIN OF THIS GROUP*\n*CONGRATULATIONS! 🔰*"
+		title = "🔰 *ADMIN TIME OVER* 🔰"
+		body = "*ADMIN POWER REMOVED*\n*NOW A REGULAR MEMBER AGAIN*"
 	}
 
 	_, err = client.UpdateGroupParticipants(context.Background(), chat, []types.JID{target}, change)
@@ -421,7 +478,9 @@ func timedAdminCancel(key string) {
 // ── .dissmisstime / .admintime stop @mention ─────────────────────────────────
 // The handler above treats a "stop" token as an invalid time; to keep the flow
 // simple and robust we expose a dedicated cancel path via the same command:
-//   .dissmisstime stop @user   /   .admintime stop @user
+//
+//	.dissmisstime stop @user   /   .admintime stop @user
+//
 // This is handled by intercepting the "stop" token before duration parsing.
 func timedAdminTryStop(s SessionBridge, info types.MessageInfo, args []string, prefix, kind string) bool {
 	// "stop" may appear anywhere (before or after the @mention).
