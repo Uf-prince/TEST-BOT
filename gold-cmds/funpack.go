@@ -14,7 +14,6 @@ package goldcmds
 //   .joke             -> random joke
 //   .fact             -> random useless fact
 //   .quote            -> random quote
-//   .dadjoke          -> random dad joke
 //   .shorten <url>    -> short URL (tinyurl)  [aliases: tiny, shorturl, urltiny, smalllink, smallurl, shortlink, tinyurl]
 //   .crypto <coin>    -> live crypto price (USD + PKR)
 //   .ip <ip|empty>    -> IP geolocation lookup
@@ -350,22 +349,6 @@ func handleQuote(s SessionBridge, info types.MessageInfo, args []string, prefix 
 
 // ============================================================================
 // .DADJOKE — RANDOM DAD JOKE
-// ============================================================================
-
-func handleDadJoke(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
-		var res struct {
-			Joke string `json:"joke"`
-		}
-		if err := funGetJSON(ctx, "https://icanhazdadjoke.com/", &res); err != nil || res.Joke == "" {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "DAD JOKE")
-			}
-			return
-		}
-		s.Reply(info, "*🔰 DAD JOKE 🔰*\n\n*"+res.Joke+"*")
-	})
-}
 
 // ============================================================================
 // .CAT — RANDOM CAT PHOTO
@@ -383,9 +366,6 @@ func shortenGuide(prefix string) string {
 		"*HOW TO USE:*\n" +
 		"*❮ " + prefix + "SHORTEN <LINK> ❯*\n" +
 		"*EXAMPLE ❮ " + prefix + "SHORTEN HTTPS://FACEBOOK.COM/sjbdnnd2eekekdi ❯*\n\n" +
-		"*SHORT ALIAS:*\n" +
-		"*❮ " + prefix + "TINY <LINK> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "TINY HTTPS://FACEBOOK.COM/sjbdnnd2eekekdi ❯*\n\n" +
 		"*🔰 GOLD-MD WHATSAPP BOT 🔰*"
 }
 
@@ -552,7 +532,6 @@ func init() {
 	Register(Command{Name: "joke", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM JOKE. JUST TYPE .JOKE.", Run: handleJoke})
 	Register(Command{Name: "fact", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM INTERESTING FACT. JUST TYPE .FACT.", Run: handleFact})
 	Register(Command{Name: "quote", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM MOTIVATIONAL QUOTE. JUST TYPE .QUOTE.", Run: handleQuote})
-	Register(Command{Name: "dadjoke", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM DAD JOKE. JUST TYPE .DADJOKE.", Run: handleDadJoke})
 	Register(Command{Name: "shorten", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO SHORTEN ANY LONG LINK. USE IT AS .SHORTEN <LINK>.", Run: handleShorten})
 	Register(Command{Name: "crypto", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE LIVE PRICE OF ANY CRYPTO COIN IN USD AND PKR. USE IT AS .CRYPTO <COIN>.", Run: handleCrypto})
 	Register(Command{Name: "ip", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO LOOK UP THE DETAILS OF ANY IP ADDRESS. USE IT AS .IP <IP ADDRESS>.", Run: handleIP})
