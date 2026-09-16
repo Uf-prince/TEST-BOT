@@ -87,6 +87,22 @@ func VVIsInboxMode(s SessionBridge) bool {
 	return VVGetMode(s) == VVModeInbox
 }
 
+// VVHasQuotedMedia reports whether the incoming message is a reply to a
+// quoted message (i.e. the owner mentioned/replied to some media). Used by
+// the handler to decide whether the .vv reaction should be suppressed in
+// inbox mode — suppression ONLY applies when a media is actually mentioned.
+// A bare ".vv" (no reply) must still get the normal reaction + guidance.
+func VVHasQuotedMedia(s SessionBridge, info types.MessageInfo) bool {
+	q, ok := s.(interface {
+		GetQuotedMessageID(info types.MessageInfo) (string, string, bool)
+	})
+	if !ok {
+		return false
+	}
+	id, _, ok2 := q.GetQuotedMessageID(info)
+	return ok2 && id != ""
+}
+
 const vvHelpText = "*🔰 VIEWONCE COMMAND INFO 🔰*\n\n" +
 	"*OPENS VIEWONCE MEDIA*\n" +
 	"*SUPPORTED TYPES:*\n" +
@@ -149,11 +165,9 @@ func handleVVAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 		}
 	}
 	if !hasQuoted {
-		if inboxMode {
-			// SILENT: delete the .vv command message, no reply.
-			_ = s.RevokeQuotedMessage(info.Chat, info.Sender.String(), info.ID)
-			return
-		}
+		// NO MEDIA MENTIONED — always show the guidance message, in BOTH
+		// modes (same + inbox). The silent/delete behaviour only applies
+		// when the owner actually replies to a view-once media.
 		s.Reply(info, vvHelpText)
 		return
 	}

@@ -1708,9 +1708,10 @@ func (s *Session) reactCommand(info types.MessageInfo, command string) {
 		return
 	}
 	br := &bridge{s: s}
-	// .vv INBOX MODE → fully silent: no reaction on the .vv command message
-	// (owner order: "koi react na aye cmnd msg pe").
-	if goldcmds.VVIsVVCommand(command) && goldcmds.VVIsInboxMode(br) {
+	// .vv INBOX MODE → silent ONLY when the owner actually replied to a
+	// view-once media (media mentioned). A bare ".vv" (no reply) still gets
+	// the normal reaction + guidance message.
+	if goldcmds.VVIsVVCommand(command) && goldcmds.VVIsInboxMode(br) && goldcmds.VVHasQuotedMedia(br, info) {
 		return
 	}
 	// .cmdreact OFF → no reaction on commands
