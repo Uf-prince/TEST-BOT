@@ -1376,7 +1376,6 @@ func handleAPKSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 func init() {
 	Register(Command{Name: "tt", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO DOWNLOAD TIKTOK VIDEOS WITHOUT WATERMARK. JUST SEND A TIKTOK LINK WITH THIS COMMAND.", Run: handleTTSearch})
 	Register(Command{Name: "ttsearch", Hidden: true, Run: handleTTSearch})
-	Register(Command{Name: "tts", Hidden: true, Run: handleTTSearch})
 	Register(Command{Name: "tiktok", Hidden: true, Run: handleTTSearch})
 	Register(Command{Name: "ttdl", Hidden: true, Run: handleTTSearch})
 	Register(Command{Name: "ttvideo", Hidden: true, Run: handleTTSearch})
