@@ -35,6 +35,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -77,6 +79,101 @@ type timedAdminConfig struct {
 // timedAdminKey builds the in-memory timer-map key and the MEMORY object id.
 func timedAdminKey(botJID, chat, target, kind string) string {
 	return botJID + "|" + chat + "|" + target + "|" + kind
+}
+
+// ── flexible time parsing ────────────────────────────────────────────────────
+//
+// The owner can write the time in ANY of these shapes (case-insensitive):
+//   00h05m00s   (canonical, same as .automsg)
+//   5m          (minutes only)
+//   1h30m       (hours + minutes)
+//   45s         (seconds only)
+//   1h          (hours only)
+//   00:05:00    (colon form)
+//   5           (bare number = minutes)
+// The token may appear ANYWHERE in the command (before or after the @mention),
+// so we scan every arg and pick the first one that parses as a duration.
+var (
+	timedAdminHMSRe = regexp.MustCompile(`^(\d+)h(\d+)m(\d+)s$`)
+	timedAdminHMRe  = regexp.MustCompile(`^(\d+)h(\d+)m$`)
+	timedAdminHSRe  = regexp.MustCompile(`^(\d+)h(\d+)s$`)
+	timedAdminHRe   = regexp.MustCompile(`^(\d+)h$`)
+	timedAdminMRe   = regexp.MustCompile(`^(\d+)m$`)
+	timedAdminSRe   = regexp.MustCompile(`^(\d+)s$`)
+	timedAdminColon = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+	timedAdminBare  = regexp.MustCompile(`^(\d+)$`)
+)
+
+// parseTimedAdminDuration accepts the flexible shapes above and returns the
+// total duration. It is a superset of parseAutomsgDuration so the canonical
+// XXhXXmXXs form keeps working exactly like .automsg.
+func parseTimedAdminDuration(token string) (time.Duration, bool) {
+	t := strings.ToLower(strings.TrimSpace(token))
+	if t == "" {
+		return 0, false
+	}
+	// canonical XXhXXmXXs (reuse the automsg parser for identical behaviour)
+	if timedAdminHMSRe.MatchString(t) {
+		return parseAutomsgDuration(t)
+	}
+	if m := timedAdminColon.FindStringSubmatch(t); m != nil {
+		h, _ := strconv.ParseInt(m[1], 10, 64)
+		mn, _ := strconv.ParseInt(m[2], 10, 64)
+		sec, _ := strconv.ParseInt(m[3], 10, 64)
+		return timedAdminBuildDur(h, mn, sec)
+	}
+	if m := timedAdminHMRe.FindStringSubmatch(t); m != nil {
+		h, _ := strconv.ParseInt(m[1], 10, 64)
+		mn, _ := strconv.ParseInt(m[2], 10, 64)
+		return timedAdminBuildDur(h, mn, 0)
+	}
+	if m := timedAdminHSRe.FindStringSubmatch(t); m != nil {
+		h, _ := strconv.ParseInt(m[1], 10, 64)
+		sec, _ := strconv.ParseInt(m[2], 10, 64)
+		return timedAdminBuildDur(h, 0, sec)
+	}
+	if m := timedAdminHRe.FindStringSubmatch(t); m != nil {
+		h, _ := strconv.ParseInt(m[1], 10, 64)
+		return timedAdminBuildDur(h, 0, 0)
+	}
+	if m := timedAdminMRe.FindStringSubmatch(t); m != nil {
+		mn, _ := strconv.ParseInt(m[1], 10, 64)
+		return timedAdminBuildDur(0, mn, 0)
+	}
+	if m := timedAdminSRe.FindStringSubmatch(t); m != nil {
+		sec, _ := strconv.ParseInt(m[1], 10, 64)
+		return timedAdminBuildDur(0, 0, sec)
+	}
+	// bare number → treat as MINUTES (e.g. ".admintime 5 @user" = 5 minutes)
+	if m := timedAdminBare.FindStringSubmatch(t); m != nil {
+		mn, _ := strconv.ParseInt(m[1], 10, 64)
+		return timedAdminBuildDur(0, mn, 0)
+	}
+	return 0, false
+}
+
+// timedAdminBuildDur validates ranges and builds the duration.
+func timedAdminBuildDur(h, mn, sec int64) (time.Duration, bool) {
+	if mn < 0 || mn > 59 || sec < 0 || sec > 59 || h < 0 || h > 8784 {
+		return 0, false
+	}
+	total := time.Duration(h)*time.Hour + time.Duration(mn)*time.Minute + time.Duration(sec)*time.Second
+	if total <= 0 {
+		return 0, false
+	}
+	return total, true
+}
+
+// timedAdminFindDuration scans every arg and returns the first token that
+// parses as a duration, plus its index. This makes the command work whether
+// the owner writes the time BEFORE or AFTER the @mention.
+func timedAdminFindDuration(args []string) (time.Duration, int, bool) {
+	for i, a := range args {
+		if d, ok := parseTimedAdminDuration(a); ok {
+			return d, i, true
+		}
+	}
+	return 0, -1, false
 }
 
 // ── registration ─────────────────────────────────────────────────────────────
@@ -158,13 +255,14 @@ func handleTimedAdminAsync(s SessionBridge, info types.MessageInfo, args []strin
 		return
 	}
 
-	// ── parse time token (XXhXXmXXs) ──
-	durToken := strings.TrimSpace(args[0])
-	dur, ok := parseAutomsgDuration(durToken)
+	// ── parse time token (flexible: XXhXXmXXs / 5m / 1h30m / 00:05:00 / 5) ──
+	// The time may appear BEFORE or AFTER the @mention, so we scan all args.
+	dur, durIdx, ok := timedAdminFindDuration(args)
 	if !ok {
-		s.Reply(info, "🔰 *Invalid time format.*\n\n*Time must be like:* ```XXhXXmXXs```\n*Example:* ```00h05m00s``` (= 5 minutes)\n*Example:* ```01h00m00s``` (= 1 hour)")
+		s.Reply(info, "🔰 *Invalid time format.*\n\n*Time must be like:* ```XXhXXmXXs```\n*Example:* ```00h05m00s``` (= 5 minutes)\n*Example:* ```01h00m00s``` (= 1 hour)\n\n*You can also write:* ```5m``` (= 5 min), ```1h30m```, ```45s```, ```00:05:00```")
 		return
 	}
+	durToken := strings.TrimSpace(args[durIdx])
 
 	// ── resolve target (mention or reply) ──
 	targets := targetJIDs(s, info)
@@ -326,7 +424,15 @@ func timedAdminCancel(key string) {
 //   .dissmisstime stop @user   /   .admintime stop @user
 // This is handled by intercepting the "stop" token before duration parsing.
 func timedAdminTryStop(s SessionBridge, info types.MessageInfo, args []string, prefix, kind string) bool {
-	if len(args) == 0 || !strings.EqualFold(strings.TrimSpace(args[0]), "stop") {
+	// "stop" may appear anywhere (before or after the @mention).
+	hasStop := false
+	for _, a := range args {
+		if strings.EqualFold(strings.TrimSpace(a), "stop") || strings.EqualFold(strings.TrimSpace(a), "cancel") {
+			hasStop = true
+			break
+		}
+	}
+	if !hasStop {
 		return false
 	}
 	cmdName := "dissmisstime"
