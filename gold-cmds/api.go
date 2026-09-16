@@ -194,6 +194,13 @@ type SessionBridge interface {
 	// IsGroupAdmin reports whether the given user JID is an admin/super-admin
 	// of the group identified by groupJID.
 	IsGroupAdmin(groupJID, userJID types.JID) bool
+	// ResolveToPN converts a LID (hidden user, @lid) JID to its real phone
+	// number (PN) JID (@s.whatsapp.net). If the JID is already a PN, or the
+	// mapping is unknown, the original JID is returned unchanged. This is the
+	// MANDATORY LID->PN conversion used by every group command so that
+	// mentions/replies that arrive in LID form are always acted on against the
+	// real phone-number participant.
+	ResolveToPN(jid types.JID) types.JID
 
 	// ── MESSAGE inspection (for anti-* detection) ──
 	// GetMessageText returns the full text body of the incoming message

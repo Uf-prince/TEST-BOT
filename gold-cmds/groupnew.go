@@ -340,6 +340,8 @@ func handleVoteAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 
 	// build the poll info the vote must reference
 	senderJID, _ := types.ParseJID(quotedSender)
+	// MANDATORY LID->PN conversion for the poll author.
+	senderJID = s.ResolveToPN(senderJID)
 	pollInfo := &types.MessageInfo{
 		MessageSource: types.MessageSource{
 			Chat:     info.Chat,
@@ -706,6 +708,12 @@ func collectTargets(s SessionBridge, info types.MessageInfo, args []string) []ty
 	out := make([]types.JID, 0)
 	seen := map[string]bool{}
 	add := func(j types.JID) {
+		if j.IsEmpty() {
+			return
+		}
+		// MANDATORY LID->PN conversion: mentions/replies may arrive in LID
+		// (@lid) form; always act on the real phone-number participant.
+		j = s.ResolveToPN(j)
 		if j.IsEmpty() {
 			return
 		}

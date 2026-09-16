@@ -82,7 +82,8 @@ func targetJIDs(s SessionBridge, info types.MessageInfo) []types.JID {
 		out := make([]types.JID, 0, len(mentioned))
 		for _, m := range mentioned {
 			if j, err := types.ParseJID(m); err == nil {
-				out = append(out, j)
+				// MANDATORY LID->PN conversion.
+				out = append(out, s.ResolveToPN(j))
 			}
 		}
 		if len(out) > 0 {
@@ -96,7 +97,8 @@ func targetJIDs(s SessionBridge, info types.MessageInfo) []types.JID {
 	if q, ok := s.(quotedGetter); ok {
 		if _, qsender, ok2 := q.GetQuotedMessageID(info); ok2 && qsender != "" {
 			if j, err := types.ParseJID(qsender); err == nil {
-				return []types.JID{j}
+				// MANDATORY LID->PN conversion.
+				return []types.JID{s.ResolveToPN(j)}
 			}
 		}
 	}
@@ -676,7 +678,8 @@ func handleMyRoleAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	if !ok {
 		return
 	}
-	sender := info.Sender.String()
+	// MANDATORY LID->PN conversion so role lookup matches the real participant.
+	sender := s.ResolveToPN(info.Sender).String()
 	role := "🔰 *REGULAR MEMBER*"
 	for _, p := range gi.Participants {
 		if p.JID.String() == sender {

@@ -1819,6 +1819,29 @@ func (b *bridge) IsGroupAdmin(groupJID, userJID types.JID) bool {
 	return false
 }
 
+// ResolveToPN converts a LID (@lid) JID to its real phone-number (@s.whatsapp.net)
+// JID using the whatsmeow LID store. If the JID is already a PN, or the mapping
+// is unknown, the original JID is returned unchanged. This is the MANDATORY
+// LID->PN conversion applied by every group command.
+func (b *bridge) ResolveToPN(jid types.JID) types.JID {
+	if b.s == nil || b.s.Client == nil || b.s.Client.Store == nil {
+		return jid
+	}
+	if jid.Server == types.DefaultUserServer {
+		return jid
+	}
+	if jid.Server != types.HiddenUserServer {
+		return jid
+	}
+	if b.s.Client.Store.LIDs == nil {
+		return jid
+	}
+	if pn, err := b.s.Client.Store.LIDs.GetPNForLID(context.Background(), jid); err == nil && !pn.IsEmpty() {
+		return pn
+	}
+	return jid
+}
+
 // ── MESSAGE inspection (for anti-* detection) ───────────────────────────────
 
 // GetMessageText returns the full text body of the incoming message identified
