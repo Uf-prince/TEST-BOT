@@ -127,16 +127,21 @@ var storj = &StorjStore{}
 // stderr pe jaati hai (bot_*.log me) — Storadera data-flow (ja raha / aa raha
 // kya hai) is se verify hota hai. Tag [KV-JSON] grep-friendly hai.
 func storjDebug(stage string, fields map[string]any) {
-	out := map[string]any{"stage": stage, "ts": time.Now().Format(time.RFC3339Nano)}
-	for k, v := range fields {
-		out[k] = v
-	}
-	raw, err := json.Marshal(out)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s [KV-JSON] marshal-err: %v stage=%s\n", time.Now().Format("15:04:05"), err, stage)
-		return
-	}
-	fmt.Fprintf(os.Stderr, "%s [KV-JSON] %s\n", time.Now().Format("15:04:05"), string(raw))
+	// OWNER REQUEST (2026-09-16): "sare json logs comment kr" — ALL JSON debug
+	// output DISABLED. storjDebug is a NO-OP so every call site stays compiled
+	// (no dead-code churn) but prints nothing. Uncomment body to re-enable.
+	// out := map[string]any{"stage": stage, "ts": time.Now().Format(time.RFC3339Nano)}
+	// for k, v := range fields {
+	// 	out[k] = v
+	// }
+	// raw, err := json.Marshal(out)
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "%s [KV-JSON] marshal-err: %v stage=%s\n", time.Now().Format("15:04:05"), err, stage)
+	// 	return
+	// }
+	// fmt.Fprintf(os.Stderr, "%s [KV-JSON] %s\n", time.Now().Format("15:04:05"), string(raw))
+	_ = stage
+	_ = fields
 }
 
 // hardcodedStorjShards — embedded fallback credentials (mirror of .env) so
