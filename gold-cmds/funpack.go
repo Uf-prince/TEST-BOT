@@ -364,8 +364,8 @@ func shortenGuide(prefix string) string {
 	return "*🔰 URL SHORTENER 🔰*\n\n" +
 		"*MAKE ANY LONG LINK SHORT*\n\n" +
 		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "SHORTEN <LINK> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "SHORTEN HTTPS://FACEBOOK.COM/sjbdnnd2eekekdi ❯*\n\n" +
+		"*❮ " + prefix + "TINY <LINK> ❯*\n" +
+		"*EXAMPLE ❮ " + prefix + "TINY HTTPS://FACEBOOK.COM/sjbdnnd2eekekdi ❯*\n\n" +
 		"*🔰 GOLD-MD WHATSAPP BOT 🔰*"
 }
 
