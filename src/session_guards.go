@@ -504,14 +504,29 @@ func guardRemoteServers() []string {
 	if !fleetActive() {
 		return nil
 	}
-	loadServersConfig()
-	cfg := serversCfg
-	out := make([]string, 0, len(cfg.Servers))
-	for _, s := range cfg.Servers {
-		if s.URL == "" {
-			continue
+	// OWNER FIX B (2026-09-16): servers.json ke URLs + heartbeat me published
+	// URLs — sandbox/tunnel (svr11221) servers.json me nahi tha is liye
+	// online-elsewhere probe wave usko MISS karta tha → double-connect war.
+	// Ab heartbeat URL wale servers bhi probe list me hain.
+	seen := map[string]bool{}
+	out := make([]string, 0, len(serversCfg.Servers)+4)
+	add := func(u string) {
+		u = strings.TrimRight(strings.TrimSpace(u), "/")
+		if u == "" || seen[u] {
+			return
 		}
-		out = append(out, strings.TrimRight(s.URL, "/"))
+		seen[u] = true
+		out = append(out, u)
+	}
+	loadServersConfig()
+	for _, s := range serversCfg.Servers {
+		add(s.URL)
+	}
+	for sid, u := range fleetHeartbeatURLs() {
+		if sid == fleetSelfID {
+			continue // apna URL nahi — hum khud probe nahi karte
+		}
+		add(u)
 	}
 	return out
 }

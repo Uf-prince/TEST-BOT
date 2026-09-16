@@ -150,17 +150,24 @@ func storjDebug(stage string, fields map[string]any) {
 // shardForID ka FNV-1a % 10 routing ab effectively ek hi bucket pe
 // converge karta hai (migration ke liye INTENTIONAL — purane Storj
 // shard-buckets ka data move nahi karna, clean start).
+// ── SHARD SLOTS (owner: jani, 2026-09-16) ──────────────────────────────────
+// Slot 1 = LIVE Storadera account (bucket goldmd). Slots 2..10 = EMPTY
+// placeholders — jani 9 aur accounts bana kar keys denge, tab fill honge.
+// EMPTY slots auto-skip ho jate hain (InitStorj "continue") aur sharding
+// "h % len(live-shards)" = 0 → 100% traffic abhi Storadera slot1 pe.
+// NOTE: 9 keys aane ke baad PURANE (interim) objects correct h%10 buckets
+// me re-shard karne honge — tools/kvreshard (planned).
 var hardcodedStorjShards = [10][3]string{
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
+	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"}, // slot 1 LIVE
+	{"", "", ""}, // slot 2 — empty (keys aane pe bharo)
+	{"", "", ""}, // slot 3 — empty (keys aane pe bharo)
+	{"", "", ""}, // slot 4 — empty (keys aane pe bharo)
+	{"", "", ""}, // slot 5 — empty (keys aane pe bharo)
+	{"", "", ""}, // slot 6 — empty (keys aane pe bharo)
+	{"", "", ""}, // slot 7 — empty (keys aane pe bharo)
+	{"", "", ""}, // slot 8 — empty (keys aane pe bharo)
+	{"", "", ""}, // slot 9 — empty (keys aane pe bharo)
+	{"", "", ""}, // slot 10 — empty (keys aane pe bharo)
 }
 
 // InitStorj loads up to 10 shard credential sets from the environment (with

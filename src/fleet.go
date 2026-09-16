@@ -289,13 +289,85 @@ func fleetHeartbeat() {
 	}
 	fleetLastHeartbeat = time.Now()
 	fleetHeartbeatMu.Unlock()
-	// NAYA format: "<ts>|<sessions>|<max>" — Session Resurrector isse pata
-	// lagata hai kaunsa server FREE hai (sessions < max) bina kisi HTTP
-	// probe ke. Purana "<ts>" format bhi parse hota rehta hai (niche).
+	// NAYA format: "<ts>|<sessions>|<max>|<url>" — Session Resurrector isse
+	// pata lagata hai kaunsa server FREE hai (sessions < max) bina kisi HTTP
+	// probe ke, AUR (owner fix B) 4th segment = is server ka public URL —
+	// hostname-style sid (svr11221) ka URL ab fleet me discoverable hai.
+	// Purana "<ts>" / "<ts>|<sessions>|<max>" format bhi parse hota rehta hai.
 	val := strconv.FormatInt(time.Now().Unix(), 10) + "|" +
 		strconv.Itoa(fleetMgr.SlotsUsed()) + "|" +
-		strconv.Itoa(maxPairedSessions())
+		strconv.Itoa(maxPairedSessions()) + "|" +
+		fleetSelfURL()
 	_, _ = fleetMgr.Redis.cmd("HSET", fleetServersHash, fleetSelfID, val)
+}
+
+// fleetSelfURL: is server ka PUBLIC URL (fleet discoverability — owner fix
+// B, 2026-09-16). GOLDMD_PUBLIC_URL (launch_fresh.sh me tunnel URL set hota
+// hai) → RENDER_EXTERNAL_URL → "". Heartbeat ke 4th segment me jata hai;
+// fleetServerURL isko hostname-style sid ke liye fallback me use karta hai.
+func fleetSelfURL() string {
+	if v := strings.TrimSpace(os.Getenv("GOLDMD_PUBLIC_URL")); v != "" {
+		return strings.TrimSuffix(v, "/")
+	}
+	if v := strings.TrimSpace(os.Getenv("RENDER_EXTERNAL_URL")); v != "" {
+		return strings.TrimSuffix(v, "/")
+	}
+	return ""
+}
+
+// fleetURLFromHeartbeat: ek sid ka public URL heartbeat hash se (4th segment).
+// fleetServerURL ka fallback — hostname-style sid (dot nahi) pe pehle ""
+//// tha, ab heartbeat URL milta hai (cmd cache 3min TTL — sasta).
+func fleetURLFromHeartbeat(sid string) string {
+	if sid == "" || fleetMgr == nil || fleetMgr.Redis == nil {
+		return ""
+	}
+	raw, err := fleetMgr.Redis.cmd("HGET", fleetServersHash, sid)
+	if err != nil || len(raw) == 0 {
+		return ""
+	}
+	var v string
+	if json.Unmarshal(raw, &v) != nil {
+		return ""
+	}
+	parts := strings.Split(v, "|")
+	if len(parts) < 4 {
+		return ""
+	}
+	u := strings.TrimSpace(parts[3])
+	if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+		return strings.TrimSuffix(u, "/")
+	}
+	return ""
+}
+
+// fleetHeartbeatURLs: servers hash → {sid: url} (ek hi HGETALL, 4th segment).
+// guardRemoteServers isse sandbox/tunnel servers ko probe list me include
+// karta hai (pehle sirf servers.json tha — sandbox invisible tha).
+func fleetHeartbeatURLs() map[string]string {
+	out := map[string]string{}
+	if fleetMgr == nil || fleetMgr.Redis == nil {
+		return out
+	}
+	r, err := fleetMgr.Redis.cmd("HGETALL", fleetServersHash)
+	if err != nil {
+		return out
+	}
+	var pairs []string
+	if json.Unmarshal(r, &pairs) != nil {
+		return out
+	}
+	for i := 0; i+1 < len(pairs); i += 2 {
+		parts := strings.Split(strings.TrimSpace(pairs[i+1]), "|")
+		if len(parts) < 4 {
+			continue
+		}
+		u := strings.TrimSpace(parts[3])
+		if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+			out[pairs[i]] = strings.TrimSuffix(u, "/")
+		}
+	}
+	return out
 }
 
 // fleetOrphanSweep releases claims held by dead servers so their sessions
@@ -502,7 +574,10 @@ func fleetServerURL(sid string) string {
 	if strings.Contains(sid, ".") {
 		return "https://" + strings.TrimSuffix(sid, "/")
 	}
-	return ""
+	// OWNER FIX B (2026-09-16): hostname-style sid (svr11221 jaisa) pehle
+	// "" return karta tha → holder-alive probe dead → claims orphan-sweep
+	// → double-connect war. Ab heartbeat me published URL se resolve karo.
+	return fleetURLFromHeartbeat(sid)
 }
 
 // fleetProbeURL does one quick GET {url} with fleetHTTPTimeout. true =
@@ -1529,6 +1604,10 @@ type fleetHealthFields struct {
 	RE       string  `json:"re"`
 	SID      string  `json:"sid"`
 	UsedMB   float64 `json:"used_mb"`
+	Sess     []struct {
+		JID    string `json:"jid"`
+		Online bool   `json:"online"`
+	} `json:"sess"`
 }
 
 // fleetRemoteHealth fetches another server's /health (6s timeout).
@@ -1603,8 +1682,27 @@ func fleetScanAll() []fleetServerInfo {
 // fleetWriteHealth emits the extended health JSON. Old clients (panel) jo
 // sirf {"bot","status","sessions"} padhte the, wo ab bhi kaam karte hain.
 func fleetWriteHealth(w io.Writer, sessions int) {
-	fmt.Fprintf(w, `{"bot":"GOLD-MD","status":"online","sessions":%d,"max":%d,"re":"%s","sid":"%s","used_mb":%.1f}`,
-		sessions, maxPairedSessions(), fleetREStatus(), fleetSelfID, fleetEgressUsedMB())
+	// OWNER FIX A (2026-09-16): per-session online array — remote servers
+	// ek hi /health request me liveness + session-state dono dekh lete
+	// hain (purane readers unknown field ignore karte hain — safe).
+	sessJSON := "[]"
+	if m := fleetMgr; m != nil {
+		type row struct {
+			JID    string `json:"jid"`
+			Online bool   `json:"online"`
+		}
+		rows := make([]row, 0, 8)
+		for _, s := range m.List() {
+			online := s.Paired && s.Client != nil && s.Client.IsConnected() &&
+				s.Client.Store != nil && s.Client.Store.ID != nil
+			rows = append(rows, row{JID: s.JID, Online: online})
+		}
+		if b, err := json.Marshal(rows); err == nil {
+			sessJSON = string(b)
+		}
+	}
+	fmt.Fprintf(w, `{"bot":"GOLD-MD","status":"online","sessions":%d,"max":%d,"re":"%s","sid":"%s","used_mb":%.1f,"sess":%s}`,
+		sessions, maxPairedSessions(), fleetREStatus(), fleetSelfID, fleetEgressUsedMB(), sessJSON)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
