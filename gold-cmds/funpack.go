@@ -365,8 +365,7 @@ func shortenGuide(prefix string) string {
 		"*MAKE ANY LONG LINK SHORT*\n\n" +
 		"*HOW TO USE:*\n" +
 		"*❮ " + prefix + "TINY <LINK> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "TINY HTTPS://FACEBOOK.COM/sjbdnnd2eekekdi ❯*\n\n" +
-		"*🔰 GOLD-MD WHATSAPP BOT 🔰*"
+		"*EXAMPLE ❮ " + prefix + "TINY HTTPS://FACEBOOK.COM/sjbdnnd2eekekdi ❯*"
 }
 
 func handleShorten(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
