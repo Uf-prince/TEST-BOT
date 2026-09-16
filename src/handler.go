@@ -608,6 +608,19 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		}
 	}
 
+	// ── CMDPREFIX (PER-COMMAND PREFIXLESS) ────────────────────────────────────
+	// Owner .cmdprefix ping stop karke kisi command ka prefix optional kar
+	// sakta hai. Agar body bina prefix ka hai aur uska pehla word kisi
+	// "stopped" command ka naam hai, to body ko prefix+body me rewrite kar
+	// dete hain — phir normal dispatch flow (owner-only / bancmd / botblock
+	// / bangc / mode — sab checks) waise hi lagte hain. Koi security bypass
+	// nahi, sirf prefix optional. No commands stopped (default) → no-op.
+	// Session checks se PEHLE rakha gaya hai taake active video/search
+	// session ke dauran bhi bare stopped command chalta rahe.
+	if rewritten, ok := goldcmds.CmdPrefixRewrite(brAR, body, prefix); ok {
+		body = rewritten
+	}
+
 	// Handle pending video selections FIRST (before prefix check).
 	// When a video search is active, the user just types a bare number
 	// (e.g. "1", "3", "14") WITHOUT any prefix to pick a result.
@@ -806,11 +819,13 @@ func (s *Session) HandleMessage(evt *events.Message) {
 	// Check if command exists in registry
 	if cmd, ok := Commands[command]; ok {
 		// Owner-only protection: any command registered with OwnerOnly=true is
-		// silently ignored for non-owners.
-		// OWNER ORDER: .host5gb / .svrchange bhi ab isi owner-only set me
-		// hain (fleet_commands.go) — non-owner ke liye silently ignored,
-		// bilkul baaki owner-only commands jaisa.
+		// blocked for non-owners. OWNER ORDER: non-owner ko ab SILENT skip
+		// nahi — saaf saaf "*THIS COMMAND IS ONLY FOR ME 😎*" reply jata hai
+		// (bilkul baaki owner-only commands jaisa, jaise .prefix/.cmdname).
+		// OWNER ORDER: .host5gb / .svrchange bhi isi owner-only set me hain
+		// (fleet_commands.go) — non-owner ko wahi reply milta hai.
 		if !isOwner && ownerOnlyCommands[command] {
+			s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
 			return
 		}
 		// ── CMDACCESS (DYNAMIC OWNER-ONLY) ENFORCEMENT ──────────────────────
@@ -822,6 +837,7 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		if !isOwner && !info.IsFromMe {
 			br := &bridge{s: s}
 			if goldcmds.CmdAccessIsOwnerOnly(br, command) {
+				s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
 				return
 			}
 		}
