@@ -33,7 +33,6 @@ package goldcmds
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -51,13 +50,12 @@ import (
 func init() {
 	// ── primary commands ──
 	Register(Command{Name: "poll", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO CREATE A POLL IN THE GROUP. USE | TO SEPARATE THE QUESTION AND OPTIONS. YOU CAN ALSO SET AN END TIME AND HIDE VOTER NAMES.", OwnerOnly: true, Run: handlePoll})
-	Register(Command{Name: "vote", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO VOTE IN A POLL. REPLY TO THE POLL WITH THE OPTION NUMBER OR THE OPTION TEXT.", OwnerOnly: true, Run: handleVote})
 	Register(Command{Name: "newgroup", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO CREATE A NEW GROUP. GIVE A NAME AND TAG THE MEMBERS TO ADD.", OwnerOnly: true, Run: handleNewGroup})
-	Register(Command{Name: "addmember", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO ADD A MEMBER TO THE GROUP. GIVE THE NUMBER OR TAG THE MEMBER.", OwnerOnly: true, Run: handleAddMember})
+	Register(Command{Name: "adduser", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO ADD A MEMBER TO THE GROUP. GIVE THE NUMBER OR TAG THE MEMBER.", OwnerOnly: true, Run: handleAddMember})
 	Register(Command{Name: "approve", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO APPROVE PENDING JOIN REQUESTS OF THE GROUP. TAG THE MEMBERS OR USE ALL.", OwnerOnly: true, Run: handleApprove})
 	Register(Command{Name: "reject", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO REJECT PENDING JOIN REQUESTS OF THE GROUP. TAG THE MEMBERS OR USE ALL.", OwnerOnly: true, Run: handleReject})
 	Register(Command{Name: "joinrequests", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW ALL PENDING JOIN REQUESTS OF THE GROUP.", OwnerOnly: true, Run: handleJoinRequests})
-	Register(Command{Name: "memberaddmode", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SET WHO CAN ADD MEMBERS TO THE GROUP. USE admin OR all.", OwnerOnly: true, Run: handleMemberAddMode})
+	Register(Command{Name: "addmember", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SET WHO CAN ADD MEMBERS TO THE GROUP. USE admin OR all.", OwnerOnly: true, Run: handleMemberAddMode})
 
 	// ── poll aliases (5+) ──
 	Register(Command{Name: "createpoll", OwnerOnly: true, Hidden: true, Run: handlePoll})
@@ -65,13 +63,6 @@ func init() {
 	Register(Command{Name: "makepoll", OwnerOnly: true, Hidden: true, Run: handlePoll})
 	Register(Command{Name: "pollcreate", OwnerOnly: true, Hidden: true, Run: handlePoll})
 	Register(Command{Name: "startpoll", OwnerOnly: true, Hidden: true, Run: handlePoll})
-
-	// ── vote aliases (5+) ──
-	Register(Command{Name: "pollvote", OwnerOnly: true, Hidden: true, Run: handleVote})
-	Register(Command{Name: "castvote", OwnerOnly: true, Hidden: true, Run: handleVote})
-	Register(Command{Name: "votepoll", OwnerOnly: true, Hidden: true, Run: handleVote})
-	Register(Command{Name: "pollchoice", OwnerOnly: true, Hidden: true, Run: handleVote})
-	Register(Command{Name: "choose", OwnerOnly: true, Hidden: true, Run: handleVote})
 
 	// ── newgroup aliases (5+) ──
 	Register(Command{Name: "creategroup", OwnerOnly: true, Hidden: true, Run: handleNewGroup})
@@ -81,7 +72,6 @@ func init() {
 	Register(Command{Name: "gcnew", OwnerOnly: true, Hidden: true, Run: handleNewGroup})
 
 	// ── addmember aliases (5+) ──
-	Register(Command{Name: "adduser", OwnerOnly: true, Hidden: true, Run: handleAddMember})
 	Register(Command{Name: "addto", OwnerOnly: true, Hidden: true, Run: handleAddMember})
 	Register(Command{Name: "invitemember", OwnerOnly: true, Hidden: true, Run: handleAddMember})
 	Register(Command{Name: "addparticipant", OwnerOnly: true, Hidden: true, Run: handleAddMember})
@@ -108,12 +98,12 @@ func init() {
 	Register(Command{Name: "pendingrequests", OwnerOnly: true, Hidden: true, Run: handleJoinRequests})
 	Register(Command{Name: "joinreq", OwnerOnly: true, Hidden: true, Run: handleJoinRequests})
 
-	// ── memberaddmode aliases (5+) ──
+	// ── addmember aliases (5+) ──
 	Register(Command{Name: "addmode", OwnerOnly: true, Hidden: true, Run: handleMemberAddMode})
 	Register(Command{Name: "setaddmode", OwnerOnly: true, Hidden: true, Run: handleMemberAddMode})
 	Register(Command{Name: "whocanadd", OwnerOnly: true, Hidden: true, Run: handleMemberAddMode})
 	Register(Command{Name: "addpermission", OwnerOnly: true, Hidden: true, Run: handleMemberAddMode})
-	Register(Command{Name: "memberadd", OwnerOnly: true, Hidden: true, Run: handleMemberAddMode})
+	Register(Command{Name: "memberaddmode", OwnerOnly: true, Hidden: true, Run: handleMemberAddMode})
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +242,7 @@ func handlePollAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 	if multi {
 		b.WriteString("🔰 *MULTI SELECT :❮ ON ❯*\n")
 	}
-	b.WriteString("\n*VOTE WITH:* ```" + prefix + "vote <number>``` *(reply to the poll)*")
+	b.WriteString("\n*VOTE BY REPLYING TO THE POLL WITH THE OPTION NUMBER*")
 	s.Reply(info, b.String())
 }
 
@@ -272,95 +262,6 @@ func stripTimeFlag(body string) string {
 		out = append(out, tokens[i])
 	}
 	return strings.Join(out, " ")
-}
-
-// ---------------------------------------------------------------------------
-// .vote  — vote in a poll (reply to the poll)
-// ---------------------------------------------------------------------------
-
-func handleVote(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleVoteAsync(s, info, args, prefix)
-}
-
-func handleVoteAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	if !s.IsOwner(info) {
-		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
-		return
-	}
-	if !requireGroup(s, info) {
-		return
-	}
-	client := s.GetClient()
-	if client == nil || !client.IsConnected() {
-		s.Reply(info, "🔰 WhatsApp client not ready.")
-		return
-	}
-	if len(args) == 0 {
-		s.Reply(info, "🔰 *VOTE IN A POLL* 🔰\n\n*REPLY TO THE POLL WITH:* ```"+prefix+"vote <number>```\n*Example:* ```"+prefix+"vote 2```")
-		return
-	}
-
-	// need the quoted poll message
-	quotedID, quotedSender, ok := getQuotedID(s, info)
-	if !ok || quotedID == "" {
-		s.Reply(info, "🔰 *REPLY TO A POLL MESSAGE TO VOTE* 🔰\n\n*Example:* ```"+prefix+"vote 2``` *(as a reply to the poll)*")
-		return
-	}
-
-	// read the poll options from the quoted message
-	options := quotedPollOptions(s, info)
-	if len(options) == 0 {
-		s.Reply(info, "🔰 *THE MESSAGE YOU REPLIED TO IS NOT A POLL* 🔰")
-		return
-	}
-
-	// resolve the choice: number or exact text
-	choice := strings.TrimSpace(strings.Join(args, " "))
-	var optionName string
-	if n, err := strconv.Atoi(choice); err == nil && n >= 1 && n <= len(options) {
-		optionName = options[n-1]
-	} else {
-		for _, o := range options {
-			if strings.EqualFold(strings.TrimSpace(o), choice) {
-				optionName = o
-				break
-			}
-		}
-	}
-	if optionName == "" {
-		var b strings.Builder
-		b.WriteString("🔰 *INVALID OPTION* 🔰\n\n")
-		for i, o := range options {
-			fmt.Fprintf(&b, "🔰 *%d.* %s\n", i+1, o)
-		}
-		b.WriteString("\n*Example:* ```" + prefix + "vote 1```")
-		s.Reply(info, b.String())
-		return
-	}
-
-	// build the poll info the vote must reference
-	senderJID, _ := types.ParseJID(quotedSender)
-	// MANDATORY LID->PN conversion for the poll author.
-	senderJID = s.ResolveToPN(senderJID)
-	pollInfo := &types.MessageInfo{
-		MessageSource: types.MessageSource{
-			Chat:     info.Chat,
-			Sender:   senderJID,
-			IsGroup:  info.IsGroup,
-			IsFromMe: false,
-		},
-		ID: types.MessageID(quotedID),
-	}
-	voteMsg, err := client.BuildPollVote(context.Background(), pollInfo, []string{optionName})
-	if err != nil {
-		s.Reply(info, "🔰 *VOTE FAILED:* "+err.Error())
-		return
-	}
-	if _, err := client.SendMessage(context.Background(), info.Chat, voteMsg); err != nil {
-		s.Reply(info, "🔰 *VOTE FAILED:* "+err.Error())
-		return
-	}
-	s.Reply(info, "🔰 *VOTE CAST* 🔰\n\n🔰 *OPTION :❮ "+optionName+" ❯*")
 }
 
 // getQuotedID is a small wrapper around the optional quotedGetter interface.
@@ -673,7 +574,7 @@ func handleMemberAddModeAsync(s SessionBridge, info types.MessageInfo, args []st
 		return
 	}
 	if len(args) == 0 {
-		s.Reply(info, "🔰 *MEMBER ADD MODE* 🔰\n\n*SET WHO CAN ADD MEMBERS:*\n🔰 ```"+prefix+"memberaddmode admin``` *(only admins)*\n🔰 ```"+prefix+"memberaddmode all``` *(all members)*")
+		s.Reply(info, "🔰 *MEMBER ADD MODE* 🔰\n\n*SET WHO CAN ADD MEMBERS:*\n🔰 ```"+prefix+"addmember admin``` *(only admins)*\n🔰 ```"+prefix+"addmember all``` *(all members)*")
 		return
 	}
 	mode := strings.ToLower(strings.TrimSpace(args[0]))
@@ -684,7 +585,7 @@ func handleMemberAddModeAsync(s SessionBridge, info types.MessageInfo, args []st
 	case "all", "everyone", "all_member_add", "allmember":
 		m = types.GroupMemberAddModeAllMember
 	default:
-		s.Reply(info, "🔰 *INVALID MODE* 🔰\n\n*USE:* ```"+prefix+"memberaddmode admin``` *or* ```"+prefix+"memberaddmode all```")
+		s.Reply(info, "🔰 *INVALID MODE* 🔰\n\n*USE:* ```"+prefix+"addmember admin``` *or* ```"+prefix+"addmember all```")
 		return
 	}
 	if err := client.SetGroupMemberAddMode(context.Background(), info.Chat, m); err != nil {
@@ -784,5 +685,5 @@ func pollUsage(prefix string) string {
 		"🔰 ```--multi```     → *allow multiple choices*\n\n" +
 		"*FULL EXAMPLE:*\n" +
 		"🔰 ```" + prefix + "poll Best fruit? | Apple | Mango | Banana --time 30m --hide```\n\n" +
-		"*VOTE WITH:* ```" + prefix + "vote <number>``` *(reply to the poll)*"
+		"*VOTE BY REPLYING TO THE POLL WITH THE OPTION NUMBER*"
 }

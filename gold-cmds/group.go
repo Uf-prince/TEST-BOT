@@ -135,6 +135,26 @@ func fetchGroupInfo(s SessionBridge, info types.MessageInfo) (*types.GroupInfo, 
 	return gi, true
 }
 
+// participantNumber returns the REAL phone number (without the leading "+") for
+// a group participant, applying the MANDATORY LID->PN conversion. It prefers the
+// PhoneNumber field populated by whatsmeow, then falls back to resolving the
+// participant JID through the LID store. If neither is available the raw user
+// part is returned so the caller always has something to show.
+func participantNumber(s SessionBridge, p types.GroupParticipant) string {
+	if !p.PhoneNumber.IsEmpty() && p.PhoneNumber.User != "" {
+		return p.PhoneNumber.User
+	}
+	if pn := s.ResolveToPN(p.JID); !pn.IsEmpty() && pn.User != "" {
+		return pn.User
+	}
+	if !p.LID.IsEmpty() {
+		if pn := s.ResolveToPN(p.LID); !pn.IsEmpty() && pn.User != "" {
+			return pn.User
+		}
+	}
+	return p.JID.User
+}
+
 // ---------------------------------------------------------------------------
 // mute / announce  (close group → admin-only)
 // ---------------------------------------------------------------------------
@@ -397,7 +417,7 @@ func handleSetGNameAsync(s SessionBridge, info types.MessageInfo, args []string,
 	}
 	name := strings.TrimSpace(strings.Join(args, " "))
 	if name == "" {
-		s.Reply(info, "*TYPE THE NEW NAME\nEXAMPLE: .GNAME MY GROUP*")
+		s.Reply(info, "*TYPE THE NEW NAME*\n*EXAMPLE: .GNAME MY GROUP*")
 		return
 	}
 	client := s.GetClient()
@@ -430,7 +450,7 @@ func handleSetGDescAsync(s SessionBridge, info types.MessageInfo, args []string,
 	}
 	topic := strings.TrimSpace(strings.Join(args, " "))
 	if topic == "" {
-		s.Reply(info, "*TYPE THE NEW DESCRIPTION\nEXAMPLE: .GDESC THIS IS MY GROUP*")
+		s.Reply(info, "*TYPE THE NEW DESCRIPTION*\n*EXAMPLE: .GDESC THIS IS MY GROUP*")
 		return
 	}
 	client := s.GetClient()
@@ -491,7 +511,7 @@ func handleMembersAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		} else if p.IsAdmin {
 			role = "🔰"
 		}
-		fmt.Fprintf(&b, "%d. %s +%s\n", i+1, role, p.JID.User)
+		fmt.Fprintf(&b, "%d. %s +%s\n", i+1, role, participantNumber(s, p))
 	}
 	s.Reply(info, b.String())
 }
@@ -531,7 +551,7 @@ func handleAdminListAsync(s SessionBridge, info types.MessageInfo, args []string
 		if p.IsSuperAdmin {
 			role = "🔰 OWNER"
 		}
-		fmt.Fprintf(&b, "%d. %s: +%s\n", i+1, role, p.JID.User)
+		fmt.Fprintf(&b, "%d. %s: +%s\n", i+1, role, participantNumber(s, p))
 	}
 	s.Reply(info, b.String())
 }
@@ -822,50 +842,6 @@ func handleLeaveAsync(s SessionBridge, info types.MessageInfo, args []string, pr
 }
 
 // ---------------------------------------------------------------------------
-// announce  (broadcast message mentioning all)
-// ---------------------------------------------------------------------------
-
-func handleAnnounce(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleAnnounceAsync(s, info, args, prefix)
-}
-
-func handleAnnounceAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	if !s.IsOwner(info) {
-		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
-		return
-	}
-	if !requireGroup(s, info) {
-		return
-	}
-	q := strings.TrimSpace(strings.Join(args, " "))
-	if q == "" {
-		s.Reply(info, "*TYPE THE ANNOUNCEMENT TEXT\nEXAMPLE: .ANNOUNCE MEETING TODAY*")
-		return
-	}
-	gi, ok := fetchGroupInfo(s, info)
-	if !ok {
-		return
-	}
-	client := s.GetClient()
-	if client == nil {
-		s.Reply(info, "🔰 WhatsApp client not ready.")
-		return
-	}
-	var b strings.Builder
-	b.WriteString("🔰 *ANNOUNCEMENT*\n")
-	b.WriteString("━━━━━━━━━━━━━━━━━━━\n\n")
-	b.WriteString(q + "\n\n")
-	b.WriteString("━━━━━━━━━━━━━━━━━━━")
-	mentioned := make([]string, 0, len(gi.Participants))
-	for _, p := range gi.Participants {
-		mentioned = append(mentioned, p.JID.String())
-	}
-	if err := sendMentionText(client, info, b.String(), mentioned); err != nil {
-		s.Reply(info, "🔰 *ANNOUNCEMENT FAILED:* "+err.Error())
-	}
-}
-
-// ---------------------------------------------------------------------------
 // editgc  (group-info edit lock toggle, supports on/off argument)
 // ---------------------------------------------------------------------------
 
@@ -881,8 +857,7 @@ func handleEditGCAsync(s SessionBridge, info types.MessageInfo, args []string, p
 	if !requireGroup(s, info) {
 		return
 	}
-	gi, ok := fetchGroupInfo(s, info)
-	if !ok {
+	if _, ok := fetchGroupInfo(s, info); !ok {
 		return
 	}
 	client := s.GetClient()
@@ -890,27 +865,35 @@ func handleEditGCAsync(s SessionBridge, info types.MessageInfo, args []string, p
 		s.Reply(info, "🔰 WhatsApp client not ready.")
 		return
 	}
-	// Determine target lock state.
-	// If an argument is given ("on" → lock, "off" → unlock), use it.
-	// Otherwise toggle the current state.
+	// No argument → show the guidance message.
 	arg := strings.ToLower(strings.TrimSpace(strings.Join(args, " ")))
+	if arg == "" {
+		s.Reply(info, "🔰 *GROUP EDIT CONTROL* 🔰\n\n"+
+			"*CHOOSE WHO CAN EDIT THE GROUP INFO:*\n"+
+			"🔰 ```"+prefix+"editgc admins``` — *only admins can edit*\n"+
+			"🔰 ```"+prefix+"editgc all``` — *all members can edit*")
+		return
+	}
+	// Determine target lock state.
+	// "admins" → lock (only admins), "all" → unlock (everyone).
 	var newLocked bool
 	switch arg {
-	case "on", "lock", "1", "true":
+	case "admins", "admin", "on", "lock", "1", "true":
 		newLocked = true
-	case "off", "unlock", "0", "false":
+	case "all", "everyone", "off", "unlock", "0", "false":
 		newLocked = false
 	default:
-		newLocked = !gi.GroupLocked.IsLocked
+		s.Reply(info, "🔰 *INVALID OPTION* 🔰\n\n*USE:* ```"+prefix+"editgc admins``` *or* ```"+prefix+"editgc all```")
+		return
 	}
 	if err := client.SetGroupLocked(context.Background(), info.Chat, newLocked); err != nil {
 		s.Reply(info, "🔰 *FAILED TO UPDATE GROUP EDIT SETTING:* "+err.Error())
 		return
 	}
 	if newLocked {
-		s.Reply(info, "🔰 *GROUP INFO LOCKED.* Only admins can edit the group name / description / photo now.")
+		s.Reply(info, "🔰 *GROUP INFO LOCKED* 🔰\n\n*ONLY ADMINS CAN EDIT THE GROUP NAME / DESCRIPTION / PHOTO NOW*")
 	} else {
-		s.Reply(info, "🔰 *GROUP INFO UNLOCKED.* All members can edit the group info now.")
+		s.Reply(info, "🔰 *GROUP INFO UNLOCKED* 🔰\n\n*ALL MEMBERS CAN EDIT THE GROUP INFO NOW*")
 	}
 }
 
@@ -997,7 +980,6 @@ func init() {
 	Register(Command{Name: "unlockgc", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO UNLOCK THE GROUP SO NEW MEMBERS CAN JOIN WITHOUT APPROVAL.", OwnerOnly: true, Run: handleUnlockGC})
 	Register(Command{Name: "myrole", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW YOUR ROLE AND POSITION IN THE GROUP.", OwnerOnly: true, Run: handleMyRole})
 	Register(Command{Name: "adminlist", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW THE LIST OF ALL ADMINS OF THE GROUP.", OwnerOnly: true, Run: handleAdminList})
-	Register(Command{Name: "announce", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO TURN ON ANNOUNCE MODE IN THE GROUP. ONLY ADMINS CAN SEND MESSAGES WHEN IT IS ON.", OwnerOnly: true, Run: handleAnnounce})
 
 	// ── mute aliases (5+) ────────────────────────────────────────────────
 	Register(Command{Name: "close", OwnerOnly: true, Hidden: true, Run: handleMute})
@@ -1025,6 +1007,7 @@ func init() {
 	Register(Command{Name: "promoteadmin", OwnerOnly: true, Hidden: true, Run: handlePromote})
 	Register(Command{Name: "add", OwnerOnly: true, Hidden: true, Run: handlePromote})
 	Register(Command{Name: "adm", OwnerOnly: true, Hidden: true, Run: handlePromote})
+	Register(Command{Name: "pmt", OwnerOnly: true, Hidden: true, Run: handlePromote})
 
 	// ── demote aliases (5+) ──────────────────────────────────────────────
 	Register(Command{Name: "removeadmin", OwnerOnly: true, Hidden: true, Run: handleDemote})
@@ -1032,6 +1015,7 @@ func init() {
 	Register(Command{Name: "demoteadmin", OwnerOnly: true, Hidden: true, Run: handleDemote})
 	Register(Command{Name: "deladmin", OwnerOnly: true, Hidden: true, Run: handleDemote})
 	Register(Command{Name: "unadm", OwnerOnly: true, Hidden: true, Run: handleDemote})
+	Register(Command{Name: "dmt", OwnerOnly: true, Hidden: true, Run: handleDemote})
 
 	// ── invitelink / link aliases (5+) ───────────────────────────────────
 	Register(Command{Name: "link", OwnerOnly: true, Hidden: true, Run: handleInviteLink})
@@ -1085,7 +1069,6 @@ func init() {
 	Register(Command{Name: "tagmembers", OwnerOnly: true, Hidden: true, Run: handleTagAll})
 	Register(Command{Name: "mentionall", OwnerOnly: true, Hidden: true, Run: handleTagAll})
 	Register(Command{Name: "everyone", OwnerOnly: true, Hidden: true, Run: handleTagAll})
-	Register(Command{Name: "hidetag", OwnerOnly: true, Hidden: true, Run: handleTagAll})
 	Register(Command{Name: "tageveryone", OwnerOnly: true, Hidden: true, Run: handleTagAll})
 	Register(Command{Name: "all", OwnerOnly: true, Hidden: true, Run: handleTagAll})
 

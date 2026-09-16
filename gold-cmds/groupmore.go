@@ -122,34 +122,6 @@ func handleRemoveGPPAsync(s SessionBridge, info types.MessageInfo, args []string
 }
 
 // ---------------------------------------------------------------------------
-// .gtopic — set the group description (topic)
-// ---------------------------------------------------------------------------
-
-func handleSetTopic(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleSetTopicAsync(s, info, args, prefix)
-}
-
-func handleSetTopicAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	if !groupOwnerGate(s, info) {
-		return
-	}
-	client := groupClient(s, info)
-	if client == nil {
-		return
-	}
-	text := strings.TrimSpace(strings.Join(args, " "))
-	if text == "" {
-		s.Reply(info, "🔰 *SET GROUP DESCRIPTION* 🔰\n\n*FORMAT:* ```"+prefix+"gtopic <new description>```")
-		return
-	}
-	if err := client.SetGroupDescription(context.Background(), info.Chat, text); err != nil {
-		s.Reply(info, "🔰 *SET DESCRIPTION FAILED:* "+err.Error())
-		return
-	}
-	s.Reply(info, "🔰 *GROUP DESCRIPTION UPDATED* 🔰\n\n"+text)
-}
-
-// ---------------------------------------------------------------------------
 // .gdeldesc — delete the group description
 // ---------------------------------------------------------------------------
 
@@ -458,14 +430,6 @@ func handleGPromoteAsync(s SessionBridge, info types.MessageInfo, args []string,
 	groupBulkChange(s, info, args, prefix, whatsmeow.ParticipantChangePromote, "PROMOTED TO ADMIN")
 }
 
-func handleGDemote(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleGDemoteAsync(s, info, args, prefix)
-}
-
-func handleGDemoteAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	groupBulkChange(s, info, args, prefix, whatsmeow.ParticipantChangeDemote, "DEMOTED TO MEMBER")
-}
-
 // groupBulkChange applies a promote/demote/remove change to every resolved
 // target and reports the result.
 func groupBulkChange(s SessionBridge, info types.MessageInfo, args []string, prefix string, change whatsmeow.ParticipantChange, label string) {
@@ -522,10 +486,6 @@ func handleGAddAsync(s SessionBridge, info types.MessageInfo, args []string, pre
 // ---------------------------------------------------------------------------
 // .gadmin — show whether a member is an admin
 // ---------------------------------------------------------------------------
-
-func handleGAdmin(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleGAdminAsync(s, info, args, prefix)
-}
 
 func handleGAdminAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	if !groupOwnerGate(s, info) {
@@ -1124,7 +1084,7 @@ func handleGMentionAsync(s SessionBridge, info types.MessageInfo, args []string,
 	}
 	text := strings.TrimSpace(strings.Join(args, " "))
 	if text == "" {
-		s.Reply(info, "🔰 *MENTION ALL* 🔰\n\n*FORMAT:* ```"+prefix+"gmention <your message>```")
+		s.Reply(info, "🔰 *HIDDEN TAG* 🔰\n\n*FORMAT:* ```"+prefix+"hidetag <your message>```")
 		return
 	}
 	gi, ok := fetchGroupInfo(s, info)
@@ -1322,29 +1282,6 @@ func handleGNameShowAsync(s SessionBridge, info types.MessageInfo, args []string
 }
 
 // ---------------------------------------------------------------------------
-// .gdesc2 — show the current group description
-// ---------------------------------------------------------------------------
-
-func handleGDescShow(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	go handleGDescShowAsync(s, info, args, prefix)
-}
-
-func handleGDescShowAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	if !groupOwnerGate(s, info) {
-		return
-	}
-	gi, ok := fetchGroupInfo(s, info)
-	if !ok {
-		return
-	}
-	desc := gi.Topic
-	if desc == "" {
-		desc = "(no description)"
-	}
-	s.Reply(info, "🔰 *GROUP DESCRIPTION* 🔰\n\n"+desc)
-}
-
-// ---------------------------------------------------------------------------
 // .gapproval — toggle join approval mode (on/off)
 // ---------------------------------------------------------------------------
 
@@ -1498,7 +1435,7 @@ func handleGHelp(s SessionBridge, info types.MessageInfo, args []string, prefix 
 		s.Reply(info, "🔰 *GROUP CONTROL HELP* 🔰\n\n"+
 			"🔰 ```"+prefix+"gpp``` — set group photo\n"+
 			"🔰 ```"+prefix+"gppremove``` — remove group photo\n"+
-			"🔰 ```"+prefix+"gtopic <text>``` — set description\n"+
+			"🔰 ```"+prefix+"gdesc <text>``` — set description\n"+
 			"🔰 ```"+prefix+"gsettings``` — show all settings\n"+
 			"🔰 ```"+prefix+"gstats``` — group statistics\n"+
 			"🔰 ```"+prefix+"grank``` — member ranking\n"+
@@ -1509,7 +1446,7 @@ func handleGHelp(s SessionBridge, info types.MessageInfo, args []string, prefix 
 			"🔰 ```"+prefix+"gjoin <link>``` — join a group\n"+
 			"🔰 ```"+prefix+"gcheck <number>``` — check WhatsApp\n"+
 			"🔰 ```"+prefix+"gblock / gunblock``` — block a user\n"+
-			"🔰 ```"+prefix+"gmention <text>``` — mention everyone")
+			"🔰 ```"+prefix+"hidetag <text>``` — mention everyone")
 	}()
 }
 
@@ -1521,7 +1458,6 @@ func init() {
 	// ── primary commands ──
 	Register(Command{Name: "gpp", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SET THE GROUP PROFILE PICTURE. REPLY TO AN IMAGE OR SEND ONE WITH THIS CAPTION.", OwnerOnly: true, Run: handleSetGPP})
 	Register(Command{Name: "gppremove", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO REMOVE THE GROUP PROFILE PICTURE.", OwnerOnly: true, Run: handleRemoveGPP})
-	Register(Command{Name: "gtopic", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SET THE GROUP DESCRIPTION. GIVE THE NEW DESCRIPTION TEXT.", OwnerOnly: true, Run: handleSetTopic})
 	Register(Command{Name: "gdeldesc", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO DELETE THE GROUP DESCRIPTION.", OwnerOnly: true, Run: handleDelDesc})
 	Register(Command{Name: "gowner", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW THE OWNER OF THE GROUP.", OwnerOnly: true, Run: handleGOwner})
 	Register(Command{Name: "gcreated", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW WHEN THE GROUP WAS CREATED.", OwnerOnly: true, Run: handleGCreated})
@@ -1530,12 +1466,11 @@ func init() {
 	Register(Command{Name: "glist", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO LIST ALL GROUPS THE BOT IS A MEMBER OF.", OwnerOnly: true, Run: handleGList})
 	Register(Command{Name: "ginfo", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW GROUP INFO FROM AN INVITE LINK WITHOUT JOINING.", OwnerOnly: true, Run: handleGInfoLink})
 	Register(Command{Name: "gjoin", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO MAKE THE BOT JOIN A GROUP USING AN INVITE LINK.", OwnerOnly: true, Run: handleGJoin})
+	Register(Command{Name: "join", OwnerOnly: true, Hidden: true, Run: handleGJoin})
 	Register(Command{Name: "gleave", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO MAKE THE BOT LEAVE THE CURRENT GROUP.", OwnerOnly: true, Run: handleGLeave})
 	Register(Command{Name: "gpromote", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO PROMOTE MEMBERS TO ADMIN. TAG THEM OR REPLY TO THEIR MESSAGE.", OwnerOnly: true, Run: handleGPromote})
-	Register(Command{Name: "gdemote", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO DEMOTE ADMINS TO MEMBERS. TAG THEM OR REPLY TO THEIR MESSAGE.", OwnerOnly: true, Run: handleGDemote})
 	Register(Command{Name: "gremove", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO REMOVE MEMBERS FROM THE GROUP. TAG THEM OR REPLY TO THEIR MESSAGE.", OwnerOnly: true, Run: handleGRemove})
 	Register(Command{Name: "gadd", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO ADD MEMBERS TO THE GROUP. TAG THEM OR GIVE THEIR NUMBERS.", OwnerOnly: true, Run: handleGAdd})
-	Register(Command{Name: "gadmin", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO CHECK IF A MEMBER IS AN ADMIN OF THE GROUP.", OwnerOnly: true, Run: handleGAdmin})
 	Register(Command{Name: "grole", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW THE ROLE OF A MEMBER IN THE GROUP.", OwnerOnly: true, Run: handleGRole})
 	Register(Command{Name: "gcount", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW THE MEMBER AND ADMIN COUNT OF THE GROUP.", OwnerOnly: true, Run: handleGCount})
 	Register(Command{Name: "gsearch", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SEARCH MEMBERS OF THE GROUP BY NAME OR NUMBER.", OwnerOnly: true, Run: handleGSearch})
@@ -1556,8 +1491,9 @@ func init() {
 	Register(Command{Name: "gmarkread", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO MARK THE GROUP CHAT AS READ.", OwnerOnly: true, Run: handleGMarkRead})
 	Register(Command{Name: "gtyping", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW A TYPING INDICATOR IN THE GROUP.", OwnerOnly: true, Run: handleGTyping})
 	Register(Command{Name: "gstoptyping", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO STOP THE TYPING INDICATOR IN THE GROUP.", OwnerOnly: true, Run: handleGStopTyping})
-	Register(Command{Name: "gmention", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SEND A MESSAGE THAT MENTIONS EVERY MEMBER OF THE GROUP.", OwnerOnly: true, Run: handleGMention})
-	Register(Command{Name: "gtag", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO TAG EVERY MEMBER OF THE GROUP WITH YOUR MESSAGE.", OwnerOnly: true, Run: handleGTag})
+	Register(Command{Name: "hidetag", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SEND A MESSAGE THAT MENTIONS EVERY MEMBER OF THE GROUP WITHOUT SHOWING THEIR NUMBERS.", OwnerOnly: true, Run: handleGMention})
+	Register(Command{Name: "gmention", OwnerOnly: true, Hidden: true, Run: handleGMention})
+	Register(Command{Name: "gtag", OwnerOnly: true, Hidden: true, Run: handleGTag})
 	Register(Command{Name: "gpromoteall", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO PROMOTE EVERY MEMBER OF THE GROUP TO ADMIN.", OwnerOnly: true, Run: handleGPromoteAll})
 	Register(Command{Name: "gdemoteall", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO DEMOTE EVERY ADMIN OF THE GROUP TO MEMBER.", OwnerOnly: true, Run: handleGDemoteAll})
 	Register(Command{Name: "gkickall", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO REMOVE EVERY REGULAR MEMBER FROM THE GROUP.", OwnerOnly: true, Run: handleGKickAll})
@@ -1565,12 +1501,11 @@ func init() {
 	Register(Command{Name: "gsummary", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW A SHORT SUMMARY OF THE GROUP.", OwnerOnly: true, Run: handleGSummary})
 	Register(Command{Name: "gid", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW THE JID OF THE CURRENT GROUP.", OwnerOnly: true, Run: handleGID})
 	Register(Command{Name: "gname2", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW THE CURRENT NAME OF THE GROUP.", OwnerOnly: true, Run: handleGNameShow})
-	Register(Command{Name: "gdesc2", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW THE CURRENT DESCRIPTION OF THE GROUP.", OwnerOnly: true, Run: handleGDescShow})
 	Register(Command{Name: "gapproval", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO TURN JOIN APPROVAL ON OR OFF FOR THE GROUP.", OwnerOnly: true, Run: handleGApproval})
 	Register(Command{Name: "gaddmode", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SET WHO CAN ADD MEMBERS TO THE GROUP. USE admin OR all.", OwnerOnly: true, Run: handleGAddMode})
 	Register(Command{Name: "gnewlink", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO GENERATE A FRESH INVITE LINK FOR THE GROUP.", OwnerOnly: true, Run: handleGNewLink})
 	Register(Command{Name: "ggetlink", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW THE CURRENT INVITE LINK OF THE GROUP.", OwnerOnly: true, Run: handleGGetLink})
-	Register(Command{Name: "gsetname", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO CHANGE THE NAME OF THE GROUP.", OwnerOnly: true, Run: handleGSetName})
+	Register(Command{Name: "gsetname", OwnerOnly: true, Hidden: true, Run: handleGSetName})
 	Register(Command{Name: "gsetdesc", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO CHANGE THE DESCRIPTION OF THE GROUP.", OwnerOnly: true, Run: handleGSetDesc})
 	Register(Command{Name: "gmembers", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW ALL MEMBERS OF THE GROUP.", OwnerOnly: true, Run: handleGMembers})
 	Register(Command{Name: "gadmins", Category: "GROUP MANAGEMENT", Desc: "THIS COMMAND IS USED TO SHOW ALL ADMINS OF THE GROUP.", OwnerOnly: true, Run: handleGAdmins})
@@ -1588,7 +1523,6 @@ func init() {
 	}
 	alias([]string{"setgpp", "setgrouppic", "setgcpp", "groupphoto", "gcphoto"}, handleSetGPP)
 	alias([]string{"delgpp", "removegpp", "delgrouppic", "nogcpp", "cleargcpp"}, handleRemoveGPP)
-	alias([]string{"setgtopic", "gctopic", "setgctopic", "grouptopic", "setdesc"}, handleSetTopic)
 	alias([]string{"delgdesc", "cleardesc", "gdescdelete", "removedesc", "nodesc"}, handleDelDesc)
 	alias([]string{"groupowner", "gcowner", "whoisowner", "ownerinfo", "gownerinfo"}, handleGOwner)
 	alias([]string{"groupcreated", "gccreated", "createdon", "gcage", "groupage"}, handleGCreated)
@@ -1599,10 +1533,8 @@ func init() {
 	alias([]string{"joingroup", "gcjoin", "joinlink", "joinchat", "gjoinlink"}, handleGJoin)
 	alias([]string{"gcleave", "leavegroup", "exitgroup", "gcexit", "leavegc"}, handleGLeave)
 	alias([]string{"gcpromote", "promoteall2", "makeadmins", "bulkpromote", "gcpromote2"}, handleGPromote)
-	alias([]string{"gcdemote", "demoteall2", "removeadmins", "bulkdemote", "gcdemote2"}, handleGDemote)
 	alias([]string{"gcremove", "removeusers", "bulkremove", "gckick", "kickmany"}, handleGRemove)
 	alias([]string{"gcadd", "addusers", "bulkadd", "gcinvite", "addmany"}, handleGAdd)
-	alias([]string{"isadmin", "checkadmin", "admincheck", "gcadmin", "isgadmin"}, handleGAdmin)
 	alias([]string{"gcrole", "memberrole", "userrole", "rolecheck", "gcroles"}, handleGRole)
 	alias([]string{"gccount", "countgc", "membercount", "gcmembers", "countmembers"}, handleGCount)
 	alias([]string{"findmember", "searchmember", "gcfind", "lookupmember", "memberfind"}, handleGSearch)
@@ -1632,7 +1564,6 @@ func init() {
 	alias([]string{"gcsummary", "summary", "groupsummary", "gcsummary2", "sum2"}, handleGSummary)
 	alias([]string{"gcjid", "groupjid", "jid2", "gcjid2", "showjid"}, handleGID)
 	alias([]string{"showname", "gcname2", "name2", "showname2", "gcshowname"}, handleGNameShow)
-	alias([]string{"showdesc", "gcdesc2", "desc2", "showdesc2", "gcshowdesc"}, handleGDescShow)
 	alias([]string{"gcapproval", "joinapproval", "approvalmode", "gcapproval2", "setapproval"}, handleGApproval)
 	alias([]string{"gcaddmode", "addmode2", "whocanadd2", "setaddmode2", "gcaddmode2"}, handleGAddMode)
 	alias([]string{"gcnewlink", "newlink2", "freshlink", "resetlink2", "gcnewlink2"}, handleGNewLink)

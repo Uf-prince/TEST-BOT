@@ -55,17 +55,19 @@ func (f *lidBridge) ResolveToPN(jid types.JID) types.JID {
 // the registry (visible or hidden alias).
 func TestGroupMoreCommandsRegistered(t *testing.T) {
 	want := []string{
-		"gpp", "gppremove", "gtopic", "gdeldesc", "gowner", "gcreated",
+		"gpp", "gppremove", "gdeldesc", "gowner", "gcreated",
 		"gsettings", "gphoto", "glist", "ginfo", "gjoin", "gleave",
-		"gpromote", "gdemote", "gremove", "gadd", "gadmin", "grole",
+		"gpromote", "gremove", "gadd", "grole",
 		"gcount", "gsearch", "gstats", "grank", "gtop", "gactive",
 		"gcheck", "gblock", "gunblock", "gblocklist", "gpic", "gabout",
 		"gpin", "gunpin", "garchive", "gunarchive", "gmarkread",
-		"gtyping", "gstoptyping", "gmention", "gtag", "gpromoteall",
+		"gtyping", "gstoptyping", "hidetag", "gpromoteall",
 		"gdemoteall", "gkickall", "gclean", "gsummary", "gid", "gname2",
-		"gdesc2", "gapproval", "gaddmode", "gnewlink", "ggetlink",
-		"gsetname", "gsetdesc", "gmembers", "gadmins", "grequests",
+		"gapproval", "gaddmode", "gnewlink", "ggetlink",
+		"gsetdesc", "gmembers", "gadmins", "grequests",
 		"gapprove", "greject", "gversion", "ghelp",
+		// hidden aliases that must still work
+		"gmention", "gtag", "gsetname", "join", "pmt", "dmt",
 	}
 	have := map[string]bool{}
 	for _, c := range Commands() {
