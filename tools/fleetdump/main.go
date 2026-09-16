@@ -17,15 +17,15 @@ import (
 // ONE bucket "goldmd". Purane Storj umar/umar2..10 sets expired/deleted.
 var shards = [10][3]string{
 	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},
+	{"AKIA3380AVOH90WMPB69", "Pm3P6PbtCNyMDdczbaSzefrzp0K5gvcqfa8E1xKq", "gold2"},
+	{"AKIA35754JXDYFQK7XHR", "R95egkdTXmE5K6UO876vzPGz9jBMq7y0FKpKX61K", "gold3"},
+	{"AKIA2083VJSVVU88VCEB", "yRus8xhVGEPW0Efyv0nhhRR40hfGgK173ZkIzjlS", "gold4"},
+	{"AKIA90170CO4BWF3OWUG", "aUDHw1vDI7d7zOg73uGhztN7lfvNb84C73mCoasL", "gold5"},
+	{"AKIA6111E0URFD3575BN", "Larcnkizs7gk9sGpAUPcgGUEVOjOVjlaM70jkwE5", "gold6"},
+	{"AKIA24138MTI05TQ6MTD", "5Aui0Yc6rdLMv6hOZt7rOyIEXlGYrUaAKXaW4faX", "gold7"},
+	{"AKIA1094TFMGV9M200IT", "pyYe6Hz4X8STOmV4i6ZoJFeASExwWlwqyYIR2Mh3", "gold8"},
+	{"AKIA3668SXGPLQA0HUJ0", "ahnlVCSEDC1EKx2jd3b31xt6rFtBBXgOYLAPdcT8", "gold9"},
+	{"AKIA6658WW37WXCBFG0Q", "1yP3vhEC6UU8hxp3DlZskmqAYnTeuZ1T9gXfgHi9", "gold10"},
 }
 
 func fnv32(s string) uint32 {

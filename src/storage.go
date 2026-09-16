@@ -157,17 +157,22 @@ func storjDebug(stage string, fields map[string]any) {
 // "h % len(live-shards)" = 0 → 100% traffic abhi Storadera slot1 pe.
 // NOTE: 9 keys aane ke baad PURANE (interim) objects correct h%10 buckets
 // me re-shard karne honge — tools/kvreshard (planned).
+// ── SHARD SLOTS (owner: jani, 2026-09-16) — 10/10 STORADERA CONNECTED ──────
+// Har slot = apna Storadera account + apna bucket. FNV-1a sharding
+// (h % 10) messages/settings ko 10 buckets me spread karti hai.
+// Bucket names S3-rule lowercase (Gold3..Gold10 → gold3..gold10).
+// Probe: tools/storadera10 → 10/10 CONNECTED (PUT/GET/DELETE OK).
 var hardcodedStorjShards = [10][3]string{
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"}, // slot 1 LIVE
-	{"", "", ""}, // slot 2 — empty (keys aane pe bharo)
-	{"", "", ""}, // slot 3 — empty (keys aane pe bharo)
-	{"", "", ""}, // slot 4 — empty (keys aane pe bharo)
-	{"", "", ""}, // slot 5 — empty (keys aane pe bharo)
-	{"", "", ""}, // slot 6 — empty (keys aane pe bharo)
-	{"", "", ""}, // slot 7 — empty (keys aane pe bharo)
-	{"", "", ""}, // slot 8 — empty (keys aane pe bharo)
-	{"", "", ""}, // slot 9 — empty (keys aane pe bharo)
-	{"", "", ""}, // slot 10 — empty (keys aane pe bharo)
+	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},  // slot 1
+	{"AKIA3380AVOH90WMPB69", "Pm3P6PbtCNyMDdczbaSzefrzp0K5gvcqfa8E1xKq", "gold2"},   // slot 2
+	{"AKIA35754JXDYFQK7XHR", "R95egkdTXmE5K6UO876vzPGz9jBMq7y0FKpKX61K", "gold3"},   // slot 3
+	{"AKIA2083VJSVVU88VCEB", "yRus8xhVGEPW0Efyv0nhhRR40hfGgK173ZkIzjlS", "gold4"},   // slot 4
+	{"AKIA90170CO4BWF3OWUG", "aUDHw1vDI7d7zOg73uGhztN7lfvNb84C73mCoasL", "gold5"},   // slot 5
+	{"AKIA6111E0URFD3575BN", "Larcnkizs7gk9sGpAUPcgGUEVOjOVjlaM70jkwE5", "gold6"},   // slot 6
+	{"AKIA24138MTI05TQ6MTD", "5Aui0Yc6rdLMv6hOZt7rOyIEXlGYrUaAKXaW4faX", "gold7"},   // slot 7
+	{"AKIA1094TFMGV9M200IT", "pyYe6Hz4X8STOmV4i6ZoJFeASExwWlwqyYIR2Mh3", "gold8"},   // slot 8
+	{"AKIA3668SXGPLQA0HUJ0", "ahnlVCSEDC1EKx2jd3b31xt6rFtBBXgOYLAPdcT8", "gold9"},   // slot 9
+	{"AKIA6658WW37WXCBFG0Q", "1yP3vhEC6UU8hxp3DlZskmqAYnTeuZ1T9gXfgHi9", "gold10"},  // slot 10
 }
 
 // InitStorj loads up to 10 shard credential sets from the environment (with
