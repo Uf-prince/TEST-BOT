@@ -7,7 +7,7 @@ package goldcmds
 // HANDLER: handleTikTok — used by .tt and the direct-link router
 //   Downloads a TikTok video (HD preferred) and sends it.
 //
-// ENGINE 1 (MAIN) — TikTok self-scrape (NO API, free + permanent, works
+// ENGINE — TikTok self-scrape (NO API, NO KEYS, free + permanent, works
 // from datacenter IPs like modal.com because it hits tiktok.com directly):
 //   1. Fresh cookie jar + iPhone mobile UA → GET the video page
 //      (vm.tiktok.com / vt.tiktok.com short links auto-follow redirects).
@@ -17,8 +17,9 @@ package goldcmds
 //   3. Download playAddr with the SAME cookie jar + mobile UA +
 //      Referer: https://www.tiktok.com/ → valid MP4.
 //
-// ENGINE 2 (FALLBACK) — tikwm API (GET https://www.tikwm.com/api/?url=<URL>)
-//   Used only when the self-scrape fails (blocked page, changed JSON).
+// NO API KEYS, NO THIRD-PARTY API (owner directive: "tiktok ki koi api key
+// nahi dhundi direct html scrapee krwa download k lie bhi"). tikwm engine
+// REMOVED — sirf TikTok ka direct HTML scrape.
 //
 // ============================================================================
 
@@ -29,7 +30,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
-	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -39,8 +39,6 @@ import (
 )
 
 const (
-	tikwmAPI = "https://www.tikwm.com/api/"
-
 	// ttMobileUA — TikTok serves the full rehydration JSON to mobile clients.
 	ttMobileUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) " +
 		"AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/E15AC Safari/604.1"
@@ -67,11 +65,13 @@ const tiktokHelpText = "🔰 TIKTOK COMMAND INFO 🔰\n" +
 type ttSelfData struct {
 	Scope struct {
 		Reflow struct {
+			StatusCode int `json:"statusCode"`
 			ItemInfo struct {
 				ItemStruct ttItem `json:"itemStruct"`
 			} `json:"itemInfo"`
 		} `json:"webapp.reflow.video.detail"`
 		Detail struct {
+			StatusCode int `json:"statusCode"`
 			ItemInfo struct {
 				ItemStruct ttItem `json:"itemStruct"`
 			} `json:"itemInfo"`
@@ -100,9 +100,8 @@ type ttItem struct {
 	} `json:"author"`
 }
 
-// ttResult is the unified result both engines map into. SrcClient keeps the
-// cookie-jar client for the self-scrape engine (playAddr download needs the
-// same cookies); nil for tikwm (plain client is enough).
+// ttResult is the unified download result. SrcClient keeps the cookie-jar
+// client from the page fetch (playAddr download needs the same cookies).
 type ttResult struct {
 	ID           string
 	Title        string
@@ -120,33 +119,6 @@ type ttResult struct {
 	SrcClient    *http.Client
 }
 
-// tikwmResponse models the tikwm API response.
-type tikwmResponse struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data struct {
-		ID           string `json:"id"`
-		Title        string `json:"title"`
-		Cover        string `json:"cover"`
-		OriginCover  string `json:"origin_cover"`
-		Duration     int    `json:"duration"`
-		Play         string `json:"play"`
-		HDPlay       string `json:"hdplay"`
-		WMPlay       string `json:"wmplay"`
-		Size         int64  `json:"size"`
-		WMSize       int64  `json:"wm_size"`
-		Music        string `json:"music"`
-		PlayCount    int64  `json:"play_count"`
-		DiggCount    int64  `json:"digg_count"`
-		CommentCount int64  `json:"comment_count"`
-		ShareCount   int64  `json:"share_count"`
-		CollectCount int64  `json:"collect_count"`
-		Author       struct {
-			UniqueID string `json:"unique_id"`
-			Nickname string `json:"nickname"`
-		} `json:"author"`
-	} `json:"data"`
-}
 
 func handleTikTok(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	// Hard 3-minute watchdog: on timeout the context is cancelled, every
@@ -169,12 +141,8 @@ func handleTikTokAsync(ctx context.Context, s SessionBridge, info types.MessageI
 
 	waitID := s.ReplyWithID(info, "🔰 *Fetching TikTok video...*")
 
-	// ENGINE 1 — TikTok self-scrape (no API; immune to API blocks).
+	// TikTok self-scrape (direct HTML, no API).
 	res, err := ttSelfFetch(ctx, ttURL)
-	if err != nil {
-		// ENGINE 2 — tikwm API fallback.
-		res, err = tikwmFetchResult(ctx, ttURL)
-	}
 	if err != nil {
 		s.DeleteMessage(info, waitID)
 		s.Reply(info, "🔰 VIDEO NOT FOUND. PLEASE CHECK THE LINK AND TRY AGAIN 🔰")
@@ -235,6 +203,21 @@ func handleTikTokAsync(ctx context.Context, s SessionBridge, info types.MessageI
 
 // ── ENGINE 1: TikTok self-scrape ──────────────────────────────────────────
 
+// ttThrottleErr translates TikTok rehydration statusCode into a clear error.
+// 10204 = web_visit_cnt_more_than_3: the video is globally throttled because
+// it has been visited too many times (popular videos). Fresh videos always
+// return statusCode 0 with full data — pick a different result instead.
+func ttThrottleErr(reflow, detail int) error {
+	sc := reflow
+	if sc == 0 {
+		sc = detail
+	}
+	if sc != 0 {
+		return fmt.Errorf("TikTok is currently throttling this popular video (status %d). Fresh videos work fine — dusra number pick karo ya dobara .tt se search karo", sc)
+	}
+	return fmt.Errorf("no video item found in page data")
+}
+
 // ttSelfFetch fetches the TikTok video page with a fresh cookie jar and a
 // mobile UA, extracts the rehydration JSON and maps the video item.
 // vm/vt short links are resolved by the client's automatic redirect follow.
@@ -287,9 +270,12 @@ func ttSelfFetch(ctx context.Context, ttURL string) (*ttResult, error) {
 	case data.Scope.Detail.ItemInfo.ItemStruct.ID != "":
 		item = data.Scope.Detail.ItemInfo.ItemStruct
 	default:
-		return nil, fmt.Errorf("no video item found in page data")
+		return nil, ttThrottleErr(data.Scope.Reflow.StatusCode, data.Scope.Detail.StatusCode)
 	}
 	if strings.TrimSpace(item.Video.PlayAddr) == "" {
+		if e := ttThrottleErr(data.Scope.Reflow.StatusCode, data.Scope.Detail.StatusCode); e != nil {
+			return nil, e
+		}
 		return nil, fmt.Errorf("playAddr empty in page data")
 	}
 
@@ -314,7 +300,7 @@ func ttSelfFetch(ctx context.Context, ttURL string) (*ttResult, error) {
 }
 
 // ttStreamDownload downloads the MP4 with the mobile UA + TikTok Referer
-// (required for TikTok CDN playAddr links; harmless for tikwm URLs).
+// (required for TikTok CDN playAddr links).
 func ttStreamDownload(ctx context.Context, client *http.Client, videoURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, videoURL, nil)
 	if err != nil {
@@ -347,66 +333,6 @@ func ttStreamDownload(ctx context.Context, client *http.Client, videoURL string)
 		return "", err
 	}
 	return path, nil
-}
-
-// ── ENGINE 2: tikwm API fallback ──────────────────────────────────────────
-
-// tikwmFetchResult calls the tikwm API and maps it to ttResult.
-func tikwmFetchResult(ctx context.Context, ttURL string) (*ttResult, error) {
-	resp, err := tikwmFetch(ctx, ttURL)
-	if err != nil {
-		return nil, err
-	}
-	d := resp.Data
-	return &ttResult{
-		ID:           d.ID,
-		Title:        d.Title,
-		Cover:        d.Cover,
-		Duration:     d.Duration,
-		Play:         d.Play,
-		HDPlay:       d.HDPlay,
-		WMPlay:       d.WMPlay,
-		PlayCount:    d.PlayCount,
-		DiggCount:    d.DiggCount,
-		CommentCount: d.CommentCount,
-		ShareCount:   d.ShareCount,
-		AuthorUnique: d.Author.UniqueID,
-		AuthorName:   d.Author.Nickname,
-		SrcClient:    nil,
-	}, nil
-}
-
-// tikwmFetch calls the tikwm API and returns the parsed response.
-func tikwmFetch(ctx context.Context, ttURL string) (*tikwmResponse, error) {
-	fullURL := fmt.Sprintf("%s?url=%s", tikwmAPI, url.QueryEscape(ttURL))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-	var parsed tikwmResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&parsed); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
-	}
-	if parsed.Code != 0 {
-		msg := parsed.Msg
-		if msg == "" {
-			msg = "API returned error"
-		}
-		return nil, fmt.Errorf("%s", msg)
-	}
-	return &parsed, nil
 }
 
 // firstNonEmpty returns the first non-empty string from the given list.

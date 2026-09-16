@@ -359,14 +359,13 @@ func runSelfSearch(s SessionBridge, info types.MessageInfo, kind searchPickKind,
 		switch kind {
 		case pickTT:
 			header, handleLabel, statsLabel, failed = "TIKTOK SEARCH", "USER", "STATS", "TIKTOK"
-			// video-first: 15 SHORTS + 15 LONG (owner rule), user-search fallback
+			// Brave HTML video search (no API, no tikwm)
 			results, err = ttVideoSearch(ctx, query)
 			if err == nil && len(results) > 0 {
 				setSearchSession(info.Sender.String(), kind, query, results)
 				s.Reply(info, ttVideoCard(query, results))
 				return
 			}
-			results, err = ttUserSearch(ctx, query)
 		case pickFB:
 			header, handleLabel, statsLabel, failed = "FACEBOOK SEARCH", "", "", "FACEBOOK"
 			results, err = fbProfileSearch(ctx, query)
@@ -586,9 +585,6 @@ func searchPickTTDirect(s SessionBridge, info types.MessageInfo, selected search
 		}
 
 		res, err := ttSelfFetch(ctx, videoURL)
-		if err != nil {
-			res, err = tikwmFetchResult(ctx, videoURL)
-		}
 		if err != nil {
 			fail()
 			return

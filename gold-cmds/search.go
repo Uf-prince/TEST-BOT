@@ -7,7 +7,7 @@ package goldcmds
 // Six search commands in the SEARCH category, each with a hidden short alias
 // (same pattern as ytsearch / yts):
 //
-//   ttsearch / tts   — TikTok user search       (tikwm user search API)
+//   ttsearch / tts   — TikTok video search       (Brave HTML scrape)
 //   fbsearch / fbs   — Facebook profile search  (facebook.com/public via jina)
 //   igsearch / igs   — Instagram search         (Bing RSS site:instagram.com)
 //   tgsearch / tgs   — Telegram channels        (telegram-group.com via jina)
@@ -21,7 +21,6 @@ package goldcmds
 import (
 	"unicode/utf8"
 	"context"
-	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -47,6 +46,20 @@ type searchResult struct {
 	// DurationSec is filled by the TikTok video search (SHORTS <= 60s
 	// vs LONG > 60s split ke liye); other engines leave it zero.
 	DurationSec int64
+}
+
+// ttFmtDuration — seconds ko "1m 45s" style me format karta hai (TikTok
+// video cards ki DURATION line ke liye).
+func ttFmtDuration(secs int64) string {
+	if secs <= 0 {
+		return "0s"
+	}
+	m := secs / 60
+	s := secs % 60
+	if m == 0 {
+		return fmt.Sprintf("%ds", s)
+	}
+	return fmt.Sprintf("%dm %ds", m, s)
 }
 
 // searchMaxResults caps every search list (same as ytsearch).
@@ -294,69 +307,6 @@ func searchNoResults(query string) string {
 // searchFailed — standard engine-error reply.
 func searchFailed(name string) string {
 	return "*🔰 SEARCH FAILED :❱*\n\n*" + name + " NOT RESPONDING — TRY AGAIN IN A FEW MINUTES*"
-}
-
-// ── TIKTOK ENGINE (tikwm user search API) ──────────────────────────────
-
-type ttSearchResp struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data struct {
-		UserList []struct {
-			User struct {
-				UniqueId  string `json:"uniqueId"`
-				Nickname  string `json:"nickname"`
-				Signature string `json:"signature"`
-			} `json:"user"`
-			Stats struct {
-				FollowerCount int64 `json:"followerCount"`
-				VideoCount    int64 `json:"videoCount"`
-			} `json:"stats"`
-		} `json:"user_list"`
-	} `json:"data"`
-}
-
-func ttUserSearch(ctx context.Context, query string) ([]searchResult, error) {
-	u := "https://www.tikwm.com/api/user/search?keywords=" + url.QueryEscape(query) + "&count=10"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "application/json")
-	res, err := searchHTTP.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("HTTP %d", res.StatusCode)
-	}
-	var parsed ttSearchResp
-	if err := json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&parsed); err != nil {
-		return nil, err
-	}
-	if parsed.Code != 0 {
-		return nil, fmt.Errorf("%s", parsed.Msg)
-	}
-	var out []searchResult
-	for _, ul := range parsed.Data.UserList {
-		title := ul.User.Nickname
-		if title == "" {
-			title = ul.User.UniqueId
-		}
-		if ul.User.UniqueId == "" {
-			continue
-		}
-		stats := searchFmtCount(ul.Stats.FollowerCount) + " FOLLOWERS ❰ " + searchFmtCount(ul.Stats.VideoCount) + " VIDEOS ❯"
-		out = append(out, searchResult{
-			Title:  title,
-			Handle: "@" + ul.User.UniqueId,
-			Stats:  stats,
-			Link:   "https://www.tiktok.com/@" + ul.User.UniqueId,
-		})
-	}
-	return out, nil
 }
 
 // ── FACEBOOK ENGINE (facebook.com/public via jina) ──────────────────────
@@ -851,9 +801,6 @@ func handleTTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 		// video-first: 15 SHORTS + 15 LONG (commit 970d0e0); user-search
 		// fallback only when the video engine is down/empty.
 		results, err := ttVideoSearch(ctx, query)
-		if err == nil {
-			results = filterTTResults(results)
-		}
 		if err == nil && len(results) > 0 {
 			s.DeleteMessage(info, waitID)
 			setSearchSession(info.Sender.String(), pickTT, query, results)
@@ -861,21 +808,8 @@ func handleTTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 			return
 		}
 		s.DeleteMessage(info, waitID)
-		results, err = ttUserSearch(ctx, query)
-		if err != nil {
-			s.Reply(info, searchFailed("TIKTOK"))
-			return
-		}
-		if len(results) == 0 {
-			s.Reply(info, searchNoResults(query))
-			return
-		}
-		if len(results) > searchMaxResults {
-			results = results[:searchMaxResults]
-		}
-		setSearchSession(info.Sender.String(), pickTT, query, results)
-		s.Reply(info, searchCard("TIKTOK SEARCH", query, "USER", "STATS", results,
-			searchPickFooter()))
+		// Brave HTML engine bhi khali aya to NO RESULTS (tikwm removed).
+		s.Reply(info, searchNoResults(query))
 	})
 }
 
