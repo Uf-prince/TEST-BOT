@@ -75,7 +75,7 @@ func TestFunPackLive(t *testing.T) {
 		url  string
 	}{
 		{"qr", "https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=10&data=GOLD-MD"},
-		{"weather", "https://wttr.in/Karachi?format=%l:+%C+%t"},
+		{"weather", "https://wttr.in/Karachi?format=j1"},
 		{"wiki", "https://en.wikipedia.org/api/rest_v1/page/summary/Pakistan"},
 		{"joke", "https://official-joke-api.appspot.com/random_joke"},
 		{"fact", "https://uselessfacts.jsph.pl/api/v2/facts/random?language=en"},

@@ -29,6 +29,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -138,20 +139,104 @@ func handleWeather(s SessionBridge, info types.MessageInfo, args []string, prefi
 		waitID := s.ReplyWithID(info, "*FETCHING WEATHER....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 
-		u := "https://wttr.in/" + url.PathEscape(city) + "?format=%l:+%C+%t+(feels+%f)+%w+%h+%p"
-		data, err := funGetBytes(ctx, u)
-		if err != nil {
+		u := "https://wttr.in/" + url.PathEscape(city) + "?format=j1"
+		var res struct {
+			Current []struct {
+				TempC      string `json:"temp_C"`
+				TempF      string `json:"temp_F"`
+				FeelsC     string `json:"FeelsLikeC"`
+				FeelsF     string `json:"FeelsLikeF"`
+				Desc       []struct {
+					Value string `json:"value"`
+				} `json:"weatherDesc"`
+				WindKmph   string `json:"windspeedKmph"`
+				WindDir    string `json:"winddir16Point"`
+				Humidity   string `json:"humidity"`
+				Visibility string `json:"visibility"`
+				UVIndex    string `json:"uvIndex"`
+				ObsTime    string `json:"observation_time"`
+			} `json:"current_condition"`
+			Nearest []struct {
+				AreaName []struct {
+					Value string `json:"value"`
+				} `json:"areaName"`
+				Region []struct {
+					Value string `json:"value"`
+				} `json:"region"`
+				Country []struct {
+					Value string `json:"value"`
+				} `json:"country"`
+			} `json:"nearest_area"`
+			Weather []struct {
+				Astronomy []struct {
+					Sunrise string `json:"sunrise"`
+					Sunset  string `json:"sunset"`
+				} `json:"astronomy"`
+			} `json:"weather"`
+		}
+		if err := funGetJSON(ctx, u, &res); err != nil || len(res.Current) == 0 {
 			if !ctxTimedOut(ctx) {
 				funFail(s, info, "WEATHER")
 			}
 			return
 		}
-		out := strings.TrimSpace(string(data))
-		if out == "" || strings.Contains(strings.ToLower(out), "unknown") {
-			s.Reply(info, "*🔰 CITY NOT FOUND, PLEASE CHECK THE NAME*")
-			return
+		c := res.Current[0]
+		desc := ""
+		if len(c.Desc) > 0 {
+			desc = c.Desc[0].Value
 		}
-		s.Reply(info, "*🔰 WEATHER 🔰*\n\n*"+out+"*")
+		area, region, country := "", "", ""
+		if len(res.Nearest) > 0 {
+			n := res.Nearest[0]
+			if len(n.AreaName) > 0 {
+				area = n.AreaName[0].Value
+			}
+			if len(n.Region) > 0 {
+				region = n.Region[0].Value
+			}
+			if len(n.Country) > 0 {
+				country = n.Country[0].Value
+			}
+		}
+		place := strings.Trim(strings.Join([]string{area, region, country}, ", "), ", ")
+		if place == "" {
+			place = city
+		}
+		sunrise, sunset := "", ""
+		if len(res.Weather) > 0 && len(res.Weather[0].Astronomy) > 0 {
+			sunrise = res.Weather[0].Astronomy[0].Sunrise
+			sunset = res.Weather[0].Astronomy[0].Sunset
+		}
+		comfort := "🥶 COLD"
+		if t, err := strconv.Atoi(c.TempC); err == nil {
+			switch {
+			case t >= 40:
+				comfort = "🔥 EXTREME HEAT"
+			case t >= 35:
+				comfort = "🔥 VERY HOT"
+			case t >= 28:
+				comfort = "☀️ HOT"
+			case t >= 20:
+				comfort = "😊 PLEASANT"
+			case t >= 10:
+				comfort = "🧥 COOL"
+			}
+		}
+		var b strings.Builder
+		b.WriteString("*🔰 WEATHER 🔰*\n\n")
+		b.WriteString("*📍 CITY ❯ " + strings.ToUpper(place) + "*\n")
+		b.WriteString("*🕒 TIME ❯ " + c.ObsTime + "*\n")
+		b.WriteString("*🌡️ TEMP ❯ " + c.TempC + "°C (" + c.TempF + "°F)*\n")
+		b.WriteString("*🤗 FEELS LIKE ❯ " + c.FeelsC + "°C (" + c.FeelsF + "°F)*\n")
+		b.WriteString("*☁️ CONDITION ❯ " + strings.ToUpper(desc) + "*\n")
+		b.WriteString("*💨 WIND ❯ " + c.WindKmph + " KM/H " + c.WindDir + "*\n")
+		b.WriteString("*💧 HUMIDITY ❯ " + c.Humidity + "%*\n")
+		b.WriteString("*🔆 UV INDEX ❯ " + c.UVIndex + "*\n")
+		b.WriteString("*👁️ VISIBILITY ❯ " + c.Visibility + " KM*\n")
+		b.WriteString("*🌅 SUNRISE ❯ " + sunrise + "*\n")
+		b.WriteString("*🌇 SUNSET ❯ " + sunset + "*\n")
+		b.WriteString("*🎯 FEEL ❯ " + comfort + "*")
+		s.Reply(info, b.String())
 	})
 }
 
