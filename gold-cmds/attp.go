@@ -34,7 +34,7 @@ func attpGuide(prefix string) string {
 		"*TURN ANY NAME INTO A GLOWING RGB STICKER*\n\n" +
 		"*HOW TO USE:*\n" +
 		"*❮ " + prefix + "ATTP <NAME> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "ATTP UMAR ❯*\n\n" +
+		"*EXAMPLE ❮ " + prefix + "ATTP GOLD-MD ❯*\n\n" +
 		"*OR REPLY TO ANY MESSAGE AND TYPE:*\n" +
 		"*❮ " + prefix + "ATTP ❯*\n\n" +
 		"*THE BOT WILL SEND AN ANIMATED RGB STICKER OF THAT NAME*"
