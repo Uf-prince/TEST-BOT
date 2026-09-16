@@ -161,6 +161,10 @@ func cmdChangeGuide(prefix string) string {
 		"*🔰 TO RESET EVERYTHING BACK TO NORMAL :❱*\n" +
 		"*" + prefix + "cmdownerpublic reset*\n" +
 		"*ALL COMMANDS GO BACK TO THEIR DEFAULT STATE — NO COMMAND REMAINS MARKED AS OWNER-ONLY OR PUBLIC, EVERYTHING WORKS EXACTLY LIKE BEFORE*\n\n" +
+		"*🔰 TO SHOW THE OWNER-ONLY COMMAND LIST :❱*\n" +
+		"*" + prefix + "cmdowner list*\n" +
+		"*" + prefix + "cmdpublicowner list*\n" +
+		"*SHOWS EVERY COMMAND THAT IS CURRENTLY MARKED OWNER-ONLY*\n\n" +
 		"*🔰 NOTE :❱*\n" +
 		"*ALIASES OF A COMMAND CHANGE TOGETHER WITH IT*\n" +
 		"*IF A COMMAND IS IN THE OWNER LIST THE BOT ONLY REPLIES TO THE OWNER*\n" +
@@ -202,7 +206,9 @@ func handleCmdOwner(s SessionBridge, info types.MessageInfo, args []string, pref
 	}
 
 	// default: .cmdowner <name>[,<name2>...] → add to owner-only list
-	handleCmdAccessAdd(s, info, prefix, rest, "owner")
+	// NOTE: pass the FULL argRaw (not rest) — for ".cmdowner ping" the first
+	// token IS the command name, so rest would be empty.
+	handleCmdAccessAdd(s, info, prefix, argRaw, "owner")
 }
 
 func handleCmdPublic(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -233,9 +239,15 @@ func handleCmdOwnerPublic(s SessionBridge, info types.MessageInfo, args []string
 	}
 
 	argRaw := strings.ToLower(strings.TrimSpace(strings.Join(args, " ")))
+	if argRaw == "list" {
+		handleCmdAccessList(s, info, prefix)
+		return
+	}
 	if argRaw == "" || argRaw != "reset" {
-		s.Reply(info, "*🔰 USAGE :❱*\n\n*"+prefix+"cmdownerpublic reset*\n\n"+
-			"*ALL COMMANDS GO BACK TO THEIR DEFAULT STATE — NO COMMAND REMAINS MARKED AS OWNER-ONLY OR PUBLIC, EVERYTHING WORKS EXACTLY LIKE BEFORE*\n\n"+
+		s.Reply(info, "*🔰 USAGE :❱*\n\n*"+prefix+"cmdownerpublic reset*\n"+
+			"*"+prefix+"cmdownerpublic list*\n\n"+
+			"*RESET : ALL COMMANDS GO BACK TO THEIR DEFAULT STATE — NO COMMAND REMAINS MARKED AS OWNER-ONLY OR PUBLIC, EVERYTHING WORKS EXACTLY LIKE BEFORE*\n"+
+			"*LIST : SHOW THE CURRENT OWNER-ONLY COMMAND LIST*\n\n"+
 			"*FULL GUIDE :❱ "+prefix+"cmdchange*")
 		return
 	}
@@ -439,6 +451,7 @@ func init() {
 	Register(Command{Name: "cmdowner", Desc: "THIS COMMAND IS USED TO SET A COMMAND SO ONLY THE OWNER CAN USE IT.", Category: "OWNER & SYSTEM", OwnerOnly: true, Hidden: true, Run: handleCmdOwner})
 	Register(Command{Name: "cmdpublic", Desc: "THIS COMMAND IS USED TO SET A COMMAND SO EVERYONE CAN USE IT.", Category: "OWNER & SYSTEM", OwnerOnly: true, Hidden: true, Run: handleCmdPublic})
 	Register(Command{Name: "cmdownerpublic", Desc: "THIS COMMAND IS USED TO SET OWNER ONLY OR PUBLIC MODE FOR ALL COMMANDS AT ONCE.", Category: "OWNER & SYSTEM", OwnerOnly: true, Hidden: true, Run: handleCmdOwnerPublic})
+	Register(Command{Name: "cmdpublicowner", Desc: "THIS COMMAND IS USED TO SET OWNER ONLY OR PUBLIC MODE FOR ALL COMMANDS AT ONCE.", Category: "OWNER & SYSTEM", OwnerOnly: true, Hidden: true, Run: handleCmdOwnerPublic})
 }
 
 // handleCmdOwnerGuide — .cmdchange → full guide (this is the menu entry too).

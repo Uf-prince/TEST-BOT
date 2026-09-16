@@ -296,6 +296,7 @@ func handleCmdName(s SessionBridge, info types.MessageInfo, args []string, prefi
 		b.WriteString("*TYPE ❲ " + prefix + "CMDNAME MINE ❳* — only my renamed commands work, bot stays silent on its own commands\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDNAME ALL ❳* — my names + bot's own commands, everything works\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDNAME RESET ❳* — delete all my names, bot back to its original commands\n\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDNAME LIST ❳* — show the list of my custom names\n\n")
 		b.WriteString(cmdNameEnglishHelp(prefix) + "\n\n")
 		b.WriteString("*CURRENT MODE :❥ " + mode + "*\n")
 		b.WriteString("*MY CUSTOM NAMES :❥ ❰ " + itoa(len(st.Pairs)) + " ❱*\n")
@@ -354,6 +355,22 @@ func handleCmdName(s SessionBridge, info types.MessageInfo, args []string, prefi
 			"*BOT IS BACK TO ITS ORIGINAL COMMAND NAMES*\n\n"+
 			"*TOTAL DELETED :❥ ❰ "+itoa(total)+" ❱*\n"+
 			deleted)
+		return
+	case "list":
+		st := cnLoad(s)
+		var b strings.Builder
+		b.WriteString("*🔰 CMDNAME LIST 🔰*\n\n")
+		if len(st.Pairs) == 0 {
+			b.WriteString("*NO CUSTOM NAMES*\n")
+			b.WriteString("*BOT IS USING ITS ORIGINAL COMMAND NAMES*\n")
+			b.WriteString("*RENAME WITH :❥ ❲ " + prefix + "CMDNAME PING TO UMAR ❳*")
+			s.Reply(info, strings.TrimSpace(b.String()))
+			return
+		}
+		b.WriteString("*THESE COMMANDS HAVE A CUSTOM NAME*\n\n")
+		b.WriteString("*TOTAL :❥ ❰ " + itoa(len(st.Pairs)) + " ❱*\n")
+		b.WriteString(cnArrowList(st.Pairs, prefix))
+		s.Reply(info, strings.TrimSpace(b.String()))
 		return
 	}
 
@@ -442,7 +459,7 @@ func handleCmdName(s SessionBridge, info types.MessageInfo, args []string, prefi
 	cnSave(s, pairs)
 	extra := ""
 	if replaced {
-		extra = "\n\n*PREVIOUS NAME FOR "+prefix+oldName+" WAS REPLACED*"
+		extra = "\n\n*PREVIOUS NAME FOR " + prefix + oldName + " WAS REPLACED*"
 	}
 	s.Reply(info, "*🔰 COMMAND NAME CHANGED 🔰*\n\n"+
 		"*❲ "+prefix+oldName+" ❳  →  ❲ "+prefix+newName+" ❳*"+extra+"\n\n"+

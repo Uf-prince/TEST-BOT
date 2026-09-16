@@ -176,6 +176,7 @@ func handleCmdReactAsync(s SessionBridge, info types.MessageInfo, args []string,
 		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT PING,MENU,ALIVE 🔰 ❳* — one emoji for many commands\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT PING REMOVE ❳* — remove a command's custom emoji\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT RESET ❳* — delete all custom emojis, back to default " + defaultCmdReactEmoji + "\n\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDREACT LIST ❳* — show the per-command emoji list\n\n")
 		b.WriteString(cmdReactEnglishHelp(prefix) + "\n\n")
 		b.WriteString("*CURRENT STATUS :❥ " + status + "*\n")
 		b.WriteString("*CURRENT EMOJIS :❥ " + strings.Join(emojis, " ") + "*\n")
@@ -224,6 +225,27 @@ func handleCmdReactAsync(s SessionBridge, info types.MessageInfo, args []string,
 			"*TOTAL EMOJIS :❥ ❲ 1 ❱*\n"+
 			"*MODE :❥ SINGLE (SAME EMOJI ON EVERY COMMAND)*\n"+
 			"*REACTION :❥ "+status+"*")
+		return
+	}
+
+	// ── LIST ──
+	// Per-command custom emoji list (numbered). Sirf guidance me zikr hai —
+	// menu / command count me koi asar nahi (ye subcommand hai, alag command nahi).
+	if sub == "list" {
+		var b strings.Builder
+		b.WriteString("*🔰 CMDREACT LIST 🔰*\n\n")
+		if len(perCmd) == 0 {
+			b.WriteString("*NO PER-COMMAND EMOJIS*\n")
+			b.WriteString("*ALL COMMANDS USE THE GENERAL EMOJIS :❥ " + strings.Join(emojis, " ") + "*")
+			s.Reply(info, strings.TrimSpace(b.String()))
+			return
+		}
+		b.WriteString("*THESE COMMANDS HAVE THEIR OWN CUSTOM EMOJI*\n\n")
+		b.WriteString("*TOTAL :❥ ❰ " + itoa(len(perCmd)) + " ❱*\n")
+		for i, c := range cmdReactSortedKeys(perCmd) {
+			b.WriteString("*" + itoa(i+1) + ". ❲ " + prefix + c + " ❳  →  ❲ " + perCmd[c] + " ❳*\n")
+		}
+		s.Reply(info, strings.TrimSpace(b.String()))
 		return
 	}
 
