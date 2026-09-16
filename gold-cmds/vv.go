@@ -103,16 +103,22 @@ func VVHasQuotedMedia(s SessionBridge, info types.MessageInfo) bool {
 	return ok2 && id != ""
 }
 
-const vvHelpText = "*🔰 VIEWONCE COMMAND INFO 🔰*\n\n" +
-	"*OPENS VIEWONCE MEDIA*\n" +
-	"*SUPPORTED TYPES:*\n" +
-	"• IMAGE 🔰\n" +
-	"• VIDEO 🔰\n" +
-	"• AUDIO 🔰\n" +
-	"• VOICE NOTE 🔰\n\n" +
-	"*REPLY TO ANY VIEWONCE MEDIA WITH THIS COMMAND*\n\n" +
-	"*EXAMPLE:* .vv\n\n" +
-	"*🔰 OWNER ONLY COMMAND 🔰*"
+// vvHelpText is the .vv guidance block (bold + 🔰 design, same style as
+// the other GOLD-MD command guides). `prefix` is the bot command prefix.
+func vvHelpText(prefix string) string {
+	return "*🔰 VIEWONCE COMMAND INFO 🔰*\n\n" +
+		"*OPENS VIEWONCE MEDIA*\n" +
+		"*SUPPORTED TYPES:*\n" +
+		"• IMAGE\n" +
+		"• VIDEO\n" +
+		"• AUDIO\n" +
+		"• VOICE NOTE\n\n" +
+		"*REPLY TO ANY VIEWONCE MEDIA*\n" +
+		"*TYPE SAME LIKE THAT*\n\n" +
+		"*❮ " + prefix + "VV ❯*\n\n" +
+		"*TO OPEN VIEWONCE MEDIA*\n\n" +
+		"*TYPE ❮ " + prefix + "VVSET ❯ FOR INFO*"
+}
 
 // vvSetGuide is the .vvset guidance block (bold + 🔰 design, same style as
 // the other GOLD-MD command guides). `mode` is the CURRENT mode (INBOX|SAME).
@@ -168,7 +174,7 @@ func handleVVAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 		// NO MEDIA MENTIONED — always show the guidance message, in BOTH
 		// modes (same + inbox). The silent/delete behaviour only applies
 		// when the owner actually replies to a view-once media.
-		s.Reply(info, vvHelpText)
+		s.Reply(info, vvHelpText(prefix))
 		return
 	}
 
