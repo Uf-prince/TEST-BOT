@@ -1,12 +1,25 @@
 package goldcmds
 
 // ============================================================================
-// GOLD-MD — View-Once Opener (VV) Command
+// GOLD-MD — View-Once Opener (VV) Command + .vvset mode control
 // File: vv.go
 // ============================================================================
 // COMMAND: .vv    (owner-only, reply to a view-once image/video/audio message)
 //   Downloads the view-once media and re-sends it as a normal, permanent
 //   media message (image, video, or audio) so it can be saved/forwarded.
+//
+// TWO DELIVERY MODES (set via .vvset):
+//
+//   .vvset same   → (DEFAULT) current behaviour: bot replies "OPENING
+//                   VIEWONCE MEDIA...", sends the opened media back into the
+//                   SAME chat, then deletes its own wait message.
+//
+//   .vvset inbox  → SILENT mode: no reaction on the .vv command message, the
+//                   .vv command message itself is deleted (best-effort), NO
+//                   reply is sent, and the opened view-once media is delivered
+//                   straight to the bot's OWN private inbox (YOU) silently.
+//
+// Storage: Redis settings:<botJID> hash, field "vvmode" = "same" | "inbox".
 //
 // Source: UMAR-MD vv.js  (Node.js / Baileys — downloadContentFromMessage)
 // Converted to Go / whatsmeow for GOLD-MD.
@@ -24,6 +37,56 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
+// vvModeField — Redis settings field holding the delivery mode.
+const vvModeField = "vvmode"
+
+// Delivery modes.
+const (
+	VVModeSame  = "same"  // send opened media back to the same chat (default)
+	VVModeInbox = "inbox" // send opened media silently to the bot's own inbox
+)
+
+// vvFamilyNames — every registered name that routes to the .vv handler.
+var vvFamilyNames = map[string]bool{
+	"vv":          true,
+	"viewonce":    true,
+	"vvopen":      true,
+	"openvv":      true,
+	"showvv":      true,
+	"vvshow":      true,
+	"privacyopen": true,
+}
+
+// VVIsVVCommand reports whether a (resolved) command name belongs to the
+// .vv family. Used by the handler to suppress the command reaction in
+// inbox mode.
+func VVIsVVCommand(name string) bool {
+	return vvFamilyNames[strings.ToLower(strings.TrimSpace(name))]
+}
+
+// VVGetMode reads the current .vv delivery mode ("same" default).
+func VVGetMode(s SessionBridge) string {
+	m := strings.ToLower(strings.TrimSpace(s.GetStatusSetting(vvModeField, VVModeSame)))
+	if m != VVModeInbox {
+		return VVModeSame
+	}
+	return VVModeInbox
+}
+
+// VVSetMode writes the .vv delivery mode (normalized to same|inbox).
+func VVSetMode(s SessionBridge, mode string) {
+	m := strings.ToLower(strings.TrimSpace(mode))
+	if m != VVModeInbox {
+		m = VVModeSame
+	}
+	s.SetStatusSetting(vvModeField, m)
+}
+
+// VVIsInboxMode reports whether .vv is in silent inbox mode.
+func VVIsInboxMode(s SessionBridge) bool {
+	return VVGetMode(s) == VVModeInbox
+}
+
 const vvHelpText = "*🔰 VIEWONCE COMMAND INFO 🔰*\n\n" +
 	"*OPENS VIEWONCE MEDIA*\n" +
 	"*SUPPORTED TYPES:*\n" +
@@ -35,8 +98,40 @@ const vvHelpText = "*🔰 VIEWONCE COMMAND INFO 🔰*\n\n" +
 	"*EXAMPLE:* .vv\n\n" +
 	"*🔰 OWNER ONLY COMMAND 🔰*"
 
+// vvSetGuide is the .vvset guidance block (bold + 🔰 design, same style as
+// the other GOLD-MD command guides).
+func vvSetGuide(prefix string) string {
+	return "*COMMANDS:*\n" +
+		"*TYPE ❉ " + prefix + "VVSET INBOX ❊* — Send opened media silently to your private inbox (YOU)\n" +
+		"*TYPE ❉ " + prefix + "VVSET SAME ❊* — Send opened media back in the same chat\n\n" +
+		"*INBOX MODE:*\n" +
+		"*🔰 NO REACTION ON THE .VV COMMAND MESSAGE*\n" +
+		"*🔰 THE .VV COMMAND MESSAGE IS DELETED*\n" +
+		"*🔰 NO REPLY IS SENT — FULLY SILENT*\n" +
+		"*🔰 VIEWONCE MEDIA GOES STRAIGHT TO YOUR INBOX*\n\n" +
+		"*SAME MODE:*\n" +
+		"*🔰 OPENS THE MEDIA IN THE SAME CHAT (DEFAULT)*"
+}
+
 func handleVV(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	go handleVVAsync(s, info, args, prefix)
+}
+
+// sendVVMedia re-sends the opened view-once bytes to `target` based on mime.
+func sendVVMedia(s SessionBridge, target types.MessageInfo, data []byte, mime string) error {
+	low := strings.ToLower(mime)
+	switch {
+	case strings.HasPrefix(low, "image"):
+		return s.SendImage(target, data, "*IMAGE OPENED*")
+	case strings.HasPrefix(low, "video"):
+		return s.SendVideo(target, data, "*VIDEO OPENED*", nil, 0, 0, 0)
+	case strings.HasPrefix(low, "audio"):
+		return s.SendAudio(target, data, "", 0)
+	case strings.Contains(low, "webp"):
+		return s.SendSticker(target, data)
+	default:
+		return s.SendDocument(target, data, "viewonce_media", mime, "*MEDIA OPENED*")
+	}
 }
 
 func handleVVAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -44,6 +139,8 @@ func handleVVAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME*")
 		return
 	}
+
+	inboxMode := VVIsInboxMode(s)
 
 	// Check if there is a quoted message at all.
 	hasQuoted := false
@@ -55,36 +152,44 @@ func handleVVAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 		}
 	}
 	if !hasQuoted {
+		if inboxMode {
+			// SILENT: delete the .vv command message, no reply.
+			_ = s.RevokeQuotedMessage(info.Chat, info.Sender.String(), info.ID)
+			return
+		}
 		s.Reply(info, vvHelpText)
 		return
 	}
 
 	data, mime, ok := s.DownloadQuotedMedia(info)
 	if !ok || len(data) == 0 {
+		if inboxMode {
+			// SILENT: delete the .vv command message, no reply.
+			_ = s.RevokeQuotedMessage(info.Chat, info.Sender.String(), info.ID)
+			return
+		}
 		s.Reply(info, "🔰 *THIS IS NOT A VIEWONCE MEDIA*\n\n*Reply to a ViewOnce image/video/audio with .vv*")
 		return
 	}
 
-	waitID := s.ReplyWithID(info, "🔰 *OPENING VIEWONCE MEDIA...*")
+	// ── INBOX MODE: fully silent delivery to the bot's own inbox ──
+	if inboxMode {
+		// Delete the .vv command message (best-effort — works when the bot
+		// can revoke it, e.g. its own message or a group where it is admin).
+		_ = s.RevokeQuotedMessage(info.Chat, info.Sender.String(), info.ID)
 
-	low := strings.ToLower(mime)
-	var sentErr error
-
-	switch {
-	case strings.HasPrefix(low, "image"):
-		sentErr = s.SendImage(info, data, "*IMAGE OPENED*")
-	case strings.HasPrefix(low, "video"):
-		// We don't have width/height/seconds readily; send with zeros.
-		sentErr = s.SendVideo(info, data, "*VIDEO OPENED*", nil, 0, 0, 0)
-	case strings.HasPrefix(low, "audio"):
-		sentErr = s.SendAudio(info, data, "", 0)
-	case strings.HasPrefix(low, "image/webp"), strings.Contains(low, "webp"):
-		sentErr = s.SendSticker(info, data)
-	default:
-		// Unknown type — send as a document so it is preserved.
-		sentErr = s.SendDocument(info, data, "viewonce_media", mime, "*MEDIA OPENED*")
+		// Redirect the media to the bot's OWN private inbox (YOU).
+		target := info
+		if ownJID, err := types.ParseJID(s.GetJID()); err == nil && !ownJID.IsEmpty() {
+			target.Chat = ownJID
+		}
+		_ = sendVVMedia(s, target, data, mime)
+		return
 	}
 
+	// ── SAME MODE (default): current behaviour ──
+	waitID := s.ReplyWithID(info, "🔰 *OPENING VIEWONCE MEDIA...*")
+	sentErr := sendVVMedia(s, info, data, mime)
 	s.DeleteMessage(info, waitID)
 
 	if sentErr != nil {
@@ -93,8 +198,44 @@ func handleVVAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 	}
 }
 
+// handleVVSet — .vvset guidance + mode switch.
+func handleVVSet(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+	if !s.IsOwner(info) {
+		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME*")
+		return
+	}
+
+	arg := ""
+	if len(args) > 0 {
+		arg = strings.ToLower(strings.TrimSpace(args[0]))
+	}
+
+	switch arg {
+	case "inbox":
+		VVSetMode(s, VVModeInbox)
+		s.Reply(info, "*🔰 VVSET MODE SET 🔰*\n\n*MODE :› INBOX*\n\n"+
+			"*🔰 .VV IS NOW FULLY SILENT*\n"+
+			"*🔰 NO REACTION ON THE COMMAND MESSAGE*\n"+
+			"*🔰 THE COMMAND MESSAGE IS DELETED*\n"+
+			"*🔰 NO REPLY — MEDIA GOES STRAIGHT TO YOUR INBOX*\n\n"+
+			vvSetGuide(prefix))
+		return
+	case "same":
+		VVSetMode(s, VVModeSame)
+		s.Reply(info, "*🔰 VVSET MODE SET 🔰*\n\n*MODE :› SAME*\n\n"+
+			"*🔰 .VV OPENS THE MEDIA IN THE SAME CHAT*\n\n"+
+			vvSetGuide(prefix))
+		return
+	}
+
+	// No / unknown arg → show current mode + full guidance.
+	cur := strings.ToUpper(VVGetMode(s))
+	s.Reply(info, "*🔰 VVSET — VIEWONCE DELIVERY MODE 🔰*\n\n*CURRENT MODE :› "+cur+"*\n\n"+vvSetGuide(prefix))
+}
+
 func init() {
 	Register(Command{Name: "vv", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO OPEN AND VIEW ONE TIME VIEW MEDIA. REPLY TO A VIEW ONCE PHOTO OR VIDEO AND USE THIS COMMAND.", OwnerOnly: true, Run: handleVV})
+	Register(Command{Name: "vvset", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO SET HOW THE .VV COMMAND DELIVERS VIEWONCE MEDIA. CHOOSE INBOX TO SEND IT SILENTLY TO YOUR PRIVATE INBOX OR SAME TO SEND IT IN THE SAME CHAT.", OwnerOnly: true, Run: handleVVSet})
 	Register(Command{Name: "viewonce", OwnerOnly: true, Hidden: true, Run: handleVV})
 	Register(Command{Name: "vvopen", OwnerOnly: true, Hidden: true, Run: handleVV})
 	Register(Command{Name: "openvv", OwnerOnly: true, Hidden: true, Run: handleVV})

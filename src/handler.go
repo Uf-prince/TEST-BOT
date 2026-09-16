@@ -1691,8 +1691,13 @@ func (s *Session) reactCommand(info types.MessageInfo, command string) {
 	if s.Client == nil || !s.Client.IsConnected() {
 		return
 	}
-	// .cmdreact OFF → no reaction on commands
 	br := &bridge{s: s}
+	// .vv INBOX MODE → fully silent: no reaction on the .vv command message
+	// (owner order: "koi react na aye cmnd msg pe").
+	if goldcmds.VVIsVVCommand(command) && goldcmds.VVIsInboxMode(br) {
+		return
+	}
+	// .cmdreact OFF → no reaction on commands
 	emoji := goldcmds.CmdReactEmoji(br, command)
 	if emoji == "" {
 		return
