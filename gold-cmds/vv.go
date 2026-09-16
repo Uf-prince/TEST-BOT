@@ -99,18 +99,15 @@ const vvHelpText = "*🔰 VIEWONCE COMMAND INFO 🔰*\n\n" +
 	"*🔰 OWNER ONLY COMMAND 🔰*"
 
 // vvSetGuide is the .vvset guidance block (bold + 🔰 design, same style as
-// the other GOLD-MD command guides).
-func vvSetGuide(prefix string) string {
-	return "*COMMANDS:*\n" +
-		"*TYPE ❉ " + prefix + "VVSET INBOX ❊* — Send opened media silently to your private inbox (YOU)\n" +
-		"*TYPE ❉ " + prefix + "VVSET SAME ❊* — Send opened media back in the same chat\n\n" +
-		"*INBOX MODE:*\n" +
-		"*🔰 NO REACTION ON THE .VV COMMAND MESSAGE*\n" +
-		"*🔰 THE .VV COMMAND MESSAGE IS DELETED*\n" +
-		"*🔰 NO REPLY IS SENT — FULLY SILENT*\n" +
-		"*🔰 VIEWONCE MEDIA GOES STRAIGHT TO YOUR INBOX*\n\n" +
-		"*SAME MODE:*\n" +
-		"*🔰 OPENS THE MEDIA IN THE SAME CHAT (DEFAULT)*"
+// the other GOLD-MD command guides). `mode` is the CURRENT mode (INBOX|SAME).
+func vvSetGuide(prefix string, mode string) string {
+	return "*🔰 VVSET — VIEWONCE DELIVERY MODE 🔰*\n\n" +
+		"*CURRENT MODE :❯ " + strings.ToUpper(mode) + "*\n\n" +
+		"*COMMANDS:*\n" +
+		"*TYPE ❮ " + prefix + "VVSET INBOX ❯*\n" +
+		"*WHEN YOU SET VV SETTINGS TO INBOX OR WHEN YOU TYPE ❮ " + prefix + "VV❯ THE BOT SEND VIEWONCE OPENED MESSAGE IN YOUR (YOU) INBOX ONLY\n\n" +
+		"*TYPE ❮ " + prefix + "VVSET SAME ❯*\n" +
+		"*WHEN YOU SET VV SETTINGS TO SAME OR WHEN YOU TYPE ❮ " + prefix + "VV❯ THE BOT SEND VIEWONCE OPENED MESSAGE IN SAME CHAT*"
 }
 
 func handleVV(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -213,24 +210,18 @@ func handleVVSet(s SessionBridge, info types.MessageInfo, args []string, prefix 
 	switch arg {
 	case "inbox":
 		VVSetMode(s, VVModeInbox)
-		s.Reply(info, "*🔰 VVSET MODE SET 🔰*\n\n*MODE :› INBOX*\n\n"+
-			"*🔰 .VV IS NOW FULLY SILENT*\n"+
-			"*🔰 NO REACTION ON THE COMMAND MESSAGE*\n"+
-			"*🔰 THE COMMAND MESSAGE IS DELETED*\n"+
-			"*🔰 NO REPLY — MEDIA GOES STRAIGHT TO YOUR INBOX*\n\n"+
-			vvSetGuide(prefix))
+		s.Reply(info, "*VIEWONCE MESSAGE DELIVERY CHANGED*\n\n"+
+			"*YOU HAVE SET THE VIEWONCE MESSAGE MEDIA PLACE IN ❮ INBOX ❯ NOW WHEN YOU TYPE ❮ "+prefix+"VV ❯ THE BOT SEND VIEWONCE OPENED MESSAGE IN YOUR (YOU) INBOX*")
 		return
 	case "same":
 		VVSetMode(s, VVModeSame)
-		s.Reply(info, "*🔰 VVSET MODE SET 🔰*\n\n*MODE :› SAME*\n\n"+
-			"*🔰 .VV OPENS THE MEDIA IN THE SAME CHAT*\n\n"+
-			vvSetGuide(prefix))
+		s.Reply(info, "*VIEWONCE MESSAGE DELIVERY CHANGED*\n\n"+
+			"*YOU HAVE SET THE VIEWONCE MESSAGE MEDIA PLACE IN ❮ SAME ❯ NOW WHEN YOU TYPE ❮ "+prefix+"VV ❯ THE BOT SEND VIEWONCE OPENED MESSAGE IN SAME CHATS/GROUPS*")
 		return
 	}
 
 	// No / unknown arg → show current mode + full guidance.
-	cur := strings.ToUpper(VVGetMode(s))
-	s.Reply(info, "*🔰 VVSET — VIEWONCE DELIVERY MODE 🔰*\n\n*CURRENT MODE :› "+cur+"*\n\n"+vvSetGuide(prefix))
+	s.Reply(info, vvSetGuide(prefix, VVGetMode(s)))
 }
 
 func init() {
