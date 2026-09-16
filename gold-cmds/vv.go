@@ -105,9 +105,9 @@ func vvSetGuide(prefix string, mode string) string {
 		"*CURRENT MODE :❯ " + strings.ToUpper(mode) + "*\n\n" +
 		"*COMMANDS:*\n" +
 		"*TYPE ❮ " + prefix + "VVSET INBOX ❯*\n" +
-		"*WHEN YOU SET VV SETTINGS TO INBOX OR WHEN YOU TYPE ❮ " + prefix + "VV❯ THE BOT SEND VIEWONCE OPENED MESSAGE IN YOUR (YOU) INBOX ONLY\n\n" +
+		"*WHEN YOU SET VV SETTINGS TO INBOX OR WHEN YOU TYPE ❮ VV ❯ THE BOT SEND VIEWONCE OPENED MESSAGE IN YOUR (YOU) INBOX ONLY*\n\n" +
 		"*TYPE ❮ " + prefix + "VVSET SAME ❯*\n" +
-		"*WHEN YOU SET VV SETTINGS TO SAME OR WHEN YOU TYPE ❮ " + prefix + "VV❯ THE BOT SEND VIEWONCE OPENED MESSAGE IN SAME CHAT*"
+		"*WHEN YOU SET VV SETTINGS TO SAME OR WHEN YOU TYPE ❮ VV ❯ THE BOT SEND VIEWONCE OPENED MESSAGE IN SAME CHAT*"
 }
 
 func handleVV(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
