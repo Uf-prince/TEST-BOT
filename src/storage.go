@@ -731,6 +731,132 @@ type AutomsgEntry struct {
 	Data []byte
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+//   GOLD-MD — Namespaced JSON store (used by .dissmisstime / .admintime)
+//
+//   Same Storj shards as the automsg store, but under a caller-chosen object
+//   prefix (namespace) so timed-admin timers live in their OWN space and never
+//   show up in .automsg list. Key naming: <ns>/<id>.json
+//
+//   The shard is picked with shardForID(ns + ":" + id) — a DIFFERENT hash input
+//   than the automsg store (which uses shardForID(id)), so the two namespaces
+//   never collide and existing automsg objects are left untouched.
+// ────────────────────────────────────────────────────────────────────────────
+
+// jsonNSObjectKey builds the Storj object key for a namespaced JSON id.
+func jsonNSObjectKey(ns, id string) string {
+	return ns + "/" + id + ".json"
+}
+
+// PutJSONNS stores a JSON byte payload under <ns>/<id>.json. Returns nil on success.
+func (ss *StorjStore) PutJSONNS(ctx context.Context, ns, id string, data []byte) error {
+	if !ss.Ready() {
+		return errors.New("storj not ready")
+	}
+	if id == "" || ns == "" {
+		return errors.New("empty id")
+	}
+	shard := ss.shardForID(ns + ":" + id)
+	if shard == nil {
+		return errors.New("no shard available")
+	}
+	key := jsonNSObjectKey(ns, id)
+	_, err := shard.client.PutObject(ctx, shard.bucket, key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
+		ContentType: "application/json",
+	})
+	return err
+}
+
+// GetJSONNS retrieves the JSON byte payload stored under <ns>/<id>.json.
+// Returns (data, true, nil) on success; (nil, false, nil) if not found;
+// (nil, false, err) on a real error.
+func (ss *StorjStore) GetJSONNS(ctx context.Context, ns, id string) ([]byte, bool, error) {
+	if !ss.Ready() {
+		return nil, false, errors.New("storj not ready")
+	}
+	if id == "" || ns == "" {
+		return nil, false, errors.New("empty id")
+	}
+	shard := ss.shardForID(ns + ":" + id)
+	if shard == nil {
+		return nil, false, errors.New("no shard")
+	}
+	key := jsonNSObjectKey(ns, id)
+	obj, err := shard.client.GetObject(ctx, shard.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		resp := minio.ToErrorResponse(err)
+		if resp.Code == "NoSuchKey" || strings.Contains(err.Error(), "NoSuchKey") ||
+			strings.Contains(err.Error(), "not found") {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	defer obj.Close()
+	var body bytes.Buffer
+	if _, err := body.ReadFrom(obj); err != nil {
+		return nil, false, fmt.Errorf("read body: %w", err)
+	}
+	return body.Bytes(), true, nil
+}
+
+// DeleteJSONNS removes the <ns>/<id>.json object. Idempotent — returns nil
+// if the object does not exist.
+func (ss *StorjStore) DeleteJSONNS(ctx context.Context, ns, id string) error {
+	if !ss.Ready() {
+		return errors.New("storj not ready")
+	}
+	if id == "" || ns == "" {
+		return errors.New("empty id")
+	}
+	shard := ss.shardForID(ns + ":" + id)
+	if shard == nil {
+		return errors.New("no shard")
+	}
+	key := jsonNSObjectKey(ns, id)
+	return shard.client.RemoveObject(ctx, shard.bucket, key, minio.RemoveObjectOptions{})
+}
+
+// ListJSONNS enumerates every <ns>/<id>.json object across ALL shards and
+// returns a slice of {ID, Data} pairs.
+func (ss *StorjStore) ListJSONNS(ctx context.Context, ns string) ([]AutomsgEntry, error) {
+	if !ss.Ready() {
+		return nil, errors.New("storj not ready")
+	}
+	if ns == "" {
+		return nil, errors.New("empty ns")
+	}
+	prefix := ns + "/"
+	var out []AutomsgEntry
+	for _, shard := range ss.shards {
+		objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{
+			Prefix:    prefix,
+			Recursive: true,
+		})
+		for obj := range objCh {
+			if obj.Err != nil {
+				continue
+			}
+			id := strings.TrimPrefix(obj.Key, prefix)
+			id = strings.TrimSuffix(id, ".json")
+			if id == "" {
+				continue
+			}
+			o, err := shard.client.GetObject(ctx, shard.bucket, obj.Key, minio.GetObjectOptions{})
+			if err != nil {
+				continue
+			}
+			var body bytes.Buffer
+			_, rerr := body.ReadFrom(o)
+			o.Close()
+			if rerr != nil {
+				continue
+			}
+			out = append(out, AutomsgEntry{ID: id, Data: body.Bytes()})
+		}
+	}
+	return out, nil
+}
+
 // ══════════════════ (merged from upstash.go) ══════════════════
 // ============================================================================
 // GOLD-MD — Storage layer (Storj-backed; Upstash Redis FULLY REMOVED)

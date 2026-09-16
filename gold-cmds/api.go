@@ -336,6 +336,15 @@ type SessionBridge interface {
 	// .automsg delete so the owner can see all schedules and pick one by number.
 	MemoryList() ([]AutomsgListItem, error)
 
+	// ── Namespaced bot MEMORY (used by .dissmisstime / .admintime) ──
+	// Same secure store as MemorySave, but under a caller-chosen namespace so
+	// timed-admin timers live in their OWN space and never appear in .automsg
+	// list. Key naming: <ns>/<id>.json
+	MemorySaveNS(ns, id string, data []byte) error
+	MemoryLoadNS(ns, id string) ([]byte, bool, error)
+	MemoryDeleteNS(ns, id string) error
+	MemoryListNS(ns string) ([]AutomsgListItem, error)
+
 	// -- AUTOREACT / OWNERREACT (per-bot Redis config) --
 	// SendReaction sends an emoji reaction to a message in a chat.
 	// chat = the chat JID, sender = the original message sender JID,

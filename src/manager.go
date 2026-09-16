@@ -1160,6 +1160,20 @@ func (s *Session) EventHandler(raw interface{}) {
 			goldcmds.AutomsgRestoreSavedSchedules(brRestore)
 		}()
 
+		// ── TIMED ADMIN RESTART-RESTORE ──────────────────────────────────────
+		// Bot ki MEMORY me saved pending .dissmisstime / .admintime timers ko
+		// phir se ARM karo (ya agar fire time nikal chuka hai to foran apply
+		// karo). Background goroutine — connect path pe 0 blocking.
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					_ = r
+				}
+			}()
+			brTA := &bridge{s: s}
+			goldcmds.TimedAdminRestoreSavedTimers(brTA)
+		}()
+
 		// ── Preload settings from Redis into cache ──────────────────────
 		// On every successful connect (boot, reconnect, or fresh pairing),
 		// load the bot's entire settings:<jid> hash into the in-memory cache

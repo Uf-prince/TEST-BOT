@@ -2639,6 +2639,43 @@ func (b *bridge) MemoryList() ([]goldcmds.AutomsgListItem, error) {
 	return out, nil
 }
 
+// ── Namespaced bot MEMORY bridge methods (used by .dissmisstime / .admintime) ──
+// Same secure store as the automsg methods above, but under a caller-chosen
+// namespace so timed-admin timers live in their OWN space and never show up in
+// .automsg list.
+
+func (b *bridge) MemorySaveNS(ns, id string, data []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return storj.PutJSONNS(ctx, ns, id, data)
+}
+
+func (b *bridge) MemoryLoadNS(ns, id string) ([]byte, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return storj.GetJSONNS(ctx, ns, id)
+}
+
+func (b *bridge) MemoryDeleteNS(ns, id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return storj.DeleteJSONNS(ctx, ns, id)
+}
+
+func (b *bridge) MemoryListNS(ns string) ([]goldcmds.AutomsgListItem, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	entries, err := storj.ListJSONNS(ctx, ns)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]goldcmds.AutomsgListItem, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, goldcmds.AutomsgListItem{ID: e.ID, Data: e.Data})
+	}
+	return out, nil
+}
+
 // ── AUTOREACT / OWNERREACT ──────────────────────────────────────────────────
 
 // SendReaction sends an emoji reaction to a specific message in a chat.
