@@ -7,11 +7,13 @@ package goldcmds
 // Owner kisi bhi command ka prefix "stop" kar sakta hai — us command ko
 // prefix ke SATH bhi aur prefix ke BAGHER bhi chalaya ja sakta hai:
 //   .cmdprefix                       → info + guidance + current status
-//   .cmdprefix ping stop             → .ping aur "ping" dono chalte hain
-//   .cmdprefix ping,menu,alive stop  → ek sath kai commands (comma/space)
-//   .cmdprefix ping start            → ping wapas sirf prefix ke sath
-//   .cmdprefix alive,menu,ping start → ek sath kai commands
+//   .cmdprefix stop ping             → .ping aur "ping" dono chalte hain
+//   .cmdprefix stop ping,menu,alive  → ek sath kai commands (comma/space)
+//   .cmdprefix start ping            → ping wapas sirf prefix ke sath
+//   .cmdprefix start alive,menu,ping → ek sath kai commands
 //   .cmdprefix reset                 → saare commands wapas prefix-only
+//
+// ORDER: action (stop/start) PEHLE, phir command name(s).
 //
 // Storage (Redis settings:<botJID> hash — cmdname/cmdreact jaisa hi Redis-safe
 // pattern, GetSetting/SetSetting full-value overwrite, koi orphan key nahi):
@@ -163,8 +165,8 @@ func cpArrowList(names []string, prefix string) string {
 // to Meta AI ko bhi samajhne me asani ho: kya hoga, kaise chalega.
 func cpEnglishHelp(prefix string) string {
 	return "*🔰 ENGLISH DESCRIPTION 🔰*\\n\\n" +
-		"*STOP :❵ Example " + prefix + "cmdprefix ping stop — the ping command now works BOTH ways: with the prefix (" + prefix + "ping) and also WITHOUT the prefix (just type ping). You can stop the prefix for as many commands as you want at once by separating them with commas, like " + prefix + "cmdprefix ping,menu,alive stop.*\\n\\n" +
-		"*START :❵ Example " + prefix + "cmdprefix ping start — the ping command goes back to prefix-only mode. From now on it ONLY works with the prefix (" + prefix + "ping) and typing just ping without the prefix does nothing. You can start several commands at once, like " + prefix + "cmdprefix alive,menu,ping start.*\\n\\n" +
+		"*STOP :❵ Example " + prefix + "cmdprefix stop ping — the ping command now works BOTH ways: with the prefix (" + prefix + "ping) and also WITHOUT the prefix (just type ping). You can stop the prefix for as many commands as you want at once by separating them with commas, like " + prefix + "cmdprefix stop ping,menu,alive.*\\n\\n" +
+		"*START :❵ Example " + prefix + "cmdprefix start ping — the ping command goes back to prefix-only mode. From now on it ONLY works with the prefix (" + prefix + "ping) and typing just ping without the prefix does nothing. You can start several commands at once, like " + prefix + "cmdprefix start alive,menu,ping.*\\n\\n" +
 		"*RESET :❵ Example " + prefix + "cmdprefix reset — every command you stopped is restored at once and the bot goes back to prefix-only for all commands.*"
 }
 
@@ -197,10 +199,10 @@ func handleCmdPrefix(s SessionBridge, info types.MessageInfo, args []string, pre
 		var b strings.Builder
 		b.WriteString("*🔰 CMDPREFIX INFO 🔰*\\n\\n")
 		b.WriteString("*MAKE ANY COMMAND WORK WITHOUT THE PREFIX TOO.*\\n\\n")
-		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX PING STOP ❳* — " + prefix + "ping AND ping both work\\n")
-		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX PING,MENU,ALIVE STOP ❳* — many commands at once\\n")
-		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX PING START ❳* — " + prefix + "ping back to prefix-only\\n")
-		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX ALIVE,MENU,PING START ❳* — many commands at once\\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX STOP PING ❳* — " + prefix + "ping AND ping both work\\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX STOP PING,MENU,ALIVE ❳* — many commands at once\\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX START PING ❳* — " + prefix + "ping back to prefix-only\\n")
+		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX START ALIVE,MENU,PING ❳* — many commands at once\\n")
 		b.WriteString("*TYPE ❲ " + prefix + "CMDPREFIX RESET ❳* — all commands back to prefix-only\\n\\n")
 		b.WriteString(cpEnglishHelp(prefix) + "\\n\\n")
 		b.WriteString("*CURRENT PREFIXLESS COMMANDS :❵ ❰ " + itoa(len(names)) + " ❱*\\n")
@@ -230,12 +232,12 @@ func handleCmdPrefix(s SessionBridge, info types.MessageInfo, args []string, pre
 		return
 	}
 
-	// ── parse: <cmds> stop|start  (action last)  OR  stop|start <cmds> (action first) ──
+	// ── parse: <stop|start> <cmds>  (action FIRST) ──
 	fields := strings.Fields(raw)
 	if len(fields) < 2 {
 		s.Reply(info, "*WRONG FORMAT*\\n\\n"+
-			"*TYPE ❲ "+prefix+"CMDPREFIX PING STOP ❳ TO MAKE A COMMAND PREFIXLESS*\\n"+
-			"*TYPE ❲ "+prefix+"CMDPREFIX PING START ❳ TO MAKE IT PREFIX-ONLY AGAIN*\\n"+
+			"*TYPE ❲ "+prefix+"CMDPREFIX STOP PING ❳ TO MAKE A COMMAND PREFIXLESS*\\n"+
+			"*TYPE ❲ "+prefix+"CMDPREFIX START PING ❳ TO MAKE IT PREFIX-ONLY AGAIN*\\n"+
 			"*TYPE ❲ "+prefix+"CMDPREFIX ❳ FOR FULL HELP*")
 		return
 	}
@@ -244,13 +246,10 @@ func handleCmdPrefix(s SessionBridge, info types.MessageInfo, args []string, pre
 	if fields[0] == "stop" || fields[0] == "start" {
 		action = fields[0]
 		cmdPart = strings.Join(fields[1:], " ")
-	} else if fields[len(fields)-1] == "stop" || fields[len(fields)-1] == "start" {
-		action = fields[len(fields)-1]
-		cmdPart = strings.Join(fields[:len(fields)-1], " ")
 	} else {
 		s.Reply(info, "*WRONG FORMAT*\\n\\n"+
-			"*LAST WORD MUST BE ❲ STOP ❳ OR ❲ START ❳*\\n"+
-			"*TYPE ❲ "+prefix+"CMDPREFIX PING STOP ❳*\\n"+
+			"*FIRST WORD MUST BE ❲ STOP ❳ OR ❲ START ❳*\\n"+
+			"*TYPE ❲ "+prefix+"CMDPREFIX STOP PING ❳*\\n"+
 			"*TYPE ❲ "+prefix+"CMDPREFIX ❳ FOR FULL HELP*")
 		return
 	}
@@ -258,7 +257,7 @@ func handleCmdPrefix(s SessionBridge, info types.MessageInfo, args []string, pre
 	names := cpSplitList(cmdPart)
 	if len(names) == 0 {
 		s.Reply(info, "*NO COMMAND NAME GIVEN*\\n\\n"+
-			"*TYPE ❲ "+prefix+"CMDPREFIX PING STOP ❳*")
+			"*TYPE ❲ "+prefix+"CMDPREFIX STOP PING ❳*")
 		return
 	}
 

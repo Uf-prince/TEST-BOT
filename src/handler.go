@@ -609,7 +609,7 @@ func (s *Session) HandleMessage(evt *events.Message) {
 	}
 
 	// ── CMDPREFIX (PER-COMMAND PREFIXLESS) ────────────────────────────────────
-	// Owner .cmdprefix ping stop karke kisi command ka prefix optional kar
+	// Owner .cmdprefix stop ping karke kisi command ka prefix optional kar
 	// sakta hai. Agar body bina prefix ka hai aur uska pehla word kisi
 	// "stopped" command ka naam hai, to body ko prefix+body me rewrite kar
 	// dete hain — phir normal dispatch flow (owner-only / bancmd / botblock

@@ -1,12 +1,18 @@
 package goldcmds
 
 import (
+	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"go.mau.fi/whatsmeow/types"
 )
+
+// cpJIDSeq gives every test bridge a unique JID so the 1-minute cpLoad cache
+// (keyed by bot JID) never leaks state between tests.
+var cpJIDSeq int64
 
 // TestMain mirrors main.go: it attaches the full dispatchable command-name
 // set (gold-cmds registry + core commands like ping/menu/alive) so that
@@ -29,7 +35,12 @@ type cpBridge struct {
 }
 
 func newCPBridge() *cpBridge {
-	return &cpBridge{settings: map[string]string{}, owner: true, jid: "bot@s.whatsapp.net"}
+	n := atomic.AddInt64(&cpJIDSeq, 1)
+	return &cpBridge{
+		settings: map[string]string{},
+		owner:    true,
+		jid:      fmt.Sprintf("bot%d@s.whatsapp.net", n),
+	}
 }
 
 func (f *cpBridge) GetJID() string { return f.jid }
@@ -73,10 +84,10 @@ func TestCmdPrefixRegistered(t *testing.T) {
 	}
 }
 
-// TestCmdPrefixStopSingle — .cmdprefix ping stop makes ping prefixless.
+// TestCmdPrefixStopSingle — .cmdprefix stop ping makes ping prefixless.
 func TestCmdPrefixStopSingle(t *testing.T) {
 	b := newCPBridge()
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping", "stop"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping"}, ".")
 	if !cpLoad(b)["ping"] {
 		t.Fatalf("ping not marked prefixless; settings=%v", b.settings)
 	}
@@ -88,7 +99,7 @@ func TestCmdPrefixStopSingle(t *testing.T) {
 // TestCmdPrefixStopMultiple — comma-separated list.
 func TestCmdPrefixStopMultiple(t *testing.T) {
 	b := newCPBridge()
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping,menu,alive", "stop"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping,menu,alive"}, ".")
 	st := cpLoad(b)
 	for _, n := range []string{"ping", "menu", "alive"} {
 		if !st[n] {
@@ -100,8 +111,8 @@ func TestCmdPrefixStopMultiple(t *testing.T) {
 // TestCmdPrefixStartSingle — start removes it again.
 func TestCmdPrefixStartSingle(t *testing.T) {
 	b := newCPBridge()
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping", "stop"}, ".")
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping", "start"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"start", "ping"}, ".")
 	if cpLoad(b)["ping"] {
 		t.Fatalf("ping still prefixless after start")
 	}
@@ -113,14 +124,14 @@ func TestCmdPrefixStartSingle(t *testing.T) {
 // TestCmdPrefixStartMultiple — multiple at once.
 func TestCmdPrefixStartMultiple(t *testing.T) {
 	b := newCPBridge()
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"alive,menu,ping", "stop"}, ".")
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"alive,menu,ping", "start"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "alive,menu,ping"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"start", "alive,menu,ping"}, ".")
 	if len(cpLoad(b)) != 0 {
 		t.Fatalf("stopped set not empty after start: %v", cpLoad(b))
 	}
 }
 
-// TestCmdPrefixActionFirst — "stop ping" (action first) also works.
+// TestCmdPrefixActionFirst — "stop ping" (action first) is the canonical form.
 func TestCmdPrefixActionFirst(t *testing.T) {
 	b := newCPBridge()
 	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping"}, ".")
@@ -129,10 +140,23 @@ func TestCmdPrefixActionFirst(t *testing.T) {
 	}
 }
 
+// TestCmdPrefixOldOrderRejected — the OLD order "ping stop" must now be
+// rejected (first word must be stop/start).
+func TestCmdPrefixOldOrderRejected(t *testing.T) {
+	b := newCPBridge()
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping", "stop"}, ".")
+	if cpLoad(b)["ping"] {
+		t.Fatalf("old order 'ping stop' should NOT be accepted anymore")
+	}
+	if !strings.Contains(b.lastReply(), "WRONG FORMAT") {
+		t.Errorf("reply missing WRONG FORMAT: %q", b.lastReply())
+	}
+}
+
 // TestCmdPrefixReset — reset clears everything.
 func TestCmdPrefixReset(t *testing.T) {
 	b := newCPBridge()
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping,menu", "stop"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping,menu"}, ".")
 	handleCmdPrefix(b, types.MessageInfo{}, []string{"reset"}, ".")
 	if len(cpLoad(b)) != 0 {
 		t.Fatalf("reset did not clear: %v", cpLoad(b))
@@ -142,7 +166,7 @@ func TestCmdPrefixReset(t *testing.T) {
 // TestCmdPrefixUnknownCommand — unknown names are reported, not stored.
 func TestCmdPrefixUnknownCommand(t *testing.T) {
 	b := newCPBridge()
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"notacommand", "stop"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "notacommand"}, ".")
 	if cpLoad(b)["notacommand"] {
 		t.Fatalf("unknown command was stored")
 	}
@@ -155,7 +179,7 @@ func TestCmdPrefixUnknownCommand(t *testing.T) {
 func TestCmdPrefixNonOwner(t *testing.T) {
 	b := newCPBridge()
 	b.owner = false
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping", "stop"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping"}, ".")
 	if !strings.Contains(b.lastReply(), "ONLY FOR ME") {
 		t.Errorf("non-owner reply = %q, want ONLY FOR ME", b.lastReply())
 	}
@@ -167,7 +191,7 @@ func TestCmdPrefixNonOwner(t *testing.T) {
 // TestCmdPrefixRewrite — the handler hook rewrites a bare stopped command.
 func TestCmdPrefixRewrite(t *testing.T) {
 	b := newCPBridge()
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping", "stop"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping"}, ".")
 
 	// bare "ping" → rewritten to ".ping"
 	got, ok := CmdPrefixRewrite(b, "ping", ".")
@@ -194,8 +218,8 @@ func TestCmdPrefixRewrite(t *testing.T) {
 // TestCmdPrefixRewriteAfterStart — after start, bare command no longer rewrites.
 func TestCmdPrefixRewriteAfterStart(t *testing.T) {
 	b := newCPBridge()
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping", "stop"}, ".")
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping", "start"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"start", "ping"}, ".")
 	if _, ok := CmdPrefixRewrite(b, "ping", "."); ok {
 		t.Fatalf("bare ping still rewritten after start")
 	}
@@ -204,7 +228,7 @@ func TestCmdPrefixRewriteAfterStart(t *testing.T) {
 // TestCmdPrefixRewriteNoPrefixMode — when bot prefix is empty, no-op.
 func TestCmdPrefixRewriteNoPrefixMode(t *testing.T) {
 	b := newCPBridge()
-	handleCmdPrefix(b, types.MessageInfo{}, []string{"ping", "stop"}, ".")
+	handleCmdPrefix(b, types.MessageInfo{}, []string{"stop", "ping"}, ".")
 	if _, ok := CmdPrefixRewrite(b, "ping", ""); ok {
 		t.Fatalf("rewrite should be no-op when prefix is empty")
 	}
