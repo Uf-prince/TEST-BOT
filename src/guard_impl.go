@@ -161,8 +161,12 @@ func guardCompressVideo(src string, target, maxLimit int64) (string, int64, stri
 			return out, size, guardNoteVideo(height, size), true
 		}
 		if size <= maxLimit {
-			if best.out != "" && size < best.size {
-				os.Remove(best.out)
+			// under-limit lekin target se bada — chhota hai to best yaad rakho
+			// (pehla under-limit candidate bhi store ho — best.out=="" case)
+			if best.out == "" || size < best.size {
+				if best.out != "" {
+					os.Remove(best.out)
+				}
 				best = cand{out, size, br}
 			} else {
 				os.Remove(out)

@@ -85,7 +85,7 @@ func guardForceMode() bool {
 }
 
 func guardLimitBytes() int64 {
-	mb := int64(50)
+	mb := int64(150)
 	if v := os.Getenv("GOLDMD_GUARD_LIMIT_MB"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
 			mb = n
@@ -226,19 +226,19 @@ func (b *bridge) guardOverLimitBytes(info MsgInfoT, kind guardKind, data []byte)
 	src, err := writeGuardTemp(data, kind)
 	if err != nil {
 		b.guardNotifyFail(info, kind, orig, "temp file nahi bana")
-		return guardResult{ok: false}
+		return guardPass() // SILENT: compress skip, original hi jayegi
 	}
 	out, _, note, ok := guardCompressFile(kind, src, guardTargetBytes(), guardLimitBytes())
 	_ = os.Remove(src)
 	if !ok {
 		b.guardNotifyFail(info, kind, orig, "compress nahi ho payi")
-		return guardResult{ok: false}
+		return guardPass() // SILENT: compress fail -> original passthrough
 	}
 	comp, err := os.ReadFile(out)
 	_ = os.Remove(out)
 	if err != nil || len(comp) == 0 {
 		b.guardNotifyFail(info, kind, orig, "compressed file read fail")
-		return guardResult{ok: false}
+		return guardPass() // SILENT: read fail -> original passthrough
 	}
 	b.guardNotifyDone(info, orig, int64(len(comp)))
 	return guardResult{
@@ -329,15 +329,15 @@ func (b *bridge) guardOverLimitPath(info MsgInfoT, kind guardKind, path string, 
 	out, outSize, note, ok := guardCompressFile(kind, path, guardTargetBytes(), guardLimitBytes())
 	if !ok {
 		b.guardNotifyFail(info, kind, orig, "compress nahi ho payi")
-		return guardResult{ok: false}
+		return guardPass() // SILENT: compress fail -> original passthrough
 	}
 	if outSize >= orig {
-		// compressor hi bada bana raha — over-limit pe original nahi jayegi
+		// compressor hi bada bana raha — SILENT: original hi jayegi
 		if out != "" {
 			_ = os.Remove(out)
 		}
 		b.guardNotifyFail(info, kind, orig, "compressor ne chhota nahi banaya")
-		return guardResult{ok: false}
+		return guardPass() // SILENT: no gain -> original passthrough
 	}
 	b.guardNotifyDone(info, orig, outSize)
 	return guardResult{
@@ -357,14 +357,11 @@ type MsgInfoT = interface{}
 // ── guard messages (WhatsApp style, owner ke style me) ──────────────────────
 
 func guardStartText(kind guardKind, orig int64) string {
-	return "*🛡️ GOLD GUARD — BANDWIDTH SHIELD*\n\n" +
-		"📦 *" + kind.label() + " SIZE:* " + guardFmtMB(orig) + "\n" +
-		"🚫 *LIMIT:* " + guardFmtMB(guardLimitBytes()) + "\n\n" +
-		"❌ _Bhai itna size hum nahi bhej sakte!_\n" +
-		"_(server ki free bandwidth khatam ho jayegi)_\n\n" +
-		"🏭 Media *COMPRESSOR ROOM* me bheji gayi hai...\n" +
-		"⚙️ Fast compress chal raha hai (target ~" + guardFmtMB(guardTargetBytes()) + ")\n" +
-		"⏳ Ruko, compressed version hi bhejunga..."
+	// SILENT MODE (owner order): koi "BANDWIDTH SHIELD" message NAHI.
+	// Compress chupke se hota hai, user ko kuch nahi dikhta.
+	_ = kind
+	_ = orig
+	return ""
 }
 
 func guardDoneText(orig, comp int64) string {
@@ -376,13 +373,12 @@ func guardDoneText(orig, comp int64) string {
 }
 
 func guardFailText(kind guardKind, orig int64, why string) string {
-	return "*🛡️ GOLD GUARD — MEDIA BLOCKED 🚫*\n\n" +
-		"📦 *" + kind.label() + " SIZE:* " + guardFmtMB(orig) + "\n" +
-		"🚫 *LIMIT:* " + guardFmtMB(guardLimitBytes()) + "\n\n" +
-		"❌ _Bhai itna size hum nahi bhej sakte!_\n" +
-		"⚠️ Compressor bhi ise chhota nahi kar paya (" + why + ")\n\n" +
-		"_Ye " + kind.label() + " server se send NAHI hogi — bandwidth bachani hai._\n" +
-		"_Chhoti file bhejo ya compress karke bhejo 🙏_"
+	// SILENT MODE (owner order): koi "MEDIA BLOCKED" message NAHI.
+	// Compress fail ho to chupke se ignore — user ko kuch nahi dikhta.
+	_ = kind
+	_ = orig
+	_ = why
+	return ""
 }
 
 // notify helpers route text into the right chat without media recursion.
@@ -390,10 +386,12 @@ func (b *bridge) guardNotifyStart(info MsgInfoT, kind guardKind, orig int64) {
 	if b == nil || b.s == nil {
 		return
 	}
-	if mi, ok := info.(InfoT); ok {
-		b.s.Reply(mi, guardStartText(kind, orig))
+	if txt := guardStartText(kind, orig); txt != "" {
+		if mi, ok := info.(InfoT); ok {
+			b.s.Reply(mi, txt)
+		}
 	}
-	ErrLog("[GUARD] %s %s blocked-send, compressor room me — %s", b.s.JID, kind.label(), guardFmtMB(orig))
+	InfoLog("[GUARD] %s %s over-limit, compressor room me — %s", b.s.JID, kind.label(), guardFmtMB(orig))
 }
 
 func (b *bridge) guardNotifyDone(info MsgInfoT, orig, comp int64) {
@@ -410,10 +408,12 @@ func (b *bridge) guardNotifyFail(info MsgInfoT, kind guardKind, orig int64, why 
 	if b == nil || b.s == nil {
 		return
 	}
-	if mi, ok := info.(InfoT); ok {
-		b.s.Reply(mi, guardFailText(kind, orig, why))
+	if txt := guardFailText(kind, orig, why); txt != "" {
+		if mi, ok := info.(InfoT); ok {
+			b.s.Reply(mi, txt)
+		}
 	}
-	ErrLog("[GUARD] %s %s %s compress FAIL (%s) — blocked", b.s.JID, kind.label(), guardFmtMB(orig), why)
+	InfoLog("[GUARD] %s %s %s compress FAIL (%s) — silently ignored", b.s.JID, kind.label(), guardFmtMB(orig), why)
 }
 
 // InfoT mirrors types.MessageInfo (guarded import lives in guard_impl.go).
@@ -427,9 +427,9 @@ type InfoT = types.MessageInfo
 //
 // Antidelete recovery flow:
 //
-//      WhatsApp (media) ──download──▶ bot ──compress──▶ WhatsApp (re-upload)
-//                                        ▲
-//                          Render ka metered OUTBOUND yahan kharch hota hai
+//	WhatsApp (media) ──download──▶ bot ──compress──▶ WhatsApp (re-upload)
+//	                                  ▲
+//	                    Render ka metered OUTBOUND yahan kharch hota hai
 //
 // Storadera me sirf chhota proto (~5-15KB: URL + mediaKey + hashes) store hota
 // hai — asli media bytes NAHI. Is liye bandwidth ka asli kharch recovery ke
@@ -442,50 +442,50 @@ type InfoT = types.MessageInfo
 // (compressedBytes, note). On any failure / no-gain it returns the ORIGINAL
 // bytes unchanged (never blocks a recovery).
 func guardAntideleteBytes(kind guardKind, data []byte) ([]byte, string) {
-        if !guardEnabled() || len(data) == 0 {
-                return data, ""
-        }
-        // docs/stickers re-encode nahi hote; floor se chhoti media skip.
-        if kind == guardDocument || kind == guardSticker {
-                return data, ""
-        }
-        if int64(len(data)) <= guardFloorBytes() {
-                return data, ""
-        }
-        src, err := writeGuardTemp(data, kind)
-        if err != nil {
-                return data, ""
-        }
-        defer os.Remove(src)
-        out, size, note, ok := guardCompressFile(kind, src, guardTargetBytes(), guardLimitBytes())
-        if !ok || size <= 0 || size >= int64(len(data)) {
-                if out != "" {
-                        os.Remove(out)
-                }
-                return data, "" // compress fail / bada bana → original hi bhejo
-        }
-        comp, rerr := os.ReadFile(out)
-        os.Remove(out)
-        if rerr != nil || len(comp) == 0 {
-                return data, ""
-        }
-        InfoLog("[GUARD-AD] antidelete media compressed %s -> %s (outbound saved)",
-                guardFmtMB(int64(len(data))), guardFmtMB(int64(len(comp))))
-        return comp, note
+	if !guardEnabled() || len(data) == 0 {
+		return data, ""
+	}
+	// docs/stickers re-encode nahi hote; floor se chhoti media skip.
+	if kind == guardDocument || kind == guardSticker {
+		return data, ""
+	}
+	if int64(len(data)) <= guardFloorBytes() {
+		return data, ""
+	}
+	src, err := writeGuardTemp(data, kind)
+	if err != nil {
+		return data, ""
+	}
+	defer os.Remove(src)
+	out, size, note, ok := guardCompressFile(kind, src, guardTargetBytes(), guardLimitBytes())
+	if !ok || size <= 0 || size >= int64(len(data)) {
+		if out != "" {
+			os.Remove(out)
+		}
+		return data, "" // compress fail / bada bana → original hi bhejo
+	}
+	comp, rerr := os.ReadFile(out)
+	os.Remove(out)
+	if rerr != nil || len(comp) == 0 {
+		return data, ""
+	}
+	InfoLog("[GUARD-AD] antidelete media compressed %s -> %s (outbound saved)",
+		guardFmtMB(int64(len(data))), guardFmtMB(int64(len(comp))))
+	return comp, note
 }
 
 // guardAntideleteKind maps an antidelete media-type string to a guardKind.
 // Returns (kind, true) when the type is compressible media.
 func guardAntideleteKind(mtype string) (guardKind, bool) {
-        switch mtype {
-        case "videoMessage":
-                return guardVideo, true
-        case "audioMessage":
-                return guardAudio, true
-        case "imageMessage":
-                return guardImage, true
-        }
-        return guardVideo, false
+	switch mtype {
+	case "videoMessage":
+		return guardVideo, true
+	case "audioMessage":
+		return guardAudio, true
+	case "imageMessage":
+		return guardImage, true
+	}
+	return guardVideo, false
 }
 
 // guardProbeBytesMeta: video duration+w+h from in-memory bytes (temp probe).
