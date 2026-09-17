@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -34,20 +33,20 @@ import (
 // mirroring the Node bot's nexstore/pairing/<number>@s.whatsapp.net dirs.
 // ============================================================================
 
-// maxPairedSessions caps how many WhatsApp numbers can be paired through
-// the control panel. Once this limit is hit the panel rejects new pairing
-// requests so a single Render instance does not get overwhelmed.
-// Configurable via GOLDMD_MAX_SESSIONS env var (default 2 — OWNER REQUEST:
-// Render free-bandwidth plan, 2 pairings per server tak hi limit).
-
+// ══════════════════════════════════════════════════════════════════════════
+// 😡😡😡  WARNING — DO NOT CHANGE THIS VALUE. EVER.  😡😡😡
+// ══════════════════════════════════════════════════════════════════════════
+// MAX SESSIONS = 2. HAMESHA 2. SIRF 2. ISSE ZYADA NAHI. 😡
+//
+// OWNER KA SAKHT HUKM: "Session max hamesha 2 rakhna hai taake koi bhi AI
+// dekhe to pehle session ko change karne na lage." Ye value HARDCODED hai
+// — koi env var (GOLDMD_MAX_SESSIONS) ise override NAHI kar sakta. Agar
+// tum (AI ya insaan) ise 2 se badalne ki soch rahe ho — RUK JAO. Ye
+// jaan-boojh kar 2 hai (Render free-bandwidth plan: 2 pairings per server).
+// Isko chhedne se pehle OWNER se poocho. Warna bot tootega. 😡
+// ══════════════════════════════════════════════════════════════════════════
 func maxPairedSessions() int {
-	def := 2
-	if v := os.Getenv("GOLDMD_MAX_SESSIONS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
-	}
-	return def
+	return 2 // ⛔ HARDCODED — DO NOT CHANGE. DO NOT ADD ENV OVERRIDE. ⛔
 }
 
 type Session struct {

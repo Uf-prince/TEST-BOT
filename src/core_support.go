@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	signalLogger "go.mau.fi/libsignal/logger"
 	"go.mau.fi/whatsmeow/types"
@@ -17,7 +16,7 @@ import (
 
 // ══════════════════ (merged from config.go) ══════════════════
 // ============================================================================
-//   GOLD-MD — configuration loaded from environment / .env
+//   GOLD-MD — configuration loaded from environment (NO .env FILE — EVER)
 // ============================================================================
 
 type Config struct {
@@ -43,7 +42,7 @@ func LoadConfig() *Config {
 		BatchSize:     envInt("GOLDMD_BATCH_SIZE", 5),
 		BatchDelaySec: envInt("GOLDMD_BATCH_DELAY", 2),
 		PanelEnabled:  envBool("GOLDMD_PANEL_ENABLED", true),
-		PanelPort:     envInt("PORT", 11224), // hardcoded default (was .env) — platform env still overrides
+		PanelPort:     envInt("PORT", 11221), // hardcoded default — NO .env FILE EVER (platform env may override)
 		// Upstash Redis REMOVED — storage is Storj-backed now (upstash.go).
 		// Fields kept only for struct/compat; values unused.
 		UpstashURL:   envOr("UPSTASH_REDIS_REST_URL", ""),
@@ -53,7 +52,7 @@ func LoadConfig() *Config {
 	c.PairingDir = c.DataDir + "/pairing"
 
 	// owners — comma separated JIDs or raw numbers
-	// Owner sirf GOLDMD_OWNER_NUMBERS env / .env se — koi hardcoded default NAHI.
+	// Owner sirf GOLDMD_OWNER_NUMBERS env se — koi hardcoded default NAHI. (.env FILE HARGIZ NAHI)
 	// FIX (trace se root cause): purana default "923158930864" ek unknown
 	// number tha (original repo author ka) — unknown users ka LID SenderAlt
 	// isi se match ho ke owner ban rahe the (.vv/.sudo pass). Ab owner =
@@ -152,54 +151,6 @@ func (c *Config) String() string {
 		c.PanelEnabled, c.PanelPort, len(c.OwnerNumbers), true)
 }
 
-// ══════════════════ (merged from dotenv.go) ══════════════════
-// ============================================================================
-// GOLD-MD — minimal .env loader (stdlib only, no new go.mod dependency)
-//
-// Reads a .env file (if present) from the working directory and sets any
-// KEY=VALUE pairs found as real process environment variables — but only
-// for keys that aren't already set (so real env vars, e.g. on Railway,
-// always take priority over the .env file).
-//
-// Supported line formats:
-//   UPSTASH_REDIS_REST_URL=https://your-db.upstash.io
-//   UPSTASH_REDIS_REST_TOKEN="your-token-here"
-//   # comments and blank lines are ignored
-// ============================================================================
-
-func loadDotEnv(path string) {
-	f, err := os.Open(path)
-	if err != nil {
-		return // no .env file — that's fine, just use real env vars
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		eq := strings.Index(line, "=")
-		if eq < 0 {
-			continue
-		}
-		key := strings.TrimSpace(line[:eq])
-		val := strings.TrimSpace(line[eq+1:])
-
-		// strip surrounding quotes if present
-		if len(val) >= 2 {
-			if (val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'') {
-				val = val[1 : len(val)-1]
-			}
-		}
-
-		// don't override a real environment variable that's already set
-		if _, exists := os.LookupEnv(key); !exists && key != "" {
-			_ = os.Setenv(key, val)
-		}
-	}
-}
 
 // ══════════════════ (merged from logger.go) ══════════════════
 const (

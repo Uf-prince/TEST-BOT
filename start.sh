@@ -18,7 +18,7 @@
 # hai.
 # ============================================================================
 
-PORT="${PORT:-11224}"
+PORT="${PORT:-11221}"
 mkdir -p nexstore/pairing
 
 echo "[start.sh] GOLD-MD starting (PORT=$PORT)"

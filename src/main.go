@@ -75,10 +75,9 @@ func hasUsableWhatsAppDevice(path string) bool {
 }
 
 func main() {
-	// load .env from the working directory (if present) BEFORE LoadConfig()
-	// reads any environment variables — real env vars (e.g. Railway ones)
-	// still win if both are set.
-	loadDotEnv(".env")
+	// ⚠️ NO .env FILE — EVER. All credentials/settings are hardcoded in
+	// source (storage.go / core_support.go). See README.md warning.
+	// (loadDotEnv() removed on owner's order — .env file hargiz nahi banani.)
 
 	// OWNER REQUEST: RAM sirf 30-40 MB - ultra-low-RAM runtime pinned FIRST.
 	memlowInit()

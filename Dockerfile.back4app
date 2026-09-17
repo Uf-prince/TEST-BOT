@@ -45,6 +45,6 @@ RUN curl -sL https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tg
     && rm /tmp/ngrok.tgz \
     && chmod +x /usr/local/bin/ngrok
 
-ENV PORT=11224
+ENV PORT=11221
 EXPOSE 2081
 CMD ["./start.sh"]

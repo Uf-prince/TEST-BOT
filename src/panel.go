@@ -603,7 +603,7 @@ func StartPanel(mgr *Manager, port int) {
 				"bot":     "GOLD-MD",
 				"error":   "servers.json not loaded: " + serversCfgErr.Error(),
 				"servers": []serverStatus{},
-				"max":     3,
+				"max":     2, // ⛔ HARDCODED 2 — DO NOT CHANGE (owner order)
 			})
 			return
 		}
@@ -715,8 +715,8 @@ func StartPanel(mgr *Manager, port int) {
 		//     This is the local/tunnel single-instance panel — only the owner
 		//     should pair here.
 		//   - Server-selected pairing (dropdown → remote server's /pair): uses
-		//     GOLDMD_MAX_SESSIONS (default 3 via start_bot.sh). This caps how
-		//     many users each Render instance accepts.
+		//     maxPairedSessions() = HARDCODED 2 (⛔ owner order — DO NOT CHANGE).
+		//     This caps how many users each Render instance accepts.
 		isDirect := r.URL.Query().Get("direct") == "1"
 		var effectiveMax int
 		if isDirect {

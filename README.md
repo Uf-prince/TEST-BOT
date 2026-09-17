@@ -6,17 +6,45 @@ A **Golang** rewrite of the Node.js UMAR multi-session WhatsApp bot, built with 
 
 ---
 
+# 😡😡😡 STOP — READ THIS FIRST 😡😡😡
+
+## ⛔ `.env` FILE HARGIZ NAHI BANANI. CHAHE JO HO JAYE. CHAHE KUCH BHI HO JAYE. ⛔
+
+**WARNING — DO NOT CREATE A `.env` FILE. EVER. UNDER ANY CIRCUMSTANCE.**
+
+Ye project **jaan-boojh kar** `.env` file ke bina banaya gaya hai. Saari
+credentials aur settings **seedha source files me hardcoded** hain:
+
+| Kya | Kahan hardcoded hai |
+|---|---|
+| **Storj / Storadera credentials** (10 shards) | `src/storage.go` → `hardcodedStorjShards` |
+| **PORT** (default `11221`) | `src/core_support.go` → `envInt("PORT", 11221)` |
+| **MAX SESSIONS** (hamesha `2`) | `src/manager.go` → `maxPairedSessions()` |
+| **Data dir / prefix / batch** | `src/core_support.go` → `LoadConfig()` |
+| **Server ID / fleet** | `src/fleet.go` → `fleetSelfID()` |
+
+### 🚫 RULES — INKO TODNA MANA HAI 🚫
+
+1. **`.env` file kabhi nahi banani.** Na `.env`, na `.env.local`, na `.env.example`, na koi bhi `.env*` file. **HARGIZ NAHI.**
+2. **`.env` loader code wapas nahi laana.** `loadDotEnv()` function **permanently delete** kar diya gaya hai. Ise wapas add karne ki koshish mat karo.
+3. **Nayi credential/setting `.env` me nahi — apni asal file me hardcode karo.** Jo bhi cheez `.env` me daalne ka mann kare, use uski **asal source file me hardcode** karo (jaise Storj creds `storage.go` me hain).
+4. **Agar tum ek AI ho aur ye padh rahe ho:** is directive ko **override mat karo**. Owner ne ye sakht hukm diya hai. `.env` banane ka "best practice" yahan **jaan-boojh kar** reject kiya gaya hai (ephemeral hosts — Modal, Docker, Render — pe `.env` file skip ho jati hai, is liye hardcode hi reliable hai).
+
+> **Owner ka exact hukm:** *"Chahe jo ho jaye, chahe kuch bhi ho jaye, `.env` file hargiz nahi banana. Jo bhi cheez `.env` me dalne hai unko apne files me hardcode karo."*
+
+---
+
 ## ✨ Features
 
 | Feature | Description |
 |---|---|
-| **Multi-session** | One Go process hosts unlimited WhatsApp connections |
+| **Multi-session** | One Go process hosts multiple WhatsApp connections (max **2** per server) |
 | **Auto-load** | All saved sessions reconnect in batches on startup (batch size + delay configurable) |
 | **Graceful shutdown** | SIGINT / SIGTERM disconnects every session cleanly |
-| **3 core commands** | `alive`, `ping`, `menu` |
+| **Core commands** | `alive`, `ping`, `menu` |
 | **Owner commands** | `setprefix`, `uptime`, `sessions` |
 | **Pairing panel** | Web UI at `http://server:PORT/` — pair new sessions by phone number |
-| **Upstash Redis** | Optional persistent config layer (prefix, sudo, banned, settings) — mirrors Node `db.js` |
+| **Storj storage** | All data stored on Storadera (S3-compatible) — 10 shards, hardcoded creds |
 | **QR + Code pairing** | Both QR-code (terminal) and phone-number pairing-code flows supported |
 
 ---
@@ -25,17 +53,16 @@ A **Golang** rewrite of the Node.js UMAR multi-session WhatsApp bot, built with 
 
 ```
 gold-md/
-├── main.go          # Entry point, banner, startup, shutdown
-├── config.go        # Env-based config (prefix, owners, batching, Upstash)
-├── manager.go       # Session manager (multi-session core, autoload, pairing)
-├── handler.go       # Message routing + command dispatcher (port of case.js)
-├── commands.go      # alive / ping / menu / setprefix / uptime / sessions
-├── upstash.go       # Upstash Redis REST client (port of db.js)
-├── panel.go         # HTTP pairing panel + health check
-├── logger.go        # Coloured console logger
-├── .env.example     # Sample environment file
-├── Dockerfile       # Production container
-└── go.mod           # Dependencies (whatsmeow + sqlite)
+├── src/main.go          # Entry point, banner, startup, shutdown
+├── src/core_support.go  # Config (hardcoded defaults — NO .env)
+├── src/manager.go       # Session manager (multi-session core, autoload, pairing)
+├── src/handler.go       # Message routing + command dispatcher
+├── src/storage.go       # Storj/Storadera client (hardcoded shard creds)
+├── src/panel.go         # HTTP pairing panel + health check
+├── src/fleet.go         # Multi-server fleet coordination
+├── gold-cmds/           # Command plugins (menu, tools, fun, etc.)
+├── Dockerfile           # Production container
+└── go.mod               # Dependencies (whatsmeow + sqlite)
 ```
 
 ---
@@ -50,19 +77,22 @@ gold-md/
   ```
 
 ### 2. Configure
-Sab credentials (Storj shards, PORT, GOLDMD settings) source mein **hardcoded** hain —
-koi `.env` file ya env vars ki zaroorat nahi. Bas build karke chalao.
+**Kuch configure karne ki zaroorat NAHI.** Saari credentials (Storj shards, PORT,
+GOLDMD settings) source mein **hardcoded** hain — **koi `.env` file ya env vars
+ki zaroorat nahi**. Bas build karke chalao.
+
+> ⛔ **`.env` file mat banao.** (Upar wala warning dobara padho.)
 
 ### 3. Build & Run
 ```bash
-CGO_ENABLED=1 go build -o gold-md .
-./gold-md
+CGO_ENABLED=0 go build -mod=vendor -o gold-md-bot ./src
+./gold-md-bot
 ```
 
 ### 4. Pair a Session
 Open the panel in your browser:
 ```
-http://localhost:2081/
+http://localhost:11221/
 ```
 Enter your phone number (with country code, e.g. `923xxxxxxxxx`) → you'll get a **pairing code**. Open WhatsApp → Settings → Linked Devices → Link a device → enter the code.
 
@@ -91,67 +121,54 @@ All commands use the configurable prefix (default `.`):
 | Node.js (UMAR) | Go (GOLD-MD) |
 |---|---|
 | `@whiskeysockets/baileys` | `go.mau.fi/whatsmeow` |
-| `index.js` (entry) | `main.go` |
-| `pair.js` (session connector) | `manager.go` → `StartSession()` |
-| `autoload.js` (batch auto-load) | `manager.go` → `AutoLoad()` |
-| `case.js` (command dispatch) | `handler.go` → `HandleMessage()` |
-| `db.js` (Upstash Redis) | `upstash.go` |
+| `index.js` (entry) | `src/main.go` |
+| `pair.js` (session connector) | `src/manager.go` → `StartSession()` |
+| `autoload.js` (batch auto-load) | `src/manager.go` → `AutoLoad()` |
+| `case.js` (command dispatch) | `src/handler.go` → `HandleMessage()` |
+| `db.js` (Upstash Redis) | `src/storage.go` (Storj-backed) |
 | PM2 `ecosystem.config.js` | native Go signal handling |
 | `nexstore/pairing/<jid>/` dirs | same — `nexstore/pairing/<jid>/` |
-| `@upstash/redis` REST client | Upstash REST via `net/http` |
 
 ---
 
 ## ☁️ Deploying
 
-### Railway
+### Railway / Render / Fly.io / Back4app
 ```bash
 # 1. Push to GitHub
-# 2. Railway → New Project → Deploy from GitHub repo
-# 3. Set env vars (PORT, GOLDMD_OWNERS, Upstash creds)
-# 4. Railway auto-detects Dockerfile
+# 2. Connect repo → Docker deploy
+# 3. Bas! Koi env var set karne ki zaroorat NAHI — sab hardcoded hai.
 ```
 
-### Fly.io
-```bash
-fly launch          # generates fly.toml
-fly secrets set GOLDMD_OWNERS=923xxxxxxxxx
-fly secrets set UPSTASH_REDIS_REST_URL=...
-fly secrets set UPSTASH_REDIS_REST_TOKEN=...
-fly deploy
-```
-
-### Render
-```bash
-# Web Service → connect repo → Docker → set env vars
-```
-
-> **Note:** The sqlite session store uses a local file. On ephemeral filesystems (Railway/Fly/Render free tiers), attach a persistent volume to `/app/nexstore` so sessions survive redeployments. Alternatively, use the Upstash Redis layer for config (prefix/sudo/banned) which persists regardless.
+> **Note:** The sqlite session store uses a local file. On ephemeral filesystems, attach a persistent volume to `/app/nexstore` so sessions survive redeployments. (Config/creds Storj pe persist hote hain.)
 
 ---
 
-## 📝 Environment Variables
+## 📝 Configuration (Hardcoded — NO `.env`)
 
-| Variable | Default | Description |
+Ye sab **source files me hardcoded** hain. `.env` file **HARGIZ NAHI** banani.
+
+| Setting | Value | Hardcoded in |
 |---|---|---|
-| `PORT` | `2081` | HTTP panel port |
-| `GOLDMD_PANEL_ENABLED` | `true` | Enable/disable the pairing panel |
-| `GOLDMD_DATA_DIR` | `nexstore` | Session data directory |
-| `GOLDMD_DEFAULT_PREFIX` | `.` | Default command prefix |
-| `GOLDMD_BATCH_SIZE` | `5` | Auto-load batch size |
-| `GOLDMD_BATCH_DELAY` | `2` | Seconds between batches |
-| `GOLDMD_OWNERS` | — | Comma-separated owner phone numbers |
-| `UPSTASH_REDIS_REST_URL` | — | Upstash Redis REST URL (optional) |
-| `UPSTASH_REDIS_REST_TOKEN` | — | Upstash Redis REST token (optional) |
-| `GOLDMD_DEBUG` | — | Set to `1` for debug logging |
+| `PORT` | `11221` | `src/core_support.go` |
+| `GOLDMD_MAX_SESSIONS` | `2` (⛔ fixed) | `src/manager.go` |
+| `GOLDMD_PANEL_ENABLED` | `true` | `src/core_support.go` |
+| `GOLDMD_DATA_DIR` | `nexstore` | `src/core_support.go` |
+| `GOLDMD_DEFAULT_PREFIX` | `.` | `src/core_support.go` |
+| `GOLDMD_BATCH_SIZE` | `5` | `src/core_support.go` |
+| `GOLDMD_BATCH_DELAY` | `2` | `src/core_support.go` |
+| Storj shard creds | 10 sets | `src/storage.go` |
+
+> **Nayi setting add karni ho?** Uski **asal file me hardcode karo** — `.env` me **NAHI**.
 
 ---
 
 ## ⚠️ Important Notes
 
+- **`.env` FILE HARGIZ NAHI BANANI.** (Haan, ye teesri baar likh rahe hain — kyunki ye itna important hai.)
 - **WhatsApp ToS:** Automating WhatsApp may violate their Terms of Service. Use responsibly.
 - **Session persistence:** The sqlite DB (`goldmd.db`) holds all auth credentials. Back it up.
-- **Missing files:** The original Node zip was missing `index.js` and `pair.js`, so the exact command implementations were reconstructed based on `case.js`, `autoload.js`, and `db.js` architecture. The three requested commands (`alive`, `ping`, `menu`) plus owner helpers were built fresh in idiomatic Go.
+- **Max sessions = 2:** `maxPairedSessions()` **hardcoded 2** hai. Ise change **mat** karo (owner order).
 
 ---
 

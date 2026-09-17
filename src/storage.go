@@ -144,10 +144,10 @@ func storjDebug(stage string, fields map[string]any) {
 	_ = fields
 }
 
-// hardcodedStorjShards — embedded fallback credentials (mirror of .env) so
-// antidelete/antiedite + automsg backups keep working on hosts where the
-// .env file is skipped (Modal, ephemeral Docker hosts). Real env vars
-// (STORJ_ACCESS_KEY_1..10 etc.) always win when present.
+// hardcodedStorjShards — embedded credentials (NO .env FILE — EVER) so
+// antidelete/antiedite + automsg backups keep working on every host
+// (Modal, ephemeral Docker hosts, etc.). Owner directive: .env file
+// hargiz nahi banani — sab kuch source me hardcoded hai.
 // hardcodedStorjShards — STORADERA (2026-09-16, owner jani ne diye).
 // OWNER DIRECTIVE: "env nahi banana jese hardcord kam kr rhe to hardcode kr
 // files me" — is liye naye creds files me hi hardcode hain, .env NAHI.

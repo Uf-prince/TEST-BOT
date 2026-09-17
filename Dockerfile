@@ -63,6 +63,6 @@ RUN set -eux; \
         echo "WARN: ngrok download FAILED (proxy/CDN block) — skipping ngrok install, build continue"; \
     fi
 
-ENV PORT=11224
+ENV PORT=11221
 EXPOSE 2081
 CMD ["./start.sh"]

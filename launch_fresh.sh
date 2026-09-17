@@ -5,7 +5,7 @@ sleep 1
 cd /workspace/TEST-BOT
 export PORT=11221
 export GOLDMD_SERVER_ID=svr11221
-export GOLDMD_MAX_SESSIONS=10
+export GOLDMD_MAX_SESSIONS=2  # ⛔ HARDCODED 2 — DO NOT CHANGE (owner order)
 export GOLDMD_DEBUG=0
 export GOLDMD_PANEL_ENABLED=true
 
