@@ -30,6 +30,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -45,6 +46,10 @@ const (
 
 	ttReferer = "https://www.tiktok.com/"
 	ttMaxPage = 8 << 20 // 8 MB cap for the video page HTML
+
+	// tikwmAPI — keyless public TikTok resolver. Works from datacenter
+	// IPs (Render/Back4app) where TikTok blocks the direct page scrape.
+	tikwmAPI = "https://www.tikwm.com/api/"
 )
 
 var ttDataScriptRe = regexp.MustCompile(
@@ -66,13 +71,13 @@ type ttSelfData struct {
 	Scope struct {
 		Reflow struct {
 			StatusCode int `json:"statusCode"`
-			ItemInfo struct {
+			ItemInfo   struct {
 				ItemStruct ttItem `json:"itemStruct"`
 			} `json:"itemInfo"`
 		} `json:"webapp.reflow.video.detail"`
 		Detail struct {
 			StatusCode int `json:"statusCode"`
-			ItemInfo struct {
+			ItemInfo   struct {
 				ItemStruct ttItem `json:"itemStruct"`
 			} `json:"itemInfo"`
 		} `json:"webapp.video-detail"`
@@ -119,6 +124,33 @@ type ttResult struct {
 	SrcClient    *http.Client
 }
 
+// tikwmResponse models the tikwm API response (ENGINE 2 fallback).
+type tikwmResponse struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data struct {
+		ID           string `json:"id"`
+		Title        string `json:"title"`
+		Cover        string `json:"cover"`
+		OriginCover  string `json:"origin_cover"`
+		Duration     int    `json:"duration"`
+		Play         string `json:"play"`
+		HDPlay       string `json:"hdplay"`
+		WMPlay       string `json:"wmplay"`
+		Size         int64  `json:"size"`
+		WMSize       int64  `json:"wm_size"`
+		Music        string `json:"music"`
+		PlayCount    int64  `json:"play_count"`
+		DiggCount    int64  `json:"digg_count"`
+		CommentCount int64  `json:"comment_count"`
+		ShareCount   int64  `json:"share_count"`
+		CollectCount int64  `json:"collect_count"`
+		Author       struct {
+			UniqueID string `json:"unique_id"`
+			Nickname string `json:"nickname"`
+		} `json:"author"`
+	} `json:"data"`
+}
 
 func handleTikTok(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	// Hard 3-minute watchdog: on timeout the context is cancelled, every
@@ -141,8 +173,16 @@ func handleTikTokAsync(ctx context.Context, s SessionBridge, info types.MessageI
 
 	waitID := s.ReplyWithID(info, "🔰 *Fetching TikTok video...*")
 
-	// TikTok self-scrape (direct HTML, no API).
-	res, err := ttSelfFetch(ctx, ttURL)
+	// ENGINE 1 — TikTok self-scrape (direct HTML, no API). Short sub-budget
+	// so the tikwm fallback still has room inside the command's 40s window.
+	sctx, scancel := context.WithTimeout(ctx, 15*time.Second)
+	res, err := ttSelfFetch(sctx, ttURL)
+	scancel()
+	if err != nil {
+		// ENGINE 2 — tikwm API fallback (keyless). Works from datacenter
+		// IPs (Render/Back4app) where TikTok blocks the direct page scrape.
+		res, err = tikwmFetchResult(ctx, ttURL)
+	}
 	if err != nil {
 		s.DeleteMessage(info, waitID)
 		s.Reply(info, "🔰 VIDEO NOT FOUND. PLEASE CHECK THE LINK AND TRY AGAIN 🔰")
@@ -333,6 +373,71 @@ func ttStreamDownload(ctx context.Context, client *http.Client, videoURL string)
 		return "", err
 	}
 	return path, nil
+}
+
+// ── ENGINE 2: tikwm API fallback ──────────────────────────────────────────
+//
+// Keyless public resolver. Used as the fallback when the direct TikTok page
+// scrape fails — which is exactly what happens on datacenter IPs like Render
+// (TikTok serves a challenge page instead of the rehydration JSON). tikwm
+// proxies the request from its own IPs, so it works everywhere.
+
+// tikwmFetchResult calls the tikwm API and maps it to ttResult.
+func tikwmFetchResult(ctx context.Context, ttURL string) (*ttResult, error) {
+	resp, err := tikwmFetch(ctx, ttURL)
+	if err != nil {
+		return nil, err
+	}
+	d := resp.Data
+	return &ttResult{
+		ID:           d.ID,
+		Title:        d.Title,
+		Cover:        d.Cover,
+		Duration:     d.Duration,
+		Play:         d.Play,
+		HDPlay:       d.HDPlay,
+		WMPlay:       d.WMPlay,
+		PlayCount:    d.PlayCount,
+		DiggCount:    d.DiggCount,
+		CommentCount: d.CommentCount,
+		ShareCount:   d.ShareCount,
+		AuthorUnique: d.Author.UniqueID,
+		AuthorName:   d.Author.Nickname,
+		SrcClient:    nil,
+	}, nil
+}
+
+// tikwmFetch calls the tikwm API and returns the parsed response.
+func tikwmFetch(ctx context.Context, ttURL string) (*tikwmResponse, error) {
+	fullURL := fmt.Sprintf("%s?url=%s", tikwmAPI, url.QueryEscape(ttURL))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+	var parsed tikwmResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&parsed); err != nil {
+		return nil, fmt.Errorf("failed to parse API response: %v", err)
+	}
+	if parsed.Code != 0 {
+		msg := parsed.Msg
+		if msg == "" {
+			msg = "API returned error"
+		}
+		return nil, fmt.Errorf("%s", msg)
+	}
+	return &parsed, nil
 }
 
 // firstNonEmpty returns the first non-empty string from the given list.

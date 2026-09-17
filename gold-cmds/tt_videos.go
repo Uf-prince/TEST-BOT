@@ -55,10 +55,10 @@ var (
 )
 
 const (
-	ttBraveUA    = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
-	ttBraveHost  = "https://search.brave.com/search?q="
-	ttMaxEnrich  = 30
-	ttEnrichTTL  = 10 * time.Minute
+	ttBraveUA   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+	ttBraveHost = "https://search.brave.com/search?q="
+	ttMaxEnrich = 30
+	ttEnrichTTL = 10 * time.Minute
 )
 
 // ttBraveSearch — one Brave HTML query, returns unique video paths.
@@ -86,7 +86,53 @@ func ttBraveSearch(ctx context.Context, query string) ([]string, error) {
 	}
 	matches := ttBraveVideoRe.FindAllStringSubmatch(string(body), -1)
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("no tiktok video links in brave results")
+		// Direct Brave blocked/empty (datacenter IP like Render) → jina proxy.
+		return ttBraveSearchViaJina(ctx, query)
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, m := range matches {
+		path := m[1]
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		out = append(out, path)
+	}
+	return out, nil
+}
+
+// ttBraveSearchViaJina fetches the same Brave search page through the
+// r.jina.ai reader proxy. Needed on datacenter IPs (Render/Back4app) where
+// Brave serves a challenge page to plain HTTP clients. The proxy returns the
+// rendered HTML (X-Return-Format: html) so the same link regex applies.
+func ttBraveSearchViaJina(ctx context.Context, query string) ([]string, error) {
+	u := "https://r.jina.ai/" + ttBraveHost + url.QueryEscape(query)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	// The reader proxy rejects browser-like UAs with a challenge page but
+	// serves plain clients — a curl UA keeps it working.
+	req.Header.Set("User-Agent", "curl/8.5.0")
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("X-Return-Format", "html")
+
+	res, err := searchHTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("jina brave HTTP %d", res.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+	if err != nil {
+		return nil, err
+	}
+	matches := ttBraveVideoRe.FindAllStringSubmatch(string(body), -1)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no tiktok video links in jina brave results")
 	}
 	seen := map[string]bool{}
 	var out []string
@@ -167,7 +213,7 @@ func ttVideoSearch(ctx context.Context, query string) ([]searchResult, error) {
 		for _, p := range foundPaths {
 			if seen[p] {
 				continue
-            }
+			}
 			seen[p] = true
 			paths = append(paths, p)
 		}

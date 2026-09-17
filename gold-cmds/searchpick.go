@@ -584,7 +584,14 @@ func searchPickTTDirect(s SessionBridge, info types.MessageInfo, selected search
 			}
 		}
 
-		res, err := ttSelfFetch(ctx, videoURL)
+		// ENGINE 1 — self-scrape (short sub-budget), ENGINE 2 — tikwm fallback
+		// (works from datacenter IPs like Render where TikTok blocks the scrape).
+		sctx, scancel := context.WithTimeout(ctx, 15*time.Second)
+		res, err := ttSelfFetch(sctx, videoURL)
+		scancel()
+		if err != nil {
+			res, err = tikwmFetchResult(ctx, videoURL)
+		}
 		if err != nil {
 			fail()
 			return
@@ -1084,45 +1091,45 @@ func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected search
 			}
 			if vid != nil {
 				s.EditMessage(info, waitID, "*DOWNLOADING VIDEO....*")
-			path, err := streamDownloadToFile(ctx, client, vid.VideoURL, nil)
-			if err != nil {
+				path, err := streamDownloadToFile(ctx, client, vid.VideoURL, nil)
+				if err != nil {
 					if i == 0 && len(tryList) > 1 {
 						s.EditMessage(info, waitID, "*SELECTED NOT AVAILABLE — TRYING OTHER RESULTS....*")
 					}
 					continue
 				}
-			// WhatsApp-compat: HEVC/mjpeg reels ko h264+faststart me convert
-			waPath, werr := whatsappifyVideo(ctx, path)
-			if werr == nil && waPath != path {
-				defer removeTempFile(path)   // original raw file
-				defer removeTempFile(waPath) // converted .wa.mp4 (LEAK FIX)
-				path = waPath
-			} else {
-				defer removeTempFile(path)
-			}
+				// WhatsApp-compat: HEVC/mjpeg reels ko h264+faststart me convert
+				waPath, werr := whatsappifyVideo(ctx, path)
+				if werr == nil && waPath != path {
+					defer removeTempFile(path)   // original raw file
+					defer removeTempFile(waPath) // converted .wa.mp4 (LEAK FIX)
+					path = waPath
+				} else {
+					defer removeTempFile(path)
+				}
 
-			title := vid.Caption
-			if title == "" {
+				title := vid.Caption
+				if title == "" {
 					title = "Instagram " + vid.Shortcode
-			}
-			if len(title) > 120 {
-				title = title[:117] + "..."
-			}
-			caption := "🔰 *INSTAGRAM VIDEO NAME 🔰*\n" +
-				"*" + title + "*\n\n"
-			if vid.LikeCount > 0 {
+				}
+				if len(title) > 120 {
+					title = title[:117] + "..."
+				}
+				caption := "🔰 *INSTAGRAM VIDEO NAME 🔰*\n" +
+					"*" + title + "*\n\n"
+				if vid.LikeCount > 0 {
 					caption += fmt.Sprintf("🔰 *LIKES :* %d\n", vid.LikeCount)
-			}
-			caption += "\n*INSTAGRAM VIDEO DOWNLOAD*"
+				}
+				caption += "\n*INSTAGRAM VIDEO DOWNLOAD*"
 
-			secs, w, h := probeVideoMeta(path)
-			if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
+				secs, w, h := probeVideoMeta(path)
+				if err := s.SendVideoFile(info, path, caption, nil, secs, w, h); err != nil {
 					continue
+				}
+				s.DeleteMessage(info, waitID)
+				ok = true
+				return
 			}
-			s.DeleteMessage(info, waitID)
-			ok = true
-			return
-		}
 
 			// image post
 			img := media[0]
@@ -1135,7 +1142,7 @@ func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected search
 				title = "Instagram " + img.Shortcode
 			}
 			if len(title) > 120 {
-			title = title[:117] + "..."
+				title = title[:117] + "..."
 			}
 			caption := "🔰 *INSTAGRAM POST* 🔰\n*" + title + "*"
 			if s.SendImage(info, data, caption) == nil {
