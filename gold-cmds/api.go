@@ -36,6 +36,14 @@ type SessionBridge interface {
 	// command timeout fires — the compressor is now part of the SAME
 	// 2-min / 40s budget as the command itself (owner order).
 	SetCmdContext(ctx context.Context)
+	// BeginGuard starts a PER-SESSION / PER-USER "latest wins" guard for the
+	// current command. It cancels any previous in-flight command of the SAME
+	// user on the SAME session (so a newer request instantly aborts the old
+	// download / ffmpeg work), and returns a cancellable context + a release
+	// func the caller MUST defer. Commands of OTHER users (same session) and
+	// of ANY user on OTHER sessions are never affected — each session has
+	// its own independent guard.
+	BeginGuard(userJID string) (context.Context, func())
 	Reply(info types.MessageInfo, text string)
 	ReplyWithID(info types.MessageInfo, text string) string
 	// ReplyWithMentions sends a text message that pings the supplied JIDs

@@ -61,7 +61,12 @@ func play2CmdError(s SessionBridge, info types.MessageInfo) {
 func RunWithTimeoutCmd(s SessionBridge, info types.MessageInfo, failed, suggest string, fn func(ctx context.Context)) {
 	_ = failed
 	_ = suggest
-	ctx, cancel := context.WithTimeout(context.Background(), cmdDownloaderTimeout)
+	// PER-SESSION / PER-USER GUARD (latest wins): a newer command from the
+	// SAME user on the SAME session cancels this one instantly. Other users
+	// (same session) and any user on other sessions are never affected.
+	gctx, release := s.BeginGuard(info.Sender.String())
+	defer release()
+	ctx, cancel := context.WithTimeout(gctx, cmdDownloaderTimeout)
 	defer cancel()
 	// Guard compressor shares this SAME 2-min budget: store ctx on the
 	// bridge so ffmpeg is killed the moment the timeout fires (owner order).

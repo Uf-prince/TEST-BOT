@@ -42,6 +42,14 @@ func (b *bridge) GetJID() string               { return b.s.JID }
 // ffmpeg exec is cancelled together with the command timeout.
 func (b *bridge) SetCmdContext(ctx context.Context) { b.cmdCtx = ctx }
 
+// BeginGuard starts a per-session / per-user "latest wins" guard for the
+// current command (SessionBridge interface). It is keyed by (session JID,
+// user JID): a newer command from the SAME user on the SAME session cancels
+// the previous one; other users / other sessions are never affected.
+func (b *bridge) BeginGuard(userJID string) (context.Context, func()) {
+	return BeginCmdGuard(b.s.JID, userJID)
+}
+
 // guardCtx returns the running command's watchdog context, or
 // context.Background() when no command context is set (e.g. antidelete
 // recovery outside a command).

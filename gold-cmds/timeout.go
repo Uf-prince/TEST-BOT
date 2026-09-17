@@ -61,7 +61,12 @@ const socialTimeout = 40 * time.Second
 // goroutine to unwind (close bodies, delete temp files), and replies
 // TRY AGAIN LATER exactly once.
 func RunWithTimeout(s SessionBridge, info types.MessageInfo, fn func(ctx context.Context)) {
-	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	// PER-SESSION / PER-USER GUARD (latest wins): a newer command from the
+	// SAME user on the SAME session cancels this one instantly. Other users
+	// (same session) and any user on other sessions are never affected.
+	gctx, release := s.BeginGuard(info.Sender.String())
+	defer release()
+	ctx, cancel := context.WithTimeout(gctx, cmdTimeout)
 	defer cancel()
 
 	done := make(chan struct{})
@@ -96,7 +101,12 @@ func RunWithTimeout(s SessionBridge, info types.MessageInfo, fn func(ctx context
 // HTTP request / download loop / ffmpeg exec tied to it aborts and its
 // deferred temp-file cleanup runs (disk stays safe).
 func RunWithTimeoutDur(s SessionBridge, info types.MessageInfo, d time.Duration, reply string, fn func(ctx context.Context)) {
-	ctx, cancel := context.WithTimeout(context.Background(), d)
+	// PER-SESSION / PER-USER GUARD (latest wins): a newer command from the
+	// SAME user on the SAME session cancels this one instantly. Other users
+	// (same session) and any user on other sessions are never affected.
+	gctx, release := s.BeginGuard(info.Sender.String())
+	defer release()
+	ctx, cancel := context.WithTimeout(gctx, d)
 	defer cancel()
 	// Guard compressor shares this SAME budget: store ctx on the bridge so
 	// ffmpeg is killed the moment the timeout fires (owner order).

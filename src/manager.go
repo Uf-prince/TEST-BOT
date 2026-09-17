@@ -1560,6 +1560,12 @@ func (m *Manager) cleanupSession(s *Session, reason string) {
 		return
 	}
 
+	// PER-SESSION GUARD cleanup: drop this session's command guard so the
+	// sessionGuards sync.Map never accumulates dead sessions. Any in-flight
+	// command of this session is cancelled by its own release func; dropping
+	// the guard here just frees the map entry.
+	dropSessionGuard(s.JID)
+
 	// DISK-ONLY (owner order — KABARDAR RULE): direct /code?phone= session
 	// ka DISK data (device row + creds + pairing folder) KABHI delete nahi
 	// hota — na yahan, na kisi purge path me. Ye cleanup sirf MEMORY-level
