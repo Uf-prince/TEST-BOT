@@ -30,8 +30,23 @@ import (
 // room — the busy-guard keeps the watchdogs off during the pipeline.
 const cmdTimeout = 5 * time.Minute
 
+// cmdDownloaderTimeout is the hard limit for the YouTube downloader
+// commands (.video / .video2 / .play / .play2). Owner order: exactly
+// 2 minutes — the timer starts the moment the command runs; if nothing
+// lands within 2 minutes the user gets "*PLEASE TRY AGAIN LATER*".
+//
+// 0% SPEED / RAM / DISK IMPACT: this is a pure context.WithTimeout +
+// goroutine + select — no polling, no sleep loop, no extra allocation on
+// the fast path. A command that finishes in 5s behaves exactly as before;
+// the timer only fires on a hang.
+const cmdDownloaderTimeout = 2 * time.Minute
+
 // timeoutReplyText is sent when a command hits the hard limit.
 const timeoutReplyText = "*TRY AGAIN LATER*"
+
+// downloaderTimeoutReplyText is sent when a downloader command hits its
+// 2-minute hard limit.
+const downloaderTimeoutReplyText = "*PLEASE TRY AGAIN LATER*"
 
 // RunWithTimeout runs fn in a goroutine with a hard 3-minute budget.
 // On timeout it cancels the context, waits a short grace period for the

@@ -47,11 +47,21 @@ func play2CmdError(s SessionBridge, info types.MessageInfo) {
 	s.Reply(info, cmdFailMsg("PLAY", "PLAY2"))
 }
 
-// RunWithTimeoutCmd is RunWithTimeout with a command-specific failure reply:
-// even the hard 3-minute watchdog uses the cross-fallback message, so a
-// timeout on .video tells the user to try .video2 (and vice versa).
+// RunWithTimeoutCmd is RunWithTimeout with a downloader-specific 2-minute
+// hard limit and reply. Used by the YouTube downloader commands
+// (.video / .video2 / .play / .play2): the timer starts the moment the
+// command runs; if nothing lands within 2 minutes the user gets
+// "*PLEASE TRY AGAIN LATER*".
+//
+// 0% SPEED / RAM / DISK IMPACT: pure context.WithTimeout + goroutine +
+// select — no polling, no sleep loop. Fast commands are unaffected; the
+// timer only fires on a hang. On timeout the context is cancelled so every
+// HTTP request / download loop / ffmpeg exec tied to it aborts and its
+// deferred temp-file cleanup runs (disk stays safe).
 func RunWithTimeoutCmd(s SessionBridge, info types.MessageInfo, failed, suggest string, fn func(ctx context.Context)) {
-	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	_ = failed
+	_ = suggest
+	ctx, cancel := context.WithTimeout(context.Background(), cmdDownloaderTimeout)
 	defer cancel()
 
 	done := make(chan struct{})
@@ -64,13 +74,13 @@ func RunWithTimeoutCmd(s SessionBridge, info types.MessageInfo, failed, suggest 
 	case <-done:
 		// Pipeline finished in time — nothing to do.
 	case <-ctx.Done():
-		// Hard limit hit: give the goroutine a short grace period to
-		// unwind (close bodies, delete temp files) then reply.
+		// Hard 2-minute limit hit: give the goroutine a short grace period
+		// to unwind (close bodies, delete temp files) then reply.
 		grace := time.After(3 * time.Second)
 		select {
 		case <-done:
 		case <-grace:
 		}
-		s.Reply(info, cmdFailMsg(failed, suggest))
+		s.Reply(info, downloaderTimeoutReplyText)
 	}
 }
