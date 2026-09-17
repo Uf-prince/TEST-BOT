@@ -901,8 +901,10 @@ func lyricsGuide(prefix string) string {
 	return "*🔰 SONG LYRICS 🔰*\n\n" +
 		"*GET THE FULL LYRICS OF ANY SONG*\n\n" +
 		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "LYRICS <ARTIST> - <SONG> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "LYRICS COLDPLAY - YELLOW ❯*"
+		"*❮ " + prefix + "LYRICS <SONG NAME> ❯*\n" +
+		"*JUST TYPE THE SONG NAME — THE BOT FINDS THE ARTIST ITSELF*\n\n" +
+		"*EXAMPLE ❮ " + prefix + "LYRICS YELLOW ❯*\n" +
+		"*EXAMPLE ❮ " + prefix + "LYRICS TUM HI HO ❯*"
 }
 
 func handleLyrics(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -912,39 +914,78 @@ func handleLyrics(s SessionBridge, info types.MessageInfo, args []string, prefix
 			s.Reply(info, lyricsGuide(prefix))
 			return
 		}
-		parts := strings.SplitN(raw, "-", 2)
-		if len(parts) < 2 {
-			s.Reply(info, lyricsGuide(prefix))
-			return
-		}
-		artist := strings.TrimSpace(parts[0])
-		song := strings.TrimSpace(parts[1])
-		if artist == "" || song == "" {
-			s.Reply(info, lyricsGuide(prefix))
-			return
-		}
 		waitID := s.ReplyWithID(info, "*SEARCHING LYRICS....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 
-		u := "https://api.lyrics.ovh/v1/" + url.PathEscape(artist) + "/" + url.PathEscape(song)
-		var res struct {
-			Lyrics string `json:"lyrics"`
-			Error  string `json:"error"`
+		// Step 1: auto-detect the song + artist from just the song name.
+		// If the user typed "artist - song", honour that split directly.
+		artist := ""
+		song := raw
+		if parts := strings.SplitN(raw, "-", 2); len(parts) == 2 {
+			if a := strings.TrimSpace(parts[0]); a != "" {
+				artist = a
+				song = strings.TrimSpace(parts[1])
+			}
 		}
-		if err := funGetJSON(ctx, u, &res); err != nil || strings.TrimSpace(res.Lyrics) == "" {
+
+		if artist == "" {
+			su := "https://api.lyrics.ovh/suggest/" + url.PathEscape(raw)
+			var sug struct {
+				Data []struct {
+					Title  string `json:"title"`
+					Artist struct {
+						Name string `json:"name"`
+					} `json:"artist"`
+				} `json:"data"`
+			}
+			if err := funGetJSON(ctx, su, &sug); err == nil && len(sug.Data) > 0 {
+				song = sug.Data[0].Title
+				artist = sug.Data[0].Artist.Name
+			}
+		}
+		if song == "" {
+			song = raw
+		}
+
+		// Step 2: fetch the lyrics. Try the detected artist first, then a
+		// couple of fallbacks so a wrong guess never blocks the result.
+		fetch := func(a, t string) string {
+			if a == "" || t == "" {
+				return ""
+			}
+			u := "https://api.lyrics.ovh/v1/" + url.PathEscape(a) + "/" + url.PathEscape(t)
+			var res struct {
+				Lyrics string `json:"lyrics"`
+			}
+			if err := funGetJSON(ctx, u, &res); err != nil {
+				return ""
+			}
+			return strings.TrimSpace(res.Lyrics)
+		}
+
+		lyr := fetch(artist, song)
+		if lyr == "" {
+			lyr = fetch(artist, raw)
+		}
+		if lyr == "" {
+			lyr = fetch("", song)
+		}
+		if lyr == "" {
 			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 LYRICS NOT FOUND, PLEASE CHECK THE NAME*")
+				s.Reply(info, "*🔰 LYRICS NOT FOUND, PLEASE CHECK THE SONG NAME*")
 			}
 			return
 		}
-		lyr := strings.TrimSpace(res.Lyrics)
 		if len(lyr) > 3500 {
 			lyr = lyr[:3500] + "\n\n...(TRUNCATED)"
 		}
 		var b strings.Builder
 		b.WriteString("*🔰 SONG LYRICS 🔰*\n\n")
 		b.WriteString("*🎵 " + strings.ToUpper(song) + "*\n")
-		b.WriteString("*🎤 " + strings.ToUpper(artist) + "*\n\n")
+		if artist != "" {
+			b.WriteString("*🎤 " + strings.ToUpper(artist) + "*\n")
+		}
+		b.WriteString("\n")
 		b.WriteString(lyr)
 		s.Reply(info, b.String())
 	})
@@ -993,26 +1034,51 @@ func handleGithub(s SessionBridge, info types.MessageInfo, args []string, prefix
 			}
 			return
 		}
+
+		// trim every value so no stray space ever sits before the closing *
+		// (a trailing space breaks WhatsApp bold rendering).
+		clean := func(v string) string {
+			return strings.TrimSpace(strings.ReplaceAll(v, "\n", " "))
+		}
+
 		var b strings.Builder
 		b.WriteString("*🔰 GITHUB PROFILE 🔰*\n\n")
-		b.WriteString("*👤 USER ❯ " + res.Login + "*\n")
-		if res.Name != "" {
-			b.WriteString("*📛 NAME ❯ " + res.Name + "*\n")
+		b.WriteString("*👤 USER ❯ " + clean(res.Login) + "*\n")
+		if n := clean(res.Name); n != "" {
+			b.WriteString("*📛 NAME ❯ " + n + "*\n")
 		}
-		if res.Bio != "" {
-			b.WriteString("*📝 BIO ❯ " + res.Bio + "*\n")
+		if c := clean(res.Company); c != "" {
+			b.WriteString("*🏢 COMPANY ❯ " + c + "*\n")
 		}
-		if res.Company != "" {
-			b.WriteString("*🏢 COMPANY ❯ " + res.Company + "*\n")
-		}
-		if res.Location != "" {
-			b.WriteString("*📍 LOCATION ❯ " + res.Location + "*\n")
+		if l := clean(res.Location); l != "" {
+			b.WriteString("*📍 LOCATION ❯ " + l + "*\n")
 		}
 		b.WriteString("*📦 REPOS ❯ " + strconv.Itoa(res.PublicRepos) + "*\n")
 		b.WriteString("*👥 FOLLOWERS ❯ " + strconv.Itoa(res.Followers) + "*\n")
 		b.WriteString("*➡️ FOLLOWING ❯ " + strconv.Itoa(res.Following) + "*\n")
-		b.WriteString("*🔗 " + res.HTMLURL + "*")
-		s.Reply(info, b.String())
+		b.WriteString("*🔗 " + clean(res.HTMLURL) + "*")
+
+		// Bio goes at the very END, raw (not bolded) so multi-line bios and
+		// bullet lists render exactly as the user wrote them.
+		if bio := strings.TrimSpace(res.Bio); bio != "" {
+			bio = strings.ReplaceAll(bio, "\r\n", "\n")
+			bio = strings.ReplaceAll(bio, "\r", "\n")
+			b.WriteString("\n\n*BIO IS HERE*\n")
+			b.WriteString(bio)
+		}
+
+		caption := b.String()
+
+		// Try to attach the profile picture. If it can't be fetched, still
+		// send the text so the command never stalls on a missing avatar.
+		if av := strings.TrimSpace(res.AvatarURL); av != "" {
+			if img, err := funGetBytes(ctx, av); err == nil && len(img) > 0 {
+				if sendErr := s.SendImage(info, img, caption); sendErr == nil {
+					return
+				}
+			}
+		}
+		s.Reply(info, caption)
 	})
 }
 
@@ -1184,7 +1250,7 @@ func init() {
 	Register(Command{Name: "currency", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO CONVERT ANY CURRENCY TO ANY CURRENCY. USE IT AS .CURRENCY <AMOUNT> <FROM> <TO>.", Run: handleCurrency})
 	Register(Command{Name: "timezone", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE CURRENT TIME IN ANY TIMEZONE. USE IT AS .TIMEZONE <ZONE>.", Run: handleTimezone})
 	Register(Command{Name: "news", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE LATEST NEWS OF ANY COUNTRY OR CITY. USE IT AS .NEWS <COUNTRY> OR .NEWS <COUNTRY> <CITY>.", Run: handleNews})
-	Register(Command{Name: "lyrics", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE FULL LYRICS OF ANY SONG. USE IT AS .LYRICS <ARTIST> - <SONG>.", Run: handleLyrics})
+	Register(Command{Name: "lyrics", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE FULL LYRICS OF ANY SONG. JUST TYPE THE SONG NAME, USE IT AS .LYRICS <SONG NAME>.", Run: handleLyrics})
 	Register(Command{Name: "github", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE PROFILE OF ANY GITHUB USER. USE IT AS .GITHUB <USERNAME>.", Run: handleGithub})
 	Register(Command{Name: "anime", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET DETAILS OF ANY ANIME. USE IT AS .ANIME <TITLE>.", Run: handleAnime})
 	Register(Command{Name: "pokemon", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET DETAILS OF ANY POKEMON. USE IT AS .POKEMON <NAME>.", Run: handlePokemon})
