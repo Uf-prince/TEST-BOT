@@ -70,7 +70,7 @@ func handleURLAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 
 	label := mediaLabelURL(mime)
 	s.Reply(info, fmt.Sprintf(
-		"*YOUR \u276E%s \u276F LINK IS HERE*\n\n%s",
+		"*YOUR \u276E %s \u276F LINK IS HERE*\n\n%s",
 		label, link))
 }
 
