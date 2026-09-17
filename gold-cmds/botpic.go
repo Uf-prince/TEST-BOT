@@ -168,7 +168,7 @@ func handleBotPic(s SessionBridge, info types.MessageInfo, args []string, prefix
 	// ── RESET ──
 	if strings.ToLower(argRaw) == "reset" {
 		s.SetBotPicSetting("")
-		s.Reply(info, "*🔰 BOT PIC RESET 🔰*\n\n*DEFAULT IMAGE RESTORE HO GYI*\n*MENU AUR ALIVE DONO DEFAULT PE AA GAYE*")
+		s.Reply(info, "*🔰 BOT PIC RESET 🔰*\n\n*DEFAULT IMAGE HAS BEEN RESTORED*\n*MENU AND ALIVE BOTH ARE BACK TO DEFAULT*")
 		return
 	}
 
