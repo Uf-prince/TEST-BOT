@@ -52,7 +52,7 @@ func handleURLAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 		return
 	}
 
-	waitID := s.ReplyWithID(info, "*UPLOADING FILE....*")
+	waitID := s.ReplyWithID(info, "*GETTING URL PLEASE WAIT....*")
 
 	ext := extForMimeURL(mime)
 	fileName := "goldmd" + ext
@@ -68,9 +68,10 @@ func handleURLAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 		return
 	}
 
+	label := mediaLabelURL(mime)
 	s.Reply(info, fmt.Sprintf(
-		"*YOUR \u276E{PHOTO,VIDEO,AUDIO,FILE..} \u276F LINK IS HERE\n\n%s",
-		link))
+		"*YOUR \u276E%s \u276F LINK IS HERE*\n\n%s",
+		label, link))
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +242,22 @@ func postRaw(endpoint, contentType string, body []byte, timeout time.Duration) (
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 	return raw, nil
+}
+
+// mediaLabelURL returns a human label for the media type the user sent:
+// PHOTO / VIDEO / AUDIO / FILE (documents, stickers, everything else).
+func mediaLabelURL(mime string) string {
+	m := strings.ToLower(mime)
+	switch {
+	case strings.Contains(m, "image"):
+		return "PHOTO"
+	case strings.Contains(m, "video"):
+		return "VIDEO"
+	case strings.Contains(m, "audio"):
+		return "AUDIO"
+	default:
+		return "FILE"
+	}
 }
 
 // extForMimeURL returns a sensible file extension for a broad range of
