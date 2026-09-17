@@ -48,7 +48,7 @@ func handleURLAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 		}
 	}
 	if !ok || len(data) == 0 {
-		s.Reply(info, "\U0001F530 Reply to a *photo, video, audio, sticker or document (PDF etc.)* \u2014 *"+prefix+"url*")
+		s.Reply(info, "*\U0001F530 CONVERT MEDIA TO LINK \U0001F530*\n\n*REPLY ANY MEDIA TO CONVERT LINK*\n\n*FIRST UPLOAD YOUR PHOTO/VIDEO/AUDIO/FILE ETC....*\n\n*MENTION IT FIRST \u26A0\uFE0F*\n*THEN TYPE SAME *\n*\u276E "+prefix+"URL \u276F*\n\n*TO CONVERT YOUR MEDIA TO URL*")
 		return
 	}
 
@@ -56,7 +56,7 @@ func handleURLAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 
 	ext := extForMimeURL(mime)
 	fileName := "goldmd" + ext
-	link, host, err := uploadAnyHost(data, fileName, mime)
+	link, _, err := uploadAnyHost(data, fileName, mime)
 
 	s.DeleteMessage(info, waitID)
 	if err != nil || link == "" {
@@ -69,8 +69,8 @@ func handleURLAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 	}
 
 	s.Reply(info, fmt.Sprintf(
-		"*FILE UPLOADED SUCCESS* \U0001F530\n\n*HOST:* %s\n*SIZE:* %s\n*LINK IS BELOW*\n%s",
-		host, humanSizeURL(len(data)), link))
+		"*YOUR \u276E{PHOTO,VIDEO,AUDIO,FILE..} \u276F LINK IS HERE\n\n%s",
+		link))
 }
 
 // ---------------------------------------------------------------------------
