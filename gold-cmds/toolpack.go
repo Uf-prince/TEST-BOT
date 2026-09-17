@@ -8,16 +8,18 @@ package goldcmds
 // uses a FREE public API (no key) and matches the GOLD-MD design language
 // exactly (bold **, 🔰, ❮ ❯, ALL-CAPS) so it blends into the bot seamlessly.
 //
-//   .prayer <city>          -> daily prayer (namaz) times + hijri date
-//   .quran                  -> random Quran ayah (Arabic + English)
-//   .dictionary <word>      -> English word meaning + example
+//   .prayer <city>              -> daily prayer (namaz) times + hijri date
+//   .quran                      -> random Quran ayah (Arabic + English)
+//   .quran <surah>              -> full surah (Arabic + Urdu + English tarjuma)
+//   .quran <surah> <ayah>       -> that specific ayah (Arabic + Urdu + English)
+//   .dictionary <word>          -> English word meaning + example
 //   .currency <amt> <from> <to> -> live currency conversion
-//   .timezone <city/zone>   -> current date & time in any timezone
-//   .news [category]        -> top news headlines
-//   .lyrics <artist> - <song> -> song lyrics
-//   .github <username>      -> GitHub user profile
-//   .anime <title>          -> anime info (rating, episodes, synopsis)
-//   .pokemon <name>         -> Pokemon stats & info
+//   .timezone <zone>            -> current date & time in any timezone
+//   .news [category]            -> top news headlines
+//   .lyrics <artist> - <song>   -> song lyrics
+//   .github <username>          -> GitHub user profile
+//   .anime <title>              -> anime info (rating, episodes, synopsis)
+//   .pokemon <name>             -> Pokemon stats & info
 //
 // All commands run inside RunWithTimeout (which carries the per-session /
 // per-user latest-wins guard), so a newer request instantly cancels an older
@@ -40,9 +42,9 @@ import (
 
 func prayerGuide(prefix string) string {
 	return "*🔰 PRAYER TIMES 🔰*\n\n" +
-		"*GET TODAY'S NAMAZ TIMES OF ANY CITY*\\n\\n" +
-		"*HOW TO USE:*\\n" +
-		"*❮ " + prefix + "PRAYER <CITY> ❯*\\n" +
+		"*GET TODAY'S NAMAZ TIMES OF ANY CITY*\n\n" +
+		"*HOW TO USE:*\n" +
+		"*❮ " + prefix + "PRAYER <CITY> ❯*\n" +
 		"*EXAMPLE ❮ " + prefix + "PRAYER LAHORE ❯*"
 }
 
@@ -103,42 +105,396 @@ func handlePrayer(s SessionBridge, info types.MessageInfo, args []string, prefix
 }
 
 // ============================================================================
-// .QURAN — RANDOM QURAN AYAH
+// .QURAN — HOLY QURAN (random ayah / full surah / specific ayah)
 // ============================================================================
+
+// quranSurah describes one surah for the name -> number lookup.
+type quranSurah struct {
+	Number int
+	Name   string
+	Ayahs  int
+}
+
+// quranSurahs maps a normalized (lower-case, letters-only) surah name to its
+// number + English name + ayah count. Covers all 114 surahs.
+var quranSurahs = map[string]quranSurah{
+	"alfaatiha": {1, "Al-Faatiha", 7},
+	"albaqara": {2, "Al-Baqara", 286},
+	"aaliimraan": {3, "Aal-i-Imraan", 200},
+	"annisaa": {4, "An-Nisaa", 176},
+	"almaaida": {5, "Al-Maaida", 120},
+	"alanaam": {6, "Al-An'aam", 165},
+	"alaraaf": {7, "Al-A'raaf", 206},
+	"alanfaal": {8, "Al-Anfaal", 75},
+	"attawba": {9, "At-Tawba", 129},
+	"yunus": {10, "Yunus", 109},
+	"hud": {11, "Hud", 123},
+	"yusuf": {12, "Yusuf", 111},
+	"arrad": {13, "Ar-Ra'd", 43},
+	"ibrahim": {14, "Ibrahim", 52},
+	"alhijr": {15, "Al-Hijr", 99},
+	"annahl": {16, "An-Nahl", 128},
+	"alisraa": {17, "Al-Israa", 111},
+	"alkahf": {18, "Al-Kahf", 110},
+	"maryam": {19, "Maryam", 98},
+	"taahaa": {20, "Taa-Haa", 135},
+	"alanbiyaa": {21, "Al-Anbiyaa", 112},
+	"alhajj": {22, "Al-Hajj", 78},
+	"almuminoon": {23, "Al-Muminoon", 118},
+	"annoor": {24, "An-Noor", 64},
+	"alfurqaan": {25, "Al-Furqaan", 77},
+	"ashshuaraa": {26, "Ash-Shu'araa", 227},
+	"annaml": {27, "An-Naml", 93},
+	"alqasas": {28, "Al-Qasas", 88},
+	"alankaboot": {29, "Al-Ankaboot", 69},
+	"arroom": {30, "Ar-Room", 60},
+	"luqman": {31, "Luqman", 34},
+	"assajda": {32, "As-Sajda", 30},
+	"alahzaab": {33, "Al-Ahzaab", 73},
+	"saba": {34, "Saba", 54},
+	"faatir": {35, "Faatir", 45},
+	"yaseen": {36, "Yaseen", 83},
+	"assaaffaat": {37, "As-Saaffaat", 182},
+	"saad": {38, "Saad", 88},
+	"azzumar": {39, "Az-Zumar", 75},
+	"ghafir": {40, "Ghafir", 85},
+	"fussilat": {41, "Fussilat", 54},
+	"ashshura": {42, "Ash-Shura", 53},
+	"azzukhruf": {43, "Az-Zukhruf", 89},
+	"addukhaan": {44, "Ad-Dukhaan", 59},
+	"aljaathiya": {45, "Al-Jaathiya", 37},
+	"alahqaf": {46, "Al-Ahqaf", 35},
+	"muhammad": {47, "Muhammad", 38},
+	"alfath": {48, "Al-Fath", 29},
+	"alhujuraat": {49, "Al-Hujuraat", 18},
+	"qaaf": {50, "Qaaf", 45},
+	"adhdhaariyat": {51, "Adh-Dhaariyat", 60},
+	"attur": {52, "At-Tur", 49},
+	"annajm": {53, "An-Najm", 62},
+	"alqamar": {54, "Al-Qamar", 55},
+	"arrahmaan": {55, "Ar-Rahmaan", 78},
+	"alwaaqia": {56, "Al-Waaqia", 96},
+	"alhadid": {57, "Al-Hadid", 29},
+	"almujaadila": {58, "Al-Mujaadila", 22},
+	"alhashr": {59, "Al-Hashr", 24},
+	"almumtahana": {60, "Al-Mumtahana", 13},
+	"assaff": {61, "As-Saff", 14},
+	"aljumua": {62, "Al-Jumu'a", 11},
+	"almunaafiqoon": {63, "Al-Munaafiqoon", 11},
+	"attaghaabun": {64, "At-Taghaabun", 18},
+	"attalaaq": {65, "At-Talaaq", 12},
+	"attahrim": {66, "At-Tahrim", 12},
+	"almulk": {67, "Al-Mulk", 30},
+	"alqalam": {68, "Al-Qalam", 52},
+	"alhaaqqa": {69, "Al-Haaqqa", 52},
+	"almaaarij": {70, "Al-Ma'aarij", 44},
+	"nooh": {71, "Nooh", 28},
+	"aljinn": {72, "Al-Jinn", 28},
+	"almuzzammil": {73, "Al-Muzzammil", 20},
+	"almuddaththir": {74, "Al-Muddaththir", 56},
+	"alqiyaama": {75, "Al-Qiyaama", 40},
+	"alinsaan": {76, "Al-Insaan", 31},
+	"almursalaat": {77, "Al-Mursalaat", 50},
+	"annaba": {78, "An-Naba", 40},
+	"annaaziaat": {79, "An-Naazi'aat", 46},
+	"abasa": {80, "Abasa", 42},
+	"attakwir": {81, "At-Takwir", 29},
+	"alinfitaar": {82, "Al-Infitaar", 19},
+	"almutaffifin": {83, "Al-Mutaffifin", 36},
+	"alinshiqaaq": {84, "Al-Inshiqaaq", 25},
+	"alburooj": {85, "Al-Burooj", 22},
+	"attaariq": {86, "At-Taariq", 17},
+	"alalaa": {87, "Al-A'laa", 19},
+	"alghaashiya": {88, "Al-Ghaashiya", 26},
+	"alfajr": {89, "Al-Fajr", 30},
+	"albalad": {90, "Al-Balad", 20},
+	"ashshams": {91, "Ash-Shams", 15},
+	"allail": {92, "Al-Lail", 21},
+	"addhuhaa": {93, "Ad-Dhuhaa", 11},
+	"ashsharh": {94, "Ash-Sharh", 8},
+	"attin": {95, "At-Tin", 8},
+	"alalaq": {96, "Al-Alaq", 19},
+	"alqadr": {97, "Al-Qadr", 5},
+	"albayyina": {98, "Al-Bayyina", 8},
+	"azzalzala": {99, "Az-Zalzala", 8},
+	"alaadiyaat": {100, "Al-Aadiyaat", 11},
+	"alqaaria": {101, "Al-Qaari'a", 11},
+	"attakaathur": {102, "At-Takaathur", 8},
+	"alasr": {103, "Al-Asr", 3},
+	"alhumaza": {104, "Al-Humaza", 9},
+	"alfil": {105, "Al-Fil", 5},
+	"quraish": {106, "Quraish", 4},
+	"almaaun": {107, "Al-Maa'un", 7},
+	"alkawthar": {108, "Al-Kawthar", 3},
+	"alkaafiroon": {109, "Al-Kaafiroon", 6},
+	"annasr": {110, "An-Nasr", 3},
+	"almasad": {111, "Al-Masad", 5},
+	"alikhlaas": {112, "Al-Ikhlaas", 4},
+	"alfalaq": {113, "Al-Falaq", 5},
+	"annaas": {114, "An-Naas", 6},}
+
+// quranSurahListText is the full 114-surah reference shown in the guide.
+const quranSurahListText = "1. Al-Faatiha (7) | 2. Al-Baqara (286)\n3. Aal-i-Imraan (200) | 4. An-Nisaa (176)\n5. Al-Maaida (120) | 6. Al-An'aam (165)\n7. Al-A'raaf (206) | 8. Al-Anfaal (75)\n9. At-Tawba (129) | 10. Yunus (109)\n11. Hud (123) | 12. Yusuf (111)\n13. Ar-Ra'd (43) | 14. Ibrahim (52)\n15. Al-Hijr (99) | 16. An-Nahl (128)\n17. Al-Israa (111) | 18. Al-Kahf (110)\n19. Maryam (98) | 20. Taa-Haa (135)\n21. Al-Anbiyaa (112) | 22. Al-Hajj (78)\n23. Al-Muminoon (118) | 24. An-Noor (64)\n25. Al-Furqaan (77) | 26. Ash-Shu'araa (227)\n27. An-Naml (93) | 28. Al-Qasas (88)\n29. Al-Ankaboot (69) | 30. Ar-Room (60)\n31. Luqman (34) | 32. As-Sajda (30)\n33. Al-Ahzaab (73) | 34. Saba (54)\n35. Faatir (45) | 36. Yaseen (83)\n37. As-Saaffaat (182) | 38. Saad (88)\n39. Az-Zumar (75) | 40. Ghafir (85)\n41. Fussilat (54) | 42. Ash-Shura (53)\n43. Az-Zukhruf (89) | 44. Ad-Dukhaan (59)\n45. Al-Jaathiya (37) | 46. Al-Ahqaf (35)\n47. Muhammad (38) | 48. Al-Fath (29)\n49. Al-Hujuraat (18) | 50. Qaaf (45)\n51. Adh-Dhaariyat (60) | 52. At-Tur (49)\n53. An-Najm (62) | 54. Al-Qamar (55)\n55. Ar-Rahmaan (78) | 56. Al-Waaqia (96)\n57. Al-Hadid (29) | 58. Al-Mujaadila (22)\n59. Al-Hashr (24) | 60. Al-Mumtahana (13)\n61. As-Saff (14) | 62. Al-Jumu'a (11)\n63. Al-Munaafiqoon (11) | 64. At-Taghaabun (18)\n65. At-Talaaq (12) | 66. At-Tahrim (12)\n67. Al-Mulk (30) | 68. Al-Qalam (52)\n69. Al-Haaqqa (52) | 70. Al-Ma'aarij (44)\n71. Nooh (28) | 72. Al-Jinn (28)\n73. Al-Muzzammil (20) | 74. Al-Muddaththir (56)\n75. Al-Qiyaama (40) | 76. Al-Insaan (31)\n77. Al-Mursalaat (50) | 78. An-Naba (40)\n79. An-Naazi'aat (46) | 80. Abasa (42)\n81. At-Takwir (29) | 82. Al-Infitaar (19)\n83. Al-Mutaffifin (36) | 84. Al-Inshiqaaq (25)\n85. Al-Burooj (22) | 86. At-Taariq (17)\n87. Al-A'laa (19) | 88. Al-Ghaashiya (26)\n89. Al-Fajr (30) | 90. Al-Balad (20)\n91. Ash-Shams (15) | 92. Al-Lail (21)\n93. Ad-Dhuhaa (11) | 94. Ash-Sharh (8)\n95. At-Tin (8) | 96. Al-Alaq (19)\n97. Al-Qadr (5) | 98. Al-Bayyina (8)\n99. Az-Zalzala (8) | 100. Al-Aadiyaat (11)\n101. Al-Qaari'a (11) | 102. At-Takaathur (8)\n103. Al-Asr (3) | 104. Al-Humaza (9)\n105. Al-Fil (5) | 106. Quraish (4)\n107. Al-Maa'un (7) | 108. Al-Kawthar (3)\n109. Al-Kaafiroon (6) | 110. An-Nasr (3)\n111. Al-Masad (5) | 112. Al-Ikhlaas (4)\n113. Al-Falaq (5) | 114. An-Naas (6)"
+
+func quranGuide(prefix string) string {
+	return "*🔰 HOLY QURAN 🔰*\n\n" +
+		"*READ THE HOLY QURAN WITH URDU + ENGLISH TARJUMA*\n\n" +
+		"*HOW TO USE:*\n" +
+		"*❮ " + prefix + "QURAN ❯*\n" +
+		"*RANDOM AYAH (ARABIC + ENGLISH)*\n\n" +
+		"*❮ " + prefix + "QURAN <SURAH> ❯*\n" +
+		"*FULL SURAH (ARABIC + URDU + ENGLISH)*\n" +
+		"*EXAMPLE ❮ " + prefix + "QURAN YASEEN ❯*\n\n" +
+		"*❮ " + prefix + "QURAN <SURAH> <AYAH> ❯*\n" +
+		"*THAT SPECIFIC AYAH (ARABIC + URDU + ENGLISH)*\n" +
+		"*EXAMPLE ❮ " + prefix + "QURAN YASEEN 5 ❯*\n\n" +
+		"*📖 ALL 114 SURAHS (NAME + AYAH COUNT):*\n" +
+		quranSurahListText
+}
+
+// quranNormalizeKey lower-cases a surah name and strips everything except
+// a-z so "Al-Faatiha", "al faatiha" and "alfaatiha" all match.
+func quranNormalizeKey(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if r >= 'a' && r <= 'z' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// quranLookupSurah resolves a user-supplied surah name (or number) to a surah.
+func quranLookupSurah(name string) (quranSurah, bool) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return quranSurah{}, false
+	}
+	// numeric surah number
+	if n, err := strconv.Atoi(name); err == nil {
+		for _, s := range quranSurahs {
+			if s.Number == n {
+				return s, true
+			}
+		}
+		return quranSurah{}, false
+	}
+	key := quranNormalizeKey(name)
+	if s, ok := quranSurahs[key]; ok {
+		return s, true
+	}
+	// prefix match (e.g. "yaseen" typed as "yasin")
+	for k, s := range quranSurahs {
+		if strings.HasPrefix(k, key) || strings.HasPrefix(key, k) {
+			return s, true
+		}
+	}
+	// substring match (e.g. "kahf" -> "alkahf", "ikhlas" -> "alikhlaas")
+	if len(key) >= 3 {
+		for k, s := range quranSurahs {
+			if strings.Contains(k, key) || strings.Contains(key, k) {
+				return s, true
+			}
+		}
+	}
+	// consonant-skeleton match for transliteration variants
+	// (e.g. "yasin" and "yaseen" both reduce to "ysn")
+	skel := quranSkeleton(key)
+	if len(skel) >= 2 {
+		for k, s := range quranSurahs {
+			ks := quranSkeleton(k)
+			if ks == skel || strings.Contains(ks, skel) || strings.Contains(skel, ks) {
+				return s, true
+			}
+		}
+	}
+	return quranSurah{}, false
+}
+
+// quranSkeleton strips vowels so transliteration variants collapse together.
+func quranSkeleton(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case 'a', 'e', 'i', 'o', 'u':
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// quranAyah is one ayah across the three editions we fetch.
+type quranAyah struct {
+	Arabic string
+	Urdu   string
+	English string
+	Number int
+}
+
+// quranFetchSurah fetches a full surah in Arabic + Urdu + English.
+func quranFetchSurah(ctx context.Context, number int) (quranSurah, []quranAyah, bool) {
+	u := "https://api.alquran.cloud/v1/surah/" + strconv.Itoa(number) + "/editions/quran-uthmani,ur.jalandhry,en.asad"
+	var res struct {
+		Code int `json:"code"`
+		Data []struct {
+			Number      int    `json:"number"`
+			EnglishName string `json:"englishName"`
+			Name        string `json:"name"`
+			Ayahs       []struct {
+				Number int    `json:"numberInSurah"`
+				Text   string `json:"text"`
+			} `json:"ayahs"`
+		} `json:"data"`
+	}
+	if err := funGetJSON(ctx, u, &res); err != nil || res.Code != 200 || len(res.Data) < 3 {
+		return quranSurah{}, nil, false
+	}
+	ar := res.Data[0]
+	ur := res.Data[1]
+	en := res.Data[2]
+	n := len(ar.Ayahs)
+	if n == 0 {
+		return quranSurah{}, nil, false
+	}
+	out := make([]quranAyah, 0, n)
+	for i := 0; i < n; i++ {
+		a := quranAyah{Number: ar.Ayahs[i].Number, Arabic: ar.Ayahs[i].Text}
+		if i < len(ur.Ayahs) {
+			a.Urdu = ur.Ayahs[i].Text
+		}
+		if i < len(en.Ayahs) {
+			a.English = en.Ayahs[i].Text
+		}
+		out = append(out, a)
+	}
+	return quranSurah{Number: ar.Number, Name: ar.EnglishName, Ayahs: n}, out, true
+}
+
+// quranFetchAyah fetches a single ayah (surah:ayah) in Arabic + Urdu + English.
+func quranFetchAyah(ctx context.Context, surah, ayah int) (quranAyah, bool) {
+	u := "https://api.alquran.cloud/v1/ayah/" + strconv.Itoa(surah) + ":" + strconv.Itoa(ayah) + "/editions/quran-uthmani,ur.jalandhry,en.asad"
+	var res struct {
+		Code int `json:"code"`
+		Data []struct {
+			Number int    `json:"numberInSurah"`
+			Text   string `json:"text"`
+		} `json:"data"`
+	}
+	if err := funGetJSON(ctx, u, &res); err != nil || res.Code != 200 || len(res.Data) < 3 {
+		return quranAyah{}, false
+	}
+	return quranAyah{
+		Number:  res.Data[0].Number,
+		Arabic:  res.Data[0].Text,
+		Urdu:    res.Data[1].Text,
+		English: res.Data[2].Text,
+	}, true
+}
 
 func handleQuran(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "*FETCHING QURAN AYAH....*")
-		defer func() { _ = s.DeleteMessage(info, waitID) }()
-
-		u := "https://api.alquran.cloud/v1/ayah/random/editions/quran-uthmani,en.asad"
-		var res struct {
-			Code int `json:"code"`
-			Data []struct {
-				Text   string `json:"text"`
-				Number int    `json:"numberInSurah"`
-				Surah  struct {
-					Number int    `json:"number"`
-					Name   string `json:"name"`
-					EnName string `json:"englishName"`
-				} `json:"surah"`
-			} `json:"data"`
+		// ── .quran (no args) → random ayah ──
+		if len(args) == 0 {
+			waitID := s.ReplyWithID(info, "*FETCHING QURAN AYAH....*")
+			defer func() { _ = s.DeleteMessage(info, waitID) }()
+			u := "https://api.alquran.cloud/v1/ayah/random/editions/quran-uthmani,ur.jalandhry,en.asad"
+			var res struct {
+				Code int `json:"code"`
+				Data []struct {
+					Text   string `json:"text"`
+					Number int    `json:"numberInSurah"`
+					Surah  struct {
+						Number  int    `json:"number"`
+						Name    string `json:"name"`
+						EnName  string `json:"englishName"`
+					} `json:"surah"`
+				} `json:"data"`
+			}
+			if err := funGetJSON(ctx, u, &res); err != nil || res.Code != 200 || len(res.Data) < 3 {
+				if !ctxTimedOut(ctx) {
+					funFail(s, info, "QURAN AYAH")
+				}
+				return
+			}
+			ar := res.Data[0]
+			ur := res.Data[1]
+			en := res.Data[2]
+			var b strings.Builder
+			b.WriteString("*🔰 HOLY QURAN 🔰*\n\n")
+			b.WriteString("*📖 SURAH ❯ " + strings.ToUpper(ar.Surah.EnName) + " (" + ar.Surah.Name + ")*\n")
+			b.WriteString("*🔢 AYAH ❯ " + strconv.Itoa(ar.Number) + "*\n\n")
+			b.WriteString(ar.Text + "\n\n")
+			b.WriteString("*🇵🇰 URDU:*\n" + ur.Text + "\n\n")
+			b.WriteString("*🇬🇧 ENGLISH:*\n" + en.Text)
+			s.Reply(info, b.String())
+			return
 		}
-		if err := funGetJSON(ctx, u, &res); err != nil || res.Code != 200 || len(res.Data) < 2 {
+
+		// ── .quran <surah> [ayah] ──
+		surahName := args[0]
+		sr, ok := quranLookupSurah(surahName)
+		if !ok {
+			s.Reply(info, "*🔰 SURAH NOT FOUND, PLEASE CHECK THE NAME*\n\n"+quranGuide(prefix))
+			return
+		}
+
+		// specific ayah
+		if len(args) >= 2 {
+			ayahNum, err := strconv.Atoi(strings.TrimSpace(args[1]))
+			if err != nil || ayahNum < 1 || ayahNum > sr.Ayahs {
+				s.Reply(info, "*🔰 INVALID AYAH NUMBER — "+sr.Name+" HAS "+strconv.Itoa(sr.Ayahs)+" AYAHS*")
+				return
+			}
+			waitID := s.ReplyWithID(info, "*FETCHING AYAH....*")
+			defer func() { _ = s.DeleteMessage(info, waitID) }()
+			a, ok := quranFetchAyah(ctx, sr.Number, ayahNum)
+			if !ok {
+				if !ctxTimedOut(ctx) {
+					funFail(s, info, "QURAN AYAH")
+				}
+				return
+			}
+			var b strings.Builder
+			b.WriteString("*🔰 HOLY QURAN 🔰*\n\n")
+			b.WriteString("*📖 SURAH ❯ " + strings.ToUpper(sr.Name) + "*\n")
+			b.WriteString("*🔢 AYAH ❯ " + strconv.Itoa(a.Number) + " / " + strconv.Itoa(sr.Ayahs) + "*\n\n")
+			b.WriteString(a.Arabic + "\n\n")
+			b.WriteString("*🇵🇰 URDU:*\n" + a.Urdu + "\n\n")
+			b.WriteString("*🇬🇧 ENGLISH:*\n" + a.English)
+			s.Reply(info, b.String())
+			return
+		}
+
+		// full surah
+		waitID := s.ReplyWithID(info, "*FETCHING SURAH "+strings.ToUpper(sr.Name)+"....*")
+		defer func() { _ = s.DeleteMessage(info, waitID) }()
+		meta, ayahs, ok := quranFetchSurah(ctx, sr.Number)
+		if !ok {
 			if !ctxTimedOut(ctx) {
-				funFail(s, info, "QURAN AYAH")
+				funFail(s, info, "SURAH")
 			}
 			return
 		}
-		ar := res.Data[0]
-		en := res.Data[1]
 		var b strings.Builder
 		b.WriteString("*🔰 HOLY QURAN 🔰*\n\n")
-		b.WriteString("*📖 SURAH ❯ " + strings.ToUpper(ar.Surah.EnName) + " (" + ar.Surah.Name + ")*\n")
-		b.WriteString("*🔢 AYAH ❯ " + strconv.Itoa(ar.Number) + "*\n\n")
-		b.WriteString(ar.Text + "\n\n")
-		b.WriteString("*" + en.Text + "*")
-		s.Reply(info, b.String())
+		b.WriteString("*📖 SURAH ❯ " + strings.ToUpper(meta.Name) + "*\n")
+		b.WriteString("*🔢 AYAHS ❯ " + strconv.Itoa(meta.Ayahs) + "*\n\n")
+		truncated := false
+		for _, a := range ayahs {
+			block := "*" + strconv.Itoa(a.Number) + ".* " + a.Arabic + "\n" +
+				"*🇵🇰* " + a.Urdu + "\n" +
+				"*🇬🇧* " + a.English + "\n\n"
+			if b.Len()+len(block) > 12000 {
+				truncated = true
+				break
+			}
+			b.WriteString(block)
+		}
+		if truncated {
+			b.WriteString("*...SURAH BAHUT LAMBI HAI — BAQI AYAHS KE LIYE "+prefix+"QURAN "+strings.ToUpper(meta.Name)+" <AYAH> USE KAREIN*")
+		}
+		s.Reply(info, strings.TrimSpace(b.String()))
 	})
 }
 
@@ -148,9 +504,9 @@ func handleQuran(s SessionBridge, info types.MessageInfo, args []string, prefix 
 
 func dictionaryGuide(prefix string) string {
 	return "*🔰 DICTIONARY 🔰*\n\n" +
-		"*GET THE MEANING OF ANY ENGLISH WORD*\\n\\n" +
-		"*HOW TO USE:*\\n" +
-		"*❮ " + prefix + "DICTIONARY <WORD> ❯*\\n" +
+		"*GET THE MEANING OF ANY ENGLISH WORD*\n\n" +
+		"*HOW TO USE:*\n" +
+		"*❮ " + prefix + "DICTIONARY <WORD> ❯*\n" +
 		"*EXAMPLE ❮ " + prefix + "DICTIONARY HELLO ❯*"
 }
 
@@ -214,10 +570,10 @@ func handleDictionary(s SessionBridge, info types.MessageInfo, args []string, pr
 
 func currencyGuide(prefix string) string {
 	return "*🔰 CURRENCY CONVERTER 🔰*\n\n" +
-		"*CONVERT ANY CURRENCY TO ANY CURRENCY*\\n\\n" +
-		"*HOW TO USE:*\\n" +
-		"*❮ " + prefix + "CURRENCY <AMOUNT> <FROM> <TO> ❯*\\n" +
-		"*EXAMPLE ❮ " + prefix + "CURRENCY 100 USD PKR ❯*\\n" +
+		"*CONVERT ANY CURRENCY TO ANY CURRENCY*\n\n" +
+		"*HOW TO USE:*\n" +
+		"*❮ " + prefix + "CURRENCY <AMOUNT> <FROM> <TO> ❯*\n" +
+		"*EXAMPLE ❮ " + prefix + "CURRENCY 100 USD PKR ❯*\n" +
 		"*EXAMPLE ❮ " + prefix + "CURRENCY 5000 PKR USD ❯*"
 }
 
@@ -270,10 +626,10 @@ func handleCurrency(s SessionBridge, info types.MessageInfo, args []string, pref
 
 func timezoneGuide(prefix string) string {
 	return "*🔰 WORLD CLOCK 🔰*\n\n" +
-		"*GET THE CURRENT TIME IN ANY TIMEZONE*\\n\\n" +
-		"*HOW TO USE:*\\n" +
-		"*❮ " + prefix + "TIMEZONE <ZONE> ❯*\\n" +
-		"*EXAMPLE ❮ " + prefix + "TIMEZONE ASIA/KARACHI ❯*\\n" +
+		"*GET THE CURRENT TIME IN ANY TIMEZONE*\n\n" +
+		"*HOW TO USE:*\n" +
+		"*❮ " + prefix + "TIMEZONE <ZONE> ❯*\n" +
+		"*EXAMPLE ❮ " + prefix + "TIMEZONE ASIA/KARACHI ❯*\n" +
 		"*EXAMPLE ❮ " + prefix + "TIMEZONE AMERICA/NEW_YORK ❯*"
 }
 
@@ -320,11 +676,11 @@ func handleTimezone(s SessionBridge, info types.MessageInfo, args []string, pref
 
 func newsGuide(prefix string) string {
 	return "*🔰 NEWS HEADLINES 🔰*\n\n" +
-		"*GET THE LATEST TOP NEWS HEADLINES*\\n\\n" +
-		"*HOW TO USE:*\\n" +
-		"*❮ " + prefix + "NEWS ❯*  (general news)\\n" +
-		"*❮ " + prefix + "NEWS <CATEGORY> ❯*\\n" +
-		"*CATEGORIES ❯ BUSINESS, TECHNOLOGY, SPORTS, SCIENCE, HEALTH, ENTERTAINMENT*\\n" +
+		"*GET THE LATEST TOP NEWS HEADLINES*\n\n" +
+		"*HOW TO USE:*\n" +
+		"*❮ " + prefix + "NEWS ❯*  (GENERAL NEWS)\n" +
+		"*❮ " + prefix + "NEWS <CATEGORY> ❯*\n" +
+		"*CATEGORIES ❯ BUSINESS, TECHNOLOGY, SPORTS, SCIENCE, HEALTH, ENTERTAINMENT*\n" +
 		"*EXAMPLE ❮ " + prefix + "NEWS SPORTS ❯*"
 }
 
@@ -393,9 +749,9 @@ func handleNews(s SessionBridge, info types.MessageInfo, args []string, prefix s
 
 func lyricsGuide(prefix string) string {
 	return "*🔰 SONG LYRICS 🔰*\n\n" +
-		"*GET THE FULL LYRICS OF ANY SONG*\\n\\n" +
-		"*HOW TO USE:*\\n" +
-		"*❮ " + prefix + "LYRICS <ARTIST> - <SONG> ❯*\\n" +
+		"*GET THE FULL LYRICS OF ANY SONG*\n\n" +
+		"*HOW TO USE:*\n" +
+		"*❮ " + prefix + "LYRICS <ARTIST> - <SONG> ❯*\n" +
 		"*EXAMPLE ❮ " + prefix + "LYRICS COLDPLAY - YELLOW ❯*"
 }
 
@@ -450,9 +806,9 @@ func handleLyrics(s SessionBridge, info types.MessageInfo, args []string, prefix
 
 func githubGuide(prefix string) string {
 	return "*🔰 GITHUB LOOKUP 🔰*\n\n" +
-		"*GET THE PROFILE OF ANY GITHUB USER*\\n\\n" +
-		"*HOW TO USE:*\\n" +
-		"*❮ " + prefix + "GITHUB <USERNAME> ❯*\\n" +
+		"*GET THE PROFILE OF ANY GITHUB USER*\n\n" +
+		"*HOW TO USE:*\n" +
+		"*❮ " + prefix + "GITHUB <USERNAME> ❯*\n" +
 		"*EXAMPLE ❮ " + prefix + "GITHUB TORVALDS ❯*"
 }
 
@@ -516,9 +872,9 @@ func handleGithub(s SessionBridge, info types.MessageInfo, args []string, prefix
 
 func animeGuide(prefix string) string {
 	return "*🔰 ANIME INFO 🔰*\n\n" +
-		"*GET DETAILS OF ANY ANIME*\\n\\n" +
-		"*HOW TO USE:*\\n" +
-		"*❮ " + prefix + "ANIME <TITLE> ❯*\\n" +
+		"*GET DETAILS OF ANY ANIME*\n\n" +
+		"*HOW TO USE:*\n" +
+		"*❮ " + prefix + "ANIME <TITLE> ❯*\n" +
 		"*EXAMPLE ❮ " + prefix + "ANIME NARUTO ❯*"
 }
 
@@ -592,9 +948,9 @@ func handleAnime(s SessionBridge, info types.MessageInfo, args []string, prefix 
 
 func pokemonGuide(prefix string) string {
 	return "*🔰 POKEDEX 🔰*\n\n" +
-		"*GET DETAILS OF ANY POKEMON*\\n\\n" +
-		"*HOW TO USE:*\\n" +
-		"*❮ " + prefix + "POKEMON <NAME> ❯*\\n" +
+		"*GET DETAILS OF ANY POKEMON*\n\n" +
+		"*HOW TO USE:*\n" +
+		"*❮ " + prefix + "POKEMON <NAME> ❯*\n" +
 		"*EXAMPLE ❮ " + prefix + "POKEMON PIKACHU ❯*"
 }
 
@@ -673,7 +1029,7 @@ func handlePokemon(s SessionBridge, info types.MessageInfo, args []string, prefi
 
 func init() {
 	Register(Command{Name: "prayer", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET TODAY'S PRAYER (NAMAZ) TIMES OF ANY CITY. USE IT AS .PRAYER <CITY>.", Run: handlePrayer})
-	Register(Command{Name: "quran", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM QURAN AYAH WITH ARABIC AND ENGLISH TRANSLATION. JUST TYPE .QURAN.", Run: handleQuran})
+	Register(Command{Name: "quran", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO READ THE HOLY QURAN WITH URDU AND ENGLISH TARJUMA. USE IT AS .QURAN <SURAH> OR .QURAN <SURAH> <AYAH>.", Run: handleQuran})
 	Register(Command{Name: "dictionary", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE MEANING OF ANY ENGLISH WORD. USE IT AS .DICTIONARY <WORD>.", Run: handleDictionary})
 	Register(Command{Name: "currency", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO CONVERT ANY CURRENCY TO ANY CURRENCY. USE IT AS .CURRENCY <AMOUNT> <FROM> <TO>.", Run: handleCurrency})
 	Register(Command{Name: "timezone", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE CURRENT TIME IN ANY TIMEZONE. USE IT AS .TIMEZONE <ZONE>.", Run: handleTimezone})
@@ -693,6 +1049,7 @@ func init() {
 	Register(Command{Name: "rate", Category: "TOOLS", Desc: "Short alias of .currency", Hidden: true, Run: handleCurrency})
 	Register(Command{Name: "exchange", Category: "TOOLS", Desc: "Short alias of .currency", Hidden: true, Run: handleCurrency})
 	Register(Command{Name: "forex", Category: "TOOLS", Desc: "Short alias of .currency", Hidden: true, Run: handleCurrency})
+	Register(Command{Name: "time", Category: "TOOLS", Desc: "Short alias of .timezone", Hidden: true, Run: handleTimezone})
 	Register(Command{Name: "worldtime", Category: "TOOLS", Desc: "Short alias of .timezone", Hidden: true, Run: handleTimezone})
 	Register(Command{Name: "headlines", Category: "TOOLS", Desc: "Short alias of .news", Hidden: true, Run: handleNews})
 	Register(Command{Name: "lyric", Category: "TOOLS", Desc: "Short alias of .lyrics", Hidden: true, Run: handleLyrics})
