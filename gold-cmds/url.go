@@ -48,7 +48,7 @@ func handleURLAsync(s SessionBridge, info types.MessageInfo, args []string, pref
 		}
 	}
 	if !ok || len(data) == 0 {
-		s.Reply(info, "*\U0001F530 CONVERT MEDIA TO LINK \U0001F530*\n\n*REPLY ANY MEDIA TO CONVERT LINK*\n\n*FIRST UPLOAD YOUR PHOTO/VIDEO/AUDIO/FILE ETC....*\n\n*MENTION IT FIRST \u26A0\uFE0F*\n*THEN TYPE SAME *\n*\u276E "+prefix+"URL \u276F*\n\n*TO CONVERT YOUR MEDIA TO URL*")
+		s.Reply(info, "*\U0001F530 CONVERT MEDIA TO LINK \U0001F530*\n\n*REPLY ANY MEDIA TO CONVERT LINK*\n\n*FIRST UPLOAD YOUR PHOTO/VIDEO/AUDIO/FILE ETC....*\n\n*MENTION IT FIRST \u26A0\uFE0F*\n*THEN TYPE SAME*\n*\u276E "+prefix+"URL \u276F*\n\n*TO CONVERT YOUR MEDIA TO URL*")
 		return
 	}
 
