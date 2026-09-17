@@ -1443,7 +1443,7 @@ func (s *Session) sendStartupNotification() {
 	totalCmds := coreCount + pluginCount
 	prefix := s.resolvePrefix(s.JID)
 
-	logoURL := "https://ik.imagekit.io/htw68giabw/5e4dbe70-a276-11f1-9408-49d23f7f2b1f.webp"
+	logoURL := "https://cdn.jsdelivr.net/gh/Uf-prince/gold-assets@main/botpic.webp"
 
 	msgText := fmt.Sprintf(`*GOLD-MD HAS BEEN STARTED*
 	
@@ -1700,7 +1700,7 @@ func (m *Manager) HealthHandler(w http.ResponseWriter, r *http.Request) {
 // ===========================================================================
 
 // menuHeaderImageURL is the image shown at the top of the redesigned .menu.
-const menuHeaderImageURL = "https://ik.imagekit.io/htw68giabw/5e4dbe70-a276-11f1-9408-49d23f7f2b1f.webp"
+const menuHeaderImageURL = "https://cdn.jsdelivr.net/gh/Uf-prince/gold-assets@main/botpic.webp"
 
 // ── ALIVE ─────────────────────────────────────────────────────────────────
 // Classic "is the bot alive?" status message with uptime + session count.
