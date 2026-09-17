@@ -28,8 +28,10 @@ package goldcmds
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -643,43 +645,98 @@ func handleTimezone(s SessionBridge, info types.MessageInfo, args []string, pref
 
 func newsGuide(prefix string) string {
 	return "*🔰 NEWS HEADLINES 🔰*\n\n" +
-		"*GET THE LATEST TOP NEWS HEADLINES*\n\n" +
+		"*GET THE LATEST NEWS OF ANY COUNTRY OR CITY*\n\n" +
 		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "NEWS ❯*  (GENERAL NEWS)\n" +
-		"*❮ " + prefix + "NEWS <CATEGORY> ❯*\n" +
-		"*CATEGORIES ❯ BUSINESS, TECHNOLOGY, SPORTS, SCIENCE, HEALTH, ENTERTAINMENT*\n" +
-		"*EXAMPLE ❮ " + prefix + "NEWS SPORTS ❯*"
+		"*❮ " + prefix + "NEWS ❯*\n" +
+		"*TOP WORLD NEWS HEADLINES*\n\n" +
+		"*❮ " + prefix + "NEWS <COUNTRY> ❯*\n" +
+		"*LATEST NEWS OF THAT COUNTRY*\n" +
+		"*EXAMPLE ❮ " + prefix + "NEWS PAKISTAN ❯*\n\n" +
+		"*❮ " + prefix + "NEWS <COUNTRY> <CITY> ❯*\n" +
+		"*LATEST NEWS OF THAT CITY*\n" +
+		"*EXAMPLE ❮ " + prefix + "NEWS PAKISTAN ISLAMABAD ❯*\n" +
+		"*EXAMPLE ❮ " + prefix + "NEWS INDIA DELHI ❯*"
+}
+
+// newsRSS is the minimal shape of a Google News RSS feed.
+type newsRSS struct {
+	Channel struct {
+		Items []struct {
+			Title  string `xml:"title"`
+			Link   string `xml:"link"`
+			Source struct {
+				Name string `xml:",chardata"`
+			} `xml:"source"`
+		} `xml:"item"`
+	} `xml:"channel"`
+}
+
+// newsCleanTitle strips the trailing " - Source" that Google News appends.
+var newsTitleSuffix = regexp.MustCompile(`\s+-\s+[^-]+$`)
+
+func newsCleanTitle(t string) string {
+	t = strings.TrimSpace(t)
+	if i := strings.LastIndex(t, " - "); i > 0 {
+		t = strings.TrimSpace(t[:i])
+	}
+	return t
+}
+
+// newsFetch pulls a Google News RSS feed for the given query and returns up to
+// max headlines as (title, source, link) triples.
+func newsFetch(ctx context.Context, query string, max int) ([][3]string, bool) {
+	u := "https://news.google.com/rss/search?q=" + url.QueryEscape(query) + "&hl=en-US&gl=US&ceid=US:en"
+	raw, err := funGetBytes(ctx, u)
+	if err != nil {
+		return nil, false
+	}
+	var feed newsRSS
+	if err := xml.Unmarshal(raw, &feed); err != nil {
+		return nil, false
+	}
+	out := make([][3]string, 0, max)
+	for _, it := range feed.Channel.Items {
+		title := newsCleanTitle(it.Title)
+		if title == "" {
+			continue
+		}
+		out = append(out, [3]string{title, strings.TrimSpace(it.Source.Name), it.Link})
+		if len(out) >= max {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil, false
+	}
+	return out, true
 }
 
 func handleNews(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		cat := strings.ToLower(strings.TrimSpace(strings.Join(args, " ")))
-		if cat == "" {
-			cat = "general"
-		}
-		valid := map[string]bool{
-			"general": true, "business": true, "technology": true, "sports": true,
-			"science": true, "health": true, "entertainment": true,
-		}
-		if !valid[cat] {
+		// ── .news (no args) → guide ──
+		if len(args) == 0 {
 			s.Reply(info, newsGuide(prefix))
 			return
 		}
+
+		// ── .news <country> [city] → location news ──
+		country := strings.TrimSpace(args[0])
+		city := ""
+		if len(args) >= 2 {
+			city = strings.TrimSpace(strings.Join(args[1:], " "))
+		}
+		query := country
+		label := strings.ToUpper(country)
+		if city != "" {
+			query = country + " " + city
+			label = strings.ToUpper(city) + ", " + strings.ToUpper(country)
+		}
+
 		waitID := s.ReplyWithID(info, "*FETCHING NEWS....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 
-		u := "https://saurav.tech/NewsAPI/top-headlines/category/" + cat + "/in.json"
-		var res struct {
-			Status   string `json:"status"`
-			Articles []struct {
-				Title  string `json:"title"`
-				Source struct {
-					Name string `json:"name"`
-				} `json:"source"`
-				URL string `json:"url"`
-			} `json:"articles"`
-		}
-		if err := funGetJSON(ctx, u, &res); err != nil || res.Status != "ok" || len(res.Articles) == 0 {
+		items, ok := newsFetch(ctx, query, 8)
+		if !ok {
 			if !ctxTimedOut(ctx) {
 				funFail(s, info, "NEWS")
 			}
@@ -687,24 +744,16 @@ func handleNews(s SessionBridge, info types.MessageInfo, args []string, prefix s
 		}
 		var b strings.Builder
 		b.WriteString("*🔰 NEWS HEADLINES 🔰*\n\n")
-		b.WriteString("*📰 CATEGORY ❯ " + strings.ToUpper(cat) + "*\n\n")
-		n := 0
-		for _, a := range res.Articles {
-			if strings.TrimSpace(a.Title) == "" || a.Title == "[Removed]" {
-				continue
+		b.WriteString("*📰 LOCATION ❯ " + label + "*\n\n")
+		for i, it := range items {
+			b.WriteString("*" + strconv.Itoa(i+1) + ". " + it[0] + "*\n")
+			if it[1] != "" {
+				b.WriteString("_— " + it[1] + "_\n")
 			}
-			n++
-			b.WriteString("*" + strconv.Itoa(n) + ". " + a.Title + "*\n")
-			if a.Source.Name != "" {
-				b.WriteString("_— " + a.Source.Name + "_\n")
-			}
-			if a.URL != "" {
-				b.WriteString(a.URL + "\n")
+			if it[2] != "" {
+				b.WriteString(it[2] + "\n")
 			}
 			b.WriteString("\n")
-			if n >= 8 {
-				break
-			}
 		}
 		s.Reply(info, strings.TrimSpace(b.String()))
 	})
@@ -1000,7 +1049,7 @@ func init() {
 	Register(Command{Name: "dictionary", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE MEANING OF ANY ENGLISH WORD. USE IT AS .DICTIONARY <WORD>.", Run: handleDictionary})
 	Register(Command{Name: "currency", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO CONVERT ANY CURRENCY TO ANY CURRENCY. USE IT AS .CURRENCY <AMOUNT> <FROM> <TO>.", Run: handleCurrency})
 	Register(Command{Name: "timezone", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE CURRENT TIME IN ANY TIMEZONE. USE IT AS .TIMEZONE <ZONE>.", Run: handleTimezone})
-	Register(Command{Name: "news", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE LATEST TOP NEWS HEADLINES. USE IT AS .NEWS <CATEGORY>.", Run: handleNews})
+	Register(Command{Name: "news", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE LATEST NEWS OF ANY COUNTRY OR CITY. USE IT AS .NEWS <COUNTRY> OR .NEWS <COUNTRY> <CITY>.", Run: handleNews})
 	Register(Command{Name: "lyrics", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE FULL LYRICS OF ANY SONG. USE IT AS .LYRICS <ARTIST> - <SONG>.", Run: handleLyrics})
 	Register(Command{Name: "github", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE PROFILE OF ANY GITHUB USER. USE IT AS .GITHUB <USERNAME>.", Run: handleGithub})
 	Register(Command{Name: "anime", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET DETAILS OF ANY ANIME. USE IT AS .ANIME <TITLE>.", Run: handleAnime})
