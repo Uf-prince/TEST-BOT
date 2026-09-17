@@ -9,7 +9,7 @@ package goldcmds
 // exactly (bold **, 🔰, ❮ ❯, ALL-CAPS) so it blends into the bot seamlessly.
 //
 //   .prayer <city>              -> daily prayer (namaz) times + hijri date
-//   .quran                      -> random Quran ayah (Arabic + English)
+//   .quran                      -> full guide (all 114 surahs)
 //   .quran <surah>              -> full surah (Arabic + Urdu + English tarjuma)
 //   .quran <surah> <ayah>       -> that specific ayah (Arabic + Urdu + English)
 //   .dictionary <word>          -> English word meaning + example
@@ -105,7 +105,7 @@ func handlePrayer(s SessionBridge, info types.MessageInfo, args []string, prefix
 }
 
 // ============================================================================
-// .QURAN — HOLY QURAN (random ayah / full surah / specific ayah)
+// .QURAN — HOLY QURAN (full surah / specific ayah)
 // ============================================================================
 
 // quranSurah describes one surah for the name -> number lookup.
@@ -240,8 +240,6 @@ func quranGuide(prefix string) string {
 	return "*🔰 HOLY QURAN 🔰*\n\n" +
 		"*READ THE HOLY QURAN WITH URDU + ENGLISH TARJUMA*\n\n" +
 		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "QURAN ❯*\n" +
-		"*RANDOM AYAH (ARABIC + ENGLISH)*\n\n" +
 		"*❮ " + prefix + "QURAN <SURAH> ❯*\n" +
 		"*FULL SURAH (ARABIC + URDU + ENGLISH)*\n" +
 		"*EXAMPLE ❮ " + prefix + "QURAN YASEEN ❯*\n\n" +
@@ -394,40 +392,9 @@ func quranFetchAyah(ctx context.Context, surah, ayah int) (quranAyah, bool) {
 
 func handleQuran(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
-		// ── .quran (no args) → random ayah ──
+		// ── .quran (no args) → full guide (all 114 surahs) ──
 		if len(args) == 0 {
-			waitID := s.ReplyWithID(info, "*FETCHING QURAN AYAH....*")
-			defer func() { _ = s.DeleteMessage(info, waitID) }()
-			u := "https://api.alquran.cloud/v1/ayah/random/editions/quran-uthmani,ur.jalandhry,en.asad"
-			var res struct {
-				Code int `json:"code"`
-				Data []struct {
-					Text   string `json:"text"`
-					Number int    `json:"numberInSurah"`
-					Surah  struct {
-						Number  int    `json:"number"`
-						Name    string `json:"name"`
-						EnName  string `json:"englishName"`
-					} `json:"surah"`
-				} `json:"data"`
-			}
-			if err := funGetJSON(ctx, u, &res); err != nil || res.Code != 200 || len(res.Data) < 3 {
-				if !ctxTimedOut(ctx) {
-					funFail(s, info, "QURAN AYAH")
-				}
-				return
-			}
-			ar := res.Data[0]
-			ur := res.Data[1]
-			en := res.Data[2]
-			var b strings.Builder
-			b.WriteString("*🔰 HOLY QURAN 🔰*\n\n")
-			b.WriteString("*📖 SURAH ❯ " + strings.ToUpper(ar.Surah.EnName) + " (" + ar.Surah.Name + ")*\n")
-			b.WriteString("*🔢 AYAH ❯ " + strconv.Itoa(ar.Number) + "*\n\n")
-			b.WriteString(ar.Text + "\n\n")
-			b.WriteString("*🇵🇰 URDU:*\n" + ur.Text + "\n\n")
-			b.WriteString("*🇬🇧 ENGLISH:*\n" + en.Text)
-			s.Reply(info, b.String())
+			s.Reply(info, quranGuide(prefix))
 			return
 		}
 
