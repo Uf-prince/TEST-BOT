@@ -48,6 +48,14 @@ const timeoutReplyText = "*TRY AGAIN LATER*"
 // 2-minute hard limit.
 const downloaderTimeoutReplyText = "*PLEASE TRY AGAIN LATER*"
 
+// socialTimeout is the hard limit for the social-media downloader commands
+// (.ig / .tt / .fb / .twt / .tg). Owner order: 40 seconds — these APIs are
+// fast; if nothing lands in 40s the user gets "*PLEASE TRY AGAIN LATER*".
+//
+// 0% SPEED / RAM / DISK IMPACT: same pure context.WithTimeout + goroutine +
+// select design as the other watchdogs — no polling, no sleep loop.
+const socialTimeout = 40 * time.Second
+
 // RunWithTimeout runs fn in a goroutine with a hard 3-minute budget.
 // On timeout it cancels the context, waits a short grace period for the
 // goroutine to unwind (close bodies, delete temp files), and replies
@@ -75,5 +83,42 @@ func RunWithTimeout(s SessionBridge, info types.MessageInfo, fn func(ctx context
 		case <-grace:
 		}
 		s.Reply(info, timeoutReplyText)
+	}
+}
+
+// RunWithTimeoutDur is RunWithTimeout with a caller-supplied hard limit and
+// reply text. Used by the social-media downloaders (.ig / .tt / .fb / .twt /
+// .tg) with a 40-second budget and the "*PLEASE TRY AGAIN LATER*" reply.
+//
+// 0% SPEED / RAM / DISK IMPACT: pure context.WithTimeout + goroutine +
+// select — no polling, no sleep loop. Fast commands are unaffected; the
+// timer only fires on a hang. On timeout the context is cancelled so every
+// HTTP request / download loop / ffmpeg exec tied to it aborts and its
+// deferred temp-file cleanup runs (disk stays safe).
+func RunWithTimeoutDur(s SessionBridge, info types.MessageInfo, d time.Duration, reply string, fn func(ctx context.Context)) {
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
+	// Guard compressor shares this SAME budget: store ctx on the bridge so
+	// ffmpeg is killed the moment the timeout fires (owner order).
+	s.SetCmdContext(ctx)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn(ctx)
+	}()
+
+	select {
+	case <-done:
+		// Pipeline finished in time — nothing to do.
+	case <-ctx.Done():
+		// Hard limit hit: give the goroutine a short grace period to
+		// unwind (close bodies, delete temp files) then reply.
+		grace := time.After(3 * time.Second)
+		select {
+		case <-done:
+		case <-grace:
+		}
+		s.Reply(info, reply)
 	}
 }

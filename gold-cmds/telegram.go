@@ -72,7 +72,7 @@ type tgMedia struct {
 
 // handleTG — t.me link (via .tg / .tgsearch) ya channel link.
 func handleTG(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		handleTGAsync(ctx, s, info, args, prefix)
 	})
 }

@@ -34,6 +34,7 @@ package main
 // ============================================================================
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -194,7 +195,7 @@ func (b *bridge) guardBytes(info MsgInfoT, kind guardKind, data []byte, caption 
 	if err != nil {
 		return guardPass() // temp fail → original (block KAHI nahi)
 	}
-	out, size, note, ok := guardCompressFile(kind, src, guardTargetBytes(), guardLimitBytes())
+	out, size, note, ok := guardCompressFile(b.guardCtx(), kind, src, guardTargetBytes(), guardLimitBytes())
 	_ = os.Remove(src)
 	if !ok || size >= orig {
 		if out != "" {
@@ -228,7 +229,7 @@ func (b *bridge) guardOverLimitBytes(info MsgInfoT, kind guardKind, data []byte)
 		b.guardNotifyFail(info, kind, orig, "temp file nahi bana")
 		return guardPass() // SILENT: compress skip, original hi jayegi
 	}
-	out, _, note, ok := guardCompressFile(kind, src, guardTargetBytes(), guardLimitBytes())
+	out, _, note, ok := guardCompressFile(b.guardCtx(), kind, src, guardTargetBytes(), guardLimitBytes())
 	_ = os.Remove(src)
 	if !ok {
 		b.guardNotifyFail(info, kind, orig, "compress nahi ho payi")
@@ -303,7 +304,7 @@ func (b *bridge) guardPath(info MsgInfoT, kind guardKind, path string, caption s
 		return guardPass()
 	}
 	orig := st.Size()
-	out, outSize, note, ok := guardCompressFile(kind, path, guardTargetBytes(), guardLimitBytes())
+	out, outSize, note, ok := guardCompressFile(b.guardCtx(), kind, path, guardTargetBytes(), guardLimitBytes())
 	if !ok || outSize >= orig {
 		if out != "" {
 			_ = os.Remove(out)
@@ -326,7 +327,7 @@ func (b *bridge) guardPath(info MsgInfoT, kind guardKind, path string, caption s
 func (b *bridge) guardOverLimitPath(info MsgInfoT, kind guardKind, path string, orig int64) guardResult {
 	b.guardNotifyStart(info, kind, orig)
 
-	out, outSize, note, ok := guardCompressFile(kind, path, guardTargetBytes(), guardLimitBytes())
+	out, outSize, note, ok := guardCompressFile(b.guardCtx(), kind, path, guardTargetBytes(), guardLimitBytes())
 	if !ok {
 		b.guardNotifyFail(info, kind, orig, "compress nahi ho payi")
 		return guardPass() // SILENT: compress fail -> original passthrough
@@ -457,7 +458,7 @@ func guardAntideleteBytes(kind guardKind, data []byte) ([]byte, string) {
 		return data, ""
 	}
 	defer os.Remove(src)
-	out, size, note, ok := guardCompressFile(kind, src, guardTargetBytes(), guardLimitBytes())
+	out, size, note, ok := guardCompressFile(context.Background(), kind, src, guardTargetBytes(), guardLimitBytes())
 	if !ok || size <= 0 || size >= int64(len(data)) {
 		if out != "" {
 			os.Remove(out)

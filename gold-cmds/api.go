@@ -1,6 +1,7 @@
 package goldcmds
 
 import (
+	"context"
 	"strings"
 
 	"go.mau.fi/whatsmeow"
@@ -30,6 +31,11 @@ type VideoResult struct {
 type SessionBridge interface {
 	GetClient() *whatsmeow.Client
 	GetJID() string
+	// SetCmdContext stores the running command's watchdog context on the
+	// bridge so the guard compressor (ffmpeg) is killed the moment the
+	// command timeout fires — the compressor is now part of the SAME
+	// 2-min / 40s budget as the command itself (owner order).
+	SetCmdContext(ctx context.Context)
 	Reply(info types.MessageInfo, text string)
 	ReplyWithID(info types.MessageInfo, text string) string
 	// ReplyWithMentions sends a text message that pings the supplied JIDs

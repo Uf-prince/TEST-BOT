@@ -17,6 +17,7 @@ package main
 // ============================================================================
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -114,7 +115,7 @@ func TestGuardDoubleCompressQuality(t *testing.T) {
 			mb(orig.size), orig.w, orig.h, orig.secs, orig.bitrate))
 
 		// ---- PASS 1 ----
-		out1, size1, _, ok1 := guardCompressFile(guardVideo, src, guardTargetBytes(), guardLimitBytes())
+		out1, size1, _, ok1 := guardCompressFile(context.Background(), guardVideo, src, guardTargetBytes(), guardLimitBytes())
 		if !ok1 {
 			rep.WriteString("PASS 1 (COMPRESS #1)   : FAILED (guard ne compress nahi kiya)\n\n")
 			continue
@@ -125,7 +126,7 @@ func TestGuardDoubleCompressQuality(t *testing.T) {
 			pctDrop(orig.size, size1), resDrop(orig.h, m1.h)))
 
 		// ---- PASS 2 (double compress) ----
-		out2, size2, _, ok2 := guardCompressFile(guardVideo, out1, guardTargetBytes(), guardLimitBytes())
+		out2, size2, _, ok2 := guardCompressFile(context.Background(), guardVideo, out1, guardTargetBytes(), guardLimitBytes())
 		if !ok2 {
 			rep.WriteString("PASS 2 (COMPRESS #2)   : FAILED (dobara compress nahi hua)\n\n")
 			os.Remove(out1)

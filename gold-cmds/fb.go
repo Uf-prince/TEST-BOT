@@ -56,7 +56,7 @@ type fbCobaltResponse struct {
 func handleFB(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	// Hard 3-minute watchdog: on timeout the context is cancelled, every
 	// HTTP call and ffmpeg job aborts, and the user gets TRY AGAIN LATER.
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		handleFBAsync(ctx, s, info, args, prefix)
 	})
 }

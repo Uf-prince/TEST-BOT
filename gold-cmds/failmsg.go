@@ -63,6 +63,9 @@ func RunWithTimeoutCmd(s SessionBridge, info types.MessageInfo, failed, suggest 
 	_ = suggest
 	ctx, cancel := context.WithTimeout(context.Background(), cmdDownloaderTimeout)
 	defer cancel()
+	// Guard compressor shares this SAME 2-min budget: store ctx on the
+	// bridge so ffmpeg is killed the moment the timeout fires (owner order).
+	s.SetCmdContext(ctx)
 
 	done := make(chan struct{})
 	go func() {

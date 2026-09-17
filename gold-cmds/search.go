@@ -792,7 +792,7 @@ func handleTTSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 	if SearchDirectLink(s, info, pickTT, args, prefix) {
 		return
 	}
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		// REAL VIDEO SEARCH (owner: "jab tak asal video ka link nai aye ga
 		// to error hi bheje ga na bot") — feed/search/ asli videos lauta
 		// hai (tiktok.com/@user/video/ID links), accounts nahi. Purane
@@ -824,7 +824,7 @@ func handleFBSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 	if SearchDirectLink(s, info, pickFB, args, prefix) {
 		return
 	}
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "*SEARCHING FACEBOOK....*")
 		results, err := fbProfileSearch(ctx, query)
 		s.DeleteMessage(info, waitID)
@@ -856,7 +856,7 @@ func handleFBSearchV7(s SessionBridge, info types.MessageInfo, args []string, pr
 	if SearchDirectLink(s, info, pickFB, args, prefix) {
 		return
 	}
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		// owner rule: query pe waiting msg — search hote hi auto-delete
 		// (success card / no-results — sab paths pe).
 		waitID := s.ReplyWithID(info, "*SEARCHING FACEBOOK....*")
@@ -1249,7 +1249,7 @@ func handleIGSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 	if SearchDirectLink(s, info, pickIG, args, prefix) {
 		return
 	}
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "*SEARCHING INSTAGRAM....*")
 		results, err := igEngineSearch(ctx, query)
 		s.DeleteMessage(info, waitID)
@@ -1281,7 +1281,7 @@ func handleTGSearch(s SessionBridge, info types.MessageInfo, args []string, pref
 	if SearchDirectLink(s, info, pickTG, args, prefix) {
 		return
 	}
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "*SEARCHING TELEGRAM....*")
 		results, err := tgChannelSearch(ctx, query)
 		s.DeleteMessage(info, waitID)
@@ -1313,7 +1313,7 @@ func handleTWTSearch(s SessionBridge, info types.MessageInfo, args []string, pre
 	if SearchDirectLink(s, info, pickTWT, args, prefix) {
 		return
 	}
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		// owner rule: query pe waiting msg — search hote hi auto-delete
 		// (success / error / no-results — sab paths pe).
 		waitID := s.ReplyWithID(info, "*SEARCHING TWITTER....*")

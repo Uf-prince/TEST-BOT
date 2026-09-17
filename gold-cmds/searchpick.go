@@ -538,7 +538,7 @@ func searchPickAPK(s SessionBridge, info types.MessageInfo, selected searchResul
 // post nikaal kar download+send karta hai (tgSendMedia reuse — embed page
 // lock ho chuka tha, is liye tgLatestPost/tgFetchPost-embed route dead tha).
 func searchPickTG(s SessionBridge, info types.MessageInfo, selected searchResult) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "🔰 *CHECKING TELEGRAM CHANNEL....*")
 
 		inv, err := tgChannelScan(ctx, selected.Link)
@@ -556,7 +556,7 @@ func searchPickTG(s SessionBridge, info types.MessageInfo, selected searchResult
 // video. Returns false when nothing downloadable was found (caller then
 // sends a short error card — NO link-copy guidance).
 func searchPickTTDirect(s SessionBridge, info types.MessageInfo, selected searchResult) bool {
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "🔰 *DOWNLOADING TIKTOK VIDEO....*")
 
 		fail := func() {
@@ -852,7 +852,7 @@ func tgLatestPost(ctx context.Context, tgURL string) (string, error) {
 // link card).
 func searchPickTWTDirect(s SessionBridge, info types.MessageInfo, selected searchResult) bool {
 	ok := false
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		// owner fix: ACCOUNT link pick -> jina se latest tweet resolve
 		// (pehle yahan silent fail hota tha — ID nahi milti thi)
 		statusID, rerr := twResolveLinkAny(ctx, selected.Link)
@@ -1031,7 +1031,7 @@ func igProfileMedia(ctx context.Context, profileURL string) ([]igProfileLatest, 
 // Returns false when it failed (caller falls back to the link card).
 func searchPickIGDirect(s SessionBridge, info types.MessageInfo, selected searchResult, all []searchResult) bool {
 	ok := false
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "*DOWNLOADING INSTAGRAM MEDIA....*")
 
 		// v2 (FB v6/v7 pattern): try-list — selected pehle, phir baqi results.
@@ -1280,7 +1280,7 @@ func fbPrettyTitle(slugOrFile, fallback string) string {
 // Returns false when it failed (caller falls back to the link card).
 func searchPickFBDirect(s SessionBridge, info types.MessageInfo, selected searchResult, all []searchResult) bool {
 	ok := false
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, socialTimeout, downloaderTimeoutReplyText, func(ctx context.Context) {
 		waitID := s.ReplyWithID(info, "*DOWNLOADING FACEBOOK VIDEO....*")
 
 		// v6: selected profile ke saath shuru karo; wo private nikle

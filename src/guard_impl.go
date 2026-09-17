@@ -27,7 +27,7 @@ import (
 // guardCompressFile compresses the media at src for kind, chasing target
 // bytes. Returns (outPath, outSize, captionNote, ok). ok=false → caller
 // must block the send (compressor room se bahar nahi bani).
-func guardCompressFile(kind guardKind, src string, target, maxLimit int64) (string, int64, string, bool) {
+func guardCompressFile(ctx context.Context, kind guardKind, src string, target, maxLimit int64) (string, int64, string, bool) {
 	// ffmpeg/ffprobe availability — same self-install as commands (root PATH me hai)
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		if !goldEnsureFfmpeg() {
@@ -36,11 +36,11 @@ func guardCompressFile(kind guardKind, src string, target, maxLimit int64) (stri
 	}
 	switch kind {
 	case guardVideo:
-		return guardCompressVideo(src, target, maxLimit)
+		return guardCompressVideo(ctx, src, target, maxLimit)
 	case guardAudio:
-		return guardCompressAudio(src, target, maxLimit)
+		return guardCompressAudio(ctx, src, target, maxLimit)
 	case guardImage, guardSticker:
-		return guardCompressImage(src, target, maxLimit)
+		return guardCompressImage(ctx, src, target, maxLimit)
 	default: // documents (zip/apk/pdf/etc.) — re-encode impossible
 		return "", 0, "", false
 	}
@@ -93,7 +93,7 @@ func guardTempOut(ext string) (string, error) {
 // Bitrate ladder 500→350→250→180→120k chase karta hai jab tak target hit.
 // Source 360p se chhota ho to upscale NAHI (same-res lower bitrate).
 
-func guardCompressVideo(src string, target, maxLimit int64) (string, int64, string, bool) {
+func guardCompressVideo(ctx context.Context, src string, target, maxLimit int64) (string, int64, string, bool) {
 	dur := guardProbeDuration(src)
 	if dur <= 0 {
 		dur = 600 // unknown duration — assume 10 min worst case for bitrate math
@@ -126,7 +126,7 @@ func guardCompressVideo(src string, target, maxLimit int64) (string, int64, stri
 		if srcSt, e := os.Stat(src); e == nil && srcSt.Size() > int64(200<<20) {
 			tmo = 10 * time.Minute
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), tmo)
+		cctx, cancel := context.WithTimeout(ctx, tmo)
 		args := []string{"-y", "-i", src,
 			"-c:v", "libx264",
 			"-b:v", strconv.Itoa(br) + "k",
@@ -139,7 +139,7 @@ func guardCompressVideo(src string, target, maxLimit int64) (string, int64, stri
 			"-c:a", "aac", "-b:a", "128k",
 			out,
 		}
-		cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+		cmd := exec.CommandContext(cctx, "ffmpeg", args...)
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 		err = cmd.Run()
@@ -195,7 +195,7 @@ func guardSizeNote(size int64) string {
 
 // ── AUDIO ladder ────────────────────────────────────────────────────────────
 
-func guardCompressAudio(src string, target, maxLimit int64) (string, int64, string, bool) {
+func guardCompressAudio(ctx context.Context, src string, target, maxLimit int64) (string, int64, string, bool) {
 	// Owner order: audio FIXED 128kbps mp3 (.compress HIGH preset wala encoder).
 	// Agar 128k pe bhi target cross ho jaye (bahut lambi audio) to hi neeche
 	// bitrate ladder (96→64→48→32) — warna 128k hi (fastest, best quality).
@@ -210,8 +210,8 @@ func guardCompressAudio(src string, target, maxLimit int64) (string, int64, stri
 		if err != nil {
 			break
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", src,
+		cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		cmd := exec.CommandContext(cctx, "ffmpeg", "-y", "-i", src,
 			"-vn", "-c:a", "libmp3lame", "-b:a", strconv.Itoa(br)+"k",
 			"-f", "mp3", out)
 		cmd.Stdout = nil
@@ -256,12 +256,12 @@ func guardCompressAudio(src string, target, maxLimit int64) (string, int64, stri
 
 // ── IMAGE ladder (JPEG quality + scale) ────────────────────────────────────
 
-func guardCompressImage(src string, target, maxLimit int64) (string, int64, string, bool) {
+func guardCompressImage(ctx context.Context, src string, target, maxLimit int64) (string, int64, string, bool) {
 	// force-tier: compressed >= original ho to original hi behtar (caller
 	// guardPass karega). Isliye output size vs SOURCE size bhi compare hota hai.
 	if srcSt, e := os.Stat(src); e == nil {
 		srcSize := srcSt.Size()
-		out, size, note, ok := guardCompressImageRun(src, target, maxLimit, srcSize)
+		out, size, note, ok := guardCompressImageRun(ctx, src, target, maxLimit, srcSize)
 		if !ok {
 			return "", 0, "", false
 		}
@@ -273,10 +273,10 @@ func guardCompressImage(src string, target, maxLimit int64) (string, int64, stri
 		}
 		return out, size, note, true
 	}
-	return guardCompressImageRun(src, target, maxLimit, 0)
+	return guardCompressImageRun(ctx, src, target, maxLimit, 0)
 }
 
-func guardCompressImageRun(src string, target, maxLimit, srcSize int64) (string, int64, string, bool) {
+func guardCompressImageRun(ctx context.Context, src string, target, maxLimit, srcSize int64) (string, int64, string, bool) {
 
 	for _, q := range []int{80, 60, 40} {
 		for _, w := range []int{1920, 1280, 1024} {
@@ -284,8 +284,8 @@ func guardCompressImageRun(src string, target, maxLimit, srcSize int64) (string,
 			if err != nil {
 				return "", 0, "", false
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", src,
+			cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			cmd := exec.CommandContext(cctx, "ffmpeg", "-y", "-i", src,
 				"-vf", "scale="+strconv.Itoa(w)+":-2",
 				"-q:v", strconv.Itoa(q),
 				out)

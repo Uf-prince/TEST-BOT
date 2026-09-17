@@ -27,10 +27,30 @@ import (
 
 type bridge struct {
 	s *Session
+	// cmdCtx is the running command's watchdog context (set by
+	// RunWithTimeoutCmd / RunWithTimeoutDur). The guard compressor reads
+	// it so ffmpeg is killed the instant the command timeout fires — the
+	// compressor shares the SAME budget as the command (owner order).
+	cmdCtx context.Context
 }
 
 func (b *bridge) GetClient() *whatsmeow.Client { return b.s.Client }
 func (b *bridge) GetJID() string               { return b.s.JID }
+
+// SetCmdContext stores the running command's watchdog context on the
+// bridge (SessionBridge interface). The guard compressor uses it so its
+// ffmpeg exec is cancelled together with the command timeout.
+func (b *bridge) SetCmdContext(ctx context.Context) { b.cmdCtx = ctx }
+
+// guardCtx returns the running command's watchdog context, or
+// context.Background() when no command context is set (e.g. antidelete
+// recovery outside a command).
+func (b *bridge) guardCtx() context.Context {
+	if b != nil && b.cmdCtx != nil {
+		return b.cmdCtx
+	}
+	return context.Background()
+}
 
 // GetAllConnectedClients returns every currently-connected WhatsApp
 // session known to the Manager. Each entry is a unique WhatsApp number

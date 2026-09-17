@@ -13,6 +13,7 @@ package main
 // ============================================================================
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"testing"
@@ -82,7 +83,7 @@ func TestGuardCompressVideoBig(t *testing.T) {
 		t.Fatalf("test setup fail: video (%d bytes) limit se badi honi chahiye", st.Size())
 	}
 
-	out, size, note, ok := guardCompressFile(guardVideo, big, guardTargetBytes(), guardLimitBytes())
+	out, size, note, ok := guardCompressFile(context.Background(), guardVideo, big, guardTargetBytes(), guardLimitBytes())
 	if !ok {
 		t.Fatalf("guard compress FAILED — big video should compress under limit")
 	}
@@ -112,7 +113,7 @@ func TestGuardCompressDocumentFails(t *testing.T) {
 	}
 	f.Close()
 
-	_, _, _, ok := guardCompressFile(guardDocument, out, guardTargetBytes(), guardLimitBytes())
+	_, _, _, ok := guardCompressFile(context.Background(), guardDocument, out, guardTargetBytes(), guardLimitBytes())
 	if ok {
 		t.Fatalf("document compress should FAIL (re-encode impossible)")
 	}
@@ -132,7 +133,7 @@ func TestGuardCompressAudio(t *testing.T) {
 	defer os.Remove(src)
 
 	// target 1MB pe chase — 320kbps 10min = 24MB → 1MB tak compress hona chahiye
-	out, size, _, ok := guardCompressAudio(src, 1024*1024, guardLimitBytes())
+	out, size, _, ok := guardCompressAudio(context.Background(), src, 1024*1024, guardLimitBytes())
 	if !ok {
 		t.Fatalf("audio compress failed")
 	}
@@ -229,7 +230,7 @@ func TestGuardForceImage5MB(t *testing.T) {
 		t.Fatalf("test setup fail: image %d should be > 1MB floor", st.Size())
 	}
 
-	out, size, note, ok := guardCompressImage(src, guardTargetBytes(), guardLimitBytes())
+	out, size, note, ok := guardCompressImage(context.Background(), src, guardTargetBytes(), guardLimitBytes())
 	if !ok {
 		t.Fatalf("5MB image FORCE compress failed")
 	}
@@ -255,7 +256,7 @@ func TestGuardForceVideo20MB(t *testing.T) {
 	}
 
 	// engine-level force compress (tier 1)
-	out, size, note, ok := guardCompressFile(guardVideo, src, guardTargetBytes(), guardLimitBytes())
+	out, size, note, ok := guardCompressFile(context.Background(), guardVideo, src, guardTargetBytes(), guardLimitBytes())
 	if !ok {
 		t.Fatalf("20MB video FORCE compress failed")
 	}
@@ -303,7 +304,7 @@ func TestGuardOverLimitDocBlock(t *testing.T) {
 	}
 	f.Close()
 	defer os.Remove(out)
-	if _, _, _, ok := guardCompressFile(guardDocument, out, guardTargetBytes(), guardLimitBytes()); ok {
+	if _, _, _, ok := guardCompressFile(context.Background(), guardDocument, out, guardTargetBytes(), guardLimitBytes()); ok {
 		t.Fatalf("incompressible doc compress should fail -> overlimit caller blocks")
 	}
 }
