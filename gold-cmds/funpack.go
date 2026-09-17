@@ -62,11 +62,83 @@ func funGetBytes(ctx context.Context, rawURL string) ([]byte, error) {
 	return data, nil
 }
 
+// funGetBytesNoGzip is like funGetBytes but explicitly disables gzip. Some
+// APIs (e.g. Jikan / MyAnimeList) return HTTP 504 when the client advertises
+// Accept-Encoding: gzip, which Go's http.Client does automatically. Sending
+// "Accept-Encoding: identity" avoids that and makes those APIs reliable.
+func funGetBytesNoGzip(ctx context.Context, rawURL string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", funUA)
+	// DisableCompression stops Go from adding "Accept-Encoding: gzip"; we also
+	// never set the header ourselves, so NO Accept-Encoding is sent at all.
+	client := &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: &http.Transport{DisableCompression: true},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("http %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty response")
+	}
+	return data, nil
+}
+
+// funGetJSONNoGzip performs a no-gzip GET and unmarshals the JSON body into v.
+func funGetJSONNoGzip(ctx context.Context, rawURL string, v any) error {
+	data, err := funGetBytesNoGzip(ctx, rawURL)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, v)
+}
+
 // funGetJSON performs a GET and unmarshals the JSON body into v.
 func funGetJSON(ctx context.Context, rawURL string, v any) error {
 	data, err := funGetBytes(ctx, rawURL)
 	if err != nil {
 		return err
+	}
+	return json.Unmarshal(data, v)
+}
+
+// funPostJSON performs a POST with a JSON body and unmarshals the JSON
+// response into v. Used for GraphQL APIs such as AniList.
+func funPostJSON(ctx context.Context, rawURL string, body []byte, v any) error {
+	req, err := http.NewRequestWithContext(ctx, "POST", rawURL, strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", funUA)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("http %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("empty response")
 	}
 	return json.Unmarshal(data, v)
 }

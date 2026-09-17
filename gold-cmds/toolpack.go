@@ -1094,6 +1094,112 @@ func animeGuide(prefix string) string {
 		"*EXAMPLE ❮ " + prefix + "ANIME NARUTO ❯*"
 }
 
+// animeResult is the normalised anime record both sources fill in.
+type animeResult struct {
+	Title    string
+	Synopsis string
+	Episodes int
+	Score    float64
+	Status   string
+	Type     string
+	Year     int
+	URL      string
+}
+
+// animeFromAniList queries the AniList GraphQL API (reliable, no gzip issue)
+// and returns the most popular matching anime.
+func animeFromAniList(ctx context.Context, q string) (animeResult, bool) {
+	body := []byte(`{"query":"query($s:String){Page(perPage:5){media(search:$s,type:ANIME,sort:SEARCH_MATCH){title{romaji english} description(asHtml:false) episodes averageScore status format startDate{year} siteUrl popularity}}}","variables":{"s":` + strconv.Quote(q) + `}}`)
+	var res struct {
+		Data struct {
+			Page struct {
+				Media []struct {
+					Title struct {
+						Romaji  string `json:"romaji"`
+						English string `json:"english"`
+					} `json:"title"`
+					Description  string `json:"description"`
+					Episodes     int    `json:"episodes"`
+					AverageScore int    `json:"averageScore"`
+					Status       string `json:"status"`
+					Format       string `json:"format"`
+					Popularity   int    `json:"popularity"`
+					SiteURL      string `json:"siteUrl"`
+					StartDate    struct {
+						Year int `json:"year"`
+					} `json:"startDate"`
+				} `json:"media"`
+			} `json:"Page"`
+		} `json:"data"`
+	}
+	if err := funPostJSON(ctx, "https://graphql.anilist.co", body, &res); err != nil {
+		return animeResult{}, false
+	}
+	media := res.Data.Page.Media
+	if len(media) == 0 {
+		return animeResult{}, false
+	}
+	// pick the most popular match so "demon slayer" resolves to Kimetsu no
+	// Yaiba rather than an obscure same-named short.
+	best := media[0]
+	for _, m := range media[1:] {
+		if m.Popularity > best.Popularity {
+			best = m
+		}
+	}
+	title := best.Title.English
+	if title == "" {
+		title = best.Title.Romaji
+	}
+	return animeResult{
+		Title:    title,
+		Synopsis: stripHTML(best.Description),
+		Episodes: best.Episodes,
+		Score:    float64(best.AverageScore) / 10.0,
+		Status:   best.Status,
+		Type:     best.Format,
+		Year:     best.StartDate.Year,
+		URL:      best.SiteURL,
+	}, true
+}
+
+// animeFromJikan is the fallback source (MyAnimeList via Jikan).
+func animeFromJikan(ctx context.Context, q string) (animeResult, bool) {
+	u := "https://api.jikan.moe/v4/anime?q=" + url.QueryEscape(q) + "&limit=1"
+	var res struct {
+		Data []struct {
+			Title    string  `json:"title"`
+			Synopsis string  `json:"synopsis"`
+			Episodes int     `json:"episodes"`
+			Score    float64 `json:"score"`
+			Status   string  `json:"status"`
+			Type     string  `json:"type"`
+			URL      string  `json:"url"`
+			Aired    struct {
+				Prop struct {
+					From struct {
+						Year int `json:"year"`
+					} `json:"from"`
+				} `json:"prop"`
+			} `json:"aired"`
+		} `json:"data"`
+	}
+	if err := funGetJSONNoGzip(ctx, u, &res); err != nil || len(res.Data) == 0 {
+		return animeResult{}, false
+	}
+	a := res.Data[0]
+	return animeResult{
+		Title:    a.Title,
+		Synopsis: a.Synopsis,
+		Episodes: a.Episodes,
+		Score:    a.Score,
+		Status:   a.Status,
+		Type:     a.Type,
+		Year:     a.Aired.Prop.From.Year,
+		URL:      a.URL,
+	}, true
+}
+
 func handleAnime(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		q := strings.TrimSpace(strings.Join(args, " "))
@@ -1104,28 +1210,17 @@ func handleAnime(s SessionBridge, info types.MessageInfo, args []string, prefix 
 		waitID := s.ReplyWithID(info, "*SEARCHING ANIME....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 
-		u := "https://api.jikan.moe/v4/anime?q=" + url.QueryEscape(q) + "&limit=1"
-		var res struct {
-			Data []struct {
-				Title    string  `json:"title"`
-				Synopsis string  `json:"synopsis"`
-				Episodes int     `json:"episodes"`
-				Score    float64 `json:"score"`
-				Status   string  `json:"status"`
-				Type     string  `json:"type"`
-				URL      string  `json:"url"`
-				Aired    struct {
-					String string `json:"string"`
-				} `json:"aired"`
-			} `json:"data"`
+		a, ok := animeFromAniList(ctx, q)
+		if !ok && !ctxTimedOut(ctx) {
+			a, ok = animeFromJikan(ctx, q)
 		}
-		if err := funGetJSON(ctx, u, &res); err != nil || len(res.Data) == 0 {
+		if !ok {
 			if !ctxTimedOut(ctx) {
 				s.Reply(info, "*🔰 ANIME NOT FOUND, PLEASE CHECK THE TITLE*")
 			}
 			return
 		}
-		a := res.Data[0]
+
 		syn := strings.TrimSpace(a.Synopsis)
 		if len(syn) > 900 {
 			syn = syn[:900] + "..."
@@ -1145,8 +1240,8 @@ func handleAnime(s SessionBridge, info types.MessageInfo, args []string, prefix 
 		if a.Status != "" {
 			b.WriteString("*📡 STATUS ❯ " + strings.ToUpper(a.Status) + "*\n")
 		}
-		if a.Aired.String != "" {
-			b.WriteString("*📅 AIRED ❯ " + a.Aired.String + "*\n")
+		if a.Year > 0 {
+			b.WriteString("*📅 YEAR ❯ " + strconv.Itoa(a.Year) + "*\n")
 		}
 		if syn != "" {
 			b.WriteString("\n*📖 SYNOPSIS:*\n" + syn + "\n")
