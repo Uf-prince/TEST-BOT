@@ -115,11 +115,9 @@ func uploadToImgBB(imgData []byte) (string, error) {
 func init() {
 	Register(Command{Name: "imgtourl", Category: "AI & MEDIA", Desc: "THIS COMMAND IS USED TO CONVERT ANY IMAGE INTO A LINK. REPLY TO A PHOTO AND THE BOT GIVES YOU A DIRECT LINK OF IT.", Run: handleImgToURL})
 	Register(Command{Name: "imgbb", Hidden: true, Run: handleImgToURL})
-	Register(Command{Name: "tourl", Hidden: true, Run: handleImgToURL})
 	Register(Command{Name: "imgurl", Hidden: true, Run: handleImgToURL})
 	Register(Command{Name: "uploadimg", Hidden: true, Run: handleImgToURL})
 	Register(Command{Name: "upimg", Hidden: true, Run: handleImgToURL})
-	Register(Command{Name: "img2url", Hidden: true, Run: handleImgToURL})
 	Register(Command{Name: "imageurl", Hidden: true, Run: handleImgToURL})
 	Register(Command{Name: "imgtobb", Hidden: true, Run: handleImgToURL})
 	Register(Command{Name: "urlimg", Hidden: true, Run: handleImgToURL})
