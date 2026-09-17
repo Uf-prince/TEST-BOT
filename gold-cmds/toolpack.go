@@ -479,6 +479,112 @@ func dictionaryGuide(prefix string) string {
 		"*EXAMPLE ❮ " + prefix + "DICTIONARY HELLO ❯*"
 }
 
+// stripHTML removes HTML tags and decodes the few entities Wiktionary emits,
+// so definitions read as clean plain text on WhatsApp.
+var htmlTagRe = regexp.MustCompile(`<[^>]*>`)
+var htmlBlockRe = regexp.MustCompile(`(?is)<(style|script)[^>]*>.*?</(style|script)>`)
+
+func stripHTML(s string) string {
+	s = htmlBlockRe.ReplaceAllString(s, "")
+	s = htmlTagRe.ReplaceAllString(s, "")
+	amp := string(rune(38))
+	s = strings.ReplaceAll(s, amp+"amp;", amp)
+	s = strings.ReplaceAll(s, amp+"quot;", string(rune(34)))
+	s = strings.ReplaceAll(s, amp+"#39;", string(rune(39)))
+	s = strings.ReplaceAll(s, amp+"apos;", string(rune(39)))
+	s = strings.ReplaceAll(s, amp+"lt;", string(rune(60)))
+	s = strings.ReplaceAll(s, amp+"gt;", string(rune(62)))
+	s = strings.ReplaceAll(s, amp+"nbsp;", " ")
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// dictWiktionary fetches English definitions from the Wiktionary REST API.
+func dictWiktionary(ctx context.Context, word string) (string, []struct {
+	POS  string
+	Defs []string
+}, bool) {
+	u := "https://en.wiktionary.org/api/rest_v1/page/definition/" + url.PathEscape(word)
+	var res map[string][]struct {
+		PartOfSpeech string `json:"partOfSpeech"`
+		Definitions  []struct {
+			Definition string   `json:"definition"`
+			Examples   []string `json:"examples"`
+		} `json:"definitions"`
+	}
+	if err := funGetJSON(ctx, u, &res); err != nil {
+		return "", nil, false
+	}
+	entries, ok := res["en"]
+	if !ok || len(entries) == 0 {
+		return "", nil, false
+	}
+	out := make([]struct {
+		POS  string
+		Defs []string
+	}, 0, len(entries))
+	for _, e := range entries {
+		pos := strings.TrimSpace(e.PartOfSpeech)
+		if pos == "" {
+			continue
+		}
+		defs := make([]string, 0, 2)
+		for _, d := range e.Definitions {
+			txt := stripHTML(d.Definition)
+			if txt == "" {
+				continue
+			}
+			defs = append(defs, txt)
+			if len(defs) >= 2 {
+				break
+			}
+		}
+		if len(defs) == 0 {
+			continue
+		}
+		out = append(out, struct {
+			POS  string
+			Defs []string
+		}{pos, defs})
+		if len(out) >= 3 {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return "", nil, false
+	}
+	return word, out, true
+}
+
+// dictDatamuse is a fallback source (definitions only, no POS grouping).
+func dictDatamuse(ctx context.Context, word string) ([]string, bool) {
+	u := "https://api.datamuse.com/words?sp=" + url.QueryEscape(word) + "&md=d&max=1"
+	var res []struct {
+		Word string   `json:"word"`
+		Defs []string `json:"defs"`
+	}
+	if err := funGetJSON(ctx, u, &res); err != nil || len(res) == 0 || len(res[0].Defs) == 0 {
+		return nil, false
+	}
+	out := make([]string, 0, len(res[0].Defs))
+	for _, d := range res[0].Defs {
+		// datamuse defs look like "n\tdefinition text"
+		if i := strings.IndexByte(d, '\t'); i >= 0 {
+			d = d[i+1:]
+		}
+		d = stripHTML(strings.TrimSpace(d))
+		if d != "" {
+			out = append(out, d)
+		}
+		if len(out) >= 3 {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil, false
+	}
+	return out, true
+}
+
 func handleDictionary(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		word := strings.TrimSpace(strings.Join(args, " "))
@@ -489,47 +595,35 @@ func handleDictionary(s SessionBridge, info types.MessageInfo, args []string, pr
 		waitID := s.ReplyWithID(info, "*SEARCHING DICTIONARY....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 
-		u := "https://api.dictionaryapi.dev/api/v2/entries/en/" + url.PathEscape(word)
-		var res []struct {
-			Word     string `json:"word"`
-			Phonetic string `json:"phonetic"`
-			Meanings []struct {
-				PartOfSpeech string `json:"partOfSpeech"`
-				Definitions  []struct {
-					Definition string `json:"definition"`
-					Example    string `json:"example"`
-				} `json:"definitions"`
-			} `json:"meanings"`
-		}
-		if err := funGetJSON(ctx, u, &res); err != nil || len(res) == 0 {
-			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 WORD NOT FOUND, PLEASE CHECK THE SPELLING*")
-			}
-			return
-		}
-		e := res[0]
 		var b strings.Builder
 		b.WriteString("*🔰 DICTIONARY 🔰*\n\n")
-		b.WriteString("*📖 WORD ❯ " + strings.ToUpper(e.Word) + "*\n")
-		if e.Phonetic != "" {
-			b.WriteString("*🔊 " + e.Phonetic + "*\n")
+		b.WriteString("*📖 WORD ❯ " + strings.ToUpper(word) + "*\n")
+
+		// primary: Wiktionary
+		if _, entries, ok := dictWiktionary(ctx, word); ok {
+			for _, e := range entries {
+				b.WriteString("\n*▪️ " + strings.ToUpper(e.POS) + "*\n")
+				for _, d := range e.Defs {
+					b.WriteString("*" + d + "*\n")
+				}
+			}
+			s.Reply(info, strings.TrimSpace(b.String()))
+			return
 		}
-		count := 0
-		for _, m := range e.Meanings {
-			if len(m.Definitions) == 0 {
-				continue
+
+		// fallback: Datamuse
+		if defs, ok := dictDatamuse(ctx, word); ok {
+			b.WriteString("\n*▪️ MEANING*\n")
+			for _, d := range defs {
+				b.WriteString("*" + d + "*\n")
 			}
-			b.WriteString("\n*▪️ " + strings.ToUpper(m.PartOfSpeech) + "*\n")
-			b.WriteString("*" + m.Definitions[0].Definition + "*\n")
-			if m.Definitions[0].Example != "" {
-				b.WriteString("_EXAMPLE: " + m.Definitions[0].Example + "_\n")
-			}
-			count++
-			if count >= 3 {
-				break
-			}
+			s.Reply(info, strings.TrimSpace(b.String()))
+			return
 		}
-		s.Reply(info, b.String())
+
+		if !ctxTimedOut(ctx) {
+			s.Reply(info, "*🔰 WORD NOT FOUND, PLEASE CHECK THE SPELLING*")
+		}
 	})
 }
 
@@ -658,22 +752,18 @@ func newsGuide(prefix string) string {
 		"*EXAMPLE ❮ " + prefix + "NEWS INDIA DELHI ❯*"
 }
 
-// newsRSS is the minimal shape of a Google News RSS feed.
+// newsRSS is the minimal shape of a Bing News RSS feed (has descriptions).
 type newsRSS struct {
 	Channel struct {
 		Items []struct {
-			Title  string `xml:"title"`
-			Link   string `xml:"link"`
-			Source struct {
-				Name string `xml:",chardata"`
-			} `xml:"source"`
+			Title       string `xml:"title"`
+			Link        string `xml:"link"`
+			Description string `xml:"description"`
 		} `xml:"item"`
 	} `xml:"channel"`
 }
 
-// newsCleanTitle strips the trailing " - Source" that Google News appends.
-var newsTitleSuffix = regexp.MustCompile(`\s+-\s+[^-]+$`)
-
+// newsCleanTitle strips the trailing " - Source" that news feeds append.
 func newsCleanTitle(t string) string {
 	t = strings.TrimSpace(t)
 	if i := strings.LastIndex(t, " - "); i > 0 {
@@ -682,10 +772,11 @@ func newsCleanTitle(t string) string {
 	return t
 }
 
-// newsFetch pulls a Google News RSS feed for the given query and returns up to
-// max headlines as (title, source, link) triples.
-func newsFetch(ctx context.Context, query string, max int) ([][3]string, bool) {
-	u := "https://news.google.com/rss/search?q=" + url.QueryEscape(query) + "&hl=en-US&gl=US&ceid=US:en"
+// newsFetch pulls a Bing News RSS feed for the given query and returns up to
+// max items as (title, summary) pairs. Bing provides real English summaries,
+// so we never have to dump raw links.
+func newsFetch(ctx context.Context, query string, max int) ([][2]string, bool) {
+	u := "https://www.bing.com/news/search?q=" + url.QueryEscape(query) + "&format=RSS"
 	raw, err := funGetBytes(ctx, u)
 	if err != nil {
 		return nil, false
@@ -694,13 +785,14 @@ func newsFetch(ctx context.Context, query string, max int) ([][3]string, bool) {
 	if err := xml.Unmarshal(raw, &feed); err != nil {
 		return nil, false
 	}
-	out := make([][3]string, 0, max)
+	out := make([][2]string, 0, max)
 	for _, it := range feed.Channel.Items {
 		title := newsCleanTitle(it.Title)
 		if title == "" {
 			continue
 		}
-		out = append(out, [3]string{title, strings.TrimSpace(it.Source.Name), it.Link})
+		summary := stripHTML(it.Description)
+		out = append(out, [2]string{title, summary})
 		if len(out) >= max {
 			break
 		}
@@ -748,10 +840,7 @@ func handleNews(s SessionBridge, info types.MessageInfo, args []string, prefix s
 		for i, it := range items {
 			b.WriteString("*" + strconv.Itoa(i+1) + ". " + it[0] + "*\n")
 			if it[1] != "" {
-				b.WriteString("_— " + it[1] + "_\n")
-			}
-			if it[2] != "" {
-				b.WriteString(it[2] + "\n")
+				b.WriteString(it[1] + "\n")
 			}
 			b.WriteString("\n")
 		}
