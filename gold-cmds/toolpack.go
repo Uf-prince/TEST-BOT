@@ -30,10 +30,12 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"go.mau.fi/whatsmeow/types"
 )
@@ -772,35 +774,78 @@ func newsCleanTitle(t string) string {
 	return t
 }
 
-// newsFetch pulls a Bing News RSS feed for the given query and returns up to
-// max items as (title, summary) pairs. Bing provides real English summaries,
-// so we never have to dump raw links.
-func newsFetch(ctx context.Context, query string, max int) ([][2]string, bool) {
-	u := "https://www.bing.com/news/search?q=" + url.QueryEscape(query) + "&format=RSS"
+// newsFetchPage pulls a single Bing News RSS page (offset = "first" param) and
+// returns the items as (title, summary) pairs. Bing provides real English
+// summaries, so we never have to dump raw links.
+func newsFetchPage(ctx context.Context, query string, offset int) [][2]string {
+	u := "https://www.bing.com/news/search?q=" + url.QueryEscape(query) +
+		"&format=RSS&first=" + strconv.Itoa(offset)
 	raw, err := funGetBytes(ctx, u)
 	if err != nil {
-		return nil, false
+		return nil
 	}
 	var feed newsRSS
 	if err := xml.Unmarshal(raw, &feed); err != nil {
-		return nil, false
+		return nil
 	}
-	out := make([][2]string, 0, max)
+	out := make([][2]string, 0, len(feed.Channel.Items))
 	for _, it := range feed.Channel.Items {
 		title := newsCleanTitle(it.Title)
 		if title == "" {
 			continue
 		}
-		summary := stripHTML(it.Description)
-		out = append(out, [2]string{title, summary})
-		if len(out) >= max {
-			break
-		}
+		out = append(out, [2]string{title, stripHTML(it.Description)})
 	}
-	if len(out) == 0 {
+	return out
+}
+
+// newsFetch builds a LARGE pool of headlines by pulling several Bing News RSS
+// pages in parallel, de-duplicates them, then returns a RANDOM selection of
+// `max` items. Because the pool is far bigger than what we show and the pick
+// is shuffled on every call, each invocation returns FRESH news instead of the
+// same top headlines every time.
+func newsFetch(ctx context.Context, query string, max int) ([][2]string, bool) {
+	// Bing paginates ~8-9 items per page; grab several pages for a big pool.
+	offsets := []int{1, 9, 17, 25, 33, 41, 49, 57}
+
+	var (
+		mu   sync.Mutex
+		pool [][2]string
+		seen = map[string]bool{}
+		wg   sync.WaitGroup
+	)
+	for _, off := range offsets {
+		wg.Add(1)
+		go func(off int) {
+			defer wg.Done()
+			items := newsFetchPage(ctx, query, off)
+			mu.Lock()
+			for _, it := range items {
+				key := strings.ToLower(it[0])
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				pool = append(pool, it)
+			}
+			mu.Unlock()
+		}(off)
+	}
+	wg.Wait()
+
+	if len(pool) == 0 {
 		return nil, false
 	}
-	return out, true
+
+	// Shuffle the whole pool so every call surfaces a different slice.
+	rand.Shuffle(len(pool), func(i, j int) {
+		pool[i], pool[j] = pool[j], pool[i]
+	})
+
+	if len(pool) > max {
+		pool = pool[:max]
+	}
+	return pool, true
 }
 
 func handleNews(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
