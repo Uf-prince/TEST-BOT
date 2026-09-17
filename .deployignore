@@ -13,14 +13,6 @@
 # Local launcher scripts (Back4App/serv00/local — Zerops pe irrelevant)
 /start.sh
 /start_bot.sh
-/start_now.sh
-/launch_11221.sh
-/restart_11221.sh
-/restart_11249.sh
-/run_11237.sh
-/run_11238.sh
-/run_11246.sh
-/run_11249.sh
 /deploy_serv00.sh
 
 # Docker files (Zerops native runtime — Docker use nahi hota)
