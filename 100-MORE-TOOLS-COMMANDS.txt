@@ -1,0 +1,138 @@
+GOLD-MD — 100 MORE USEFUL TOOLS COMMANDS (Round 3)
+==================================================
+All commands live in the TOOLS category. Every command also has a short
+hidden alias (works the same, but does NOT show in the menu or command count).
+
+PACK 18 — Health & Finance Calculators (no internet needed)
+--------------------------------------------------
+1.   .bmr <weight_kg> <height_cm> <age> <m/f>  — Basal metabolic rate
+2.   .caloriecalc <weight> <height> <age> <m/f> <activity> — Daily calorie needs
+3.   .bodyfat <weight_kg> <height_cm> <age> <m/f> — Body fat percentage
+4.   .idealweight <height_cm> <m/f> — Ideal body weight
+5.   .waterintake <weight_kg> — Daily water intake goal
+6.   .mortgage <loan> <rate%> <years> — Monthly mortgage payment
+7.   .loancalc <amount> <rate%> <months> — Loan EMI + total interest
+8.   .taxcalc <income> <rate%> — Tax amount and net income
+9.   .tipcalc <bill> <tip%> — Tip amount and total bill
+10.  .discountcalc <price> <discount%> — Final price after discount
+
+PACK 19 — Text Analysis & Manipulation (no internet needed)
+--------------------------------------------------
+11.  .charfreq <text> — Frequency of each character
+12.  .uniquewords <text> — List unique words in text
+13.  .longestword <text> — Find the longest word
+14.  .textreverse <text> — Reverse the text
+15.  .textwrap <width> <text> — Wrap text to a width
+16.  .texttrim <text> — Trim extra spaces
+17.  .textsplit <text> — Split text into words/lines
+18.  .textreplace <old> | <new> | <text> — Replace text
+19.  .textbanner <text> — Big ASCII banner text
+20.  .textflip <text> — Flip text upside down
+
+PACK 20 — Date & Time Tools (no internet needed)
+--------------------------------------------------
+21.  .dateadd <YYYY-MM-DD> <days> — Add days to a date
+22.  .datesub <YYYY-MM-DD> <days> — Subtract days from a date
+23.  .dateformat <YYYY-MM-DD> — Show a date in many formats
+24.  .weeknumber <YYYY-MM-DD> — ISO week number of a date
+25.  .dayofweek <YYYY-MM-DD> — Day of the week
+26.  .countdownto <YYYY-MM-DD> — Days left until a date
+27.  .timer <seconds> — Start a countdown timer
+28.  .stopwatch — Show current stopwatch time
+29.  .pomodoro <minutes> — Pomodoro focus session
+30.  .ageindays <YYYY-MM-DD> — Your age in days, weeks and months
+
+PACK 21 — Encoding & Ciphers (no internet needed)
+--------------------------------------------------
+31.  .rot13 <text> — ROT13 cipher
+32.  .caesar <shift> <text> — Caesar cipher
+33.  .atbash <text> — Atbash cipher
+34.  .vigenere <key> <text> — Vigenere cipher
+35.  .leetspeak <text> — Convert text to leetspeak
+36.  .morseencode <text> — Text to Morse code
+37.  .morsedecode <morse> — Morse code to text
+38.  .binaryencode <text> — Text to binary
+39.  .binarydecode <binary> — Binary to text
+40.  .hexencode <text> — Text to hex
+
+PACK 22 — Astrology & Personality
+--------------------------------------------------
+41.  .chinesezodiac <year> — Chinese zodiac animal
+42.  .birthstone <month> — Birthstone for a month
+43.  .birthflower <month> — Birth flower for a month
+44.  .numerology <name> — Numerology number of a name
+45.  .lifepath <YYYY-MM-DD> — Life path number
+46.  .horoscope <sign> — Daily horoscope (live)
+47.  .tarot — Draw a random tarot card
+48.  .dream <symbol> — Dream meaning
+49.  .zodiacsign <YYYY-MM-DD> — Western zodiac sign
+50.  .compatibility <sign1> <sign2> — Zodiac compatibility
+
+PACK 23 — Random & Password Tools (no internet needed)
+--------------------------------------------------
+51.  .passwordstrength <password> — Analyse password strength
+52.  .randompassword [length] — Generate a strong random password
+53.  .randomuuid — Generate a random UUID v4
+54.  .randint <min> <max> — Random integer in range
+55.  .randomdice [sides] [count] — Roll dice
+56.  .randomcard — Draw a random playing card
+57.  .randomcoin — Flip a coin
+58.  .randomwheel a, b, c — Spin a wheel of options
+59.  .randomteam <n> a, b, c — Split names into n teams
+60.  .randompick a, b, c — Pick one random item
+
+PACK 24 — Text Analysis & Styling (no internet needed)
+--------------------------------------------------
+61.  .readingtime <text> — Estimated reading time
+62.  .speakingtime <text> — Estimated speaking time
+63.  .isogram <word> — Check if a word is an isogram
+64.  .pangram <text> — Check if text is a pangram
+65.  .palindromecheck <text> — Check if text is a palindrome
+66.  .anagramcheck <w1> | <w2> — Check if two words are anagrams
+67.  .wordshuffle <sentence> — Shuffle the words in a sentence
+68.  .textrepeat <count> <text> — Repeat text n times
+69.  .textpad <width> <text> — Pad text to a fixed width
+70.  .textcenter <width> <text> — Center text within a width
+
+PACK 25 — Finance & Health Calculators (no internet needed)
+--------------------------------------------------
+71.  .compoundinterest <p> <rate%> <years> — Compound interest growth
+72.  .inflation <amount> <rate%> <years> — Future value after inflation
+73.  .macrocalc <calories> <goal> — Macro split (protein/carbs/fat)
+74.  .ovulation <YYYY-MM-DD> [cycle] — Ovulation & fertile window
+75.  .pacecalc <distance_km> <minutes> — Running pace
+76.  .pregnancy <YYYY-MM-DD> — Pregnancy due date & week
+77.  .profitcalc <cost> <sell> — Profit & margin
+78.  .salarycalc <monthly> — Yearly / daily / hourly salary
+79.  .savingscalc <target> <monthly> [rate%] — Time to reach a goal
+80.  .sleepcalc <wake HH:MM> — Best bedtimes for sleep cycles
+
+PACK 26 — Random Generators
+--------------------------------------------------
+81.  .randomadvice — Random life advice (live)
+82.  .randomcolor — Random colour with hex code
+83.  .randomemoji — Random emoji
+84.  .randomfact — Random fun fact (live)
+85.  .randomhex — Random hex colour code
+86.  .randomletter — Random letter A-Z
+87.  .randomname — Random person name
+88.  .randompin [length] — Random numeric PIN
+89.  .randomquote — Random inspirational quote (live)
+90.  .randomtip — Random useful tip
+
+PACK 27 — Text Styling & Transformation (no internet needed)
+--------------------------------------------------
+91.  .textborder <text> — Wrap text in a decorative border
+92.  .textbox <text> — Put text inside a box
+93.  .textfind <word> | <text> — Find a word inside text
+94.  .textinsert <pos> <text> | <insert> — Insert text at a position
+95.  .textleet <text> — Convert text to leetspeak
+96.  .textmirror <text> — Mirror text backwards
+97.  .textsmallcaps <text> — Convert text to small capitals
+98.  .textsubscript <text> — Convert text to subscript
+99.  .textsuperscript <text> — Convert text to superscript
+100. .textupsidedown <text> — Flip text upside down
+
+==================================================
+TOTAL: 100 new TOOLS commands (10 packs x 10)
+All verified free of duplicates against the existing command set.
