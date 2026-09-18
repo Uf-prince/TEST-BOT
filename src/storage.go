@@ -1117,6 +1117,33 @@ func (u *Upstash) cmdCore(args ...string) (json.RawMessage, error) {
 		return nil, fmt.Errorf("kv: empty command")
 	}
 	op := strings.ToUpper(args[0])
+
+	// DISK-CACHE fast path (read ops): disk se serve — 0 Storj bandwidth.
+	if diskCacheEnabled && dcReady && !dcSkipKey(args) && dcIsReadOp(op) {
+		if res, ok := dcRead(args); ok {
+			return res, nil
+		}
+	}
+
+	res, err := u.cmdStorj(args...)
+
+	// DISK-CACHE populate/update. Reads: sirf success pe (data mila).
+	// Writes: hamesha — disk user ki intent reflect kare chahe Storj fail ho
+	// (retry queue Storj durability sambhalta hai, disk behaviour correct).
+	if diskCacheEnabled && dcReady && !dcSkipKey(args) {
+		if err == nil || dcIsWriteOp(op) {
+			dcApply(args, res)
+		}
+	}
+	return res, err
+}
+
+// cmdStorj is the actual Storj/S3-backed dispatcher (the old cmdCore body).
+func (u *Upstash) cmdStorj(args ...string) (json.RawMessage, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("kv: empty command")
+	}
+	op := strings.ToUpper(args[0])
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

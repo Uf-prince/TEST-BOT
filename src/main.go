@@ -113,6 +113,18 @@ func main() {
 	OkLog("Storj store ready (%d shards)", len(storj.shards))
 	storj.StartTTLGuard()
 
+	// ── DISK-CACHE (owner order — bandwidth bachao) ──────────────────────
+	// Har KV op ab DISK se serve hota hai; Storj sirf read-miss / write pe
+	// touch hota hai. Boot pe GUARD: disk khali ho to ek baar Storj se
+	// bulk-load, phir hamesha disk se. Slow background refresh (default
+	// 5 min) cross-server freshness ke liye. Is se fleet watchdog ke
+	// per-60s HGETALL/SMEMBERS Storj reads ~90% kam → Render 5GB bachta hai.
+	diskCacheInit()
+	go dcGuardLoad() // background — boot block na ho (read-through miss safe hai)
+	dcGuardLoop()    // continuous guard — disk khali ho to foran reload (0 bandwidth check)
+	dcStartRefresher()
+	dcStartFleetRefresher()
+
 	// ── config + session persistence layer (Storj-backed) ──
 	// Per-session prefix / sudo / settings AND the full WhatsApp auth store
 	// now live in Storj (same shards/buckets as antidelete) and survive
