@@ -52,6 +52,14 @@ func TestMenuCategoryFromCommand(t *testing.T) {
 			t.Fatalf("menuCategoryFromCommand(%q) = (%q,%v), want (%q,true)", in, got, ok, want)
 		}
 	}
+	// REGRESSION: handler.go passes the FULL category name (e.g. "GROUP
+	// MANAGEMENT") to CmdMenu, which re-resolves it. Must still resolve.
+	for _, full := range []string{"GROUP MANAGEMENT", "ANTI & PROTECTION", "OWNER & SYSTEM", "AI & MEDIA", "PRESENCE & STATUS", "TOOLS", "DOWNLOADER", "CONVERTER", "OTHER"} {
+		got, ok := menuCategoryFromCommand(full)
+		if !ok || got != full {
+			t.Fatalf("re-resolve menuCategoryFromCommand(%q) = (%q,%v), want (%q,true)", full, got, ok, full)
+		}
+	}
 	// Non-category inputs must NOT resolve.
 	for _, in := range []string{"ping", "menu", "owner", "system", "xyz", ""} {
 		if got, ok := menuCategoryFromCommand(in); ok {

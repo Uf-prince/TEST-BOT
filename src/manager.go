@@ -1861,6 +1861,12 @@ func menuCategoryFromCommand(cmd string) (string, bool) {
 		}
 	}
 	for cat := range menuCategorySlugs {
+		// exact full category name (case-insensitive, spaces/& intact) —
+		// handler.go isi full naam ke saath CmdMenu ko call karta hai.
+		if strings.ToLower(cat) == c {
+			return cat, true
+		}
+		// normalized full name (spaces/& stripped): .groupmanagement etc.
 		if menuCategoryNorm(cat) == c {
 			return cat, true
 		}
