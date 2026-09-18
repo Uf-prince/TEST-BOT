@@ -1818,7 +1818,7 @@ type menuCmd struct {
 var menuCategorySlugs = map[string]string{
 	"OWNER & SYSTEM":    "core",
 	"GROUP MANAGEMENT":  "group",
-	"ANTI & PROTECTION": "anti",
+	"ANTI & PROTECTION": "protection",
 	"DOWNLOADER":        "downloader",
 	"AI & MEDIA":        "ai",
 	"PRESENCE & STATUS": "presence",
@@ -1979,23 +1979,17 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	//   *TO SHOW FULL MENU*
 	b.WriteString(fmt.Sprintf("*HI %s*\n*SEE MY BOT COMMANDS*\n*TYPE ❮ %sFULLMENU ❯*\n*TO SHOW FULL MENU*\n\n", pushName, prefix))
 
-	// ── MODE A: category-list (.menu) — SIRF category names ──
-	// Owner order: .menu likhe to bas categories dikhein. Har category ke
-	// saath uska short slug (e.g. .group) jo user type kar sakta hai.
+	// ── MODE A: category-list (.menu) — SIRF category names, LINE BY LINE ──
+	// Owner order: .menu likhe to bas category names line by line dikhein
+	// (koi box nahi). Har line: category naam + wo command jo user type kare.
 	if onlyCat == "" {
 		for _, cat := range orderedCats {
 			list, ok := groups[cat]
 			if !ok || len(list) == 0 {
 				continue
 			}
-			emoji := goldcmds.CategoryEmoji[cat]
-			if emoji == "" {
-				emoji = "🔰"
-			}
 			slug := menuCategorySlug(cat)
-			b.WriteString(fmt.Sprintf("*╭──❰ %s %s ❱──╮*\n", emoji, cat))
-			b.WriteString(fmt.Sprintf("*┃🔰┃  %s%s*\n", prefix, slug))
-			b.WriteString("╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n")
+			b.WriteString(fmt.Sprintf("*🔰 %s ❯ %s%s*\n", cat, prefix, slug))
 		}
 		return b.String()
 	}
