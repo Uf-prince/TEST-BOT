@@ -544,6 +544,7 @@ var CategoryOrder = []string{
 	"DOWNLOADER",
 	"AI & MEDIA",
 	"PRESENCE & STATUS",
+	"CONVERTER",
 	"TOOLS",
 }
 
@@ -556,6 +557,7 @@ var CategoryEmoji = map[string]string{
 	"AI & MEDIA":        "🔰",
 	"TOOLS":             "🔰",
 	"PRESENCE & STATUS": "🔰",
+	"CONVERTER":         "🔰",
 }
 
 var registry []Command
