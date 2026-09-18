@@ -64,7 +64,7 @@ func TestMenuCategoryFromCommand(t *testing.T) {
 // category names (slugs), not individual commands.
 func TestBuildCategoryMenuCategoryListMode(t *testing.T) {
 	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "")
-	for _, slug := range []string{"core", "group", "protection", "downloader", "ai", "presence", "converter", "tools", "other"} {
+	for _, slug := range []string{"CORE", "GROUP", "PROTECTION", "DOWNLOADER", "AI", "PRESENCE", "CONVERTER", "TOOLS", "OTHER"} {
 		if !strings.Contains(out, "."+slug) {
 			t.Fatalf("category-list menu missing slug .%s\n%s", slug, out)
 		}

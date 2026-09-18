@@ -1979,18 +1979,20 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	//   *TO SHOW FULL MENU*
 	b.WriteString(fmt.Sprintf("*HI %s*\n*SEE MY BOT COMMANDS*\n*TYPE ❮ %sFULLMENU ❯*\n*TO SHOW FULL MENU*\n\n", pushName, prefix))
 
-	// ── MODE A: category-list (.menu) — SIRF category names, LINE BY LINE ──
-	// Owner order: .menu likhe to bas category names line by line dikhein
-	// (koi box nahi). Har line: category naam + wo command jo user type kare.
+	// ── MODE A: category-list (.menu) — BOX design, har line pe prefix ──
+	// Owner order: .menu likhe to box me category commands line by line dikhein,
+	// har line pe prefix laga ho (e.g. .CORE / .GROUP / .PROTECTION).
 	if onlyCat == "" {
+		b.WriteString("┏─━─━─━─━─━─━─━─━─━─━─━┓\n")
 		for _, cat := range orderedCats {
 			list, ok := groups[cat]
 			if !ok || len(list) == 0 {
 				continue
 			}
-			slug := menuCategorySlug(cat)
-			b.WriteString(fmt.Sprintf("*🔰 %s ❯ %s%s*\n", cat, prefix, slug))
+			slug := strings.ToUpper(menuCategorySlug(cat))
+			b.WriteString(fmt.Sprintf("*🔰 %s%s*\n", prefix, slug))
 		}
+		b.WriteString("┗─━─━─━─━─━─━─━─━─━─━─━┛\n")
 		return b.String()
 	}
 
