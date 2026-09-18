@@ -52,7 +52,7 @@ func TestLogo1000MenusAndRegistry(t *testing.T) {
 	// (nil view nahi — CmdNameViewFor ko live session chahiye; default view me
 	// koi rename nahi hota aur Mode "" hota hai)
 	menuView := &goldcmds.CmdNameView{Renames: map[string]string{}, Mode: ""}
-	menu := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView)
+	menu := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView, "AI & MEDIA")
 	// .logo line prefix ke sath aani chahiye (menu me command names prefix ke sath likhe hain)
 	if !strings.Contains(menu, ".logo") && !strings.Contains(menu, "LOGO") {
 		t.Error(".menu me .logo entry nahi mili")

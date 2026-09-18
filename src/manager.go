@@ -1808,7 +1808,72 @@ type menuCmd struct {
 // commands are merged into one flat list, grouped by their Category field and
 // rendered under per-category banners (with their own emoji) and the 🔰 emoji
 // next to every command, followed by its description.
-func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView) string {
+// ── CATEGORY MENU SHORTCUT (owner order 2026-09-18) ──────────────────────────
+// .menu ab SIRF category names dikhata hai. User category name type kare
+// (e.g. .group / .anti / .tools) to usi category ka menu banta hai — same
+// format, sirf us category ke commands. "OWNER & SYSTEM" ka slug "core"
+// hai kyunke "owner" aur "system" dono pehle se real commands hain (unko
+// break nahi karna). Baaki slugs bhi verified hain — koi real command ka
+// prefix nahi (prefix-match fallback unhe rewrite nahi karega).
+var menuCategorySlugs = map[string]string{
+	"OWNER & SYSTEM":    "core",
+	"GROUP MANAGEMENT":  "group",
+	"ANTI & PROTECTION": "anti",
+	"DOWNLOADER":        "downloader",
+	"AI & MEDIA":        "ai",
+	"PRESENCE & STATUS": "presence",
+	"CONVERTER":         "converter",
+	"TOOLS":             "tools",
+	"OTHER":             "other",
+}
+
+// menuCategorySlug returns the short command slug for a category.
+func menuCategorySlug(cat string) string {
+	if sl, ok := menuCategorySlugs[cat]; ok {
+		return sl
+	}
+	return menuCategoryNorm(cat)
+}
+
+// menuCategoryNorm strips a category name to lowercase alphanumerics
+// ("GROUP MANAGEMENT" -> "groupmanagement"). Used for full-name matching.
+func menuCategoryNorm(cat string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(cat) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// menuCategoryFromCommand resolves a typed command to a category name.
+// Matches the short slug OR the normalized full category name (spaces/&
+// stripped), so .group, .groupmanagement, .anti, .antiprotection sab kaam.
+func menuCategoryFromCommand(cmd string) (string, bool) {
+	c := strings.ToLower(strings.TrimSpace(cmd))
+	if c == "" {
+		return "", false
+	}
+	for cat, sl := range menuCategorySlugs {
+		if c == sl {
+			return cat, true
+		}
+	}
+	for cat := range menuCategorySlugs {
+		if menuCategoryNorm(cat) == c {
+			return cat, true
+		}
+	}
+	return "", false
+}
+
+func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView, onlyCat string) string {
+	// nil view → default (no renames, no mine-mode). Production always passes
+	// a live view; tests may pass nil.
+	if menuView == nil {
+		menuView = &goldcmds.CmdNameView{Renames: map[string]string{}}
+	}
 	// ── Gather ALL visible commands (core + plugin) with their meta ──
 	// CMDNAME: renamed commands apne NEW naam se dikhte hain (owner ne
 	// .cmdname ping to umar kiya to menu me .ping ki jagah .umar aata hai),
@@ -1892,7 +1957,13 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	if ownerNum != "" {
 		b.WriteString(fmt.Sprintf("*│🔰 OWNER:❯ %s*\n", ownerNum))
 	}
-	b.WriteString(fmt.Sprintf("*│🔰 COMMANDS :❯ ❮ %d ❯*\n", totalCmds))
+	headerCount := totalCmds
+	if onlyCat != "" {
+		if l, ok := groups[onlyCat]; ok {
+			headerCount = len(l)
+		}
+	}
+	b.WriteString(fmt.Sprintf("*│🔰 COMMANDS :❯ ❮ %d ❯*\n", headerCount))
 	b.WriteString(fmt.Sprintf("*│🔰 UPTIME :❯ %s*\n", uptimeHM))
 	b.WriteString(fmt.Sprintf("*│🔰 PREFIX :❯ ❮ %s ❯*\n", prefix))
 	b.WriteString("┗─━─━─━─━─━─━─━─━─┛\n\n")
@@ -1908,24 +1979,43 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	//   *TO SHOW FULL MENU*
 	b.WriteString(fmt.Sprintf("*HI %s*\n*SEE MY BOT COMMANDS*\n*TYPE ❮ %sFULLMENU ❯*\n*TO SHOW FULL MENU*\n\n", pushName, prefix))
 
-	for _, cat := range orderedCats {
-		list, ok := groups[cat]
-		if !ok || len(list) == 0 {
-			continue
+	// ── MODE A: category-list (.menu) — SIRF category names ──
+	// Owner order: .menu likhe to bas categories dikhein. Har category ke
+	// saath uska short slug (e.g. .group) jo user type kar sakta hai.
+	if onlyCat == "" {
+		for _, cat := range orderedCats {
+			list, ok := groups[cat]
+			if !ok || len(list) == 0 {
+				continue
+			}
+			emoji := goldcmds.CategoryEmoji[cat]
+			if emoji == "" {
+				emoji = "🔰"
+			}
+			slug := menuCategorySlug(cat)
+			b.WriteString(fmt.Sprintf("*╭──❰ %s %s ❱──╮*\n", emoji, cat))
+			b.WriteString(fmt.Sprintf("*┃🔰┃  %s%s*\n", prefix, slug))
+			b.WriteString("╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n")
 		}
-		emoji := goldcmds.CategoryEmoji[cat]
-		if emoji == "" {
-			emoji = "🔰"
-		}
-		b.WriteString(fmt.Sprintf("*╭──❰ %s %s ❱──╮*\n", emoji, cat))
-		for _, c := range list {
-			b.WriteString(fmt.Sprintf("*┃🔰┃  %s%s*\n", prefix, c.Name))
-		}
-
-		b.WriteString("╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n")
+		return b.String()
 	}
 
-	// NOTE: the bot name footer is now applied centrally by
+	// ── MODE B: single category (.group / .anti / ...) — SAME format ──
+	// Sirf usi category ke commands, bilkul wahi banner/footer style.
+	list, ok := groups[onlyCat]
+	if !ok || len(list) == 0 {
+		return b.String()
+	}
+	emoji := goldcmds.CategoryEmoji[onlyCat]
+	if emoji == "" {
+		emoji = "🔰"
+	}
+	b.WriteString(fmt.Sprintf("*╭──❰ %s %s ❱──╮*\n", emoji, onlyCat))
+	for _, c := range list {
+		b.WriteString(fmt.Sprintf("*┃🔰┃  %s%s*\n", prefix, c.Name))
+	}
+	b.WriteString("╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n")
+	// NOTE: the bot name footer is applied centrally by
 	// ReplyImageWithNewsletter / ReplyWithNewsletter (via
 	// withCaptionFooter / withFooter), so we do NOT append it here —
 	// otherwise .menu would show a double footer.
@@ -2021,9 +2111,19 @@ func (s *Session) CmdMenu(info types.MessageInfo, args []string, prefix string) 
 		}
 	}
 
+	// ── CATEGORY SHORTCUT (owner order): .menu <category> → usi category
+	// ka menu. (.group / .anti / .tools ... bhi yahan aate hain — handler.go
+	// unhe CmdMenu pe route karta hai.)
+	onlyCat := ""
+	if len(args) > 0 {
+		if cat, ok := menuCategoryFromCommand(args[0]); ok {
+			onlyCat = cat
+		}
+	}
+
 	// ── CMDNAME view: this bot's active command renames (nil → default menu)
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
-	caption := buildCategoryMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
+	caption := buildCategoryMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView, onlyCat)
 
 	// ── Pick the header image: per-bot custom bot pic (.botpic)
 	//    if set, otherwise the default menu header image. ──

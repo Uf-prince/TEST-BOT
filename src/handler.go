@@ -905,6 +905,16 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		return
 	}
 
+	// ── CATEGORY SHORTCUT (owner order 2026-09-18) ──────────────────────────────
+	// .menu ab sirf category names dikhata hai. User category name type kare
+	// (e.g. .group / .anti / .tools) to usi category ka menu banta hai — same
+	// format, sirf us category ke commands. Ye check unknown-command se PEHLE
+	// chalta hai taake category slug kabhi "unknown" na lage.
+	if cat, ok := menuCategoryFromCommand(command); ok {
+		s.CmdMenu(info, []string{cat}, prefix)
+		return
+	}
+
 	// Unknown command — no reply. All core commands (alive, ping, menu,
 	// uptime, sessions) are now registered in the Commands map via
 	// manager.go's init(), so the legacy hardcoded switch is gone.
