@@ -32,19 +32,18 @@ func TestMenuCategorySlugsUniqueAndSafe(t *testing.T) {
 // TestMenuCategoryFromCommand checks slug + normalized-name resolution.
 func TestMenuCategoryFromCommand(t *testing.T) {
 	cases := map[string]string{
-		"core":              "OWNER & SYSTEM",
-		"group":             "GROUP MANAGEMENT",
-		"groupmanagement":   "GROUP MANAGEMENT",
-		"protection":        "ANTI & PROTECTION",
-		"antiprotection":    "ANTI & PROTECTION",
-		"downloader":        "DOWNLOADER",
-		"ai":                "AI & MEDIA",
-		"aimedia":           "AI & MEDIA",
-		"presence":          "PRESENCE & STATUS",
-		"presencestatus":    "PRESENCE & STATUS",
-		"converter":         "CONVERTER",
-		"tools":             "TOOLS",
-		"other":             "OTHER",
+		"core":            "OWNER & SYSTEM",
+		"group":           "GROUP MANAGEMENT",
+		"groupmanagement": "GROUP MANAGEMENT",
+		"protection":      "ANTI & PROTECTION",
+		"antiprotection":  "ANTI & PROTECTION",
+		"downloader":      "DOWNLOADER",
+		"utility":         "AI & MEDIA",
+		"aimedia":         "AI & MEDIA",
+		"presence":        "PRESENCE & STATUS",
+		"presencestatus":  "PRESENCE & STATUS",
+		"converter":       "CONVERTER",
+		"tools":           "TOOLS",
 	}
 	for in, want := range cases {
 		got, ok := menuCategoryFromCommand(in)
@@ -54,7 +53,7 @@ func TestMenuCategoryFromCommand(t *testing.T) {
 	}
 	// REGRESSION: handler.go passes the FULL category name (e.g. "GROUP
 	// MANAGEMENT") to CmdMenu, which re-resolves it. Must still resolve.
-	for _, full := range []string{"GROUP MANAGEMENT", "ANTI & PROTECTION", "OWNER & SYSTEM", "AI & MEDIA", "PRESENCE & STATUS", "TOOLS", "DOWNLOADER", "CONVERTER", "OTHER"} {
+	for _, full := range []string{"GROUP MANAGEMENT", "ANTI & PROTECTION", "OWNER & SYSTEM", "AI & MEDIA", "PRESENCE & STATUS", "TOOLS", "DOWNLOADER", "CONVERTER"} {
 		got, ok := menuCategoryFromCommand(full)
 		if !ok || got != full {
 			t.Fatalf("re-resolve menuCategoryFromCommand(%q) = (%q,%v), want (%q,true)", full, got, ok, full)
@@ -72,7 +71,7 @@ func TestMenuCategoryFromCommand(t *testing.T) {
 // category names (slugs), not individual commands.
 func TestBuildCategoryMenuCategoryListMode(t *testing.T) {
 	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "")
-	for _, slug := range []string{"CORE", "GROUP", "PROTECTION", "DOWNLOADER", "AI", "PRESENCE", "CONVERTER", "TOOLS", "OTHER"} {
+	for _, slug := range []string{"CORE", "GROUP", "PROTECTION", "DOWNLOADER", "UTILITY", "PRESENCE", "CONVERTER", "TOOLS"} {
 		if !strings.Contains(out, "."+slug) {
 			t.Fatalf("category-list menu missing slug .%s\n%s", slug, out)
 		}

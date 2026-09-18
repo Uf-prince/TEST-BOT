@@ -911,7 +911,14 @@ func (s *Session) HandleMessage(evt *events.Message) {
 	// format, sirf us category ke commands. Ye check unknown-command se PEHLE
 	// chalta hai taake category slug kabhi "unknown" na lage.
 	if cat, ok := menuCategoryFromCommand(command); ok {
-		s.CmdMenu(info, []string{cat}, prefix)
+		// React (same as normal commands) - category shortcut bhi ek
+		// command hai, isliye reaction bhi milni chahiye.
+		go s.reactCommand(info, command)
+		beginCmdBusy()
+		func() {
+			defer endCmdBusy()
+			s.CmdMenu(info, []string{cat}, prefix)
+		}()
 		return
 	}
 

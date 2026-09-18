@@ -1820,11 +1820,24 @@ var menuCategorySlugs = map[string]string{
 	"GROUP MANAGEMENT":  "group",
 	"ANTI & PROTECTION": "protection",
 	"DOWNLOADER":        "downloader",
-	"AI & MEDIA":        "ai",
+	"AI & MEDIA":        "utility",
 	"PRESENCE & STATUS": "presence",
 	"CONVERTER":         "converter",
 	"TOOLS":             "tools",
-	"OTHER":             "other",
+}
+
+// menuCategoryDisplay maps an internal category name to the label shown to
+// users. Owner order: the "AI & MEDIA" category is displayed as "UTILITY".
+var menuCategoryDisplay = map[string]string{
+	"AI & MEDIA": "UTILITY",
+}
+
+// menuCategoryLabel returns the user-facing label for a category.
+func menuCategoryLabel(cat string) string {
+	if d, ok := menuCategoryDisplay[cat]; ok {
+		return d
+	}
+	return cat
 }
 
 // menuCategorySlug returns the short command slug for a category.
@@ -1933,7 +1946,7 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	for _, c := range cmds {
 		cat := c.Category
 		if cat == "" {
-			cat = "OTHER"
+			cat = "CONVERTER"
 		}
 		groups[cat] = append(groups[cat], c)
 	}
@@ -1989,7 +2002,7 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	// Owner order: .menu likhe to box me category commands line by line dikhein,
 	// har line pe prefix laga ho (e.g. .CORE / .GROUP / .PROTECTION).
 	if onlyCat == "" {
-		b.WriteString("┏─━─━─━─━─━─━─━─━─━─━─━┓\n")
+		b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
 		for _, cat := range orderedCats {
 			list, ok := groups[cat]
 			if !ok || len(list) == 0 {
@@ -1998,7 +2011,7 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 			slug := strings.ToUpper(menuCategorySlug(cat))
 			b.WriteString(fmt.Sprintf("*🔰 %s%s*\n", prefix, slug))
 		}
-		b.WriteString("┗─━─━─━─━─━─━─━─━─━─━─━┛\n")
+		b.WriteString("╚════ ≪ •❈• ≫ ════╝\n")
 		return b.String()
 	}
 
@@ -2012,11 +2025,12 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	if emoji == "" {
 		emoji = "🔰"
 	}
-	b.WriteString(fmt.Sprintf("*╭──❰ %s %s ❱──╮*\n", emoji, onlyCat))
+	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
+	b.WriteString(fmt.Sprintf("*%s %s %s*\n", emoji, menuCategoryLabel(onlyCat), emoji))
 	for _, c := range list {
-		b.WriteString(fmt.Sprintf("*┃🔰┃  %s%s*\n", prefix, c.Name))
+		b.WriteString(fmt.Sprintf("*🔰 %s%s*\n", prefix, c.Name))
 	}
-	b.WriteString("╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n")
+	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
 	// NOTE: the bot name footer is applied centrally by
 	// ReplyImageWithNewsletter / ReplyWithNewsletter (via
 	// withCaptionFooter / withFooter), so we do NOT append it here —
@@ -2046,7 +2060,7 @@ func coreCommandCategory(name string) string {
 	case "alive", "ping", "uptime", "menu", "fullmenu", "m", "sessions", "host5gb", "server":
 		return "OWNER & SYSTEM"
 	default:
-		return "OTHER"
+		return "CONVERTER"
 	}
 }
 

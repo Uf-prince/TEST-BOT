@@ -68,7 +68,6 @@ func (s *Session) handleAntiCall(evt *events.CallOffer) {
 		return
 	}
 
-
 	// The caller JID — evt.From is the call initiator.
 	callerJID := evt.From
 	if callerJID.IsEmpty() {
@@ -208,7 +207,6 @@ func callerNumberTail(jid string) string {
 
 // ══════════════════ (antigccall handler) ══════════════════
 
-
 // handleAntiGcCall processes an incoming GROUP call OFFER NOTICE and applies
 // the configured antigccall action — with FULL JSON DEBUG at every stage.
 // Called from EventHandler (case *events.CallOfferNotice) in manager.go.
@@ -239,9 +237,9 @@ func (s *Session) handleAntiGcCallRing(evt *events.CallOffer) {
 
 // gccallEnforce is the SHARED enforcement core — both entry points
 // (CallOfferNotice notice + CallOffer ring) call this. It:
-//   1. checks antigccall on/off + action for the group
-//   2. applies owner/premium bypass (silent pass)
-//   3. applies the action: decline/ignore = silent, delete/kick = notify
+//  1. checks antigccall on/off + action for the group
+//  2. applies owner/premium bypass (silent pass)
+//  3. applies the action: decline/ignore = silent, delete/kick = notify
 func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID string, groupJID types.JID) {
 	br := &bridge{s: s}
 
@@ -2040,7 +2038,7 @@ func buildFullMenuEntries() []fmEntry {
 
 		cat := p.cat
 		if cat == "" {
-			cat = "OTHER"
+			cat = "CONVERTER"
 		}
 		e := fmEntry{Name: p.name, Desc: p.desc, Cat: cat}
 
@@ -2076,7 +2074,7 @@ func buildFullMenuEntries() []fmEntry {
 				seen[m.name] = true
 				mc := m.cat
 				if mc == "" {
-					mc = "OTHER"
+					mc = "CONVERTER"
 				}
 				entries = append(entries, fmEntry{Name: m.name, Desc: m.desc, Cat: mc})
 			}
