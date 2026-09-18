@@ -1,0 +1,71 @@
+GOLD-MD — 50 MORE USEFUL TOOLS COMMANDS (Round 2)
+==================================================
+
+PACK 13 — Everyday Utilities (no internet needed)
+--------------------------------------------------
+1.  .timestamp <unix>            — Unix timestamp <-> date converter
+2.  .agecalc <YYYY-MM-DD>        — Calculate exact age from birthdate
+3.  .unitconvert <v> <from> <to> — Convert km/mi, kg/lb, C/F etc.
+4.  .caseconvert <mode> <text>   — Change text case (upper/lower/title)
+5.  .charcount <text>            — Count characters, words, lines
+6.  .palindrome <text>           — Check if text is a palindrome
+7.  .anagram <w1> <w2>           — Check if two words are anagrams
+8.  .loremipsum <count>          — Generate lorem ipsum placeholder text
+9.  .urlparse <url>              — Break a URL into its parts
+10. .emailvalidate <email>       — Validate an email address
+
+PACK 14 — Money, Media & Words
+--------------------------------------------------
+11. .qrgen <text>                — Generate a QR code image
+12. .barcode <text>              — Generate a barcode image
+13. .urlshort <url>              — Shorten a long URL
+14. .goldprice                   — Live gold price per ounce
+15. .silverprice                 — Live silver price per ounce
+16. .currencyconvert <amt> <from> <to> — Live currency conversion
+17. .randomuser                  — Generate a random user profile
+18. .synwords <word>             — Find synonyms
+19. .antonym <word>              — Find antonyms
+20. .wordassoc <word>            — Find related words
+
+PACK 15 — Islamic, Time & Location
+--------------------------------------------------
+21. .prayertimes <city> <country> — Daily namaz (salah) times
+22. .hijridate <DD-MM-YYYY>       — Gregorian to Hijri date
+23. .qibladirection <lat> <lon>   — Qibla direction in degrees
+24. .asmaulhusna <number>         — 99 names of Allah
+25. .worldclock <timezone>        — Current time in any timezone
+26. .timezoneconvert <from> <to> <datetime> — Convert time between zones
+27. .ipdetails <ip>               — Full geolocation + ISP of an IP
+28. .countryfacts <country>       — Capital, currency, population
+29. .countrycapital <country>     — Capital city of a country
+30. .sslcheck <host>              — SSL/TLS security grade of a site
+
+PACK 16 — Text, Numbers & Web
+--------------------------------------------------
+31. .textstats <text>             — Detailed text statistics
+32. .wordfreq <text>              — Word frequency counter
+33. .leapyear <year>              — Check if a year is a leap year
+34. .domaininfo <domain>          — Domain registration info (RDAP)
+35. .phonevalidate <number>       — Validate a phone number + country
+36. .colorinfo <hex>              — Color name, RGB, HSL from hex
+37. .numberfact <number>          — Facts about a number (prime, etc.)
+38. .wordmeaning <word>           — Dictionary meaning of a word
+39. .spellcheck <word>            — Spelling suggestions
+40. .mathcalc <expression>        — Evaluate a math expression
+
+PACK 17 — Security & Generators
+--------------------------------------------------
+41. .emailcheck <email>           — Validate email + domain MX check
+42. .dnscheck <domain>            — DNS records (A, MX, TXT, NS)
+43. .httpheaders <url>            — HTTP response headers of a site
+44. .uuidgen                      — Generate a random UUID v4
+45. .passwordgen <length>         — Generate a strong random password
+46. .base64tool <enc|dec> <text>  — Base64 encode or decode
+47. .hashgen <algo> <text>        — MD5 / SHA1 / SHA256 hash
+48. .randomnumber <min> <max>     — Random number in a range
+49. .coinflip                     — Flip a coin (heads/tails)
+50. .diceroll <sides>             — Roll a dice
+
+==================================================
+All commands are in the TOOLS category.
+Each has hidden short aliases too (not counted in menu).
