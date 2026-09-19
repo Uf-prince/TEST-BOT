@@ -98,3 +98,27 @@ func TestAISystemPromptIdentity(t *testing.T) {
 		t.Fatalf("prompt must NOT contain owner number\n%s", p)
 	}
 }
+
+// TestAIWhatsAppFormat — Markdown emphasis must be converted to WhatsApp-native
+// formatting so the ** stars hide (owner report + screenshot).
+func TestAIWhatsAppFormat(t *testing.T) {
+	cases := map[string]string{
+		"I am **ChatGPT**, a model from OpenAI.": "I am *ChatGPT*, a model from OpenAI.",
+		"**Bold** and *italic*.":                 "*Bold* and _italic_.",
+		"~~strike~~":                             "~strike~",
+		"`code`":                                 "```code```",
+		"# Heading":                              "*Heading*",
+		"[Google](https://google.com)":           "Google (https://google.com)",
+		"plain text":                             "plain text",
+	}
+	for in, want := range cases {
+		got := aiWhatsAppFormat(in)
+		if got != want {
+			t.Fatalf("aiWhatsAppFormat(%q) = %q, want %q", in, got, want)
+		}
+	}
+	// No double-star must survive.
+	if strings.Contains(aiWhatsAppFormat("**x**"), "**") {
+		t.Fatal("double-star survived conversion")
+	}
+}

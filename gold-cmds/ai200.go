@@ -27,6 +27,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -574,6 +575,58 @@ func aiSystemPrompt(b aiBrand, ownerName, ownerNumber string) string {
 // Shared handler
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────────────────────
+// WhatsApp formatting converter
+// ────────────────────────────────────────────────────────────────────────────
+// Models (Mistral etc.) Markdown me jawab dete hain: **bold**, *italic*,
+// `code`, ~~strike~~, # heading, [text](url). WhatsApp in me se sirf apna
+// format samajhta hai: *bold*, _italic_, ```mono```, ~strike~. Is liye
+// **bold** ka doosra star WhatsApp pe HIDE nahi hota — user ko literally
+// "**ChatGPT**" dikhta hai (owner report + screenshot).
+//
+// aiWhatsAppFormat Markdown ko WhatsApp format me convert karta hai taake
+// stars hide ho jayein aur text sahi bold/italic dikhe.
+
+var (
+	aiReBold       = regexp.MustCompile(`\*\*(.+?)\*\*`)
+	aiReBoldAlt    = regexp.MustCompile(`__(.+?)__`)
+	aiReItalic     = regexp.MustCompile(`(^|[^*])\*([^*\n]+?)\*([^*]|$)`)
+	aiReStrike     = regexp.MustCompile(`~~(.+?)~~`)
+	aiReInlineCode = regexp.MustCompile("`([^`\n]+?)`")
+	aiReHeading    = regexp.MustCompile(`(?m)^#{1,6}\s*(.+?)\s*$`)
+	aiReLink       = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
+)
+
+// aiWhatsAppFormat converts Markdown emphasis to WhatsApp-native formatting.
+//
+// Order matters: bold (**x**) is converted to a placeholder FIRST, then single
+// star italic (*x*) is handled, then the placeholder is restored to *x*.
+// Without the placeholder, the italic pass would turn the freshly-made bold
+// *x* into _x_ (italic) — wrong.
+func aiWhatsAppFormat(in string) string {
+	if in == "" {
+		return in
+	}
+	out := in
+	// Links: [text](url) -> text (url)
+	out = aiReLink.ReplaceAllString(out, "$1 ($2)")
+	// Headings: "# Title" -> bold placeholder (protect from italic pass)
+	out = aiReHeading.ReplaceAllString(out, "\x00B\x00$1\x00/B\x00")
+	// Bold: **x** / __x__ -> placeholder (protect from italic pass)
+	out = aiReBold.ReplaceAllString(out, "\x00B\x00$1\x00/B\x00")
+	out = aiReBoldAlt.ReplaceAllString(out, "\x00B\x00$1\x00/B\x00")
+	// Strike: ~~x~~ -> ~x~
+	out = aiReStrike.ReplaceAllString(out, "~$1~")
+	// Inline code: `x` -> ```x```
+	out = aiReInlineCode.ReplaceAllString(out, "```$1```")
+	// Italic: *x* -> _x_ (single-star pairs only)
+	out = aiReItalic.ReplaceAllString(out, "${1}_${2}_${3}")
+	// Restore bold placeholders -> WhatsApp bold *x*
+	out = strings.ReplaceAll(out, "\x00B\x00", "*")
+	out = strings.ReplaceAll(out, "\x00/B\x00", "*")
+	return out
+}
+
 func aiHandle(s SessionBridge, info types.MessageInfo, args []string, prefix string, b aiBrand) {
 	prompt := strings.TrimSpace(strings.Join(args, " "))
 	if prompt == "" {
@@ -592,7 +645,7 @@ func aiHandle(s SessionBridge, info types.MessageInfo, args []string, prefix str
 		return
 	}
 
-	s.Reply(info, fmt.Sprintf("*🤖 %s AI 🤖*\n\n%s", b.Name, out))
+	s.Reply(info, fmt.Sprintf("*🤖 %s AI 🤖*\n\n%s", b.Name, aiWhatsAppFormat(out)))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
