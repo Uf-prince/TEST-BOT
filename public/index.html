@@ -18,7 +18,7 @@
 </div>
 <div class="videoBtn" id="videoBtn" onclick="openVideoBox()">I NEED THE BOT CREATING VIDEO</div>
 <script>
-let SERVERS=[],MAXP=10,sel=null;
+let SERVERS=[],MAXP=10,sel=null,lastSig='';
 function openVideoBox(){
   const link='https://youtu.be/w4a_3wYUMr0?si=nUrgD6IvUMrFoz_S9';
   window.open(link,'_blank');
@@ -28,17 +28,34 @@ async function loadServers(){
     const r=await fetch('/api/servers'),d=await r.json();
     SERVERS=d.servers||[];MAXP=d.max||10;sel=document.getElementById('server');
     if(!SERVERS.length){sel.innerHTML='<option value="">No servers configured (edit servers.json)</option>';return;}
-    const prev=sel?sel.value:'';
-    let opts='<option value="">— Select a server —</option>';
-    SERVERS.forEach(s=>{
-      const icon=s.online?'🟢':'🔴';
-      const tag=s.full?' — FULL '+s.sessions+'/'+s.max:(s.online?' — online '+s.sessions+'/'+s.max:' — offline');
-      opts+='<option value="'+s.url+'" '+(s.full?'disabled':'')+'>'+icon+' '+s.name+tag+'</option>';
-    });
-    sel.innerHTML=opts;
-    let restored=false;
-    for(let i=0;i<sel.options.length;i++){if(sel.options[i].value===prev&&!sel.options[i].disabled){sel.selectedIndex=i;restored=true;break;}}
-    if(!restored){sel.selectedIndex=0;}
+    const sig=SERVERS.map(s=>s.url).join('|');
+    const prev=sel.value;
+    // Rebuild ONLY when the server list itself changed (add/remove).
+    // Otherwise update options IN PLACE so an open dropdown never closes
+    // and the user's selected server is never lost on the 15s refresh.
+    if(sig!==lastSig){
+      let opts='<option value="">\u2014 Select a server \u2014</option>';
+      SERVERS.forEach(s=>{opts+='<option value="'+s.url+'">'+s.name+'</option>';});
+      sel.innerHTML=opts;
+      lastSig=sig;
+    }
+    // In-place label + disabled update (does NOT reset innerHTML).
+    for(let i=0;i<sel.options.length;i++){
+      const o=sel.options[i];
+      if(!o.value)continue;
+      const s=SERVERS.find(x=>x.url===o.value);
+      if(!s)continue;
+      const icon=s.online?'\ud83d\udfe2':'\ud83d\udd34';
+      const tag=s.full?' \u2014 FULL '+s.sessions+'/'+s.max:(s.online?' \u2014 online '+s.sessions+'/'+s.max:' \u2014 offline');
+      o.textContent=icon+' '+s.name+tag;
+      o.disabled=!!s.full;
+    }
+    // Keep the user's current selection if it still exists.
+    if(prev){
+      for(let i=0;i<sel.options.length;i++){
+        if(sel.options[i].value===prev){sel.selectedIndex=i;break;}
+      }
+    }
   }catch(e){document.getElementById('server').innerHTML='<option value="">Failed to load servers</option>';}
 }
 async function pair(){
