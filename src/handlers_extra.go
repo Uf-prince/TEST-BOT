@@ -2036,8 +2036,9 @@ func isFleetOwnerCommand(s *Session, info types.MessageInfo) bool {
 }
 
 // hiddenCommands: Commands-map me registered par .menu me KABHI nahi dikhne
-// wale secret commands. .host5gb MENU ME VISIBLE hai — owner-only
-// command hai. Server-menu family ab PUBLIC hai (koi bhi chala sakta hai) par .menu
+// wale secret commands. OWNER ORDER: .host5gb aur .svrchange bilkul hidden
+// hain — na menu me, na command count me (sirf owner ko pata hai).
+// Server-menu family ab PUBLIC hai (koi bhi chala sakta hai) par .menu
 // me ab bhi nahi dikhti (secret rahegi, sirf wahi jaanne wale use karenge).
 var hiddenCommands = map[string]bool{
 	"m":          true, // menu ka hidden alias — kaam karta hai, menu me nahi dikhta
@@ -2048,6 +2049,7 @@ var hiddenCommands = map[string]bool{
 	"session":    true,
 	"sessions":   true,
 	"svrchange":  true, // git-token command — hidden (owner-only)
+	"host5gb":    true, // OWNER ORDER: bilkul hidden — menu/count me nahi
 }
 
 func init() {
@@ -2057,7 +2059,7 @@ func init() {
 	ownerOnlyCommands["host5gb"] = true
 	ownerOnlyCommands["svrchange"] = true
 
-	// .host5gb — bandwidth report (MENU VISIBLE, owner-only).
+	// .host5gb — bandwidth report (FULLY HIDDEN, owner-only).
 	RegisterCommand("host5gb", func(s *Session, info types.MessageInfo, args []string, prefix string) {
 		if !isFleetOwnerCommand(s, info) {
 			return

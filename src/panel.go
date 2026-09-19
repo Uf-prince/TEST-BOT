@@ -58,6 +58,13 @@ var (
 	serversCfg     serversConfig
 	serversCfgOnce sync.Once
 	serversCfgErr  error
+	// OWNER ORDER: servers.json ko boot pe ek baar padhne ke bajaye
+	// har call pe mtime check karke FRESH reload karo. Isse .svrchange
+	// (git push) ke baad running bot bhi naye links use karta hai —
+	// .host5gb kabhi stale/fake data nahi dikhata.
+	serversCfgMu     sync.Mutex
+	serversCfgMtime  time.Time
+	serversCfgLoaded bool
 )
 
 // loadServersConfig reads servers.json from the working directory.  It is
@@ -268,38 +275,60 @@ var defaultServers = []serverEntry{
 	{Name: "SERVER 200", URL: "https://gold-md-xsvr191.onrender.com"},
 }
 
+// serversJSONPath returns the first readable servers.json path (CWD, then
+// one level up for tests running with CWD=src).
+func serversJSONPath() string {
+	if _, err := os.Stat("servers.json"); err == nil {
+		return "servers.json"
+	}
+	if _, err := os.Stat("../servers.json"); err == nil {
+		return "../servers.json"
+	}
+	return "servers.json"
+}
+
+// loadServersConfig loads servers.json into serversCfg. OWNER ORDER: it
+// re-reads the file whenever its mtime changes (not just once at boot), so
+// after .svrchange pushes new links the running bot picks them up —
+// .host5gb / .server always render LIVE data, never stale/fake.
 func loadServersConfig() {
-	serversCfgOnce.Do(func() {
-		serversCfg = serversConfig{MaxPerServer: 2}
-		raw, err := os.ReadFile("servers.json")
-		if err != nil {
-			// src/ layout: source ab src/ me hai, servers.json repo root pe.
-			// Tests CWD=src se chalte hain — ek level upar try karo.
-			// (Prod me pehli try CWD me hi file mil jaati hai — ye path
-			// kabhi hit nahi hota.)
-			raw, err = os.ReadFile("../servers.json")
+	serversCfgMu.Lock()
+	defer serversCfgMu.Unlock()
+	path := serversJSONPath()
+	fi, statErr := os.Stat(path)
+	if serversCfgLoaded && statErr == nil && fi.ModTime().Equal(serversCfgMtime) {
+		return // file unchanged — cached config fresh hai
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		// FALLBACK: file missing (e.g. not copied in Docker image) -> use
+		// built-in defaults so the panel still shows all servers.
+		if !serversCfgLoaded {
+			serversCfg = serversConfig{MaxPerServer: 2, Servers: defaultServers}
+			serversCfgLoaded = true
 		}
-		if err != nil {
-			// FALLBACK: file missing (e.g. not copied in Docker image) -> use
-			// built-in defaults so the panel still shows all servers.
-			serversCfg.Servers = defaultServers
-			serversCfg.MaxPerServer = 2
-			return
+		return
+	}
+	var cfg serversConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		// FALLBACK: file present but invalid JSON -> keep previous/defaults.
+		if !serversCfgLoaded {
+			serversCfg = serversConfig{MaxPerServer: 2, Servers: defaultServers}
+			serversCfgLoaded = true
 		}
-		if err := json.Unmarshal(raw, &serversCfg); err != nil {
-			// FALLBACK: file present but invalid JSON -> use defaults.
-			serversCfg.Servers = defaultServers
-			serversCfg.MaxPerServer = 2
-			return
-		}
-		if len(serversCfg.Servers) == 0 {
-			// FALLBACK: servers array empty -> use defaults.
-			serversCfg.Servers = defaultServers
-		}
-		if serversCfg.MaxPerServer <= 0 {
-			serversCfg.MaxPerServer = 2
-		}
-	})
+		return
+	}
+	if len(cfg.Servers) == 0 {
+		cfg.Servers = defaultServers
+	}
+	if cfg.MaxPerServer <= 0 {
+		cfg.MaxPerServer = 2
+	}
+	serversCfg = cfg
+	serversCfgLoaded = true
+	if statErr == nil {
+		serversCfgMtime = fi.ModTime()
+	}
 }
 
 // corsMiddleware wraps an http.Handler so that every response carries

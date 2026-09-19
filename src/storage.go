@@ -168,16 +168,16 @@ func storjDebug(stage string, fields map[string]any) {
 // Bucket names S3-rule lowercase (Gold3..Gold10 → gold3..gold10).
 // Probe: tools/storadera10 → 10/10 CONNECTED (PUT/GET/DELETE OK).
 var hardcodedStorjShards = [10][3]string{
-	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"},  // slot 1
-	{"AKIA3380AVOH90WMPB69", "Pm3P6PbtCNyMDdczbaSzefrzp0K5gvcqfa8E1xKq", "gold2"},   // slot 2
-	{"AKIA35754JXDYFQK7XHR", "R95egkdTXmE5K6UO876vzPGz9jBMq7y0FKpKX61K", "gold3"},   // slot 3
-	{"AKIA2083VJSVVU88VCEB", "yRus8xhVGEPW0Efyv0nhhRR40hfGgK173ZkIzjlS", "gold4"},   // slot 4
-	{"AKIA90170CO4BWF3OWUG", "aUDHw1vDI7d7zOg73uGhztN7lfvNb84C73mCoasL", "gold5"},   // slot 5
-	{"AKIA6111E0URFD3575BN", "Larcnkizs7gk9sGpAUPcgGUEVOjOVjlaM70jkwE5", "gold6"},   // slot 6
-	{"AKIA24138MTI05TQ6MTD", "5Aui0Yc6rdLMv6hOZt7rOyIEXlGYrUaAKXaW4faX", "gold7"},   // slot 7
-	{"AKIA1094TFMGV9M200IT", "pyYe6Hz4X8STOmV4i6ZoJFeASExwWlwqyYIR2Mh3", "gold8"},   // slot 8
-	{"AKIA3668SXGPLQA0HUJ0", "ahnlVCSEDC1EKx2jd3b31xt6rFtBBXgOYLAPdcT8", "gold9"},   // slot 9
-	{"AKIA6658WW37WXCBFG0Q", "1yP3vhEC6UU8hxp3DlZskmqAYnTeuZ1T9gXfgHi9", "gold10"},  // slot 10
+	{"AKIA6139I7AGJR0L0630", "ZPkK0Pkczn3kWetTMJGUyBjPUqvb9Z2TBXddIpsz", "goldmd"}, // slot 1
+	{"AKIA3380AVOH90WMPB69", "Pm3P6PbtCNyMDdczbaSzefrzp0K5gvcqfa8E1xKq", "gold2"},  // slot 2
+	{"AKIA35754JXDYFQK7XHR", "R95egkdTXmE5K6UO876vzPGz9jBMq7y0FKpKX61K", "gold3"},  // slot 3
+	{"AKIA2083VJSVVU88VCEB", "yRus8xhVGEPW0Efyv0nhhRR40hfGgK173ZkIzjlS", "gold4"},  // slot 4
+	{"AKIA90170CO4BWF3OWUG", "aUDHw1vDI7d7zOg73uGhztN7lfvNb84C73mCoasL", "gold5"},  // slot 5
+	{"AKIA6111E0URFD3575BN", "Larcnkizs7gk9sGpAUPcgGUEVOjOVjlaM70jkwE5", "gold6"},  // slot 6
+	{"AKIA24138MTI05TQ6MTD", "5Aui0Yc6rdLMv6hOZt7rOyIEXlGYrUaAKXaW4faX", "gold7"},  // slot 7
+	{"AKIA1094TFMGV9M200IT", "pyYe6Hz4X8STOmV4i6ZoJFeASExwWlwqyYIR2Mh3", "gold8"},  // slot 8
+	{"AKIA3668SXGPLQA0HUJ0", "ahnlVCSEDC1EKx2jd3b31xt6rFtBBXgOYLAPdcT8", "gold9"},  // slot 9
+	{"AKIA6658WW37WXCBFG0Q", "1yP3vhEC6UU8hxp3DlZskmqAYnTeuZ1T9gXfgHi9", "gold10"}, // slot 10
 }
 
 // InitStorj loads up to 10 shard credential sets from the environment (with
@@ -318,8 +318,8 @@ func (ss *StorjStore) PutMessage(ctx context.Context, msgID, chat, sender, pushN
 
 	if len(raw) > maxStorjBytes {
 		storjDebug("STORJ_PUT", map[string]any{
-		"msgID": msgID, "chat": chat, "ok": false, "skip": true,
-		"reason": "size > 50MiB", "sizeBytes": len(raw), "maxBytes": maxStorjBytes,
+			"msgID": msgID, "chat": chat, "ok": false, "skip": true,
+			"reason": "size > 50MiB", "sizeBytes": len(raw), "maxBytes": maxStorjBytes,
 		})
 		return "", "", true, nil
 	}
@@ -376,9 +376,9 @@ func (ss *StorjStore) PutMessage(ctx context.Context, msgID, chat, sender, pushN
 
 	atomic.AddUint64(&ss.rr, 1)
 	storjDebug("STORJ_PUT", map[string]any{
-	"msgID": msgID, "chat": chat, "sender": sender, "mediaType": mediaType,
-	"shard": shard.idx, "bucket": shard.bucket, "key": key, "sizeBytes": len(raw),
-	"ok": true, "ts": ts.Format(time.RFC3339),
+		"msgID": msgID, "chat": chat, "sender": sender, "mediaType": mediaType,
+		"shard": shard.idx, "bucket": shard.bucket, "key": key, "sizeBytes": len(raw),
+		"ok": true, "ts": ts.Format(time.RFC3339),
 	})
 	return shard.bucket, key, false, nil
 }
@@ -464,8 +464,8 @@ func (ss *StorjStore) GetMessage(ctx context.Context, msgID string) (*waProto.Me
 	}
 
 	storjDebug("STORJ_GET", map[string]any{
-	"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey,
-	"ok": true, "mediaType": meta.MediaType, "sizeBytes": meta.SizeBytes, "chat": meta.Chat, "sender": meta.Sender, "ts": time.UnixMilli(meta.Timestamp).Format(time.RFC3339),
+		"msgID": msgID, "shard": shard.idx, "bucket": shard.bucket, "key": foundKey,
+		"ok": true, "mediaType": meta.MediaType, "sizeBytes": meta.SizeBytes, "chat": meta.Chat, "sender": meta.Sender, "ts": time.UnixMilli(meta.Timestamp).Format(time.RFC3339),
 	})
 	return &msg, meta, nil
 }
@@ -576,9 +576,9 @@ func (ss *StorjStore) runTTLSweep() {
 	}
 
 	storjDebug("GUARD_TTL", map[string]any{
-	"ok": true, "stage": "sweep_done", "cutoffMs": cutoff,
-	"checked": totalChecked, "deleted": totalDeleted,
-	"deletedIDs": deletedIDs,
+		"ok": true, "stage": "sweep_done", "cutoffMs": cutoff,
+		"checked": totalChecked, "deleted": totalDeleted,
+		"deletedIDs": deletedIDs,
 	})
 }
 
@@ -3047,6 +3047,28 @@ func svrApplyChanges(raw string, changes map[int]string) (newRaw string, updated
 //   .svrchange — PARSE + VALIDATE + RUN (dono repos, aggregated reply)
 // ═════════════════════════════════════════════════════════════════════════════
 
+// svrWriteLocalServers applies the same changes to the LOCAL servers.json
+// so the running bot immediately uses the new links (no redeploy wait).
+// OWNER ORDER: .host5gb must always render LIVE data — never stale/fake.
+func svrWriteLocalServers(changes map[int]string) (updated []string, err error) {
+	path := serversJSONPath()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	newRaw, updated, missing, err := svrApplyChanges(string(raw), changes)
+	if err != nil {
+		return nil, err
+	}
+	if len(missing) > 0 {
+		return updated, fmt.Errorf("servers %v not found in local servers.json", missing)
+	}
+	if err := os.WriteFile(path, []byte(newRaw), 0o644); err != nil {
+		return updated, err
+	}
+	return updated, nil
+}
+
 // svrParseAndRun: .svrchange ka pura flow.  fleet_commands.go se owner-guard
 // ke BAAD call hota hai (non-owner ke liye command silently ignore hota hai).
 func svrParseAndRun(args []string) string {
@@ -3115,9 +3137,21 @@ func svrParseAndRun(args []string) string {
 		changes[n] = links[i]
 	}
 
+	// ── LOCAL servers.json update (running bot foran naye links use kare) ──
+	localUpdated, localErr := svrWriteLocalServers(changes)
+
 	// ── GITHUB push ──
 	var b strings.Builder
 	b.WriteString("*🔰 .svrchange — SERVER LINKS UPDATE 🔰*\n\n")
+	if localErr != nil {
+		b.WriteString(fmt.Sprintf("*❌ LOCAL servers.json*\n%v\n\n", localErr))
+	} else {
+		b.WriteString("*✅ LOCAL servers.json — UPDATED (live)*\n")
+		for _, u := range localUpdated {
+			b.WriteString("• " + u + "\n")
+		}
+		b.WriteString("\n")
+	}
 	ghOK, glOK := false, false
 
 	if raw, sha, err := svrGitHubGet(); err != nil {
