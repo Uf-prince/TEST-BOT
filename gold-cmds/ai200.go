@@ -1471,7 +1471,10 @@ func init() {
 	// ban ke aata hai".)
 
 	// 500 AI brand commands — each with its own guidance message.
-	for _, b := range aiBrands {
+	// Batch 2 (aiBrandsExtra, 500 more) is registered with the SAME loop so
+	// every extra brand behaves identically (guidance, Mistral reply, identity
+	// prompt, .ai menu category "AI").
+	for _, b := range append(append([]aiBrand{}, aiBrands...), aiBrandsExtra...) {
 		brand := b
 		Register(Command{
 			Name:     brand.Cmd,

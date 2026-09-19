@@ -5,13 +5,17 @@ import (
 	"testing"
 )
 
-// TestAI200Count — exactly 500 AI brand commands + the .ai menu command.
+// TestAI200Count — exactly 500 AI brand commands in batch 1 (aiBrands) and
+// exactly 500 more in batch 2 (aiBrandsExtra) = 1000 total, all unique.
 func TestAI200Count(t *testing.T) {
 	if len(aiBrands) != 500 {
 		t.Fatalf("aiBrands = %d, want 500", len(aiBrands))
 	}
+	if len(aiBrandsExtra) != 500 {
+		t.Fatalf("aiBrandsExtra = %d, want 500", len(aiBrandsExtra))
+	}
 	seen := map[string]bool{}
-	for _, b := range aiBrands {
+	for _, b := range append(append([]aiBrand{}, aiBrands...), aiBrandsExtra...) {
 		if b.Cmd == "" || b.Name == "" || b.Company == "" {
 			t.Fatalf("brand with empty field: %+v", b)
 		}
@@ -19,6 +23,9 @@ func TestAI200Count(t *testing.T) {
 			t.Fatalf("duplicate command name %q", b.Cmd)
 		}
 		seen[b.Cmd] = true
+	}
+	if len(seen) != 1000 {
+		t.Fatalf("total unique AI brands = %d, want 1000", len(seen))
 	}
 }
 
