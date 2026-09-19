@@ -531,6 +531,84 @@ func guardRemoteServers() []string {
 	return out
 }
 
+// ── SHARED KEEP-ALIVE CLIENT + /sessions CACHE (bandwidth fix) ──
+//
+// MASLA: fleetSessionOnlineElsewhere() har unconnected JID ke liye SAARE
+// servers.json (200) ko probe karta tha -> 14 JID x 200 = 2800 /sessions
+// requests per pass. Har call naya http.Client banata tha (TLS handshake
+// overhead) aur wahi server baar-baar fetch hota tha.
+//
+// HAL (0% behaviour change): ek shared keep-alive client + per-URL /sessions
+// response cache (30s TTL). Ek hi pass me pehla JID saare servers fetch karta
+// hai, baaki JIDs cache se padhte hain -> 2800 req -> ~200 req. DECISIONS
+// bilkul same: wahi data, wahi safe-side policies (network fail pe online=false,
+// present=true). Sirf network traffic kam.
+var guardHTTPClient = &http.Client{
+	Timeout: guardProbeTimeout,
+	Transport: &http.Transport{
+		MaxIdleConns:        256,
+		MaxIdleConnsPerHost: 4,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
+
+type guardSessCacheEntry struct {
+	seen guardSessionsSeen
+	ok   bool
+	ts   time.Time
+}
+
+var (
+	guardSessCacheMu sync.Mutex
+	guardSessCache   = map[string]guardSessCacheEntry{}
+)
+
+// guardSessCacheTTL: ek pass ke andar saare JIDs same snapshot dekhein.
+// 30s = watchdog pass duration se zyada, staleness window chhota.
+const guardSessCacheTTL = 30 * time.Second
+
+// guardFetchSessions: serverURL ka /sessions payload (cached 30s).
+// ok=false = fetch fail (network / non-200 / decode) — caller apni
+// safe-side policy lagata hai (online=false ya present=true).
+func guardFetchSessions(serverURL string) (guardSessionsSeen, bool) {
+	guardSessCacheMu.Lock()
+	if e, hit := guardSessCache[serverURL]; hit && time.Since(e.ts) < guardSessCacheTTL {
+		guardSessCacheMu.Unlock()
+		return e.seen, e.ok
+	}
+	guardSessCacheMu.Unlock()
+
+	var seen guardSessionsSeen
+	ok := false
+	resp, err := guardHTTPClient.Get(serverURL + "/sessions")
+	if err == nil {
+		if resp.StatusCode == http.StatusOK {
+			if json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&seen) == nil {
+				ok = true
+			}
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}
+
+	// SIRF SUCCESS cache karo (0% behaviour change): fetch fail hone pe har
+	// caller apna fresh retry kare — bilkul original jaisa. Isse transient
+	// network fail se cache poison nahi hota aur koi naya risk nahi banta.
+	if ok {
+		guardSessCacheMu.Lock()
+		if len(guardSessCache) >= 512 {
+			for k, e := range guardSessCache {
+				if time.Since(e.ts) >= guardSessCacheTTL {
+					delete(guardSessCache, k)
+				}
+			}
+		}
+		guardSessCache[serverURL] = guardSessCacheEntry{seen: seen, ok: ok, ts: time.Now()}
+		guardSessCacheMu.Unlock()
+	}
+	return seen, ok
+}
+
 // guardRemoteSessionOnline probes one server's /sessions endpoint and
 // reports whether the target JID is online there. Single attempt, 4s
 // timeout — offline/STOPPED server false deta hai (network error/dead).
@@ -538,20 +616,8 @@ func guardRemoteSessionOnline(serverURL, jid string) bool {
 	if serverURL == "" || jid == "" {
 		return false
 	}
-	cl := &http.Client{Timeout: guardProbeTimeout}
-	resp, err := cl.Get(serverURL + "/sessions")
-	if err != nil {
-		return false
-	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusOK {
-		return false
-	}
-	var seen guardSessionsSeen
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&seen); err != nil {
+	seen, ok := guardFetchSessions(serverURL)
+	if !ok {
 		return false
 	}
 	for _, s := range seen.Sessions {
@@ -584,21 +650,9 @@ func guardRemoteSessionPresent(serverURL, jid string) bool {
 	if serverURL == "" || jid == "" {
 		return false
 	}
-	cl := &http.Client{Timeout: guardProbeTimeout}
-	resp, err := cl.Get(serverURL + "/sessions")
-	if err != nil {
+	seen, ok := guardFetchSessions(serverURL)
+	if !ok {
 		return true // network fail = confirm nahi = safe side (respect)
-	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusOK {
-		return true // 4xx/5xx = process zinda, layer issue = safe side
-	}
-	var seen guardSessionsSeen
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&seen); err != nil {
-		return true // decode fail = safe side
 	}
 	for _, s := range seen.Sessions {
 		// ONLINE ya OFFLINE — dono me se koi bhi match kaafi hai

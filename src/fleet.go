@@ -580,14 +580,25 @@ func fleetServerURL(sid string) string {
 	return fleetURLFromHeartbeat(sid)
 }
 
+// fleetHTTPClient: SHARED keep-alive client (bandwidth fix). Pehle har
+// fleetProbeURL / fleetRemoteHealth call naya http.Client banata tha ->
+// har probe pe naya TCP+TLS handshake. Ab connections reuse hote hain.
+var fleetHTTPClient = &http.Client{
+	Timeout: fleetHTTPTimeout,
+	Transport: &http.Transport{
+		MaxIdleConns:        256,
+		MaxIdleConnsPerHost: 4,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
+
 // fleetProbeURL does one quick GET {url} with fleetHTTPTimeout. true =
 // /health ne 2xx/3xx diya — server process waqai zinda hai. 4xx/5xx
 // (Render error page, tunnel 502 Bad Gateway, 503 wake-fail) = ORIGIN
 // DOWN = dead — pehle ye bhi "alive" gin jata tha is liye crashed server
 // ka failover kabhi trigger nahi hota tha. Network error/DNS fail = dead.
 func fleetProbeURL(raw string) bool {
-	cl := &http.Client{Timeout: fleetHTTPTimeout}
-	resp, err := cl.Get(raw)
+	resp, err := fleetHTTPClient.Get(raw)
 	if err != nil {
 		return false
 	}
@@ -1612,9 +1623,8 @@ type fleetHealthFields struct {
 
 // fleetRemoteHealth fetches another server's /health (6s timeout).
 func fleetRemoteHealth(url string) (*fleetHealthFields, error) {
-	client := &http.Client{Timeout: fleetHTTPTimeout}
 	healthURL := strings.TrimRight(url, "/") + "/health"
-	resp, err := client.Get(healthURL)
+	resp, err := fleetHTTPClient.Get(healthURL)
 	if err != nil {
 		return nil, err
 	}
