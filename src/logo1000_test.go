@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -60,6 +61,30 @@ func TestLogo1000MenusAndRegistry(t *testing.T) {
 			t.Errorf(".menu me %q dikh gaya — hidden hona chahiye", banned)
 		}
 	}
+
+	// 3b) plain .menu (category list) must ALSO show .LOGO (owner order)
+	plain := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView, "")
+	if !strings.Contains(plain, ".LOGO") {
+		t.Errorf("plain .menu me .LOGO entry nahi mili\n%s", plain)
+	}
+	// 3c) COMMANDS total must include the 1000 hidden logo commands.
+	idx := strings.Index(plain, "COMMANDS :❯ ❮ ")
+	if idx < 0 {
+		t.Fatalf("plain .menu me COMMANDS line nahi mili\n%s", plain)
+	}
+	rest := plain[idx+len("COMMANDS :❯ ❮ "):]
+	end := strings.Index(rest, " ❯")
+	if end < 0 {
+		t.Fatalf("COMMANDS count parse fail\n%s", plain)
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(rest[:end]))
+	if err != nil {
+		t.Fatalf("COMMANDS count atoi fail: %v\n%s", err, plain)
+	}
+	if n < goldcmds.LogoCount {
+		t.Errorf("COMMANDS total %d me 1000 logo commands count nahi hue (min %d chahiye)", n, goldcmds.LogoCount)
+	}
+	fmt.Printf("plain .menu COMMANDS total = %d (includes %d logo cmds) — OK\n", n, goldcmds.LogoCount)
 
 	// 4) .logo menu: fancy boxed format (same as other category menus)
 	logoMenu := buildLogoMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView)

@@ -1987,7 +1987,11 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 		cmds = append(cmds, menuCmd{Name: name, Category: coreCommandCategory(name), Desc: coreCommandDesc(name)})
 	}
 
-	totalCmds := len(cmds)
+	// OWNER ORDER: the 1000 .LOGO1..LOGO1000 commands are hidden from the
+	// list (they live behind the single .logo command) but MUST still be
+	// counted in the COMMANDS total. So add goldcmds.LogoCount to the
+	// visible count.
+	totalCmds := len(cmds) + goldcmds.LogoCount
 
 	// ── Uptime in "XXH XXM" form for the fancy header ──
 	uptimeHM := formatUptimeHM(uptime())
@@ -2062,6 +2066,9 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 			slug := strings.ToUpper(menuCategorySlug(cat))
 			b.WriteString(fmt.Sprintf("*| 🔰 | %s%s*\n", prefix, slug))
 		}
+		// OWNER ORDER: .LOGO ko plain .menu me bhi dikhao (category list ke
+		// saath) taake user ko .LOGO naam nazar aaye.
+		b.WriteString(fmt.Sprintf("*| 🔰 | %sLOGO*\n", prefix))
 		b.WriteString("╚════ ≪ •❈• ≫ ════╝\n")
 		return b.String()
 	}
