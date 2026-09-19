@@ -1934,6 +1934,12 @@ func fullMessageText(msg *waProto.Message) string {
 	if msg.VideoMessage != nil && msg.VideoMessage.Caption != nil && *msg.VideoMessage.Caption != "" {
 		return *msg.VideoMessage.Caption
 	}
+	// OWNER ORDER (AI media reading): a document (e.g. a PDF) may carry the
+	// command as its caption — ".gpt summarise this". Read it too so the
+	// command dispatches and the AI handler can OCR the document.
+	if msg.DocumentMessage != nil && msg.DocumentMessage.Caption != nil && *msg.DocumentMessage.Caption != "" {
+		return *msg.DocumentMessage.Caption
+	}
 	return ""
 }
 

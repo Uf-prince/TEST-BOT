@@ -416,7 +416,14 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		}()
 	}
 
-	body := getText(msg)
+	// OWNER ORDER (AI media reading): a command may arrive as a CAPTION on top
+	// of media (image/video/document) — e.g. the user sends a photo with the
+	// caption ".gpt what is this". getText() only reads Conversation /
+	// ExtendedTextMessage, so such captions were previously dropped and the
+	// command never ran. fullMessageText() additionally reads ImageMessage /
+	// VideoMessage / DocumentMessage captions, so the command is now parsed
+	// and dispatched normally (the AI handler then downloads the media).
+	body := fullMessageText(msg)
 	if body == "" {
 		return
 	}

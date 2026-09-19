@@ -22,12 +22,16 @@ package goldcmds
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
+	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -64,6 +68,22 @@ var aiMistralModels = []string{
 	"open-mistral-7b",
 	"codestral-latest",
 	"mistral-medium-latest",
+}
+
+// aiVisionModels — vision-capable chain (image understanding). Biggest/latest
+// first. Used when the user sends an image (or video frames) with the command.
+var aiVisionModels = []string{
+	"mistral-medium-latest",
+	"ministral-14b-latest",
+	"ministral-8b-latest",
+	"mistral-small-latest",
+}
+
+// aiAudioModels — audio-capable chain (Voxtral). Used when the user sends a
+// voice note / audio clip with the command.
+var aiAudioModels = []string{
+	"voxtral-small-latest",
+	"voxtral-mini-latest",
 }
 
 // aiBlockedModels — models jo is account tier pe blocked nikle (429 limit 0).
@@ -180,9 +200,24 @@ func aiNextKey() *aiKeyEntry {
 // Mistral chat call
 // ─────────────────────────────────────────────────────────────────────────────
 
+// aiChatMessage — one chat message. Content is `any` so it can be either a
+// plain string (text-only turns) OR a []aiContentPart slice (multimodal turns
+// carrying images / audio / documents). encoding/json marshals both correctly.
 type aiChatMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"`
+}
+
+// aiContentPart — one part of a multimodal user message. Mistral accepts:
+//
+//	{"type":"text","text":"..."}
+//	{"type":"image_url","image_url":"data:image/jpeg;base64,..."}
+//	{"type":"input_audio","input_audio":"<base64>"}
+type aiContentPart struct {
+	Type       string `json:"type"`
+	Text       string `json:"text,omitempty"`
+	ImageURL   string `json:"image_url,omitempty"`
+	InputAudio string `json:"input_audio,omitempty"`
 }
 
 type aiChatRequest struct {
@@ -204,8 +239,13 @@ type aiChatResponse struct {
 	} `json:"error"`
 }
 
-// aiMistralChat sends a chat completion request, rotating keys on 429.
-func aiMistralChat(system, user string) (string, error) {
+// aiMistralCall is the shared chat-completion engine. It walks the given model
+// chain (biggest/latest first) and, for each model, tries every key once
+// (round-robin). A 429 with `x-ratelimit-limit-req-minute: 0` means the account
+// tier blocks that model entirely -> mark it blocked and jump to the next
+// model. Any other 429 just rests that key and tries the next key on the SAME
+// model. 400 (model unavailable / bad content) -> next model.
+func aiMistralCall(models []string, messages []aiChatMessage) (string, error) {
 	aiInitPool()
 	if len(aiKeyPool) == 0 {
 		return "", fmt.Errorf("no API keys configured")
@@ -214,20 +254,14 @@ func aiMistralChat(system, user string) (string, error) {
 	client := &http.Client{Timeout: aiHTTPTimeout}
 	var lastErr error
 
-	// Model fallback chain (biggest/latest first). For each model we try every
-	// key once (round-robin). A 429 on a model means the account tier blocks
-	// that model (limit 0) OR the key is throttled — we move on.
-	for _, model := range aiMistralModels {
+	for _, model := range models {
 		// Skip models known to be blocked on this account tier (429 limit 0).
 		if aiModelBlocked(model) {
 			continue
 		}
 		reqBody := aiChatRequest{
-			Model: model,
-			Messages: []aiChatMessage{
-				{Role: "system", Content: system},
-				{Role: "user", Content: user},
-			},
+			Model:       model,
+			Messages:    messages,
 			Temperature: 0.7,
 			MaxTokens:   2048,
 		}
@@ -257,13 +291,6 @@ func aiMistralChat(system, user string) (string, error) {
 			resp.Body.Close()
 
 			if resp.StatusCode == 429 {
-				// 429 = either the key is throttled OR the account tier blocks
-				// this model entirely. Mistral sends
-				// `x-ratelimit-limit-req-minute: 0` when the MODEL is blocked on
-				// this tier (no amount of waiting helps) — in that case mark
-				// the model blocked and jump to the next model. Otherwise it's
-				// just this key being throttled — rest the key and try the
-				// next key on the SAME model.
 				if strings.TrimSpace(resp.Header.Get("x-ratelimit-limit-req-minute")) == "0" {
 					aiMarkModelBlocked(model)
 					lastErr = fmt.Errorf("model %s blocked on this tier", model)
@@ -278,7 +305,7 @@ func aiMistralChat(system, user string) (string, error) {
 				continue
 			}
 			if resp.StatusCode == 400 {
-				// model not available on this tier — try next model
+				// model not available on this tier OR content rejected
 				lastErr = fmt.Errorf("model %s unavailable", model)
 				break
 			}
@@ -311,7 +338,301 @@ func aiMistralChat(system, user string) (string, error) {
 	return "", lastErr
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// aiMistralChat — text-only chat (backwards-compatible wrapper).
+func aiMistralChat(system, user string) (string, error) {
+	return aiMistralCall(aiMistralModels, []aiChatMessage{
+		{Role: "system", Content: system},
+		{Role: "user", Content: user},
+	})
+}
+
+// aiMistralChatMedia — multimodal chat. `parts` are the user content parts
+// (text + image_url / input_audio). `models` is the model chain to try (vision
+// models for images, Voxtral for audio).
+func aiMistralChatMedia(models []string, system string, parts []aiContentPart) (string, error) {
+	return aiMistralCall(models, []aiChatMessage{
+		{Role: "system", Content: system},
+		{Role: "user", Content: parts},
+	})
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Mistral OCR (documents: PDF / PPTX / DOCX / images -> markdown text)
+// ────────────────────────────────────────────────────────────────────────────
+
+type aiOCRRequest struct {
+	Model    string `json:"model"`
+	Document struct {
+		Type        string `json:"type"`
+		DocumentURL string `json:"document_url"`
+	} `json:"document"`
+}
+
+type aiOCRResponse struct {
+	Pages []struct {
+		Index    int    `json:"index"`
+		Markdown string `json:"markdown"`
+	} `json:"pages"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// aiOCRDocument runs Mistral OCR on a document/image and returns the extracted
+// markdown text. `mime` decides whether it is sent as document_url (PDF/office)
+// or image_url (raster image).
+func aiOCRDocument(data []byte, mime string) (string, error) {
+	aiInitPool()
+	if len(aiKeyPool) == 0 {
+		return "", fmt.Errorf("no API keys configured")
+	}
+	docType := "document_url"
+	if strings.HasPrefix(strings.ToLower(mime), "image/") {
+		docType = "image_url"
+	}
+	dataURL := fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString(data))
+	reqBody := aiOCRRequest{Model: "mistral-ocr-latest"}
+	reqBody.Document.Type = docType
+	reqBody.Document.DocumentURL = dataURL
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	client := &http.Client{Timeout: aiHTTPTimeout}
+	var lastErr error
+	for attempt := 0; attempt < len(aiKeyPool); attempt++ {
+		entry := aiNextKey()
+		if entry == nil || entry.key == "" {
+			lastErr = fmt.Errorf("no usable API key")
+			continue
+		}
+		req, err := http.NewRequest("POST", aiMistralBase+"/ocr", bytes.NewReader(bodyBytes))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Authorization", "Bearer "+entry.key)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == 429 {
+			entry.markResting(0)
+			lastErr = fmt.Errorf("rate limited")
+			continue
+		}
+		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+			lastErr = fmt.Errorf("auth failed")
+			continue
+		}
+		var parsed aiOCRResponse
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			lastErr = fmt.Errorf("bad ocr response: %s", string(raw))
+			continue
+		}
+		if parsed.Error != nil {
+			lastErr = fmt.Errorf("%s", parsed.Error.Message)
+			continue
+		}
+		var sb strings.Builder
+		for _, pg := range parsed.Pages {
+			if pg.Markdown != "" {
+				sb.WriteString(pg.Markdown)
+				sb.WriteString("\n\n")
+			}
+		}
+		out := strings.TrimSpace(sb.String())
+		if out == "" {
+			lastErr = fmt.Errorf("empty ocr result")
+			continue
+		}
+		return out, nil
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("ocr failed")
+	}
+	return "", lastErr
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Mistral audio transcription (Voxtral Mini Transcribe 2)
+// ────────────────────────────────────────────────────────────────────────────
+
+type aiTranscribeResponse struct {
+	Text  string `json:"text"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// aiTranscribeAudio uploads an audio clip to /v1/audio/transcriptions and
+// returns the transcript text.
+func aiTranscribeAudio(data []byte, mime, filename string) (string, error) {
+	aiInitPool()
+	if len(aiKeyPool) == 0 {
+		return "", fmt.Errorf("no API keys configured")
+	}
+	client := &http.Client{Timeout: aiHTTPTimeout}
+	var lastErr error
+	for attempt := 0; attempt < len(aiKeyPool); attempt++ {
+		entry := aiNextKey()
+		if entry == nil || entry.key == "" {
+			lastErr = fmt.Errorf("no usable API key")
+			continue
+		}
+		var buf bytes.Buffer
+		w := multipart.NewWriter(&buf)
+		fw, err := w.CreateFormFile("file", filename)
+		if err != nil {
+			return "", err
+		}
+		fw.Write(data)
+		w.WriteField("model", "voxtral-mini-latest")
+		w.Close()
+
+		req, err := http.NewRequest("POST", aiMistralBase+"/audio/transcriptions", &buf)
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Authorization", "Bearer "+entry.key)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == 429 {
+			entry.markResting(0)
+			lastErr = fmt.Errorf("rate limited")
+			continue
+		}
+		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+			lastErr = fmt.Errorf("auth failed")
+			continue
+		}
+		var parsed aiTranscribeResponse
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			lastErr = fmt.Errorf("bad transcription response: %s", string(raw))
+			continue
+		}
+		if parsed.Error != nil {
+			lastErr = fmt.Errorf("%s", parsed.Error.Message)
+			continue
+		}
+		out := strings.TrimSpace(parsed.Text)
+		if out == "" {
+			lastErr = fmt.Errorf("empty transcription")
+			continue
+		}
+		return out, nil
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("transcription failed")
+	}
+	return "", lastErr
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// ffmpeg helpers (video -> audio + frames)
+// ────────────────────────────────────────────────────────────────────────────
+
+// aiFFmpegExtractAudio converts any media file to a small mono 16kHz MP3 so it
+// can be sent to Mistral's audio endpoint. Returns the output path.
+func aiFFmpegExtractAudio(inputPath string) (string, error) {
+	outPath := inputPath + ".ai.mp3"
+	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath,
+		"-vn", "-ac", "1", "-ar", "16000", "-b:a", "64k", outPath)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("ffmpeg audio extract: %v (%s)", err, stderr.String())
+	}
+	return outPath, nil
+}
+
+// aiFFmpegExtractFrames grabs up to maxFrames evenly-spaced JPEG frames from a
+// video so a vision model can "see" it. Returns the frame paths.
+func aiFFmpegExtractFrames(inputPath string, maxFrames int) ([]string, error) {
+	if maxFrames < 1 {
+		maxFrames = 1
+	}
+	dur := aiFFprobeDuration(inputPath)
+	var frames []string
+	if dur <= 0 {
+		out := inputPath + ".ai_f0.jpg"
+		cmd := exec.Command("ffmpeg", "-y", "-ss", "1", "-i", inputPath,
+			"-frames:v", "1", "-q:v", "3", out)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			return nil, fmt.Errorf("ffmpeg frame: %v (%s)", err, stderr.String())
+		}
+		return []string{out}, nil
+	}
+	step := dur / float64(maxFrames+1)
+	for i := 1; i <= maxFrames; i++ {
+		ts := step * float64(i)
+		out := fmt.Sprintf("%s.ai_f%d.jpg", inputPath, i)
+		cmd := exec.Command("ffmpeg", "-y", "-ss", fmt.Sprintf("%.2f", ts), "-i", inputPath,
+			"-frames:v", "1", "-q:v", "3", out)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			continue
+		}
+		frames = append(frames, out)
+	}
+	return frames, nil
+}
+
+// aiFFprobeDuration returns the media duration in seconds (0 if unknown).
+func aiFFprobeDuration(inputPath string) float64 {
+	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1", inputPath)
+	out, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+	d, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	if err != nil {
+		return 0
+	}
+	return d
+}
+
+// aiAudioExt maps a mimetype to a sensible file extension for the audio upload.
+func aiAudioExt(mime string) string {
+	switch {
+	case strings.Contains(mime, "wav"):
+		return "wav"
+	case strings.Contains(mime, "ogg"), strings.Contains(mime, "opus"):
+		return "ogg"
+	case strings.Contains(mime, "mp4"), strings.Contains(mime, "m4a"), strings.Contains(mime, "aac"):
+		return "m4a"
+	case strings.Contains(mime, "webm"):
+		return "webm"
+	default:
+		return "mp3"
+	}
+}
+
+// aiVideoExt maps a video mimetype to a file extension for the temp file.
+func aiVideoExt(mime string) string {
+	switch {
+	case strings.Contains(mime, "webm"):
+		return ".webm"
+	case strings.Contains(mime, "3gpp"):
+		return ".3gp"
+	case strings.Contains(mime, "quicktime"):
+		return ".mov"
+	default:
+		return ".mp4"
+	}
+}
+
 // Brand table — 500 AI names
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -928,25 +1249,207 @@ func aiWhatsAppFormat(in string) string {
 	return out
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Reply helpers (brand header + WhatsApp formatting)
+// ────────────────────────────────────────────────────────────────────────────
+
+func aiReplyOK(s SessionBridge, info types.MessageInfo, b aiBrand, out string) {
+	s.Reply(info, fmt.Sprintf("*\U0001F530 %s AI \U0001F530*\n\n%s", b.Name, aiWhatsAppFormat(out)))
+}
+
+func aiReplyError(s SessionBridge, info types.MessageInfo, b aiBrand, err error) {
+	s.Reply(info, fmt.Sprintf(
+		"*\U0001F530 %s AI \U0001F530*\n\n*\u26a0\ufe0f SORRY, I COULD NOT ANSWER RIGHT NOW.*\n_%s_\n\n*PLEASE TRY AGAIN IN A MOMENT.*",
+		b.Name, err.Error()))
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Media handlers — image / audio / video / document
+// ────────────────────────────────────────────────────────────────────────────
+
+// aiHandleImage sends an image to a vision model and answers the prompt.
+func aiHandleImage(s SessionBridge, info types.MessageInfo, prompt string, b aiBrand, data []byte, mime string) {
+	if prompt == "" {
+		prompt = "Describe this image in detail."
+	}
+	system := aiSystemPrompt(b, "", "")
+	dataURL := fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString(data))
+	parts := []aiContentPart{
+		{Type: "text", Text: prompt},
+		{Type: "image_url", ImageURL: dataURL},
+	}
+	out, err := aiMistralChatMedia(aiVisionModels, system, parts)
+	if err != nil {
+		aiReplyError(s, info, b, err)
+		return
+	}
+	aiReplyOK(s, info, b, out)
+}
+
+// aiHandleAudio sends an audio clip to Voxtral (chat-with-audio). If the model
+// chain fails, it falls back to plain transcription + text chat.
+func aiHandleAudio(s SessionBridge, info types.MessageInfo, prompt string, b aiBrand, data []byte, mime string) {
+	if prompt == "" {
+		prompt = "Listen to this audio and respond to it."
+	}
+	system := aiSystemPrompt(b, "", "")
+	parts := []aiContentPart{
+		{Type: "input_audio", InputAudio: base64.StdEncoding.EncodeToString(data)},
+		{Type: "text", Text: prompt},
+	}
+	out, err := aiMistralChatMedia(aiAudioModels, system, parts)
+	if err == nil {
+		aiReplyOK(s, info, b, out)
+		return
+	}
+	// Fallback: transcribe, then answer in text.
+	txt, terr := aiTranscribeAudio(data, mime, "audio."+aiAudioExt(mime))
+	if terr != nil {
+		aiReplyError(s, info, b, err)
+		return
+	}
+	out2, err2 := aiMistralChat(system, prompt+"\n\n[Audio transcript]:\n"+txt)
+	if err2 != nil {
+		aiReplyError(s, info, b, err2)
+		return
+	}
+	aiReplyOK(s, info, b, out2)
+}
+
+// aiHandleDocument OCRs a document (PDF / DOCX / PPTX / image) then answers the
+// prompt using the extracted text.
+func aiHandleDocument(s SessionBridge, info types.MessageInfo, prompt string, b aiBrand, data []byte, mime string) {
+	if prompt == "" {
+		prompt = "Summarise this document."
+	}
+	system := aiSystemPrompt(b, "", "")
+	text, err := aiOCRDocument(data, mime)
+	if err != nil {
+		aiReplyError(s, info, b, err)
+		return
+	}
+	// Cap the extracted text so we stay well inside the context window.
+	const maxDocChars = 24000
+	if len(text) > maxDocChars {
+		text = text[:maxDocChars] + "\n...[truncated]"
+	}
+	out, err := aiMistralChat(system, prompt+"\n\n[Document content]:\n"+text)
+	if err != nil {
+		aiReplyError(s, info, b, err)
+		return
+	}
+	aiReplyOK(s, info, b, out)
+}
+
+// aiHandleVideo reads a video: it extracts the audio track (transcribed via
+// Voxtral) AND a few evenly-spaced frames (understood via a vision model), then
+// answers the prompt with both signals.
+func aiHandleVideo(s SessionBridge, info types.MessageInfo, prompt string, b aiBrand, data []byte, mime string) {
+	if prompt == "" {
+		prompt = "Describe this video."
+	}
+	system := aiSystemPrompt(b, "", "")
+
+	tmp, err := os.CreateTemp("", "goldmd_ai_video_*"+aiVideoExt(mime))
+	if err != nil {
+		aiReplyError(s, info, b, err)
+		return
+	}
+	tmpPath := tmp.Name()
+	tmp.Write(data)
+	tmp.Close()
+	defer os.Remove(tmpPath)
+
+	// 1) Audio track -> transcript
+	transcript := ""
+	if ap, aerr := aiFFmpegExtractAudio(tmpPath); aerr == nil {
+		defer os.Remove(ap)
+		if ab, rerr := os.ReadFile(ap); rerr == nil {
+			if txt, terr := aiTranscribeAudio(ab, "audio/mpeg", "audio.mp3"); terr == nil {
+				transcript = txt
+			}
+		}
+	}
+
+	// 2) Frames -> vision parts
+	parts := []aiContentPart{{Type: "text", Text: prompt}}
+	if frames, ferr := aiFFmpegExtractFrames(tmpPath, 4); ferr == nil {
+		for _, fp := range frames {
+			defer os.Remove(fp)
+			if fb, rerr := os.ReadFile(fp); rerr == nil {
+				parts = append(parts, aiContentPart{
+					Type:     "image_url",
+					ImageURL: fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(fb)),
+				})
+			}
+		}
+	}
+	if transcript != "" {
+		parts = append(parts, aiContentPart{Type: "text", Text: "[Audio transcript]:\n" + transcript})
+	}
+	if len(parts) == 1 {
+		aiReplyError(s, info, b, fmt.Errorf("could not read this video"))
+		return
+	}
+	out, err := aiMistralChatMedia(aiVisionModels, system, parts)
+	if err != nil {
+		aiReplyError(s, info, b, err)
+		return
+	}
+	aiReplyOK(s, info, b, out)
+}
+
+// aiDispatchMedia routes downloaded media to the right handler by mimetype.
+func aiDispatchMedia(s SessionBridge, info types.MessageInfo, prompt string, b aiBrand, data []byte, mime string) {
+	m := strings.ToLower(mime)
+	switch {
+	case strings.HasPrefix(m, "image/"):
+		aiHandleImage(s, info, prompt, b, data, mime)
+	case strings.HasPrefix(m, "audio/"):
+		aiHandleAudio(s, info, prompt, b, data, mime)
+	case strings.HasPrefix(m, "video/"):
+		aiHandleVideo(s, info, prompt, b, data, mime)
+	default:
+		// documents: pdf, docx, pptx, txt, octet-stream, ...
+		aiHandleDocument(s, info, prompt, b, data, mime)
+	}
+}
+
+// aiHandle is the shared entry point for every AI brand command.
+//
+// OWNER ORDER (AI media reading): if the command arrives WITH media — either as
+// a caption on top of the media, or by quoting/replying to media — the media is
+// downloaded and sent to Mistral's multimodal API, and the reply is signed with
+// the SAME AI brand name the user typed (e.g. ".gpt" -> "GPT AI").
 func aiHandle(s SessionBridge, info types.MessageInfo, args []string, prefix string, b aiBrand) {
 	prompt := strings.TrimSpace(strings.Join(args, " "))
+
+	// ── MEDIA DETECTION ──
+	// DownloadQuotedMedia handles BOTH direct media (command written as the
+	// media's caption) AND quoted/replied-to media, plus view-once wrappers.
+	if data, mime, ok := s.DownloadQuotedMedia(info); ok && len(data) > 0 {
+		aiDispatchMedia(s, info, prompt, b, data, mime)
+		return
+	}
+	// Fallback: image-only downloader (covers edge cases the generic path misses).
+	if data, ok := s.DownloadImage(info); ok && len(data) > 0 {
+		aiDispatchMedia(s, info, prompt, b, data, "image/jpeg")
+		return
+	}
+
+	// ── TEXT-ONLY ──
 	if prompt == "" {
 		s.Reply(info, aiGuidanceText(b, prefix))
 		return
 	}
-
 	// Owner ka naam jaan-boojh kar prompt me NAHI bhejte (owner order).
 	system := aiSystemPrompt(b, "", "")
-
 	out, err := aiMistralChat(system, prompt)
 	if err != nil {
-		s.Reply(info, fmt.Sprintf(
-			"*🔰 %s AI 🔰*\n\n*⚠️ SORRY, I COULD NOT ANSWER RIGHT NOW.*\n_%s_\n\n*PLEASE TRY AGAIN IN A MOMENT.*",
-			b.Name, err.Error()))
+		aiReplyError(s, info, b, err)
 		return
 	}
-
-	s.Reply(info, fmt.Sprintf("*🔰 %s AI 🔰*\n\n%s", b.Name, aiWhatsAppFormat(out)))
+	aiReplyOK(s, info, b, out)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
