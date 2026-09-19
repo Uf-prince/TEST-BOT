@@ -1,14 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "public": true,
   "cleanUrls": true,
   "functions": {
     "api/servers.js": {
       "maxDuration": 15
     }
-  },
-  "rewrites": [
-    { "source": "/api/servers", "destination": "/api/servers" }
-  ]
+  }
 }
