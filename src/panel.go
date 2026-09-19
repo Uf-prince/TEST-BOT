@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -822,73 +823,13 @@ func checkAllServers(cfg serversConfig) []serverStatus {
 //  or the MAX PAIRING REACHED message.
 // ---------------------------------------------------------------------------
 
-func panelHTML(mgr *Manager) string {
-	return fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GOLD-MD · Control Panel</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#f2f3f5;color:#000;font-weight:700;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;padding-bottom:75px}.card{background:#ffffff;border:1px solid #d7dade;border-radius:16px;padding:32px;max-width:640px;width:100%%;box-shadow:0 2px 10px rgba(0,0,0,.06)}h1{color:#000;font-size:28px;margin-bottom:8px;text-align:center;font-weight:800}.sub{color:#000;text-align:center;margin-bottom:28px;font-size:14px;font-weight:700}.status{background:#f2f3f5;border-radius:10px;padding:16px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center}.dot{width:10px;height:10px;border-radius:50%%;background:#2ea043;display:inline-block;margin-right:8px}.badge{background:#2ea043;color:#fff;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:800}label{display:block;margin-bottom:6px;color:#000;font-size:14px;font-weight:800;margin-top:16px}select,input{width:100%%;padding:13px 14px;background:#fff;border:1px solid #b9bec5;border-radius:8px;color:#000;font-weight:700;font-size:16px;margin-bottom:16px}#server,#phone{border:3px solid #c22a2a}select:focus,input:focus{outline:none;border-color:#c9a300}.btn{width:100%%;padding:14px;background:#ffd700;color:#000;border:3px solid #c22a2a;border-radius:8px;font-size:15px;font-weight:800;cursor:pointer}.btn:disabled{opacity:.5;cursor:not-allowed}.videoBtn{position:fixed;left:20px;right:20px;bottom:16px;width:auto;margin:0;padding:14px;background:#ffd700;color:#000;border:4px solid #c22a2a;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;text-align:center;z-index:999;box-shadow:0 2px 10px rgba(0,0,0,.15)}.videoBtn:hover{background:#ffde33}.result{margin-top:16px;padding:18px;background:#f2f3f5;border-radius:8px;font-size:14px;font-weight:700;display:none;text-align:center}.pair-code{display:block;margin:14px auto;padding:14px 10px;background:#e7f7ec;border:3px solid #c22a2a;border-radius:12px;color:#177a34;font-weight:800;font-size:20px;letter-spacing:5px;cursor:pointer;user-select:none;text-align:center;max-width:220px}.hint{color:#000;font-size:12px;font-weight:700}.error{color:#c22a2a}.warn{color:#a3690a}.links{margin-top:24px;text-align:center;font-size:13px;font-weight:700}.links a{color:#0b5fcc;text-decoration:none;margin:0 8px;font-weight:800}
-</style></head><body><div class="card">
-<h1>🔰 GOLD-MD 🔰</h1>
-<label for="server" style="text-align:center;font-size:18px;font-weight:900">SELECT SERVER TO PAIR</label>
-<select id="server"><option value="">Loading servers…</option></select>
+// panelHTML is the control-panel page. The markup lives in panel.html
+// (single source of truth) and is embedded into the binary at build time,
+// so the Go bot serves the EXACT same page as the Vercel static deploy.
+//
+//go:embed panel.html
+var panelHTMLRaw string
 
-<label for="phone" style="text-align:center">TYPE YOUR NUMBER HERE IN THIS BOX</label>
-<input id="phone" type="tel" inputmode="numeric" pattern="[0-9]*" autocomplete="tel" placeholder="e.g. 923xxxxxxxxx" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
-<button class="btn" id="pairBtn" onclick="pair()">GET PAIR CODE</button>
-<div class="result" id="result"></div>
-</div>
-<div class="videoBtn" id="videoBtn" onclick="openVideoBox()">I NEED THE BOT CREATING VIDEO</div>
-<script>
-let SERVERS=[],MAXP=10,sel=null;
-function openVideoBox(){
-  const link='https://youtu.be/w4a_3wYUMr0?si=nUrgD6IvUMrFoz_S9';
-  window.open(link,'_blank');
-}
-async function loadServers(){
-  try{
-    const r=await fetch('/api/servers'),d=await r.json();
-    SERVERS=d.servers||[];MAXP=d.max||10;sel=document.getElementById('server');
-    if(!SERVERS.length){sel.innerHTML='<option value="">No servers configured (edit servers.json)</option>';return;}
-    const prev=sel?sel.value:'';
-    let opts='<option value="">— Select a server —</option>';
-    SERVERS.forEach(s=>{
-      const icon=s.online?'🟢':'🔴';
-      const tag=s.full?' — FULL '+s.sessions+'/'+s.max:(s.online?' — online '+s.sessions+'/'+s.max:' — offline');
-      opts+='<option value="'+s.url+'" '+(s.full?'disabled':'')+'>'+icon+' '+s.name+tag+'</option>';
-    });
-    sel.innerHTML=opts;
-    let restored=false;
-    for(let i=0;i<sel.options.length;i++){if(sel.options[i].value===prev&&!sel.options[i].disabled){sel.selectedIndex=i;restored=true;break;}}
-    if(!restored){sel.selectedIndex=0;}
-  }catch(e){document.getElementById('server').innerHTML='<option value="">Failed to load servers</option>';}
-}
-async function pair(){
-  const phone=document.getElementById('phone').value.trim(),
-        srv=document.getElementById('server').value,
-        res=document.getElementById('result');
-  if(!phone){res.className='result error';res.style.display='block';res.textContent='Enter your phone number first';return;}
-  if(!srv){res.className='result error';res.style.display='block';res.innerHTML='\u26d4 <strong>Select any free server first</strong><br><div class="hint">Pick a \ud83d\udfe2 green server from the dropdown above, then pair.</div>';return;}
-  const url=(srv.endsWith('/')?srv.slice(0,-1):srv)+'/pair';
-  res.className='result';res.style.display='block';res.textContent='PLEASE WAIT.......';
-  try{
-    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone})}),
-          d=await r.json();
-    if(d.status==='max_pairing_reached'||d.status==='error'){
-      res.className='result error';res.style.display='block';
-      res.innerHTML='⛔ <strong>MAX PAIRING REACHED</strong><br>TRY ANOTHER SERVER<br><div class="hint">Go back, pick a different 🟢 server from the dropdown and try again.</div>';
-      loadServers();return;
-    }
-    if(!r.ok||d.error){res.className='result error';res.textContent=d.error||('Server error ('+r.status+')');return;}
-    if(d.status==='already_connected'){res.className='result';res.style.display='block';res.innerHTML='✅ <strong>BOT ALREADY CONNECTED AND WORKING WELL</strong><div class="hint">Redis session found. Pairing dobara zaroori nahi.</div>';return;}
-    res.innerHTML='CLICK TO COPY CODE<button class="pair-code" id="pairCode" data-code="'+d.code+'" onclick="copyCode()">'+d.code+'</button><div class="hint">WhatsApp → Linked Devices → Link with phone number instead</div>';
-    loadServers();
-  }catch(e){res.className='result error';res.style.display='block';res.textContent='Request failed: '+e.message+' — server may be stopped. Try another 🟢 server.';}
-}
-async function copyCode(){const el=document.getElementById('pairCode');try{await navigator.clipboard.writeText(el.textContent);el.textContent='COPIED';setTimeout(()=>{el.textContent=el.dataset.code||''},1200)}catch(e){const range=document.createRange();range.selectNodeContents(el);getSelection().removeAllRanges();getSelection().addRange(range)}}
-loadServers();setInterval(loadServers,15000);
-</script></body></html>`)
+func panelHTML(mgr *Manager) string {
+	return panelHTMLRaw
 }

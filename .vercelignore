@@ -1,0 +1,54 @@
+# ============================================================================
+#  GOLD-MD  ·  Vercel deploy ignore list
+# ============================================================================
+#  The Vercel deploy only needs: public/ (static panel), api/ (serverless
+#  function), servers.json (server list), package.json, vercel.json.
+#  Everything else (Go source, vendor, binaries, logs) is NOT uploaded.
+# ============================================================================
+
+# Go source & build
+src/
+gold-cmds/
+vendor/
+tools/
+patches/
+*.go
+go.mod
+go.sum
+gold-md-bot
+gold-md-cgofree
+gold-md-lowram
+gold-md-bot-static
+gold-md-bot-arm64
+gold-md-freebsd
+
+# Docker / host configs
+Dockerfile
+Dockerfile.*
+.dockerignore
+.deployignore
+zerops.yaml
+zerops-import.yaml
+modal_app.py
+deploy_serv00.sh
+launch_fresh.sh
+start.sh
+start_bot.sh
+rebuild_binaries.sh
+
+# Runtime data / logs
+nexstore/
+*.log
+*.old
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+bot.pid
+logs/
+
+# Docs / scratch
+*.txt
+*.md
+.github/
+.git/
