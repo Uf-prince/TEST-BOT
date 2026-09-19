@@ -2507,53 +2507,60 @@ func (s *Session) CmdHost5GB(info types.MessageInfo, args []string, prefix strin
 // 4s timeout — QUICK). Online servers full INFO block me, offline servers
 // \n\n\n ke baad single choti lines me.
 func (s *Session) CmdServerMenu(info types.MessageInfo, args []string, prefix string) {
-	scan := fleetScanAll()
+	s.Reply(info, fleetServersMenuText(fleetScanAll()))
+}
+
+// fleetServersMenuText builds the .server report from a scan slice (pure —
+// network-free, unit-testable). OWNER ORDER format:
+//
+//	*ACTIVE BOTS :❯ ❮ {N} ❯*      ← total live pairings (jitne bot active)
+//	*ONLINE SERVERS :❯ ❮ {x} ❯*
+//	*OFFLINE SERVERS :❯ ❮ {x} ❯*
+//
+//	*SERVER 1 ACTIVE 1/2*
+//	*SERVER 2 ACTIVE 0/2*
+//	...
+//	*SERVER 5 OFFLINE*
+//	*SERVER 6 OFFLINE*
+func fleetServersMenuText(scan []fleetServerInfo) string {
 	var b strings.Builder
 
-	b.WriteString("*🔰 GOLD-MD SERVERS INFO 🔰*\n\n")
-
-	// ── OWNER ORDER: servers NUMBER-WISE (1, 2, 3...) — scan slices
-	//    khud servers.json ke order me aate hain, isliye seedha iterate.
-	//    ONLINE -> full INFO block. OFFLINE -> sirf EK choti line
-	//    *SERVER ❮ N ❯ OFFLINE* (us number ke turant baad, number order
-	//    me hi — Server 2 upar aur Server 1 niche wala mix NAHI hoga).
 	online, offline, pairs := 0, 0, 0
 	for _, srv := range scan {
 		if srv.Online {
 			online++
 			pairs += srv.Sessions
-			paired := "0/0"
-			if srv.Max > 0 {
-				if srv.Sessions >= srv.Max {
-					paired = fmt.Sprintf("%d/%d FULL", srv.Sessions, srv.Max)
-				} else {
-					paired = fmt.Sprintf("%d/%d", srv.Sessions, srv.Max)
-				}
-			}
-			b.WriteString(fmt.Sprintf("*🔰 %s INFORMATION 🔰*\n", srv.Name))
-			b.WriteString("*🔰 STATUS :➯ ACTIVE*\n")
-			b.WriteString(fmt.Sprintf("*🔰 MAX PAIRING :➯ %d*\n", srv.Max))
-			b.WriteString(fmt.Sprintf("*🔰 PAIRED :➯ ❮ %s ❯*\n", paired))
-			b.WriteString(fmt.Sprintf("*🔰 RE :➯ %s*\n\n", srv.RE))
 		} else {
 			offline++
-			// OWNER ORDER: offline server sirf EK choti line — number order me.
-			b.WriteString(fmt.Sprintf("*SERVER ❮ %s ❯ OFFLINE*\n\n", fleetServerNumber(srv.Name)))
 		}
 	}
 
-	// ── compact fleet summary ──
-	b.WriteString(fmt.Sprintf("*🔰 SERVERS ONLINE :➯ %d*\n", online))
-	b.WriteString(fmt.Sprintf("*🔰 SERVERS OFFLINE :➯ %d*\n", offline))
-	b.WriteString(fmt.Sprintf("*🔰 TOTAL LIVE PAIRINGS :➯ %d*\n", pairs))
+	b.WriteString(fmt.Sprintf("*ACTIVE BOTS :❯ ❮ %d ❯*\n", pairs))
+	b.WriteString(fmt.Sprintf("*ONLINE SERVERS :❯ ❮ %d ❯*\n", online))
+	b.WriteString(fmt.Sprintf("*OFFLINE SERVERS :❯ ❮ %d ❯*\n\n", offline))
 
-	// OWNER ORDER: LOCAL SESSIONS / THIS SERVER block REMOVED — server
-	// report me koi bhi private JID / local session detail NAHI dikhega
-	// (sirf fleet-wide pairing counts).
+	// ONLINE servers — number order, ek line each.
+	for _, srv := range scan {
+		if !srv.Online {
+			continue
+		}
+		paired := "0/2"
+		if srv.Max > 0 {
+			paired = fmt.Sprintf("%d/%d", srv.Sessions, srv.Max)
+		}
+		b.WriteString(fmt.Sprintf("*SERVER %s ACTIVE %s*\n", fleetServerNumber(srv.Name), paired))
+	}
 
-	s.Reply(info, b.String())
+	// OFFLINE servers — number order, ek line each.
+	for _, srv := range scan {
+		if srv.Online {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("*SERVER %s OFFLINE*\n", fleetServerNumber(srv.Name)))
+	}
+
+	return b.String()
 }
-
 func fleetServerNumber(name string) string {
 	fields := strings.Fields(strings.TrimSpace(name))
 	if len(fields) >= 2 {
