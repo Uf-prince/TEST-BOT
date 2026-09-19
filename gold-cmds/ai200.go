@@ -1,12 +1,12 @@
 package goldcmds
 
 // ============================================================================
-// GOLD-MD — 200 AI COMMANDS  (.ai system)
+// GOLD-MD — 500 AI COMMANDS  (.ai system)
 // File: ai200.go
 // ============================================================================
 // Owner order (2026-09-19):
-//   * 200 AI names (Play Store / popular AI apps) ke naam se commands banao.
-//   * .menu me ek naya category ".AI" ho — .ai likhne per 200 AI names ka
+//   * 500 AI names (Play Store / popular AI apps) ke naam se commands banao.
+//   * .menu me ek naya category ".AI" ho — .ai likhne per 500 AI names ka
 //     menu aa jaye (bilkul baaki category menus ki tarah).
 //   * Har command ka apna GUIDANCE message ho (jaise .gpt ka apna hota hai).
 //   * Har command Mistral API se jawab de — 3 GOLD keys rotate hoti hain,
@@ -42,17 +42,19 @@ import (
 const (
 	aiMistralBase    = "https://api.mistral.ai/v1"
 	aiMistralChatURL = aiMistralBase + "/chat/completions"
-	aiRestMs       = 60 * 1000
-	aiHTTPTimeout  = 90 * time.Second
+	aiRestMs         = 60 * 1000
+	aiHTTPTimeout    = 90 * time.Second
 )
 
 // aiMistralModels — model fallback chain, BIGGEST / LATEST first.
-//   mistral-medium-latest = Mistral Medium 3.5 (mistral-medium-2604), 262K ctx
-//                           (Mistral ka sab se bara / latest chat model).
-//   ministral-14b-latest  = Ministral 3 14B, 262K ctx (biggest open model).
-//   ministral-8b-latest   = Ministral 3 8B, 262K ctx.
-//   open-mistral-nemo     = 12B, 128K ctx.
-//   open-mistral-7b       = 7B, 32K ctx.
+//
+//	mistral-medium-latest = Mistral Medium 3.5 (mistral-medium-2604), 262K ctx
+//	                        (Mistral ka sab se bara / latest chat model).
+//	ministral-14b-latest  = Ministral 3 14B, 262K ctx (biggest open model).
+//	ministral-8b-latest   = Ministral 3 8B, 262K ctx.
+//	open-mistral-nemo     = 12B, 128K ctx.
+//	open-mistral-7b       = 7B, 32K ctx.
+//
 // Agar account tier kisi model ko block kare (429 limit 0), chain agla model
 // try karti hai — is liye bot hamesha jawab de pata hai.
 var aiMistralModels = []string{
@@ -310,7 +312,7 @@ func aiMistralChat(system, user string) (string, error) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Brand table — 200 AI names
+// Brand table — 500 AI names
 // ─────────────────────────────────────────────────────────────────────────────
 
 type aiBrand struct {
@@ -320,7 +322,7 @@ type aiBrand struct {
 	Tagline string // short tagline
 }
 
-// aiBrands — 200 AI apps / models (Play Store + popular AI apps).
+// aiBrands — 500 AI apps / models (Play Store + popular AI apps).
 var aiBrands = []aiBrand{
 	{"gpt", "ChatGPT", "OpenAI", "The world's most popular AI assistant"},
 	{"gemini", "Gemini", "Google", "Google's multimodal AI assistant"},
@@ -522,6 +524,306 @@ var aiBrands = []aiBrand{
 	{"chatsonic", "ChatSonic", "Writesonic", "AI chatbot with search"},
 	{"youchat", "YouChat", "You.com", "AI chat with sources"},
 	{"andi", "Andi", "Andi", "AI search assistant"},
+	{"bingchat", "Bing Chat", "Microsoft", "Microsoft's AI chat in search"},
+	{"moonshot", "Moonshot", "Moonshot AI", "Moonshot's large language model"},
+	{"stepfun", "StepFun", "StepFun", "Chinese multimodal AI maker"},
+	{"lingyiwanwu", "Lingyiwanwu", "01.AI", "01.AI's AI research lab"},
+	{"internlm", "InternLM", "Shanghai AI Lab", "Open academic Chinese LLM"},
+	{"baize", "Baize", "Open Source", "Open-source chat model"},
+	{"moss", "MOSS", "Fudan University", "Open Chinese conversational model"},
+	{"chatglm", "ChatGLM", "Zhipu AI", "Open bilingual chat model"},
+	{"kagi", "Kagi Assistant", "Kagi", "Premium AI search assistant"},
+	{"brave", "Brave Leo", "Brave", "Private AI in the Brave browser"},
+	{"leo", "Leo", "Brave", "Brave's built-in AI assistant"},
+	{"arc", "Arc Max", "The Browser Company", "AI features in Arc browser"},
+	{"dia", "Dia", "The Browser Company", "AI-native web browser"},
+	{"sigma", "Sigma AI", "Sigma", "AI browsing companion"},
+	{"komo", "Komo", "Komo", "AI search and discovery"},
+	{"monica", "Monica", "Monica", "All-in-one AI browser assistant"},
+	{"sider", "Sider", "Sider", "AI sidebar for your browser"},
+	{"merlin", "Merlin", "Foyer", "AI assistant for the web"},
+	{"harpa", "Harpa AI", "Harpa", "AI browser automation agent"},
+	{"maxai", "MaxAI", "MaxAI", "AI anywhere in your browser"},
+	{"typly", "Typly", "Typly", "AI keyboard assistant"},
+	{"magai", "Magai", "Magai", "One subscription, many AI models"},
+	{"chatpdf", "ChatPDF", "ChatPDF", "Chat with any PDF document"},
+	{"askyourpdf", "AskYourPDF", "AskYourPDF", "Ask questions about PDFs"},
+	{"pdfai", "PDF.ai", "PDF.ai", "AI chat with your documents"},
+	{"humata", "Humata", "Humata", "AI for your research files"},
+	{"documind", "Documind", "Documind", "AI document analysis"},
+	{"elicit", "Elicit", "Elicit", "AI research assistant"},
+	{"scispace", "SciSpace", "SciSpace", "AI for reading research papers"},
+	{"consensus", "Consensus", "Consensus", "AI answers from science"},
+	{"scite", "Scite", "Scite", "Smart citations for research"},
+	{"semantic", "Semantic Scholar", "Allen Institute", "AI-powered research tool"},
+	{"connectedpapers", "Connected Papers", "Connected Papers", "Visual research graphs"},
+	{"researchrabbit", "ResearchRabbit", "ResearchRabbit", "Discover related papers"},
+	{"litmaps", "Litmaps", "Litmaps", "Literature mapping with AI"},
+	{"inciteful", "Inciteful", "Inciteful", "AI literature discovery"},
+	{"iris", "Iris.ai", "Iris.ai", "AI for scientific text"},
+	{"paperpal", "Paperpal", "Cactus", "AI academic writing assistant"},
+	{"writefull", "Writefull", "Writefull", "AI language feedback for papers"},
+	{"trinka", "Trinka", "Cactus", "AI grammar for academic writing"},
+	{"wordtune", "Wordtune", "AI21 Labs", "AI rewriting and paraphrasing"},
+	{"anyword", "Anyword", "Anyword", "AI copy that converts"},
+	{"copysmith", "Copysmith", "Copysmith", "AI content for ecommerce"},
+	{"frase", "Frase", "Frase", "AI content optimization"},
+	{"surferseo", "Surfer SEO", "Surfer", "AI SEO content editor"},
+	{"marketmuse", "MarketMuse", "MarketMuse", "AI content strategy"},
+	{"neuronwriter", "NeuronWriter", "NeuronWriter", "AI SEO writing tool"},
+	{"contentbot", "ContentBot", "ContentBot", "AI content automation"},
+	{"hypotenuse", "Hypotenuse AI", "Hypotenuse", "AI product descriptions"},
+	{"simplified", "Simplified", "Simplified", "AI design and writing"},
+	{"verb", "Verb", "Verb", "AI writing for authors"},
+	{"hyperwrite", "HyperWrite", "OthersideAI", "AI writing assistant"},
+	{"novelcrafter", "Novelcrafter", "Novelcrafter", "AI toolkit for novelists"},
+	{"squibler", "Squibler", "Squibler", "AI book writing software"},
+	{"shortlyai", "ShortlyAI", "ShortlyAI", "AI writing companion"},
+	{"aiwriter", "AI Writer", "AI Writer", "AI article generator"},
+	{"textio", "Textio", "Textio", "AI for inclusive writing"},
+	{"prowritingaid", "ProWritingAid", "Orpheus", "AI writing style editor"},
+	{"languagetool", "LanguageTool", "LanguageTool", "AI grammar and style checker"},
+	{"sapling", "Sapling", "Sapling", "AI writing assistant for teams"},
+	{"ginger", "Ginger", "Ginger", "AI grammar and spelling"},
+	{"deepl", "DeepL Write", "DeepL", "AI writing and translation"},
+	{"notionai", "Notion AI", "Notion", "AI inside your Notion workspace"},
+	{"reflect", "Reflect", "Reflect", "AI note-taking app"},
+	{"obsidian", "Obsidian Copilot", "Obsidian", "AI plugin for Obsidian notes"},
+	{"logseq", "Logseq AI", "Logseq", "AI for your knowledge base"},
+	{"roam", "Roam Research", "Roam", "Networked notes with AI"},
+	{"coda", "Coda AI", "Coda", "AI in your docs and tables"},
+	{"airtable", "Airtable AI", "Airtable", "AI in your databases"},
+	{"asana", "Asana AI", "Asana", "AI for team workflows"},
+	{"trello", "Trello AI", "Atlassian", "AI in your boards"},
+	{"motion", "Motion", "Motion", "AI calendar and tasks"},
+	{"reclaim", "Reclaim AI", "Reclaim", "AI scheduling assistant"},
+	{"clockwise", "Clockwise", "Clockwise", "AI calendar optimization"},
+	{"magictask", "MagicTask", "MagicTask", "AI task management"},
+	{"akiflow", "Akiflow", "Akiflow", "AI daily planner"},
+	{"sunsama", "Sunsama", "Sunsama", "Calm daily planning with AI"},
+	{"todoist", "Todoist AI", "Doist", "AI task assistant"},
+	{"superhuman", "Superhuman", "Superhuman", "AI-powered email"},
+	{"shortwave", "Shortwave", "Shortwave", "AI email assistant"},
+	{"sanebox", "SaneBox", "SaneBox", "AI email filtering"},
+	{"sparkmail", "Spark Mail", "Readdle", "AI email by Readdle"},
+	{"newton", "Newton Mail", "Newton", "AI email client"},
+	{"polymail", "Polymail", "Polymail", "AI email productivity"},
+	{"mailbutler", "Mailbutler", "Mailbutler", "AI email assistant"},
+	{"lavender", "Lavender", "Lavender", "AI sales email coach"},
+	{"regie", "Regie.ai", "Regie", "AI sales content"},
+	{"outreach", "Outreach AI", "Outreach", "AI sales engagement"},
+	{"salesloft", "SalesLoft", "SalesLoft", "AI sales platform"},
+	{"gong", "Gong", "Gong", "AI revenue intelligence"},
+	{"chorus", "Chorus", "ZoomInfo", "AI conversation intelligence"},
+	{"clari", "Clari", "Clari", "AI revenue operations"},
+	{"peopleai", "People.ai", "People.ai", "AI revenue intelligence"},
+	{"apollo", "Apollo.io", "Apollo", "AI sales intelligence"},
+	{"clay", "Clay", "Clay", "AI data enrichment for sales"},
+	{"instantly", "Instantly", "Instantly", "AI cold email outreach"},
+	{"lemlist", "Lemlist", "Lemlist", "AI cold outreach"},
+	{"smartlead", "Smartlead", "Smartlead", "AI cold email platform"},
+	{"reply", "Reply.io", "Reply", "AI sales engagement"},
+	{"mailshake", "Mailshake", "Mailshake", "AI sales outreach"},
+	{"woodpecker", "Woodpecker", "Woodpecker", "AI cold email"},
+	{"hubspot", "HubSpot AI", "HubSpot", "AI CRM assistant"},
+	{"salesforce", "Einstein", "Salesforce", "Salesforce's AI CRM"},
+	{"zoho", "Zia", "Zoho", "Zoho's AI assistant"},
+	{"freshworks", "Freddy", "Freshworks", "Freshworks' AI assistant"},
+	{"intercom", "Fin", "Intercom", "AI customer support agent"},
+	{"drift", "Drift", "Salesloft", "AI conversational marketing"},
+	{"tidio", "Tidio Lyro", "Tidio", "AI customer service chatbot"},
+	{"crisp", "Crisp", "Crisp", "AI customer messaging"},
+	{"livechat", "LiveChat AI", "LiveChat", "AI chat support"},
+	{"zendesk", "Zendesk AI", "Zendesk", "AI customer service"},
+	{"ada", "Ada", "Ada", "AI customer service automation"},
+	{"forethought", "Forethought", "Forethought", "AI support automation"},
+	{"kustomer", "Kustomer", "Meta", "AI customer service CRM"},
+	{"gorgias", "Gorgias", "Gorgias", "AI support for ecommerce"},
+	{"helpscout", "Help Scout", "Help Scout", "AI customer support"},
+	{"front", "Front", "Front", "AI customer communication"},
+	{"missive", "Missive", "Missive", "AI team inbox"},
+	{"hiver", "Hiver", "Hiver", "AI shared inbox"},
+	{"kayako", "Kayako", "Kayako", "AI helpdesk"},
+	{"grove", "Grove", "Grove", "AI customer support"},
+	{"chatwoot", "Chatwoot", "Chatwoot", "Open-source AI support"},
+	{"botpress", "Botpress", "Botpress", "AI chatbot builder"},
+	{"dialogflow", "Dialogflow", "Google", "Google's conversational AI"},
+	{"rasa", "Rasa", "Rasa", "Open-source conversational AI"},
+	{"voiceflow", "Voiceflow", "Voiceflow", "AI conversation design"},
+	{"landbot", "Landbot", "Landbot", "AI chatbot builder"},
+	{"manychat", "ManyChat", "ManyChat", "AI chat marketing"},
+	{"chatbot", "ChatBot", "LiveChat", "AI chatbot platform"},
+	{"yellowai", "Yellow.ai", "Yellow.ai", "AI customer experience"},
+	{"haptik", "Haptik", "Jio", "AI conversational assistant"},
+	{"gupshup", "Gupshup", "Gupshup", "AI conversational messaging"},
+	{"kore", "Kore.ai", "Kore.ai", "AI virtual assistants"},
+	{"cognigy", "Cognigy", "Cognigy", "AI contact center"},
+	{"ibmwatson", "IBM Watson", "IBM", "IBM's AI platform"},
+	{"watsonx", "watsonx", "IBM", "IBM's enterprise AI platform"},
+	{"azureai", "Azure AI", "Microsoft", "Microsoft's cloud AI"},
+	{"bedrock", "Amazon Bedrock", "AWS", "AWS managed foundation models"},
+	{"sagemaker", "SageMaker", "AWS", "AWS machine learning platform"},
+	{"vertexai", "Vertex AI", "Google", "Google Cloud AI platform"},
+	{"googleai", "Google AI Studio", "Google", "Build with Google's models"},
+	{"aistudio", "AI Studio", "Google", "Prototype with Gemini"},
+	{"ollama", "Ollama", "Ollama", "Run LLMs locally"},
+	{"lmstudio", "LM Studio", "LM Studio", "Local LLM desktop app"},
+	{"gpt4all", "GPT4All", "Nomic AI", "Local open-source LLM"},
+	{"jan", "Jan", "Menlo", "Open-source local AI"},
+	{"localai", "LocalAI", "LocalAI", "Self-hosted OpenAI alternative"},
+	{"textgen", "Text Generation WebUI", "Open Source", "Local LLM interface"},
+	{"koboldai", "KoboldAI", "KoboldAI", "Local AI writing"},
+	{"sillytavern", "SillyTavern", "Open Source", "Local AI chat frontend"},
+	{"openrouter", "OpenRouter", "OpenRouter", "One API for many models"},
+	{"baseten", "Baseten", "Baseten", "Deploy ML models"},
+	{"deepinfra", "DeepInfra", "DeepInfra", "Serverless AI inference"},
+	{"lepton", "Lepton AI", "Lepton", "AI cloud platform"},
+	{"novita", "Novita AI", "Novita", "AI model APIs"},
+	{"hyperbolic", "Hyperbolic", "Hyperbolic", "Open AI cloud"},
+	{"lambdalabs", "Lambda Labs", "Lambda", "AI cloud and GPUs"},
+	{"coreweave", "CoreWeave", "CoreWeave", "AI cloud infrastructure"},
+	{"runpod", "RunPod", "RunPod", "GPU cloud for AI"},
+	{"vast", "Vast.ai", "Vast.ai", "Rent GPU compute"},
+	{"paperspace", "Paperspace", "DigitalOcean", "Cloud GPUs for AI"},
+	{"banana", "Banana Dev", "Banana", "Serverless GPU inference"},
+	{"fal", "Fal.ai", "Fal", "Fast generative media API"},
+	{"portkey", "Portkey", "Portkey", "AI gateway and observability"},
+	{"langchain", "LangChain", "LangChain", "Framework for LLM apps"},
+	{"llamaindex", "LlamaIndex", "LlamaIndex", "Data framework for LLMs"},
+	{"haystack", "Haystack", "deepset", "NLP framework for LLMs"},
+	{"flowise", "Flowise", "Flowise", "Drag-and-drop LLM apps"},
+	{"langflow", "LangFlow", "LangFlow", "Visual LLM app builder"},
+	{"dify", "Dify", "Dify", "Open-source LLM app platform"},
+	{"relevance", "Relevance AI", "Relevance", "Build AI agents and tools"},
+	{"agentgpt", "AgentGPT", "Reworkd", "Autonomous AI agents in browser"},
+	{"autogpt", "AutoGPT", "Significant Gravitas", "Autonomous GPT agent"},
+	{"babyagi", "BabyAGI", "Open Source", "Task-driven autonomous agent"},
+	{"superagi", "SuperAGI", "SuperAGI", "Open-source AI agent framework"},
+	{"crewai", "CrewAI", "CrewAI", "Multi-agent orchestration"},
+	{"autogen", "AutoGen", "Microsoft", "Multi-agent conversation framework"},
+	{"metagpt", "MetaGPT", "Open Source", "Multi-agent software company"},
+	{"ghostwriter", "Ghostwriter", "Replit", "Replit's AI coder"},
+	{"cody", "Cody", "Sourcegraph", "AI coding assistant"},
+	{"sweep", "Sweep", "Sweep", "AI for GitHub issues"},
+	{"codegen", "CodeGen", "Salesforce", "Open program synthesis model"},
+	{"mutable", "Mutable AI", "Mutable", "AI code acceleration"},
+	{"aicoder", "AI Coder", "AI Coder", "AI pair programmer"},
+	{"qodo", "Qodo", "Qodo", "AI code integrity"},
+	{"codium", "Codium", "Codium", "AI code testing"},
+	{"codegpt", "CodeGPT", "CodeGPT", "AI coding assistant"},
+	{"askcodi", "AskCodi", "AskCodi", "AI developer assistant"},
+	{"codewhisperer", "CodeWhisperer", "AWS", "AWS AI coding companion"},
+	{"amazonq", "Amazon Q", "AWS", "AWS generative AI assistant"},
+	{"copilotworkspace", "Copilot Workspace", "GitHub", "AI dev environment"},
+	{"replitagent", "Replit Agent", "Replit", "AI app-building agent"},
+	{"claudecode", "Claude Code", "Anthropic", "Agentic coding in terminal"},
+	{"geminicli", "Gemini CLI", "Google", "Gemini in your terminal"},
+	{"opencode", "OpenCode", "OpenCode", "Open-source coding agent"},
+	{"cline", "Cline", "Cline", "Autonomous coding agent"},
+	{"roo", "Roo Code", "Roo", "AI coding agent for VS Code"},
+	{"kiro", "Kiro", "AWS", "Spec-driven AI IDE"},
+	{"zed", "Zed AI", "Zed", "Fast editor with AI"},
+	{"void", "Void", "Void", "Open-source AI editor"},
+	{"pearai", "PearAI", "PearAI", "Open-source AI code editor"},
+	{"melty", "Melty", "Melty", "AI code editor"},
+	{"double", "Double", "Double", "AI spreadsheet and code"},
+	{"supermaven", "Supermaven", "Supermaven", "Fast AI code completion"},
+	{"magic", "Magic.dev", "Magic", "AI software engineer"},
+	{"poolside", "Poolside", "Poolside", "AI for software engineering"},
+	{"augment", "Augment Code", "Augment", "AI coding for large codebases"},
+	{"factory", "Factory AI", "Factory", "Agentic software development"},
+	{"tessl", "Tessl", "Tessl", "AI-native software development"},
+	{"gitingest", "Gitingest", "Open Source", "Turn repos into AI prompts"},
+	{"sdxl", "SDXL", "Stability AI", "High-resolution image model"},
+	{"starryai", "StarryAI", "StarryAI", "AI art generator"},
+	{"dreamstudio", "DreamStudio", "Stability AI", "Stable Diffusion studio"},
+	{"haiper", "Haiper", "Haiper", "AI video creation"},
+	{"genmo", "Genmo", "Genmo", "AI video generation"},
+	{"kaiber", "Kaiber", "Kaiber", "AI video art"},
+	{"deforum", "Deforum", "Open Source", "Stable Diffusion animation"},
+	{"leiapix", "LeiaPix", "Leia", "Turn photos into 3D video"},
+	{"elai", "Elai.io", "Elai", "AI video from text"},
+	{"colossyan", "Colossyan", "Colossyan", "AI video for learning"},
+	{"hourone", "Hour One", "Hour One", "AI presenter videos"},
+	{"rephrase", "Rephrase.ai", "Rephrase", "AI video personalization"},
+	{"kapwing", "Kapwing", "Kapwing", "AI video editing"},
+	{"pictory", "Pictory", "Pictory", "AI video from scripts"},
+	{"fliki", "Fliki", "Fliki", "AI video from text"},
+	{"lumen5", "Lumen5", "Lumen5", "AI video marketing"},
+	{"resemble", "Resemble AI", "Resemble", "AI voice cloning"},
+	{"speechify", "Speechify", "Speechify", "AI text to speech"},
+	{"wellsaid", "WellSaid", "WellSaid", "AI voiceover"},
+	{"listnr", "Listnr", "Listnr", "AI voice generator"},
+	{"voicemod", "Voicemod", "Voicemod", "AI voice changer"},
+	{"krisp", "Krisp", "Krisp", "AI noise cancellation"},
+	{"avoma", "Avoma", "Avoma", "AI meeting intelligence"},
+	{"grain", "Grain", "Grain", "AI meeting notes"},
+	{"supernormal", "Supernormal", "Supernormal", "AI meeting notes"},
+	{"jamie", "Jamie", "Jamie", "AI meeting notes"},
+	{"notta", "Notta", "Notta", "AI transcription"},
+	{"revai", "Rev AI", "Rev", "AI transcription and captions"},
+	{"sonix", "Sonix", "Sonix", "AI audio transcription"},
+	{"trint", "Trint", "Trint", "AI transcription"},
+	{"happy", "Happy Scribe", "Happy Scribe", "AI transcription"},
+	{"assemblyai", "AssemblyAI", "AssemblyAI", "AI speech-to-text API"},
+	{"deepgram", "Deepgram", "Deepgram", "AI speech recognition"},
+	{"whisper", "Whisper", "OpenAI", "Open speech recognition model"},
+	{"mubert", "Mubert", "Mubert", "AI music streaming"},
+	{"beatoven", "Beatoven", "Beatoven", "AI royalty-free music"},
+	{"soundful", "Soundful", "Soundful", "AI music generation"},
+	{"loudly", "Loudly", "Loudly", "AI music generator"},
+	{"splash", "Splash", "Splash", "AI music and voice"},
+	{"pitch", "Pitch", "Pitch", "AI presentations for teams"},
+	{"plusai", "Plus AI", "Plus", "AI slides for Google Slides"},
+	{"magicslides", "MagicSlides", "MagicSlides", "AI presentation maker"},
+	{"presentations", "Presentations.AI", "Presentations.AI", "AI slide decks"},
+	{"designs", "Microsoft Designer", "Microsoft", "AI graphic design"},
+	{"visily", "Visily", "Visily", "AI wireframing"},
+	{"logoai", "LogoAI", "LogoAI", "AI logo maker"},
+	{"designsai", "Designs.ai", "Designs.ai", "AI design suite"},
+	{"khroma", "Khroma", "Khroma", "AI color palette tool"},
+	{"huemint", "Huemint", "Huemint", "AI color palette generator"},
+	{"colormind", "Colormind", "Colormind", "AI color schemes"},
+	{"removebg", "Remove.bg", "Canva", "AI background removal"},
+	{"cleanuppics", "Cleanup.pictures", "Clipdrop", "AI object removal"},
+	{"clipdrop", "Clipdrop", "Stability AI", "AI image editing suite"},
+	{"photoroom", "Photoroom", "Photoroom", "AI product photos"},
+	{"pixlr", "Pixlr AI", "Pixlr", "AI photo editor"},
+	{"fotor", "Fotor", "Fotor", "AI photo editing"},
+	{"vanceai", "VanceAI", "VanceAI", "AI photo enhancement"},
+	{"topaz", "Topaz AI", "Topaz Labs", "AI photo and video enhancement"},
+	{"letsenhance", "Let's Enhance", "Let's Enhance", "AI image upscaling"},
+	{"upscale", "Upscale.media", "PixelBin", "AI image upscaler"},
+	{"bigjpg", "BigJPG", "BigJPG", "AI image upscaling"},
+	{"waifu2x", "Waifu2x", "Open Source", "AI anime image upscaling"},
+	{"reminiai", "Remini", "Bending Spoons", "AI photo enhancement"},
+	{"facetune", "FaceApp", "FaceApp", "AI face editing"},
+	{"luminar", "Luminar Neo", "Skylum", "AI photo editor"},
+	{"evoto", "Evoto", "Evoto", "AI photo retouching"},
+	{"retouch4me", "Retouch4me", "Retouch4me", "AI retouching plugins"},
+	{"pebblely", "Pebblely", "Pebblely", "AI product backgrounds"},
+	{"flair", "Flair AI", "Flair", "AI product photography"},
+	{"booth", "Booth AI", "Booth", "AI product photos"},
+	{"mokker", "Mokker", "Mokker", "AI product backgrounds"},
+	{"photostudy", "PhotoStudy", "PhotoStudy", "AI study helper"},
+	{"brainly", "Brainly AI", "Brainly", "AI homework community"},
+	{"chegg", "Chegg AI", "Chegg", "AI study assistant"},
+	{"coursehero", "Course Hero AI", "Course Hero", "AI study tools"},
+	{"numerade", "Numerade", "Numerade", "AI STEM tutoring"},
+	{"studyfetch", "StudyFetch", "StudyFetch", "AI study platform"},
+	{"turbolearn", "TurboLearn", "TurboLearn", "AI study notes"},
+	{"unstuck", "Unstuck AI", "Unstuck", "AI study companion"},
+	{"caktus", "Caktus AI", "Caktus", "AI student assistant"},
+	{"jenni", "Jenni AI", "Jenni", "AI academic writing"},
+	{"essayflow", "EssayFlow", "EssayFlow", "AI essay writing"},
+	{"aithor", "Aithor", "Aithor", "AI essay writer"},
+	{"smodin", "Smodin", "Smodin", "AI writing and grading"},
+	{"scribbr", "Scribbr", "Scribbr", "AI proofreading"},
+	{"editpad", "EditPad", "EditPad", "AI paraphrasing tools"},
+	{"prepostseo", "PrePostSEO", "PrePostSEO", "AI SEO and writing tools"},
+	{"smallseotools", "SmallSEOTools", "SmallSEOTools", "AI writing utilities"},
+	{"zerogpt", "ZeroGPT", "ZeroGPT", "AI content detector"},
+	{"gptzero", "GPTZero", "GPTZero", "AI text detection"},
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -648,9 +950,8 @@ func aiHandle(s SessionBridge, info types.MessageInfo, args []string, prefix str
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// .ai menu — 200 AI names
+// .ai menu — 500 AI names
 // ─────────────────────────────────────────────────────────────────────────────
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Registration
@@ -666,7 +967,7 @@ func init() {
 	// (Owner report: ".ai likhne per simple text q, baqi categories ka menu
 	// ban ke aata hai".)
 
-	// 200 AI brand commands — each with its own guidance message.
+	// 500 AI brand commands — each with its own guidance message.
 	for _, b := range aiBrands {
 		brand := b
 		Register(Command{

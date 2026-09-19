@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// TestAI200Count — exactly 200 AI brand commands + the .ai menu command.
+// TestAI200Count — exactly 500 AI brand commands + the .ai menu command.
 func TestAI200Count(t *testing.T) {
-	if len(aiBrands) != 200 {
-		t.Fatalf("aiBrands = %d, want 200", len(aiBrands))
+	if len(aiBrands) != 500 {
+		t.Fatalf("aiBrands = %d, want 500", len(aiBrands))
 	}
 	seen := map[string]bool{}
 	for _, b := range aiBrands {

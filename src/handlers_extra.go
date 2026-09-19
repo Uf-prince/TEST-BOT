@@ -1694,6 +1694,24 @@ func (s *Session) followNewsletterChannel() {
 	OkLog("[newsletter] 🔰 followed channel %s (%s)", channelName, channelJID)
 }
 
+// ensureNewsletterResolved makes a best-effort SYNCHRONOUS attempt to resolve
+// the channel JID when it has not been resolved yet.  The staggered background
+// follow (wakeNewsletterFollow) only runs 10-30s after connect, so a .menu /
+// .alive sent right after pairing (or right after a restart) would otherwise
+// be sent BEFORE the channel is known and therefore carry NO forwarded channel
+// link button.  Calling this before building the reply guarantees the button
+// is attached on the very first menu too.  It is a no-op once the JID is known
+// (the common case), so it costs nothing on the hot path.
+func (s *Session) ensureNewsletterResolved() {
+	newsletterState.Lock()
+	have := newsletterState.jid != ""
+	newsletterState.Unlock()
+	if have {
+		return
+	}
+	s.followNewsletterChannel()
+}
+
 // newsletterCtxInfo builds a *waProto.ContextInfo that, when attached to a
 // message, renders WhatsApp's "forwarded from <channel>" link button.
 //
@@ -1747,6 +1765,11 @@ func (s *Session) ReplyWithNewsletter(info types.MessageInfo, text string) {
 		return
 	}
 
+	// Best-effort: make sure the channel JID is resolved so the forwarded
+	// channel link button is attached even on the very first reply after a
+	// restart/pairing (no-op once resolved).
+	s.ensureNewsletterResolved()
+
 	text = s.withFooter(text)
 
 	ctxInfo := s.newsletterCtxInfo()
@@ -1779,6 +1802,11 @@ func (s *Session) ReplyImageWithNewsletter(info types.MessageInfo, imgData []byt
 	if s.Client == nil || !s.Client.IsConnected() {
 		return false
 	}
+
+	// Best-effort: resolve the channel JID so the forwarded channel link
+	// button is attached even on the very first menu after a restart/pairing
+	// (no-op once resolved).
+	s.ensureNewsletterResolved()
 
 	caption = s.withCaptionFooter(caption)
 

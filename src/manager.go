@@ -2010,7 +2010,7 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 				continue
 			}
 			slug := strings.ToUpper(menuCategorySlug(cat))
-			b.WriteString(fmt.Sprintf("*🔰 %s%s*\n", prefix, slug))
+			b.WriteString(fmt.Sprintf("*| 🔰 | %s%s*\n", prefix, slug))
 		}
 		b.WriteString("╚════ ≪ •❈• ≫ ════╝\n")
 		return b.String()
@@ -2027,9 +2027,9 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 		emoji = "🔰"
 	}
 	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
-	b.WriteString(fmt.Sprintf("*%s %s %s*\n", emoji, menuCategoryLabel(onlyCat), emoji))
+	b.WriteString(fmt.Sprintf("*| %s | %s | %s |*\n", emoji, menuCategoryLabel(onlyCat), emoji))
 	for _, c := range list {
-		b.WriteString(fmt.Sprintf("*🔰 %s%s*\n", prefix, c.Name))
+		b.WriteString(fmt.Sprintf("*| 🔰 | %s%s*\n", prefix, c.Name))
 	}
 	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
 	// NOTE: the bot name footer is applied centrally by
