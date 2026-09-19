@@ -834,7 +834,7 @@ var aiBrands = []aiBrand{
 // likha jaye). .gpt jaisa apna intro.
 func aiGuidanceText(b aiBrand, prefix string) string {
 	return fmt.Sprintf(
-		"*🤖 %s AI 🤖*\n\n"+
+		"*🔰 %s AI 🔰*\n\n"+
 			"*%s* is an AI assistant by *%s*.\n"+
 			"_%s_\n\n"+
 			"*HOW TO USE :❯*\n"+
@@ -941,12 +941,12 @@ func aiHandle(s SessionBridge, info types.MessageInfo, args []string, prefix str
 	out, err := aiMistralChat(system, prompt)
 	if err != nil {
 		s.Reply(info, fmt.Sprintf(
-			"*🤖 %s AI 🤖*\n\n*⚠️ SORRY, I COULD NOT ANSWER RIGHT NOW.*\n_%s_\n\n*PLEASE TRY AGAIN IN A MOMENT.*",
+			"*🔰 %s AI 🔰*\n\n*⚠️ SORRY, I COULD NOT ANSWER RIGHT NOW.*\n_%s_\n\n*PLEASE TRY AGAIN IN A MOMENT.*",
 			b.Name, err.Error()))
 		return
 	}
 
-	s.Reply(info, fmt.Sprintf("*🤖 %s AI 🤖*\n\n%s", b.Name, aiWhatsAppFormat(out)))
+	s.Reply(info, fmt.Sprintf("*🔰 %s AI 🔰*\n\n%s", b.Name, aiWhatsAppFormat(out)))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
