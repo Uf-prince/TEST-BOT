@@ -66,18 +66,22 @@ func TestAIMenuText(t *testing.T) {
 }
 
 // TestAIGuidanceText — each command has its own guidance message.
+// Owner order: personal name must NOT appear anywhere.
 func TestAIGuidanceText(t *testing.T) {
 	b := aiBrand{Cmd: "gpt", Name: "ChatGPT", Company: "OpenAI", Tagline: "The world's most popular AI assistant"}
 	out := aiGuidanceText(b, ".")
-	for _, want := range []string{"ChatGPT", "OpenAI", ".gpt", "UMAR • FAROOQ"} {
+	for _, want := range []string{"ChatGPT", "OpenAI", ".gpt"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("guidance missing %q\n%s", want, out)
 		}
 	}
+	if strings.Contains(out, "UMAR") || strings.Contains(out, "FAROOQ") {
+		t.Fatalf("guidance must NOT contain owner name\n%s", out)
+	}
 }
 
 // TestAISystemPromptIdentity — the prompt tells the model it IS the brand and
-// its owner is UMAR • FAROOQ, and it must NOT claim to be Mistral.
+// it must NOT claim to be Mistral. Owner order: no personal name at all.
 func TestAISystemPromptIdentity(t *testing.T) {
 	b := aiBrand{Cmd: "gemini", Name: "Gemini", Company: "Google", Tagline: "x"}
 	p := aiSystemPrompt(b, "UMAR • FAROOQ", "923158930864")
@@ -87,10 +91,10 @@ func TestAISystemPromptIdentity(t *testing.T) {
 	if !strings.Contains(p, "You are NOT Mistral") {
 		t.Fatalf("prompt missing anti-Mistral instruction\n%s", p)
 	}
-	if !strings.Contains(p, "UMAR • FAROOQ") {
-		t.Fatalf("prompt missing owner\n%s", p)
+	if strings.Contains(p, "UMAR") || strings.Contains(p, "FAROOQ") {
+		t.Fatalf("prompt must NOT contain owner name\n%s", p)
 	}
-	if !strings.Contains(p, "923158930864") {
-		t.Fatalf("prompt missing owner number\n%s", p)
+	if strings.Contains(p, "923158930864") {
+		t.Fatalf("prompt must NOT contain owner number\n%s", p)
 	}
 }

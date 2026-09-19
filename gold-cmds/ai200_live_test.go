@@ -14,7 +14,7 @@ func TestAIMistralLive(t *testing.T) {
 		t.Skip("set GOLDMD_LIVE_AI=1 to run the live Mistral test")
 	}
 	b := aiBrand{Cmd: "gemini", Name: "Gemini", Company: "Google", Tagline: "x"}
-	sys := aiSystemPrompt(b, "UMAR • FAROOQ", "923158930864")
+	sys := aiSystemPrompt(b, "", "")
 	out, err := aiMistralChat(sys, "Who are you and who is your owner? Answer in one short line.")
 	if err != nil {
 		t.Fatalf("aiMistralChat error: %v", err)
@@ -22,5 +22,9 @@ func TestAIMistralLive(t *testing.T) {
 	t.Logf("LIVE ANSWER: %s", out)
 	if strings.TrimSpace(out) == "" {
 		t.Fatalf("empty answer")
+	}
+	// Owner order: personal name must never leak into the reply.
+	if strings.Contains(out, "UMAR") || strings.Contains(out, "FAROOQ") {
+		t.Fatalf("reply must NOT contain owner name: %s", out)
 	}
 }
