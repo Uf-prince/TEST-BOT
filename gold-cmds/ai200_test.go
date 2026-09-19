@@ -22,18 +22,17 @@ func TestAI200Count(t *testing.T) {
 	}
 }
 
-// TestAICommandsRegistered — every brand is registered under category "AI",
-// and the .ai menu command exists.
+// TestAICommandsRegistered — every brand is registered under category "AI".
+// NOTE: .ai must NOT be registered as a command — otherwise the dispatcher
+// would match it as a command (plain text) instead of the category shortcut
+// (fancy boxed menu). See src/ai_menu_test.go for the menu behaviour.
 func TestAICommandsRegistered(t *testing.T) {
 	byName := map[string]Command{}
 	for _, c := range Commands() {
 		byName[c.Name] = c
 	}
-	if _, ok := byName["ai"]; !ok {
-		t.Fatalf(".ai command not registered")
-	}
-	if byName["ai"].Category != "AI" {
-		t.Fatalf(".ai category = %q, want AI", byName["ai"].Category)
+	if _, ok := byName["ai"]; ok {
+		t.Fatalf(".ai must NOT be registered as a command (it is a category shortcut)")
 	}
 	for _, b := range aiBrands {
 		c, ok := byName[b.Cmd]
@@ -45,22 +44,6 @@ func TestAICommandsRegistered(t *testing.T) {
 		}
 		if c.Run == nil {
 			t.Fatalf("%q has nil Run", b.Cmd)
-		}
-	}
-}
-
-// TestAIMenuText — the .ai menu lists all 200 names with the prefix.
-func TestAIMenuText(t *testing.T) {
-	out := aiMenuText(".")
-	if !strings.Contains(out, "AI COMMANDS") {
-		t.Fatalf("menu missing header\n%s", out)
-	}
-	if !strings.Contains(out, "TOTAL ❮ 200 ❯") {
-		t.Fatalf("menu missing total 200\n%s", out)
-	}
-	for _, b := range aiBrands {
-		if !strings.Contains(out, "."+b.Cmd) {
-			t.Fatalf("menu missing command .%s", b.Cmd)
 		}
 	}
 }

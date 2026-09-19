@@ -28,7 +28,6 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -652,41 +651,20 @@ func aiHandle(s SessionBridge, info types.MessageInfo, args []string, prefix str
 // .ai menu — 200 AI names
 // ─────────────────────────────────────────────────────────────────────────────
 
-// aiMenuText builds the .ai menu listing all 200 AI names.
-func aiMenuText(prefix string) string {
-	names := make([]string, 0, len(aiBrands))
-	for _, b := range aiBrands {
-		names = append(names, b.Cmd)
-	}
-	sort.Strings(names)
-
-	var sb strings.Builder
-	sb.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
-	sb.WriteString(fmt.Sprintf("*🤖 AI COMMANDS 🤖*\n*TOTAL ❮ %d ❯*\n", len(aiBrands)))
-	sb.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
-	for _, n := range names {
-		sb.WriteString(fmt.Sprintf("*🔰 %s%s*\n", prefix, n))
-	}
-	sb.WriteString("\n*🤖 TYPE ❮ "+prefix+"GPT ❯ YOUR QUESTION 🤖*")
-	return sb.String()
-}
-
-func handleAIMenu(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	s.Reply(info, aiMenuText(prefix))
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
 func init() {
-	// .ai — the AI menu (200 names). Category "AI" so .menu shows ".AI".
-	Register(Command{
-		Name:     "ai",
-		Category: "AI",
-		Desc:     "THIS COMMAND SHOWS THE AI MENU WITH 200 AI ASSISTANT COMMANDS.",
-		Run:      handleAIMenu,
-	})
+	// NOTE: .ai is NOT registered as a command on purpose. If it were, the
+	// dispatcher (handler.go) would match it as a COMMAND first and reply with
+	// plain text — it would never reach the category shortcut. By leaving .ai
+	// unregistered, typing .ai falls through to menuCategoryFromCommand("ai")
+	// → CmdMenu(..., "AI") → buildCategoryMenu, which renders the SAME fancy
+	// boxed menu as every other category (.group / .tools / .anti ...).
+	// (Owner report: ".ai likhne per simple text q, baqi categories ka menu
+	// ban ke aata hai".)
 
 	// 200 AI brand commands — each with its own guidance message.
 	for _, b := range aiBrands {
