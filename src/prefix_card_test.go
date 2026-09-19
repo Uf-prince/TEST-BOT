@@ -109,6 +109,11 @@ func TestConnectedCardCountsLogo(t *testing.T) {
 	if !strings.Contains(src, "totalCmds := coreCount + pluginCount + goldcmds.LogoCount") {
 		t.Error("startup card totalCmds me goldcmds.LogoCount add nahi hua")
 	}
+	// coreCount must be computed dynamically (Commands map minus plugin/hidden)
+	// so it always matches the .menu count.
+	if !strings.Contains(src, "coreCount := 0") {
+		t.Error("startup card coreCount dynamic nahi hai (hardcoded 7 hata do)")
+	}
 }
 
 // TestConnectedCardNoteText: NOTE me 2/3 minutes + no-need-to-pair text.

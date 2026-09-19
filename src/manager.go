@@ -1432,16 +1432,23 @@ func (s *Session) sendStartupNotification() {
 
 	// Core commands are handled by handler.go's fallback switch.
 	// Plugin commands are registered separately by commands_loader.go.
-	// Core visible commands: alive, ping, menu, uptime, sessions + host5gb
-	// + server (dono ab .menu me bhi dikhte hain — count bhi wahi hona
-	// chahiye, warna menu COMMANDS ❮N❯ vs startup card COMMANDS ❮N❯ alag
-	// alag dikhte the).
-	coreCount := 7
+	// OWNER ORDER: the startup card's COMMANDS total MUST be identical to
+	// the .menu COMMANDS total. Both are computed the same way:
+	//   visible core commands (Commands map minus plugin/hidden)
+	//   + visible plugin commands (goldcmds.CommandsCount)
+	//   + the 1000 hidden .LOGO1..LOGO1000 commands (goldcmds.LogoCount).
+	pluginSet := make(map[string]bool)
+	for _, c := range goldcmds.Commands() {
+		pluginSet[c.Name] = true
+	}
+	coreCount := 0
+	for name := range Commands {
+		if pluginSet[name] || hiddenCommands[name] {
+			continue
+		}
+		coreCount++
+	}
 	pluginCount := goldcmds.CommandsCount() // only visible (non-hidden) commands
-
-	// OWNER ORDER: the 1000 .LOGO1..LOGO1000 commands are hidden from the
-	// list but MUST be counted \u2014 keep the startup card's COMMANDS total
-	// identical to the .menu COMMANDS total (both add goldcmds.LogoCount).
 	totalCmds := coreCount + pluginCount + goldcmds.LogoCount
 	prefix := s.resolvePrefix(s.JID)
 
