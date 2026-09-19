@@ -22,10 +22,10 @@ package goldcmds
 // 15-req/70s window per key, exponential backoff rest (60s→max 5min),
 // busy-lock per key. Env override: LOGO_API_KEY_1 ... LOGO_API_KEY_15.
 //
-// VISIBILITY (owner order): .logo VISIBLE (menu + fullmenu with desc).
-// logo1..logo1000 register MAIN-package me as hiddenCommands — na .menu me
-// dikhte hain na .fullmenu me (fullmenu sirf gold-cmds registry + core
-// list scan karta hai). Is file me SIRF .logo visible command hai.
+// VISIBILITY (owner order): .logo VISIBLE (menu, display name .LOGO).
+// logo1..logo1000 register MAIN-package me as hiddenCommands — .menu me
+// nahi dikhte. Is file me SIRF .logo visible command hai; .logo likhne par
+// fancy boxed menu banta hai (ShowLogoMenu → manager.go CmdLogoMenu).
 //
 // Waiting message ALWAYS delete hota hai (success / error / timeout —
 // har path pe DeleteMessage).

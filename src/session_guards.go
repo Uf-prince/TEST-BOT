@@ -1216,15 +1216,11 @@ func clearVideoSession(jid string) {
 // GOLD-MD — logo1..logo1000 hidden command registrations (main package)
 // File: logo1000_main.go
 // ============================================================================
-// OWNER ORDER: logo1..logo1000 .menu aur .fullmenu DONO me kabhi nahi
-// dikhne chahiye. Isliye ye Commands map me direct register hote hain
-// (gold-cmds registry me nahi) + hiddenCommands set me hain:
-//   .menu    → hiddenCommands filter (manager.go:1794) unhe skip karta hai
-//   .fullmenu → sirf gold-cmds registry + fmCoreCommands scan karta hai —
-//               main-package Commands map scan me coreCommandCategory/
-//               coreCommandDesc use hota hai, jo in naam ko pehchan kar
-//               AI & MEDIA category me daal deta hai (warna OTHER me).
-//               OWNER ORDER: in dono ko pehchan kar SKIP karna hai.
+// OWNER ORDER: logo1..logo1000 .menu me kabhi nahi dikhne chahiye. Isliye ye
+// Commands map me direct register hote hain (gold-cmds registry me nahi) +
+// hiddenCommands set me hain:
+//   .menu → hiddenCommands filter (manager.go) unhe skip karta hai.
+//   .logo → fancy boxed menu (ShowLogoMenu → manager.go CmdLogoMenu).
 // Handler: goldcmds.LogoRunN(n) — 15-key Agnes pool + 1000 designs engine.
 // ============================================================================
 

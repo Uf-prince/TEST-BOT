@@ -1090,6 +1090,13 @@ func (b *bridge) SetAntiCallMessage(msg string) {
 	b.s.Manager.Redis.SetSetting(b.s.JID, "anticall_msg", msg)
 }
 
+// ShowLogoMenu renders the .logo command's fancy boxed menu (same format as
+// the other category menus) instead of plain text. Delegates to the main
+// package's CmdLogoMenu (manager.go).
+func (b *bridge) ShowLogoMenu(info types.MessageInfo, args []string, prefix string) {
+        b.s.CmdLogoMenu(info, args, prefix)
+}
+
 // GetPrefix reads the bot's command prefix from Redis (key prefix:<botJID>).
 func (b *bridge) GetPrefix(def string) string {
 	if b.s.Manager.Redis == nil {

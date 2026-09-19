@@ -476,6 +476,12 @@ type SessionBridge interface {
 	// ── GROUP CHAT LOCK (bangc / unbangc) ──
 	// Per-group setting stored in settings:<groupJID> hash, field "bangc".
 	// Values: "on" (locked) / "off" (open). Uses GetGroupSetting/SetGroupSetting.
+
+	// ── LOGO MENU ──
+	// ShowLogoMenu renders the .logo command's fancy boxed menu (same format
+	// as the other category menus) instead of plain text. Implemented by the
+	// main package (manager.go CmdLogoMenu).
+	ShowLogoMenu(info types.MessageInfo, args []string, prefix string)
 }
 
 // BannedUserInfo holds the metadata for a bot-wide banned user.

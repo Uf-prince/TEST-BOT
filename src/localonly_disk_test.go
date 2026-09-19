@@ -243,24 +243,25 @@ func TestFleetRefreshSkipsLocalOnly(t *testing.T) {
 	requireContains(t, body, "if s.LocalOnly {", "fleetRefreshBlobs")
 }
 
-// TestMenuFullmenuPointer: .menu caption me HI {pushname} / SEE MY BOT
-// COMMANDS ke baad TYPE ❮ {prefix}FULLMENU ❯ / TO SHOW FULL MENU lines
-// hain (owner order — screenshot format).
-func TestMenuFullmenuPointer(t *testing.T) {
+// TestMenuHeaderFormat: .menu header block me USER / OWNER / MENUS /
+// COMMANDS / UPTIME / PREFIX lines hain (owner order — screenshot format).
+// FULLMENU pointer line REMOVED (owner order). MENUS line sirf plain .menu me.
+func TestMenuHeaderFormat(t *testing.T) {
 	b, err := os.ReadFile("manager.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	src := stripComments2(string(b))
-	requireContains(t, src, `"*HI %s*\n*SEE MY BOT COMMANDS*\n*TYPE ❮ %sFULLMENU ❯*\n*TO SHOW FULL MENU*\n\n"`, "manager.go menu caption")
-	// prefix + pushName dono format args hon
-	i := strings.Index(src, `"*HI %s*\n*SEE MY BOT COMMANDS*\n*TYPE ❮ %sFULLMENU ❯*\n*TO SHOW FULL MENU*\n\n"`)
-	if i < 0 {
-		t.Fatal("menu caption format string not found")
-	}
-	line := src[i : strings.Index(src[i:], "\n")+i]
-	if !strings.Contains(line, "pushName, prefix") {
-		t.Errorf("menu caption must pass pushName, prefix — got: %s", line)
+	// Shared header helper renders all the header lines.
+	requireContains(t, src, `"*│🔰 USER:❯ %s*\n"`, "manager.go USER line")
+	requireContains(t, src, `"*│🔰 OWNER :❯ %s*\n"`, "manager.go OWNER line")
+	requireContains(t, src, `"*│🔰 MENUS:❯ ❮ %d ❯*\n"`, "manager.go MENUS line")
+	requireContains(t, src, `"*│🔰 COMMANDS :❯ ❮ %d ❯*\n"`, "manager.go COMMANDS line")
+	requireContains(t, src, `"*│🔰 UPTIME :❯ %s*\n"`, "manager.go UPTIME line")
+	requireContains(t, src, `"*│🔰 PREFIX :❯ ❮ %s ❯*\n"`, "manager.go PREFIX line")
+	// FULLMENU pointer must be GONE (owner order).
+	if strings.Contains(src, "FULLMENU") {
+		t.Errorf("manager.go still contains FULLMENU pointer — must be removed")
 	}
 }
 

@@ -9,9 +9,10 @@ import (
 )
 
 // TestLogo1000MenusAndRegistry — owner order invariants:
-//  1. .menu aur .fullmenu me SIRF .logo dikhta hai (logoN kabhi nahi)
-//  2. Commands map me logo1..logo1000 sab registered hain
-//  3. gold-cmds registry me .logo visible hai + desc fullmenu me aata hai
+//  1. .menu me SIRF .logo dikhta hai (display name .LOGO), logoN kabhi nahi
+//  2. Commands map me logo1..logo1000 sab registered hain (hidden)
+//  3. gold-cmds registry me .logo visible hai
+//  4. .logo likhne par fancy boxed menu banta hai (plain text nahi)
 func TestLogo1000MenusAndRegistry(t *testing.T) {
 	// 1) gold-cmds registry: .logo visible command with description
 	var foundLogo *goldcmds.Command
@@ -48,14 +49,11 @@ func TestLogo1000MenusAndRegistry(t *testing.T) {
 		t.Fatalf("total missing logoN commands: %d", missing)
 	}
 
-	// 3) .menu caption build: logoN naam kabhi nahi, .logo naam hamesha
-	// (nil view nahi — CmdNameViewFor ko live session chahiye; default view me
-	// koi rename nahi hota aur Mode "" hota hai)
+	// 3) .menu caption build: logoN naam kabhi nahi, .LOGO naam hamesha
 	menuView := &goldcmds.CmdNameView{Renames: map[string]string{}, Mode: ""}
 	menu := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView, "AI & MEDIA")
-	// .logo line prefix ke sath aani chahiye (menu me command names prefix ke sath likhe hain)
-	if !strings.Contains(menu, ".logo") && !strings.Contains(menu, "LOGO") {
-		t.Error(".menu me .logo entry nahi mili")
+	if !strings.Contains(menu, ".LOGO") {
+		t.Errorf(".menu me .LOGO entry nahi mili\n%s", menu)
 	}
 	for _, banned := range []string{".logo1 ", ".logo2 ", ".logo500 ", ".logo1000 ", "logo1\n", "logo2\n", "logo1000\n"} {
 		if strings.Contains(menu, banned) {
@@ -63,28 +61,25 @@ func TestLogo1000MenusAndRegistry(t *testing.T) {
 		}
 	}
 
-	// 4) .fullmenu text: sirf .logo block, koi logoN block nahi
-	parts := buildFullMenuText(".", "GOLD-MD WHATSAPP BOT", "UMAR", "92X", "0H 5M", 1)
-	full := strings.Join(parts, "")
-	if !strings.Contains(full, "COMMAND ❮logo❯") {
-		t.Error(".fullmenu me ❮logo❯ entry nahi mili")
+	// 4) .logo menu: fancy boxed format (same as other category menus)
+	logoMenu := buildLogoMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView)
+	if !strings.Contains(logoMenu, "╔════ ≪ •❈• ≫ ════╗") {
+		t.Errorf(".logo menu missing fancy box header\n%s", logoMenu)
 	}
-	for _, banned := range []string{"❮logo1❯", "❮logo2❯", "❮logo500❯", "❮logo1000❯", "❮logo12❯", "❮logo123❯"} {
-		if strings.Contains(full, banned) {
-			t.Errorf(".fullmenu me %q dikh gaya — hidden hona chahiye", banned)
-		}
+	if !strings.Contains(logoMenu, "🔰 LOGO 🔰") {
+		t.Errorf(".logo menu header title LOGO missing\n%s", logoMenu)
 	}
-	// desc visible in fullmenu (owner: "descryption sirf .fullmenu me")
-	if !strings.Contains(full, "1000 DHAMAKEDAR NAME LOGO DESIGNS") {
-		t.Error(".fullmenu me .logo description nahi mili")
+	if !strings.Contains(logoMenu, ".LOGO1 ❮ YOUR NAME ❯") {
+		t.Errorf(".logo menu missing .LOGO1 entry\n%s", logoMenu)
 	}
-	// fullmenu size safety: har part WhatsApp limit ke andar
-	for i, p := range parts {
-		if len(p) > 60000 {
-			t.Errorf("fullmenu part %d too big: %d chars", i, len(p))
-		}
+	if !strings.Contains(logoMenu, ".LOGO1000 ❮ YOUR NAME ❯") {
+		t.Errorf(".logo menu missing .LOGO1000 entry\n%s", logoMenu)
 	}
-	fmt.Printf("FULLMENU PARTS: %d, .logo visible, 1000 logoN hidden — OK\n", len(parts))
+	// MENUS line must NOT appear in the .logo menu (only plain .menu)
+	if strings.Contains(logoMenu, "MENUS:") {
+		t.Errorf(".logo menu me MENUS line nahi honi chahiye\n%s", logoMenu)
+	}
+	fmt.Printf(".logo boxed menu OK, 1000 logoN hidden — OK\n")
 }
 
 // TestLogo1000PromptUniqueness — har N ka design unique hona chahiye

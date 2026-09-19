@@ -273,15 +273,11 @@ func LogoDesignName(n int) string {
 	return fmt.Sprintf("%s + %s Font %s + %s + %s", logoBaseNames[b], logoFontNames[f], logoSizeNames[sz], logoTextNames[t], logoLightNames[l])
 }
 
-// ── .logo — list command (OWNER SPEC format, akela message) ──────────────
+// ── .logo — menu command (OWNER ORDER: fancy boxed menu, same as other
+// category menus — NOT plain text). The main package renders the boxed
+// .LOGO1..1000 list via ShowLogoMenu (manager.go CmdLogoMenu).
 func handleLogoList(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	var sb strings.Builder
-	sb.WriteString("*CREATE TEXT TO IMAGE ( NAME LOGO )*\n\n")
-	sb.WriteString("*TYPE SAME LIKE THAT*\n\n")
-	for n := 1; n <= LogoCount; n++ {
-		sb.WriteString(fmt.Sprintf("*%sLOGO%d ❮ YOUR NAME ❯*\n", prefix, n))
-	}
-	s.Reply(info, sb.String())
+	s.ShowLogoMenu(info, args, prefix)
 }
 
 // ── logoN <name> — generate that design's logo ───────────────────────────
@@ -359,9 +355,10 @@ func logoRunNAsync(s SessionBridge, info types.MessageInfo, args []string, prefi
 }
 
 func init() {
-	// OWNER ORDER: .menu aur .fullmenu me SIRF .logo dikhta hai (desc ke sath
-	// fullmenu me). logo1..logo1000 main-package Commands map me hidden
-	// hote hain (logo1000_main.go) — dono menus me kabhi nahi dikhte.
+	// OWNER ORDER: .menu me SIRF .logo dikhta hai (display name .LOGO).
+	// logo1..logo1000 main-package Commands map me hidden hote hain
+	// (logo1000_main.go) — menu me kabhi nahi dikhte. .logo likhne par
+	// fancy boxed menu banta hai (ShowLogoMenu → manager.go CmdLogoMenu).
 	Register(Command{
 		Name:     "logo",
 		Category: "AI & MEDIA",

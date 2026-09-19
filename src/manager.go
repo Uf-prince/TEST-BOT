@@ -1888,6 +1888,50 @@ func menuCategoryFromCommand(cmd string) (string, bool) {
 	return "", false
 }
 
+// buildMenuHeader renders the shared fancy header block used by .menu, every
+// category menu, and the .logo menu. title is the box title ("MENU" for the
+// plain menu, the category label for category menus, "LOGO" for .logo).
+// showMenus controls the MENUS count line (owner order: ONLY in plain .menu).
+func buildMenuHeader(title, botNum, ownerNum, uptimeHM, prefix string, menuCount, cmdCount int, showMenus bool) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("┏─━─━─🔰 %s 🔰─━─━─┓\n", title))
+	b.WriteString(fmt.Sprintf("*│🔰 USER:❯ %s*\n", botNum))
+	if ownerNum != "" {
+		b.WriteString(fmt.Sprintf("*│🔰 OWNER :❯ %s*\n", ownerNum))
+	}
+	if showMenus {
+		b.WriteString(fmt.Sprintf("*│🔰 MENUS:❯ ❮ %d ❯*\n", menuCount))
+	}
+	b.WriteString(fmt.Sprintf("*│🔰 COMMANDS :❯ ❮ %d ❯*\n", cmdCount))
+	b.WriteString(fmt.Sprintf("*│🔰 UPTIME :❯ %s*\n", uptimeHM))
+	b.WriteString(fmt.Sprintf("*│🔰 PREFIX :❯ ❮ %s ❯*\n", prefix))
+	b.WriteString("┗─━─━─━─━─━─━─━─━─┛\n\n")
+	return b.String()
+}
+
+// buildLogoMenu renders the .logo menu in the SAME fancy boxed format as the
+// other category menus (owner order: .logo must show a proper menu, not plain
+// text). It lists .LOGO1 .. .LOGO1000 with the shared header block.
+func buildLogoMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView) string {
+	_ = pushName
+	_ = botName
+	_ = sessCount
+	_ = menuView
+	uptimeHM := uptimeStr
+	if uptimeHM == "" {
+		uptimeHM = formatUptimeHM(uptime())
+	}
+	var b strings.Builder
+	b.WriteString(buildMenuHeader("LOGO", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.LogoCount, false))
+	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
+	b.WriteString("*| 🔰 | LOGO | 🔰 |*\n")
+	for n := 1; n <= goldcmds.LogoCount; n++ {
+		b.WriteString(fmt.Sprintf("*| 🔰 | %sLOGO%d ❮ YOUR NAME ❯*\n", prefix, n))
+	}
+	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
+	return b.String()
+}
+
 func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView, onlyCat string) string {
 	// nil view → default (no renames, no mine-mode). Production always passes
 	// a live view; tests may pass nil.
@@ -1915,7 +1959,13 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 		if menuView.Mode == "mine" && !isMenuLifelineCommand(c.Name, menuView) {
 			continue // bot's own original — hidden in mine mode
 		}
-		cmds = append(cmds, menuCmd{Name: c.Name, Category: c.Category, Desc: c.Desc})
+		// OWNER ORDER: .logo is displayed as .LOGO in the menu (the command
+		// itself is case-insensitive, so .logo and .LOGO both work).
+		dispName := c.Name
+		if strings.EqualFold(c.Name, "logo") {
+			dispName = "LOGO"
+		}
+		cmds = append(cmds, menuCmd{Name: dispName, Category: c.Category, Desc: c.Desc})
 	}
 	for name := range Commands {
 		if pluginSet[name] {
@@ -1972,10 +2022,19 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	// ── Build the fancy caption (new MENU block) ──
 	var b strings.Builder
 
-	b.WriteString("┏─━─━─🔰 MENU 🔰─━─━─┓\n")
-	b.WriteString(fmt.Sprintf("*│🔰 USER:❯ %s*\n", botNum))
-	if ownerNum != "" {
-		b.WriteString(fmt.Sprintf("*│🔰 OWNER:❯ %s*\n", ownerNum))
+	// Header title (owner order): plain .menu → "MENU"; a category menu →
+	// that category's display label (e.g. .group → "GROUP MANAGEMENT").
+	headerTitle := "MENU"
+	if onlyCat != "" {
+		headerTitle = menuCategoryLabel(onlyCat)
+	}
+	// MENUS count line — ONLY in plain .menu (owner order), NOT in category
+	// menus. Counts the non-empty category menus shown in MODE A below.
+	menuCount := 0
+	for _, cat := range orderedCats {
+		if l, ok := groups[cat]; ok && len(l) > 0 {
+			menuCount++
+		}
 	}
 	headerCount := totalCmds
 	if onlyCat != "" {
@@ -1983,21 +2042,12 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 			headerCount = len(l)
 		}
 	}
-	b.WriteString(fmt.Sprintf("*│🔰 COMMANDS :❯ ❮ %d ❯*\n", headerCount))
-	b.WriteString(fmt.Sprintf("*│🔰 UPTIME :❯ %s*\n", uptimeHM))
-	b.WriteString(fmt.Sprintf("*│🔰 PREFIX :❯ ❮ %s ❯*\n", prefix))
-	b.WriteString("┗─━─━─━─━─━─━─━─━─┛\n\n")
+	b.WriteString(buildMenuHeader(headerTitle, botNum, ownerNum, uptimeHM, prefix, menuCount, headerCount, onlyCat == ""))
 
 	pushName = strings.TrimSpace(pushName)
 	if pushName == "" {
 		pushName = "User"
 	}
-	// OWNER ORDER: HI {pushname} / SEE MY BOT COMMANDS ke BAAD 2 nayi
-	// lines — fullmenu ka pointer taake user ko turant pata chale ke
-	// poora menu kahan hai:
-	//   *TYPE ❮ {prefix}FULLMENU ❯*
-	//   *TO SHOW FULL MENU*
-	b.WriteString(fmt.Sprintf("*HI %s*\n*SEE MY BOT COMMANDS*\n*TYPE ❮ %sFULLMENU ❯*\n*TO SHOW FULL MENU*\n\n", pushName, prefix))
 
 	// ── MODE A: category-list (.menu) — BOX design, har line pe prefix ──
 	// Owner order: .menu likhe to box me category commands line by line dikhein,
@@ -2058,7 +2108,7 @@ func isMenuLifelineCommand(name string, view *goldcmds.CmdNameView) bool {
 // gold-cmds registry (alive, ping, uptime, menu, sessions).
 func coreCommandCategory(name string) string {
 	switch name {
-	case "alive", "ping", "uptime", "menu", "fullmenu", "m", "sessions", "host5gb", "server":
+	case "alive", "ping", "uptime", "menu", "m", "sessions", "host5gb", "server":
 		return "OWNER & SYSTEM"
 	default:
 		return "CONVERTER"
@@ -2075,8 +2125,6 @@ func coreCommandDesc(name string) string {
 		return "THIS COMMAND IS USED TO SHOW HOW LONG THE BOT HAS BEEN RUNNING."
 	case "menu":
 		return "THIS COMMAND IS USED TO SHOW THE MAIN COMMAND MENU OF THE BOT."
-	case "fullmenu":
-		return "THIS COMMAND IS USED TO SHOW THE FULL COMMAND MENU WITH ALL COMMANDS, DESCRIPTIONS AND HIDDEN ALIASES."
 	case "sessions":
 		return "THIS COMMAND IS USED TO SHOW ALL GOLD-MD SERVERS PAIRING STATUS. IT SHOWS ONLINE AND OFFLINE SERVERS."
 	case "host5gb":
@@ -2085,6 +2133,55 @@ func coreCommandDesc(name string) string {
 		return "THIS COMMAND IS USED TO SHOW ALL GOLD-MD SERVERS PAIRING STATUS. IT SHOWS ONLINE AND OFFLINE SERVERS."
 	default:
 		return ""
+	}
+}
+
+// CmdLogoMenu renders the .logo menu in the SAME fancy boxed format as the
+// other category menus (owner order). It reads the same per-bot settings as
+// CmdMenu (owner name/number, prefix) and sends the boxed .LOGO1..1000 list.
+func (s *Session) CmdLogoMenu(info types.MessageInfo, args []string, prefix string) {
+	uptimeStr := formatUptime(uptime())
+	sessCount := s.Manager.Count()
+
+	botName := ""
+	if s.Manager != nil && s.Manager.Redis != nil {
+		botName = s.Manager.Redis.GetSetting(s.JID, "botname", "")
+	}
+	if botName == "" ||
+		botName == goldcmds.DefaultBotNameMarker ||
+		strings.Contains(botName, "GOLD_MD_DEFAULT_FOOTER") ||
+		strings.Contains(botName, "GOLD_MD_DEFAULT") {
+		botName = "GOLD-MD WHATSAPP BOT"
+	}
+
+	menuUser := "UMAR"
+	if s.Manager != nil && s.Manager.Redis != nil {
+		if on := s.Manager.Redis.GetSetting(s.JID, "ownername", ""); on != "" {
+			menuUser = on
+		}
+	}
+
+	ownerNum := botOwnNumber(s.JID)
+	if s.Manager != nil && s.Manager.Redis != nil {
+		if on := s.Manager.Redis.GetSetting(s.JID, "ownernumber", ""); on != "" {
+			ownerNum = on
+		}
+		if sudoRaw := s.Manager.Redis.GetSetting(s.JID, "sudowners", ""); sudoRaw != "" {
+			ownerNum = ownerNum + "," + sudoRaw
+		}
+	}
+
+	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
+	caption := buildLogoMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
+
+	imgURL := s.botPicURL()
+	imgData, fetchErr := fetchMenuImageURL(imgURL)
+	if fetchErr != nil || len(imgData) == 0 {
+		s.ReplyWithNewsletter(info, caption)
+		return
+	}
+	if ok := s.ReplyImageWithNewsletter(info, imgData, caption); !ok {
+		s.ReplyWithNewsletter(info, caption)
 	}
 }
 
@@ -2204,10 +2301,6 @@ func init() {
 	// fleet_commands.go hiddenCommands me "m" true hai). Owner order.
 	RegisterCommand("m", func(s *Session, info types.MessageInfo, args []string, prefix string) {
 		s.CmdMenu(info, args, prefix)
-	})
-	// .fullmenu — FULL command menu (hidden aliases + descriptions samet).
-	RegisterCommand("fullmenu", func(s *Session, info types.MessageInfo, args []string, prefix string) {
-		s.CmdFullMenu(info, args, prefix)
 	})
 	// setprefix has been REMOVED - prefix management is done via the .prefix
 	// command (gold-cmds/prefix.go). "sessions" ki registration ab

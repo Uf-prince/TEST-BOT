@@ -37,8 +37,13 @@ func TestAISingleCategoryMenu(t *testing.T) {
 	if !strings.Contains(out, "╔════ ≪ •❈• ≫ ════╗") {
 		t.Fatalf("AI menu missing fancy box header\n%s", out)
 	}
-	if !strings.Contains(out, "MENU") {
-		t.Fatalf("AI menu missing MENU header block\n%s", out)
+	// OWNER ORDER: category menu header shows the CATEGORY name, not "MENU".
+	if !strings.Contains(out, "🔰 AI 🔰") {
+		t.Fatalf("AI menu header missing category title\n%s", out)
+	}
+	// MENUS count line must NOT appear in a category menu (only plain .menu).
+	if strings.Contains(out, "MENUS:") {
+		t.Fatalf("AI category menu must not show MENUS line\n%s", out)
 	}
 }
 
