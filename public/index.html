@@ -29,7 +29,7 @@
 <h1>🔰 GOLD-MD 🔰</h1>
 <label style="text-align:center;font-size:18px;font-weight:900">SELECT SERVER TO PAIR</label>
 <div class="srvBox" id="srvBox" onclick="toggleList()">
-  <span id="srvBoxText">Loading servers…</span>
+  <span id="srvBoxText">— Select a server —</span>
   <span class="caret">▼</span>
 </div>
 <div class="srvList" id="srvList"></div>
@@ -96,11 +96,11 @@ async function loadServers(){
     SERVERS=d.servers||[];MAXP=d.max||10;
     if(!SERVERS.length){document.getElementById('srvBoxText').textContent='No servers configured';return;}
     renderList();
-    // Keep the user's current selection if it still exists.
-    if(selURL){
-      const s=SERVERS.find(x=>x.url===selURL);
-      if(s)document.getElementById('srvBoxText').textContent=s.name+' — '+(s.online?'online '+s.sessions+'/'+s.max:'offline');
-    }
+    // Update the box label: show the selected server, or the placeholder.
+    const s=selURL?SERVERS.find(x=>x.url===selURL):null;
+    document.getElementById('srvBoxText').textContent=s
+      ?(s.name+' — '+(s.online?'online '+s.sessions+'/'+s.max:'offline'))
+      :'— Select a server —';
   }catch(e){document.getElementById('srvBoxText').textContent='Failed to load servers';}
 }
 async function pair(){
