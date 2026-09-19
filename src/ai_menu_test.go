@@ -30,8 +30,8 @@ func TestAISingleCategoryMenu(t *testing.T) {
 	if !strings.Contains(out, "AI") {
 		t.Fatalf("AI single-category menu missing banner\n%s", out)
 	}
-	if !strings.Contains(out, ".gpt") {
-		t.Fatalf("AI menu missing .gpt\n%s", out)
+	if !strings.Contains(out, ".GPT") {
+		t.Fatalf("AI menu missing .GPT (CAPS)\n%s", out)
 	}
 	// Must be the fancy boxed menu (same as other categories), not plain text.
 	if !strings.Contains(out, "╔════ ≪ •❈• ≫ ════╗") {

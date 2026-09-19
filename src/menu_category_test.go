@@ -93,7 +93,7 @@ func TestBuildCategoryMenuSingleCategory(t *testing.T) {
 	hasGroupCmd := false
 	for _, c := range goldcmds.Commands() {
 		if c.Category == "GROUP MANAGEMENT" && !c.Hidden {
-			if strings.Contains(out, "."+c.Name) {
+			if strings.Contains(out, "."+strings.ToUpper(c.Name)) {
 				hasGroupCmd = true
 				break
 			}
@@ -105,7 +105,7 @@ func TestBuildCategoryMenuSingleCategory(t *testing.T) {
 	// Should NOT contain a command from a different category (e.g. a TOOLS cmd).
 	for _, c := range goldcmds.Commands() {
 		if c.Category == "TOOLS" && !c.Hidden {
-			if strings.Contains(out, "."+c.Name+"*") {
+			if strings.Contains(out, "."+strings.ToUpper(c.Name)+"*") {
 				t.Fatalf("single-category menu leaked a TOOLS command .%s", c.Name)
 			}
 		}

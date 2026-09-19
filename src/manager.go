@@ -2096,7 +2096,8 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
 	b.WriteString(fmt.Sprintf("*| %s | %s | %s |*\n", emoji, menuCategoryLabel(onlyCat), emoji))
 	for _, c := range list {
-		b.WriteString(fmt.Sprintf("*| 🔰 | %s%s*\n", prefix, c.Name))
+		// OWNER ORDER: category menus me command names CAPS (ABCD) me dikhein.
+		b.WriteString(fmt.Sprintf("*| 🔰 | %s%s*\n", prefix, strings.ToUpper(c.Name)))
 	}
 	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
 	// NOTE: the bot name footer is applied centrally by
