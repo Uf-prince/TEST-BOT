@@ -1820,6 +1820,7 @@ var menuCategorySlugs = map[string]string{
 	"GROUP MANAGEMENT":  "group",
 	"ANTI & PROTECTION": "protection",
 	"DOWNLOADER":        "downloader",
+	"AI":                "ai",
 	"AI & MEDIA":        "utility",
 	"PRESENCE & STATUS": "presence",
 	"CONVERTER":         "converter",
