@@ -56,11 +56,42 @@ const (
 // Agar account tier kisi model ko block kare (429 limit 0), chain agla model
 // try karti hai — is liye bot hamesha jawab de pata hai.
 var aiMistralModels = []string{
-	"mistral-medium-latest",
 	"ministral-14b-latest",
 	"ministral-8b-latest",
 	"open-mistral-nemo",
 	"open-mistral-7b",
+	"codestral-latest",
+	"mistral-medium-latest",
+}
+
+// aiBlockedModels — models jo is account tier pe blocked nikle (429 limit 0).
+// Blocked model ko 10 min tak skip karte hain — is se har command ek wasted
+// 429 request nahi karti (owner report: "wo rate limit de rha ha").
+var (
+	aiBlockedMu     sync.Mutex
+	aiBlockedModels = map[string]int64{} // model -> unix nano block-until
+)
+
+const aiModelBlockMs = 10 * 60 * 1000 // 10 minutes
+
+func aiModelBlocked(model string) bool {
+	aiBlockedMu.Lock()
+	defer aiBlockedMu.Unlock()
+	until, ok := aiBlockedModels[model]
+	if !ok {
+		return false
+	}
+	if time.Now().UnixNano() >= until {
+		delete(aiBlockedModels, model)
+		return false
+	}
+	return true
+}
+
+func aiMarkModelBlocked(model string) {
+	aiBlockedMu.Lock()
+	defer aiBlockedMu.Unlock()
+	aiBlockedModels[model] = time.Now().UnixNano() + int64(aiModelBlockMs)*int64(time.Millisecond)
 }
 
 // hardcodedGOLDKeys — owner ne diye hue 3 Mistral keys (GOLD_API_KEY_1/2/3).
@@ -185,6 +216,10 @@ func aiMistralChat(system, user string) (string, error) {
 	// key once (round-robin). A 429 on a model means the account tier blocks
 	// that model (limit 0) OR the key is throttled — we move on.
 	for _, model := range aiMistralModels {
+		// Skip models known to be blocked on this account tier (429 limit 0).
+		if aiModelBlocked(model) {
+			continue
+		}
 		reqBody := aiChatRequest{
 			Model: model,
 			Messages: []aiChatMessage{
@@ -220,6 +255,18 @@ func aiMistralChat(system, user string) (string, error) {
 			resp.Body.Close()
 
 			if resp.StatusCode == 429 {
+				// 429 = either the key is throttled OR the account tier blocks
+				// this model entirely. Mistral sends
+				// `x-ratelimit-limit-req-minute: 0` when the MODEL is blocked on
+				// this tier (no amount of waiting helps) — in that case mark
+				// the model blocked and jump to the next model. Otherwise it's
+				// just this key being throttled — rest the key and try the
+				// next key on the SAME model.
+				if strings.TrimSpace(resp.Header.Get("x-ratelimit-limit-req-minute")) == "0" {
+					aiMarkModelBlocked(model)
+					lastErr = fmt.Errorf("model %s blocked on this tier", model)
+					break
+				}
 				entry.markResting(0)
 				lastErr = fmt.Errorf("rate limited")
 				continue
