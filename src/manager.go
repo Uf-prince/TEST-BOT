@@ -1439,7 +1439,10 @@ func (s *Session) sendStartupNotification() {
 	coreCount := 7
 	pluginCount := goldcmds.CommandsCount() // only visible (non-hidden) commands
 
-	totalCmds := coreCount + pluginCount
+	// OWNER ORDER: the 1000 .LOGO1..LOGO1000 commands are hidden from the
+	// list but MUST be counted \u2014 keep the startup card's COMMANDS total
+	// identical to the .menu COMMANDS total (both add goldcmds.LogoCount).
+	totalCmds := coreCount + pluginCount + goldcmds.LogoCount
 	prefix := s.resolvePrefix(s.JID)
 
 	logoURL := "https://cdn.jsdelivr.net/gh/Uf-prince/gold-assets@main/botpic.webp"

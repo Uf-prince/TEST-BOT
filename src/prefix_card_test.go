@@ -98,6 +98,19 @@ func TestConnectedCardNoOwnerLine(t *testing.T) {
 	}
 }
 
+// TestConnectedCardCountsLogo: startup card COMMANDS total must include the
+// 1000 hidden logo commands (same as .menu).
+func TestConnectedCardCountsLogo(t *testing.T) {
+	b, err := os.ReadFile("manager.go")
+	if err != nil {
+		t.Fatal("manager.go missing:", err)
+	}
+	src := string(b)
+	if !strings.Contains(src, "totalCmds := coreCount + pluginCount + goldcmds.LogoCount") {
+		t.Error("startup card totalCmds me goldcmds.LogoCount add nahi hua")
+	}
+}
+
 // TestConnectedCardNoteText: NOTE me 2/3 minutes + no-need-to-pair text.
 func TestConnectedCardNoteText(t *testing.T) {
 	b, err := os.ReadFile("manager.go")
