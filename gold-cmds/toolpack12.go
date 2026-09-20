@@ -58,7 +58,7 @@ func handleChuck(s SessionBridge, info types.MessageInfo, args []string, prefix 
 // ── .DADJOKE ─────────────────────────────────────────────────────────────────
 
 func dadjokeGuide(prefix string) string {
-	return "*🔰 DAD JOKE 🔰*\n\n" +
+	return "🔰 DAD JOKE 🔰\n\n" +
 		"*GET A RANDOM DAD JOKE*\n\n" +
 		"*HOW TO USE:*\n" +
 		"*❮ " + prefix + "DADJOKE ❯*"
@@ -81,7 +81,7 @@ func handleDadjoke(s SessionBridge, info types.MessageInfo, args []string, prefi
 			return
 		}
 		var b strings.Builder
-		b.WriteString("*🔰 DAD JOKE 🔰*\n\n")
+		b.WriteString("🔰 DAD JOKE 🔰\n\n")
 		b.WriteString(res.Joke.Opener + "\n\n")
 		if res.Joke.Punchline != "" {
 			b.WriteString("😂 " + res.Joke.Punchline)
