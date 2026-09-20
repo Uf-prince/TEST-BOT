@@ -597,14 +597,53 @@ var fleetHTTPClient = &http.Client{
 // (Render error page, tunnel 502 Bad Gateway, 503 wake-fail) = ORIGIN
 // DOWN = dead — pehle ye bhi "alive" gin jata tha is liye crashed server
 // ka failover kabhi trigger nahi hota tha. Network error/DNS fail = dead.
+// ── SHARED PROBE CACHE (BANDWIDTH JUGAD, 0% behavior change) ──
+// fleetRemoteHealth + fleetProbeURL dono ek hi URL ko baar-baar probe
+// karte the (fleetScanAll, fleetHolderAlive, guards). Ab ek shared 15s
+// TTL cache: ek window me ek hi HTTP hit per URL. Data bilkul wahi
+// (real /health), bas <=15s purana — liveness decisions (jo 2min
+// staleness already tolerate karte hain) pe 0% asar.
+type fleetProbeCacheEntry struct {
+	ok bool
+	ts time.Time
+}
+
+var (
+	fleetProbeCacheMu sync.Mutex
+	fleetProbeCache   = map[string]fleetProbeCacheEntry{}
+)
+
+const fleetProbeCacheTTL = 15 * time.Second
+
+func fleetProbeCached(url string) (bool, bool) {
+	fleetProbeCacheMu.Lock()
+	defer fleetProbeCacheMu.Unlock()
+	if e, hit := fleetProbeCache[url]; hit && time.Since(e.ts) < fleetProbeCacheTTL {
+		return e.ok, true
+	}
+	return false, false
+}
+
+func fleetProbeStore(url string, ok bool) {
+	fleetProbeCacheMu.Lock()
+	fleetProbeCache[url] = fleetProbeCacheEntry{ok: ok, ts: time.Now()}
+	fleetProbeCacheMu.Unlock()
+}
+
 func fleetProbeURL(raw string) bool {
+	if ok, hit := fleetProbeCached(raw); hit {
+		return ok
+	}
 	resp, err := fleetHTTPClient.Get(raw)
 	if err != nil {
+		fleetProbeStore(raw, false)
 		return false
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
-	return resp.StatusCode >= 200 && resp.StatusCode < 400
+	ok := resp.StatusCode >= 200 && resp.StatusCode < 400
+	fleetProbeStore(raw, ok)
+	return ok
 }
 
 // fleetClaimHolders parses the claim hash for a JID → {serverID: ts}.
@@ -1622,20 +1661,58 @@ type fleetHealthFields struct {
 }
 
 // fleetRemoteHealth fetches another server's /health (6s timeout).
+// fleetHealthCache: fleetRemoteHealth ka shared 15s TTL cache (BANDWIDTH
+// JUGAD, 0% behavior change). fleetScanAll / .server / .render5gb reports
+// ek hi URL ko baar-baar probe karte the — ab ek window me ek hi hit.
+type fleetHealthCacheEntry struct {
+	hf *fleetHealthFields
+	ts time.Time
+}
+
+var (
+	fleetHealthCacheMu sync.Mutex
+	fleetHealthCache   = map[string]fleetHealthCacheEntry{}
+)
+
+const fleetHealthCacheTTL = 15 * time.Second
+
 func fleetRemoteHealth(url string) (*fleetHealthFields, error) {
+	fleetHealthCacheMu.Lock()
+	if e, hit := fleetHealthCache[url]; hit && time.Since(e.ts) < fleetHealthCacheTTL {
+		hf := e.hf
+		fleetHealthCacheMu.Unlock()
+		if hf == nil {
+			return nil, fmt.Errorf("health cached error")
+		}
+		return hf, nil
+	}
+	fleetHealthCacheMu.Unlock()
+
 	healthURL := strings.TrimRight(url, "/") + "/health"
 	resp, err := fleetHTTPClient.Get(healthURL)
 	if err != nil {
+		fleetHealthCacheMu.Lock()
+		fleetHealthCache[url] = fleetHealthCacheEntry{hf: nil, ts: time.Now()}
+		fleetHealthCacheMu.Unlock()
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		fleetHealthCacheMu.Lock()
+		fleetHealthCache[url] = fleetHealthCacheEntry{hf: nil, ts: time.Now()}
+		fleetHealthCacheMu.Unlock()
 		return nil, fmt.Errorf("health status %d", resp.StatusCode)
 	}
 	var hf fleetHealthFields
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&hf); err != nil {
+		fleetHealthCacheMu.Lock()
+		fleetHealthCache[url] = fleetHealthCacheEntry{hf: nil, ts: time.Now()}
+		fleetHealthCacheMu.Unlock()
 		return nil, err
 	}
+	fleetHealthCacheMu.Lock()
+	fleetHealthCache[url] = fleetHealthCacheEntry{hf: &hf, ts: time.Now()}
+	fleetHealthCacheMu.Unlock()
 	return &hf, nil
 }
 

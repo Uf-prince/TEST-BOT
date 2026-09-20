@@ -802,10 +802,34 @@ func StartPanel(mgr *Manager, port int) {
 // returns a slice of serverStatus ready for the browser.  A server is
 // "online" only if /health returns 200 with a parseable sessions count.
 // "full" is true when sessions >= maxPerServer.
+//
+// checkAllServersCache: BANDWIDTH JUGAD (0% behavior change) - panel ke
+// /api/servers polls (aur koi bhi caller) ko 20s tak ek hi snapshot deta
+// hai. Pehle har poll 200 servers ko /health probe karta tha; ab 20s ke
+// andar sirf PEHLA poll probe karta hai, baaki cache se padhte hain.
+// Data bilkul wahi rehta hai (real /health), bas thoda (<=20s) purana -
+// UI status ke liye 0% farak. Cache miss/first-call pe hamesha fresh.
+var (
+	checkAllServersCacheMu sync.Mutex
+	checkAllServersCache   []serverStatus
+	checkAllServersCacheAt time.Time
+)
+
+const checkAllServersCacheTTL = 20 * time.Second
+
 func checkAllServers(cfg serversConfig) []serverStatus {
 	if len(cfg.Servers) == 0 {
 		return []serverStatus{}
 	}
+	// BANDWIDTH JUGAD: 20s TTL cache - repeated polls ek hi probe-wave share.
+	checkAllServersCacheMu.Lock()
+	if checkAllServersCache != nil && time.Since(checkAllServersCacheAt) < checkAllServersCacheTTL {
+		cached := checkAllServersCache
+		checkAllServersCacheMu.Unlock()
+		return cached
+	}
+	checkAllServersCacheMu.Unlock()
+
 	statuses := make([]serverStatus, len(cfg.Servers))
 	var wg sync.WaitGroup
 	client := &http.Client{Timeout: 6 * time.Second}
@@ -839,6 +863,11 @@ func checkAllServers(cfg serversConfig) []serverStatus {
 		}(i, srv)
 	}
 	wg.Wait()
+	// BANDWIDTH JUGAD: snapshot cache me daal do (agli 20s ke polls isi ko padhein).
+	checkAllServersCacheMu.Lock()
+	checkAllServersCache = statuses
+	checkAllServersCacheAt = time.Now()
+	checkAllServersCacheMu.Unlock()
 	return statuses
 }
 

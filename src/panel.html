@@ -125,5 +125,5 @@ async function pair(){
   }catch(e){res.className='result error';res.style.display='block';res.textContent='Request failed: '+e.message+' — server may be stopped. Try another 🟢 server.';}
 }
 async function copyCode(){const el=document.getElementById('pairCode');try{await navigator.clipboard.writeText(el.textContent);el.textContent='COPIED';setTimeout(()=>{el.textContent=el.dataset.code||''},1200)}catch(e){const range=document.createRange();range.selectNodeContents(el);getSelection().removeAllRanges();getSelection().addRange(range)}}
-loadServers();setInterval(loadServers,15000);
+loadServers();setInterval(loadServers,60000);
 </script></body></html>
