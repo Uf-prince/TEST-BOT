@@ -7,7 +7,6 @@ package goldcmds
 //   .agify <name>        -> predict the age of a name
 //   .genderize <name>    -> predict the gender of a name
 //   .nationalize <name>  -> predict the nationality of a name
-//   .whatismyip          -> show your public IP address
 //   .maclookup <mac>     -> find the vendor of a MAC address
 //   .zipcode <zip>       -> location info for a postal code
 //   .avatar <text>       -> generate a random avatar image
@@ -54,11 +53,15 @@ func handleAgify(s SessionBridge, info types.MessageInfo, args []string, prefix 
 			Count int    `json:"count"`
 		}
 		u := "https://api.agify.io/?name=" + url.QueryEscape(name)
-		if err := funGetJSON(ctx, u, &res); err != nil || res.Age == 0 {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "AGIFY")
+		if err := funGetJSONRetry(ctx, u, &res, 3); err != nil || res.Age == 0 {
+			// Fallback: route through the Jina reader proxy (different egress IP)
+			// when agify rate-limits this host.
+			if err2 := funGetJSONViaJina(ctx, u, &res); err2 != nil || res.Age == 0 {
+				if !ctxTimedOut(ctx) {
+					funFail(s, info, "AGIFY")
+				}
+				return
 			}
-			return
 		}
 		var b strings.Builder
 		b.WriteString("*🔰 AGE PREDICTOR 🔰*\n\n")
@@ -95,7 +98,25 @@ func handleGenderize(s SessionBridge, info types.MessageInfo, args []string, pre
 			Count       int     `json:"count"`
 		}
 		u := "https://api.genderize.io/?name=" + url.QueryEscape(name)
-		if err := funGetJSON(ctx, u, &res); err != nil || res.Gender == "" {
+		if err := funGetJSONRetry(ctx, u, &res, 3); err != nil || res.Gender == "" {
+			// Fallback: genderapi.io (free tier) when genderize.io is
+			// rate-limited or returns no prediction.
+			var alt struct {
+				Name        string `json:"name"`
+				Gender      string `json:"gender"`
+				Probability int    `json:"probability"`
+				TotalNames  int    `json:"total_names"`
+			}
+			au := "https://api.genderapi.io/api/?name=" + url.QueryEscape(name)
+			if err2 := funGetJSONRetry(ctx, au, &alt, 2); err2 == nil && alt.Gender != "" {
+				var fb strings.Builder
+				fb.WriteString("*\U0001f530 GENDER PREDICTOR \U0001f530*\n\n")
+				fb.WriteString("*\U0001f464 NAME \u276f " + strings.ToUpper(alt.Name) + "*\n")
+				fb.WriteString("*\u26a7 GENDER \u276f " + strings.ToUpper(alt.Gender) + "*\n")
+				fb.WriteString("*\U0001f4ca PROBABILITY \u276f " + strconv.Itoa(alt.Probability) + "%*")
+				s.Reply(info, fb.String())
+				return
+			}
 			if !ctxTimedOut(ctx) {
 				funFail(s, info, "GENDERIZE")
 			}
@@ -138,11 +159,15 @@ func handleNationalize(s SessionBridge, info types.MessageInfo, args []string, p
 			} `json:"country"`
 		}
 		u := "https://api.nationalize.io/?name=" + url.QueryEscape(name)
-		if err := funGetJSON(ctx, u, &res); err != nil || len(res.Country) == 0 {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "NATIONALIZE")
+		if err := funGetJSONRetry(ctx, u, &res, 3); err != nil || len(res.Country) == 0 {
+			// Fallback: route through the Jina reader proxy (different egress IP)
+			// when nationalize rate-limits this host.
+			if err2 := funGetJSONViaJina(ctx, u, &res); err2 != nil || len(res.Country) == 0 {
+				if !ctxTimedOut(ctx) {
+					funFail(s, info, "NATIONALIZE")
+				}
+				return
 			}
-			return
 		}
 		var b strings.Builder
 		b.WriteString("*🔰 NATIONALITY PREDICTOR 🔰*\n\n")
@@ -156,35 +181,6 @@ func handleNationalize(s SessionBridge, info types.MessageInfo, args []string, p
 			b.WriteString("*🌍 " + strings.ToUpper(c.CountryID) + " ❯ " + fmt.Sprintf("%.0f%%", c.Probability*100) + "*\n")
 		}
 		s.Reply(info, strings.TrimSpace(b.String()))
-	})
-}
-
-// ── .WHATISMYIP ─────────────────────────────────────────────────────────────
-
-func whatismyipGuide(prefix string) string {
-	return "*🔰 MY IP ADDRESS 🔰*\n\n" +
-		"*SHOW YOUR PUBLIC IP ADDRESS*\n\n" +
-		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "WHATISMYIP ❯*"
-}
-
-func handleWhatismyip(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "*FETCHING IP....*")
-		defer func() { _ = s.DeleteMessage(info, waitID) }()
-		var res struct {
-			IP string `json:"ip"`
-		}
-		if err := funGetJSON(ctx, "https://api.ipify.org?format=json", &res); err != nil || res.IP == "" {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "WHATISMYIP")
-			}
-			return
-		}
-		var b strings.Builder
-		b.WriteString("*🔰 MY IP ADDRESS 🔰*\n\n")
-		b.WriteString("*🌐 PUBLIC IP ❯ " + res.IP + "*")
-		s.Reply(info, b.String())
 	})
 }
 
@@ -436,7 +432,6 @@ func init() {
 	Register(Command{Name: "agify", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO PREDICT THE AGE OF A NAME. USE IT AS .AGIFY <NAME>.", Run: handleAgify})
 	Register(Command{Name: "genderize", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO PREDICT THE GENDER OF A NAME. USE IT AS .GENDERIZE <NAME>.", Run: handleGenderize})
 	Register(Command{Name: "nationalize", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO PREDICT THE NATIONALITY OF A NAME. USE IT AS .NATIONALIZE <NAME>.", Run: handleNationalize})
-	Register(Command{Name: "whatismyip", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO SHOW YOUR PUBLIC IP ADDRESS. USE IT AS .WHATISMYIP.", Run: handleWhatismyip})
 	Register(Command{Name: "maclookup", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO FIND THE VENDOR OF A MAC ADDRESS. USE IT AS .MACLOOKUP <MAC>.", Run: handleMaclookup})
 	Register(Command{Name: "zipcode", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET LOCATION INFO FOR A POSTAL CODE. USE IT AS .ZIPCODE <COUNTRY> <ZIP>.", Run: handleZipcode})
 	Register(Command{Name: "avatar", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GENERATE A RANDOM AVATAR IMAGE. USE IT AS .AVATAR <TEXT>.", Run: handleAvatar})
@@ -448,7 +443,6 @@ func init() {
 	Register(Command{Name: "agepredict", Category: "TOOLS", Desc: "Short alias of .agify", Hidden: true, Run: handleAgify})
 	Register(Command{Name: "genderpredict", Category: "TOOLS", Desc: "Short alias of .genderize", Hidden: true, Run: handleGenderize})
 	Register(Command{Name: "nationalitypredict", Category: "TOOLS", Desc: "Short alias of .nationalize", Hidden: true, Run: handleNationalize})
-	Register(Command{Name: "myipaddress", Category: "TOOLS", Desc: "Short alias of .whatismyip", Hidden: true, Run: handleWhatismyip})
 	Register(Command{Name: "macvendor", Category: "TOOLS", Desc: "Short alias of .maclookup", Hidden: true, Run: handleMaclookup})
 	Register(Command{Name: "postalcode", Category: "TOOLS", Desc: "Short alias of .zipcode", Hidden: true, Run: handleZipcode})
 	Register(Command{Name: "dicebear", Category: "TOOLS", Desc: "Short alias of .avatar", Hidden: true, Run: handleAvatar})

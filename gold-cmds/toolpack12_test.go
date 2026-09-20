@@ -21,7 +21,6 @@ func TestToolpack12GuidesRenderRealNewlines(t *testing.T) {
 		"mealdb":      mealdbGuide("."),
 		"uselessfact": uselessfactGuide("."),
 		"ipgeo":       ipgeoGuide("."),
-		"seeip":       seeipGuide("."),
 	}
 	for name, g := range guides {
 		if strings.Contains(g, `\n`) {
@@ -52,7 +51,6 @@ func TestToolpack12Live(t *testing.T) {
 		{"mealdb", handleMealdb, nil},
 		{"uselessfact", handleUselessfact, nil},
 		{"ipgeo", handleIpgeo, nil},
-		{"seeip", handleSeeip, nil},
 	}
 	for _, c := range cases {
 		b := &lgBridge{}

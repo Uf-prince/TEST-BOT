@@ -4,7 +4,6 @@ package goldcmds
 // GOLD-MD — TOOLS PACK 9 (10 new everyday commands)
 // File: toolpack9.go
 // ============================================================================
-//   .quake        -> latest significant earthquake on earth
 //   .launch       -> next upcoming space rocket launch
 //   .forecast     -> live weather forecast for a city
 //   .art <query>  -> artwork from the Art Institute of Chicago
@@ -25,52 +24,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"go.mau.fi/whatsmeow/types"
 )
-
-// ── .QUAKE ──────────────────────────────────────────────────────────────────
-
-func quakeGuide(prefix string) string {
-	return "*🔰 EARTHQUAKE INFO 🔰*\n\n" +
-		"*GET THE LATEST SIGNIFICANT EARTHQUAKE ON EARTH*\n\n" +
-		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "QUAKE ❯*"
-}
-
-func handleQuake(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "*FETCHING EARTHQUAKE....*")
-		defer func() { _ = s.DeleteMessage(info, waitID) }()
-		var res struct {
-			Features []struct {
-				Properties struct {
-					Mag   float64 `json:"mag"`
-					Place string  `json:"place"`
-					Time  int64   `json:"time"`
-					URL   string  `json:"url"`
-				} `json:"properties"`
-			} `json:"features"`
-		}
-		if err := funGetJSON(ctx, "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_week.geojson", &res); err != nil || len(res.Features) == 0 {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "QUAKE")
-			}
-			return
-		}
-		f := res.Features[0].Properties
-		var b strings.Builder
-		b.WriteString("*🔰 EARTHQUAKE INFO 🔰*\n\n")
-		b.WriteString("*🌍 MAGNITUDE ❯ " + fmt.Sprintf("%.1f", f.Mag) + "*\n")
-		b.WriteString("*📍 PLACE ❯ " + strings.ToUpper(f.Place) + "*\n")
-		b.WriteString("*🕒 TIME ❯ " + time.Unix(f.Time/1000, 0).UTC().Format("2006-01-02 15:04") + " UTC*")
-		if f.URL != "" {
-			b.WriteString("\n\n*🔗 " + f.URL + "*")
-		}
-		s.Reply(info, b.String())
-	})
-}
 
 // ── .LAUNCH ─────────────────────────────────────────────────────────────────
 
@@ -575,7 +531,6 @@ func handleDaylight(s SessionBridge, info types.MessageInfo, args []string, pref
 }
 
 func init() {
-	Register(Command{Name: "quake", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE LATEST SIGNIFICANT EARTHQUAKE ON EARTH. USE IT AS .QUAKE.", Run: handleQuake})
 	Register(Command{Name: "launch", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE NEXT UPCOMING SPACE ROCKET LAUNCH. USE IT AS .LAUNCH.", Run: handleLaunch})
 	Register(Command{Name: "forecast", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE LIVE WEATHER FORECAST FOR A CITY. USE IT AS .FORECAST <CITY>.", Run: handleForecast})
 	Register(Command{Name: "art", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO FIND ARTWORK FROM THE ART INSTITUTE OF CHICAGO. USE IT AS .ART <QUERY>.", Run: handleArt})
@@ -587,7 +542,6 @@ func init() {
 	Register(Command{Name: "daylight", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET SUNRISE, SUNSET AND DAY LENGTH FOR A LOCATION. USE IT AS .DAYLIGHT <LAT> <LON>.", Run: handleDaylight})
 
 	// hidden aliases
-	Register(Command{Name: "earthquakeinfo", Category: "TOOLS", Desc: "Short alias of .quake", Hidden: true, Run: handleQuake})
 	Register(Command{Name: "rocketlaunch", Category: "TOOLS", Desc: "Short alias of .launch", Hidden: true, Run: handleLaunch})
 	Register(Command{Name: "weathernow", Category: "TOOLS", Desc: "Short alias of .forecast", Hidden: true, Run: handleForecast})
 	Register(Command{Name: "artwork", Category: "TOOLS", Desc: "Short alias of .art", Hidden: true, Run: handleArt})

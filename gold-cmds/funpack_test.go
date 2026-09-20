@@ -11,7 +11,7 @@ import (
 // funPackNames are the 12 visible commands added by funpack.go.
 var funPackNames = []string{
 	"qr", "weather", "wiki", "joke", "fact", "quote",
-	"shorten", "crypto", "ip",
+	"shorten", "crypto",
 }
 
 // TestFunPackRegistered verifies all 12 commands are registered, visible,
@@ -82,7 +82,6 @@ func TestFunPackLive(t *testing.T) {
 		{"quote", "https://zenquotes.io/api/random"},
 		{"shorten", "https://tinyurl.com/api-create.php?url=https://github.com/Uf-prince/TEST-BOT"},
 		{"crypto", "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,pkr"},
-		{"ip", "http://ip-api.com/json/8.8.8.8"},
 	}
 	for _, c := range checks {
 		data, err := funGetBytes(ctx, c.url)

@@ -29,10 +29,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-# build-stamp: 20260917-080224 tt render fix (tikwm fallback + jina brave search)
+# build-stamp: 20260920-074639 command fixes (ayah/linkpreview/pincode/iss/holiday/earthquake/cve/demographics)
 # ^ ye line har fresh rebuild pe update hoti hai — Docker layer cache invalidate
 #   karti hai taake Render purani cached image use na kare.
-RUN echo "GOLD-MD build-stamp 20260917-080224"
+RUN echo "GOLD-MD build-stamp 20260920-074639"
 COPY gold-md-cgofree ./gold-md
 COPY servers.json .
 COPY start.sh .

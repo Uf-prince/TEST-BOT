@@ -12,7 +12,6 @@ import (
 // newlines (no literal backslash-n) and carries the 🔰 marker.
 func TestToolpack9GuidesRenderRealNewlines(t *testing.T) {
 	guides := map[string]string{
-		"quake":       quakeGuide("."),
 		"launch":      launchGuide("."),
 		"forecast":    forecastGuide("."),
 		"art":         artGuide("."),
@@ -43,7 +42,6 @@ func TestToolpack9Live(t *testing.T) {
 		fn   func(SessionBridge, types.MessageInfo, []string, string)
 		args []string
 	}{
-		{"quake", handleQuake, nil},
 		{"launch", handleLaunch, nil},
 		{"forecast", handleForecast, []string{"london"}},
 		{"art", handleArt, []string{"monet"}},

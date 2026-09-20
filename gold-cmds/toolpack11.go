@@ -422,11 +422,11 @@ func handlePypiinfo(s SessionBridge, info types.MessageInfo, args []string, pref
 // ── .AYAH ───────────────────────────────────────────────────────────────────
 
 func ayahGuide(prefix string) string {
-	return "*🔰 QURAN AYAH 🔰*\n\n" +
-		"*GET ANY QURAN AYAH BY NUMBER*\n\n" +
+	return "*\U0001f530 QURAN AYAH \U0001f530*\n\n" +
+		"*GET ANY QURAN AYAH BY NUMBER (ARABIC + ENGLISH)*\n\n" +
 		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "AYAH <NUMBER> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "AYAH 262 ❯*"
+		"*\u276e " + prefix + "AYAH <NUMBER> \u276f*\n" +
+		"*EXAMPLE \u276e " + prefix + "AYAH 262 \u276f*"
 }
 
 func handleAyah(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -438,31 +438,55 @@ func handleAyah(s SessionBridge, info types.MessageInfo, args []string, prefix s
 		}
 		waitID := s.ReplyWithID(info, "*FETCHING AYAH....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
+
+		// Fetch BOTH the Arabic (Uthmani) text and the English translation.
 		var res struct {
-			Code   int    `json:"code"`
-			Status string `json:"status"`
-			Data   struct {
+			Code int    `json:"code"`
+			Data []struct {
 				NumberInSurah int    `json:"numberInSurah"`
 				Text          string `json:"text"`
-				Surah         struct {
+				Edition       struct {
+					Identifier string `json:"identifier"`
+				} `json:"edition"`
+				Surah struct {
 					EnglishName string `json:"englishName"`
 					Number      int    `json:"number"`
 				} `json:"surah"`
 			} `json:"data"`
 		}
-		u := "https://api.alquran.cloud/v1/ayah/" + url.QueryEscape(num) + "/en.asad"
-		if err := funGetJSON(ctx, u, &res); err != nil || res.Code != 200 {
+		u := "https://api.alquran.cloud/v1/ayah/" + url.QueryEscape(num) + "/editions/quran-uthmani,en.asad"
+		if err := funGetJSONRetry(ctx, u, &res, 2); err != nil || res.Code != 200 || len(res.Data) == 0 {
 			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 AYAH NOT FOUND, PLEASE CHECK THE NUMBER*")
+				s.Reply(info, "*\U0001f530 AYAH NOT FOUND, PLEASE CHECK THE NUMBER*")
 			}
 			return
 		}
+		var arabic, english string
+		var surahName string
+		var surahNum, ayahNum int
+		for _, d := range res.Data {
+			if surahName == "" {
+				surahName = d.Surah.EnglishName
+				surahNum = d.Surah.Number
+				ayahNum = d.NumberInSurah
+			}
+			if strings.Contains(d.Edition.Identifier, "quran-uthmani") {
+				arabic = d.Text
+			} else {
+				english = d.Text
+			}
+		}
 		var b strings.Builder
-		b.WriteString("*🔰 QURAN AYAH 🔰*\n\n")
-		b.WriteString("*📖 SURAH ❯ " + strings.ToUpper(res.Data.Surah.EnglishName) + " (" + strconv.Itoa(res.Data.Surah.Number) + ")*\n")
-		b.WriteString("*🔢 AYAH ❯ " + strconv.Itoa(res.Data.NumberInSurah) + "*\n\n")
-		b.WriteString("*\"" + res.Data.Text + "\"*")
-		s.Reply(info, b.String())
+		b.WriteString("*\U0001f530 QURAN AYAH \U0001f530*\n\n")
+		b.WriteString("*\U0001f4d6 SURAH \u276f " + strings.ToUpper(surahName) + " (" + strconv.Itoa(surahNum) + ")*\n")
+		b.WriteString("*\U0001f522 AYAH \u276f " + strconv.Itoa(ayahNum) + "*\n\n")
+		if arabic != "" {
+			b.WriteString("*\U0001f54b ARABIC:*\n" + arabic + "\n\n")
+		}
+		if english != "" {
+			b.WriteString("*\U0001f1ec\U0001f1e7 ENGLISH:*\n" + english)
+		}
+		s.Reply(info, strings.TrimSpace(b.String()))
 	})
 }
 
@@ -536,11 +560,11 @@ func handleWikisearch(s SessionBridge, info types.MessageInfo, args []string, pr
 // ── .LINKPREVIEW ────────────────────────────────────────────────────────────
 
 func linkpreviewGuide(prefix string) string {
-	return "*🔰 LINK PREVIEW 🔰*\n\n" +
-		"*GET A PREVIEW OF ANY WEBSITE LINK*\n\n" +
+	return "*\U0001f530 LINK PREVIEW \U0001f530*\n\n" +
+		"*GET A PREVIEW + SCREENSHOT OF ANY WEBSITE LINK*\n\n" +
 		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "LINKPREVIEW <URL> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "LINKPREVIEW HTTPS://EXAMPLE.COM ❯*"
+		"*\u276e " + prefix + "LINKPREVIEW <URL> \u276f*\n" +
+		"*EXAMPLE \u276e " + prefix + "LINKPREVIEW HTTPS://EXAMPLE.COM \u276f*"
 }
 
 func handleLinkpreview(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -566,10 +590,14 @@ func handleLinkpreview(s SessionBridge, info types.MessageInfo, args []string, p
 				Image       struct {
 					URL string `json:"url"`
 				} `json:"image"`
+				Screenshot struct {
+					URL string `json:"url"`
+				} `json:"screenshot"`
 			} `json:"data"`
 		}
-		u := "https://api.microlink.io/?url=" + url.QueryEscape(link)
-		if err := funGetJSON(ctx, u, &res); err != nil || res.Status != "success" {
+		// Request a live screenshot of the page in addition to the metadata.
+		u := "https://api.microlink.io/?url=" + url.QueryEscape(link) + "&screenshot=true"
+		if err := funGetJSONRetry(ctx, u, &res, 2); err != nil || res.Status != "success" {
 			if !ctxTimedOut(ctx) {
 				funFail(s, info, "LINKPREVIEW")
 			}
@@ -577,31 +605,38 @@ func handleLinkpreview(s SessionBridge, info types.MessageInfo, args []string, p
 		}
 		d := res.Data
 		var b strings.Builder
-		b.WriteString("*🔰 LINK PREVIEW 🔰*\n\n")
+		b.WriteString("*\U0001f530 LINK PREVIEW \U0001f530*\n\n")
 		if d.Title != "" {
-			b.WriteString("*📰 TITLE ❯ " + strings.ToUpper(d.Title) + "*\n")
+			b.WriteString("*\U0001f4f0 TITLE \u276f " + strings.ToUpper(d.Title) + "*\n")
 		}
 		if d.Publisher != "" {
-			b.WriteString("*🏢 PUBLISHER ❯ " + strings.ToUpper(d.Publisher) + "*\n")
+			b.WriteString("*\U0001f3e2 PUBLISHER \u276f " + strings.ToUpper(d.Publisher) + "*\n")
 		}
 		if d.Author != "" {
-			b.WriteString("*✍️ AUTHOR ❯ " + strings.ToUpper(d.Author) + "*\n")
+			b.WriteString("*\u270d\ufe0f AUTHOR \u276f " + strings.ToUpper(d.Author) + "*\n")
 		}
 		if d.Description != "" {
 			desc := d.Description
 			if len(desc) > 400 {
 				desc = desc[:400] + "..."
 			}
-			b.WriteString("*📝 " + desc + "*\n")
+			b.WriteString("*\U0001f4dd " + desc + "*\n")
 		}
-		b.WriteString("*🔗 " + d.URL + "*")
-		if d.Image.URL != "" {
-			if data, err := funGetBytes(ctx, d.Image.URL); err == nil {
-				_ = s.SendImage(info, data, strings.TrimSpace(b.String()))
+		b.WriteString("*\U0001f517 " + d.URL + "*")
+		caption := strings.TrimSpace(b.String())
+
+		// Prefer the live screenshot; fall back to the page's og:image.
+		shotURL := d.Screenshot.URL
+		if shotURL == "" {
+			shotURL = d.Image.URL
+		}
+		if shotURL != "" {
+			if data, err := funGetBytes(ctx, shotURL); err == nil {
+				_ = s.SendImage(info, data, caption)
 				return
 			}
 		}
-		s.Reply(info, strings.TrimSpace(b.String()))
+		s.Reply(info, caption)
 	})
 }
 

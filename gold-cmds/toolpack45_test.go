@@ -29,7 +29,6 @@ func TestToolpack45GuidesRenderRealNewlines(t *testing.T) {
 		"advice":      adviceGuide("."),
 		"trivia":      triviaGuide("."),
 		// pack 5
-		"myip":          myipGuide("."),
 		"pincode":       pincodeGuide("."),
 		"hackernews":    hackernewsGuide("."),
 		"synonym":       synonymGuide("."),
@@ -82,7 +81,6 @@ func TestToolpack45Live(t *testing.T) {
 		{"advice", handleAdvice, nil},
 		{"trivia", handleTrivia, nil},
 		// pack 5
-		{"myip", handleMyIP, nil},
 		{"pincode", handlePincode, []string{"110001"}},
 		{"hackernews", handleHackerNews, nil},
 		{"synonym", handleSynonym, []string{"happy"}},

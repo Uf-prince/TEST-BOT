@@ -32,60 +32,15 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// ── .MYIP ────────────────────────────────────────────────────────────────────
-
-func myipGuide(prefix string) string {
-	return "*🔰 MY IP 🔰*\n\n" +
-		"*SHOW YOUR PUBLIC IP + LOCATION*\n\n" +
-		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "MYIP ❯*"
-}
-
-func handleMyIP(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "*CHECKING YOUR IP....*")
-		defer func() { _ = s.DeleteMessage(info, waitID) }()
-
-		var ipRes struct {
-			IP string `json:"ip"`
-		}
-		if err := funGetJSON(ctx, "https://api.ipify.org?format=json", &ipRes); err != nil || ipRes.IP == "" {
-			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 COULD NOT DETECT IP*")
-			}
-			return
-		}
-		var geo struct {
-			IP      string `json:"ip"`
-			Country string `json:"country"`
-			Region  string `json:"region"`
-			City    string `json:"city"`
-			Org     string `json:"org"`
-		}
-		_ = funGetJSON(ctx, "https://ipwho.is/"+url.PathEscape(ipRes.IP), &geo)
-
-		var b strings.Builder
-		b.WriteString("*🔰 MY IP 🔰*\n\n")
-		b.WriteString("*🌐 IP ❯ " + ipRes.IP + "*\n")
-		if geo.Country != "" {
-			b.WriteString("*🌍 COUNTRY ❯ " + geo.Country + "*\n")
-			b.WriteString("*🏙️ CITY ❯ " + geo.City + ", " + geo.Region + "*\n")
-			if geo.Org != "" {
-				b.WriteString("*🏢 ORG ❯ " + geo.Org + "*")
-			}
-		}
-		s.Reply(info, strings.TrimSpace(b.String()))
-	})
-}
-
 // ── .PINCODE ─────────────────────────────────────────────────────────────────
 
 func pincodeGuide(prefix string) string {
-	return "*🔰 PINCODE LOOKUP 🔰*\n\n" +
-		"*FIND POST OFFICES BY INDIA PIN CODE*\n\n" +
+	return "*\U0001f530 PINCODE LOOKUP \U0001f530*\n\n" +
+		"*FIND POST OFFICES BY PIN / POSTAL CODE (ANY COUNTRY)*\n\n" +
 		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "PINCODE <CODE> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "PINCODE 110001 ❯*"
+		"*\u276e " + prefix + "PINCODE <CODE> \u276f*  (DEFAULT: INDIA)\n" +
+		"*\u276e " + prefix + "PINCODE <COUNTRY> <CODE> \u276f*\n" +
+		"*EXAMPLE \u276e " + prefix + "PINCODE PK 44000 \u276f*"
 }
 
 func handlePincode(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -94,38 +49,85 @@ func handlePincode(s SessionBridge, info types.MessageInfo, args []string, prefi
 			s.Reply(info, pincodeGuide(prefix))
 			return
 		}
-		code := strings.TrimSpace(args[0])
+		country := "in"
+		code := ""
+		if len(args) >= 2 {
+			country = strings.ToLower(strings.TrimSpace(args[0]))
+			code = strings.TrimSpace(strings.Join(args[1:], " "))
+		} else {
+			code = strings.TrimSpace(args[0])
+		}
+		if code == "" {
+			s.Reply(info, pincodeGuide(prefix))
+			return
+		}
 		waitID := s.ReplyWithID(info, "*LOOKING UP PINCODE....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 
-		var res []struct {
-			Message    string `json:"Message"`
-			Status     string `json:"Status"`
-			PostOffice []struct {
-				Name     string `json:"Name"`
-				District string `json:"District"`
-				State    string `json:"State"`
-				Pincode  string `json:"Pincode"`
-			} `json:"PostOffice"`
+		// Primary: zippopotam.us (covers many countries worldwide).
+		var z struct {
+			Country  string `json:"country"`
+			PostCode string `json:"post code"`
+			Places   []struct {
+				PlaceName string `json:"place name"`
+				State     string `json:"state"`
+				Lat       string `json:"latitude"`
+				Lon       string `json:"longitude"`
+			} `json:"places"`
 		}
-		if err := funGetJSON(ctx, "https://api.postalpincode.in/pincode/"+url.PathEscape(code), &res); err != nil ||
-			len(res) == 0 || res[0].Status != "Success" || len(res[0].PostOffice) == 0 {
-			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 PINCODE NOT FOUND*")
+		zu := "https://api.zippopotam.us/" + url.PathEscape(country) + "/" + url.PathEscape(code)
+		if err := funGetJSONRetry(ctx, zu, &z, 2); err == nil && len(z.Places) > 0 {
+			var b strings.Builder
+			b.WriteString("*\U0001f530 PINCODE LOOKUP \U0001f530*\n\n")
+			b.WriteString("*\U0001f4ee CODE \u276f " + z.PostCode + "*\n")
+			b.WriteString("*\U0001f30d COUNTRY \u276f " + strings.ToUpper(z.Country) + "*\n\n")
+			for i, pl := range z.Places {
+				if i >= 8 {
+					break
+				}
+				b.WriteString("*\U0001f4cd " + strings.ToUpper(pl.PlaceName) + "*\n")
+				if pl.State != "" {
+					b.WriteString("\u2022 STATE: " + pl.State + "\n")
+				}
+				if pl.Lat != "" && pl.Lon != "" {
+					b.WriteString("\u2022 LAT/LON: " + pl.Lat + ", " + pl.Lon + "\n")
+				}
+				b.WriteString("\n")
 			}
+			s.Reply(info, strings.TrimSpace(b.String()))
 			return
 		}
-		var b strings.Builder
-		b.WriteString("*🔰 PINCODE LOOKUP 🔰*\n\n")
-		b.WriteString("*📮 PIN ❯ " + code + "*\n")
-		b.WriteString("*📍 " + res[0].PostOffice[0].District + ", " + res[0].PostOffice[0].State + "*\n\n")
-		for i, po := range res[0].PostOffice {
-			if i >= 8 {
-				break
+
+		// Fallback: India Post API (only for India).
+		if country == "in" || country == "india" {
+			var res []struct {
+				Status     string `json:"Status"`
+				PostOffice []struct {
+					Name     string `json:"Name"`
+					District string `json:"District"`
+					State    string `json:"State"`
+				} `json:"PostOffice"`
 			}
-			b.WriteString("• " + po.Name + "\n")
+			iu := "https://api.postalpincode.in/pincode/" + url.PathEscape(code)
+			if err := funGetJSONRetry(ctx, iu, &res, 2); err == nil && len(res) > 0 && res[0].Status == "Success" && len(res[0].PostOffice) > 0 {
+				var b strings.Builder
+				b.WriteString("*\U0001f530 PINCODE LOOKUP \U0001f530*\n\n")
+				b.WriteString("*\U0001f4ee PIN \u276f " + code + "*\n")
+				b.WriteString("*\U0001f4cd " + res[0].PostOffice[0].District + ", " + res[0].PostOffice[0].State + "*\n\n")
+				for i, po := range res[0].PostOffice {
+					if i >= 8 {
+						break
+					}
+					b.WriteString("\u2022 " + po.Name + "\n")
+				}
+				s.Reply(info, strings.TrimSpace(b.String()))
+				return
+			}
 		}
-		s.Reply(info, strings.TrimSpace(b.String()))
+
+		if !ctxTimedOut(ctx) {
+			s.Reply(info, "*\U0001f530 PINCODE NOT FOUND*")
+		}
 	})
 }
 
@@ -715,7 +717,6 @@ func handleStackOverflow(s SessionBridge, info types.MessageInfo, args []string,
 // ── REGISTRATION ─────────────────────────────────────────────────────────────
 
 func init() {
-	Register(Command{Name: "myip", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO SHOW YOUR PUBLIC IP + LOCATION. USE IT AS .MYIP.", Run: handleMyIP})
 	Register(Command{Name: "pincode", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO FIND POST OFFICES BY INDIA PIN CODE. USE IT AS .PINCODE <CODE>.", Run: handlePincode})
 	Register(Command{Name: "hackernews", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET TOP STORIES FROM HACKER NEWS. USE IT AS .HACKERNEWS.", Run: handleHackerNews})
 	Register(Command{Name: "synonym", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO FIND SYNONYMS OF ANY WORD. USE IT AS .SYNONYM <WORD>.", Run: handleSynonym})

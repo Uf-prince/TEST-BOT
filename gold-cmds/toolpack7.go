@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.mau.fi/whatsmeow/types"
 )
@@ -190,42 +191,6 @@ func handleWordCount(s SessionBridge, info types.MessageInfo, args []string, pre
 	b.WriteString("*🔡 WITHOUT SPACES ❯ " + strconv.Itoa(charsNoSpace) + "*\n")
 	b.WriteString("*📄 LINES ❯ " + strconv.Itoa(lines) + "*")
 	s.Reply(info, b.String())
-}
-
-// ── .SLUG ────────────────────────────────────────────────────────────────────
-
-func slugGuide(prefix string) string {
-	return "*🔰 SLUG MAKER 🔰*\n\n" +
-		"*MAKE A CLEAN URL SLUG*\n\n" +
-		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "SLUG <TEXT> ❯*\n\n" +
-		"*EXAMPLE:*\n" +
-		"*❮ " + prefix + "SLUG Hello World 2025 ❯*"
-}
-
-func handleSlug(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	if len(args) < 1 {
-		s.Reply(info, slugGuide(prefix))
-		return
-	}
-	text := strings.ToLower(strings.Join(args, " "))
-	var b strings.Builder
-	prevDash := false
-	for _, r := range text {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
-			b.WriteRune(r)
-			prevDash = false
-		} else if !prevDash {
-			b.WriteByte('-')
-			prevDash = true
-		}
-	}
-	slug := strings.Trim(b.String(), "-")
-	if slug == "" {
-		s.Reply(info, "*🔰 NO VALID CHARACTERS*")
-		return
-	}
-	s.Reply(info, "*🔰 URL SLUG 🔰*\n\n*"+slug+"*")
 }
 
 // ── .URLENCODE ───────────────────────────────────────────────────────────────
@@ -480,40 +445,94 @@ func handleCVE(s SessionBridge, info types.MessageInfo, args []string, prefix st
 		waitID := s.ReplyWithID(info, "*FETCHING LATEST CVES....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 
-		var res []struct {
-			ID        string   `json:"id"`
-			Published string   `json:"published"`
-			Aliases   []string `json:"aliases"`
-			Details   string   `json:"details"`
+		// NVD CVE API 2.0 — official, reliable, no key required.
+		// Query the last 30 days of published CVEs, newest first.
+		end := time.Now().UTC()
+		start := end.AddDate(0, 0, -30)
+		u := "https://services.nvd.nist.gov/rest/json/cves/2.0?pubStartDate=" +
+			url.QueryEscape(start.Format("2006-01-02T15:04:05.000")) +
+			"&pubEndDate=" + url.QueryEscape(end.Format("2006-01-02T15:04:05.000")) +
+			"&resultsPerPage=" + strconv.Itoa(n)
+
+		var res struct {
+			Vulnerabilities []struct {
+				CVE struct {
+					ID          string `json:"id"`
+					Published   string `json:"published"`
+					Descriptions []struct {
+						Lang  string `json:"lang"`
+						Value string `json:"value"`
+					} `json:"descriptions"`
+				} `json:"cve"`
+			} `json:"vulnerabilities"`
 		}
-		if err := funGetJSON(ctx, "https://cve.circl.lu/api/last", &res); err != nil || len(res) == 0 {
-			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 COULD NOT FETCH CVES*")
+		if err := funGetJSON(ctx, u, &res); err != nil || len(res.Vulnerabilities) == 0 {
+			// Fallback: CIRCL mirror (older but still live).
+			var alt []struct {
+				ID        string   `json:"id"`
+				Published string   `json:"published"`
+				Aliases   []string `json:"aliases"`
+				Details   string   `json:"details"`
 			}
+			if err2 := funGetJSON(ctx, "https://cve.circl.lu/api/last", &alt); err2 != nil || len(alt) == 0 {
+				if !ctxTimedOut(ctx) {
+					s.Reply(info, "*🔰 COULD NOT FETCH CVES*")
+				}
+				return
+			}
+			var b strings.Builder
+			b.WriteString("*🔰 LATEST CVES 🔰*\n\n")
+			for i, c := range alt {
+				if i >= n {
+					break
+				}
+				id := c.ID
+				for _, a := range c.Aliases {
+					if strings.HasPrefix(a, "CVE-") {
+						id = a
+						break
+					}
+				}
+				date := c.Published
+				if len(date) >= 10 {
+					date = date[:10]
+				}
+				desc := c.Details
+				if len(desc) > 160 {
+					desc = desc[:160] + "..."
+				}
+				b.WriteString("*" + strconv.Itoa(i+1) + ". " + id + "*\n")
+				b.WriteString("• 📅 " + date + "\n")
+				b.WriteString("• " + desc + "\n\n")
+			}
+			s.Reply(info, strings.TrimSpace(b.String()))
 			return
 		}
 		var b strings.Builder
 		b.WriteString("*🔰 LATEST CVES 🔰*\n\n")
-		for i, c := range res {
+		for i, v := range res.Vulnerabilities {
 			if i >= n {
 				break
 			}
-			id := c.ID
-			for _, a := range c.Aliases {
-				if strings.HasPrefix(a, "CVE-") {
-					id = a
-					break
-				}
-			}
+			c := v.CVE
 			date := c.Published
 			if len(date) >= 10 {
 				date = date[:10]
 			}
-			desc := c.Details
+			desc := ""
+			for _, d := range c.Descriptions {
+				if d.Lang == "en" {
+					desc = d.Value
+					break
+				}
+			}
+			if desc == "" && len(c.Descriptions) > 0 {
+				desc = c.Descriptions[0].Value
+			}
 			if len(desc) > 160 {
 				desc = desc[:160] + "..."
 			}
-			b.WriteString("*" + strconv.Itoa(i+1) + ". " + id + "*\n")
+			b.WriteString("*" + strconv.Itoa(i+1) + ". " + c.ID + "*\n")
 			b.WriteString("• 📅 " + date + "\n")
 			b.WriteString("• " + desc + "\n\n")
 		}
@@ -725,7 +744,6 @@ func init() {
 	Register(Command{Name: "hex", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO CONVERT TEXT TO HEX. USE IT AS .HEX <TEXT> OR .HEX -D <HEX>.", Run: handleHex})
 	Register(Command{Name: "reverse", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO REVERSE ANY TEXT. USE IT AS .REVERSE <TEXT>.", Run: handleReverse})
 	Register(Command{Name: "wordcount", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO COUNT WORDS AND CHARACTERS. USE IT AS .WORDCOUNT <TEXT>.", Run: handleWordCount})
-	Register(Command{Name: "slug", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO MAKE A CLEAN URL SLUG. USE IT AS .SLUG <TEXT>.", Run: handleSlug})
 	Register(Command{Name: "urlencode", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO ENCODE OR DECODE A URL. USE IT AS .URLENCODE <TEXT> OR .URLENCODE -D <URL>.", Run: handleURLEncode})
 	Register(Command{Name: "dice", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO ROLL DICE. USE IT AS .DICE [SIDES] [COUNT].", Run: handleDice})
 	Register(Command{Name: "random", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM NUMBER IN A RANGE. USE IT AS .RANDOM <MIN> <MAX>.", Run: handleRandom})

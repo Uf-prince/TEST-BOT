@@ -82,9 +82,9 @@ func handleDadjoke(s SessionBridge, info types.MessageInfo, args []string, prefi
 		}
 		var b strings.Builder
 		b.WriteString("*🔰 DAD JOKE 🔰*\n\n")
-		b.WriteString("*" + res.Joke.Opener + "*\n\n")
+		b.WriteString(res.Joke.Opener + "\n\n")
 		if res.Joke.Punchline != "" {
-			b.WriteString("*😂 " + res.Joke.Punchline + "*")
+			b.WriteString("😂 " + res.Joke.Punchline)
 		}
 		s.Reply(info, strings.TrimSpace(b.String()))
 	})
@@ -448,30 +448,6 @@ func handleIpgeo(s SessionBridge, info types.MessageInfo, args []string, prefix 
 
 // ── .SEEIP ───────────────────────────────────────────────────────────────────
 
-func seeipGuide(prefix string) string {
-	return "*🔰 MY IP ADDRESS 🔰*\n\n" +
-		"*GET YOUR PUBLIC IP ADDRESS*\n\n" +
-		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "SEEIP ❯*"
-}
-
-func handleSeeip(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
-		waitID := s.ReplyWithID(info, "*CHECKING IP....*")
-		defer func() { _ = s.DeleteMessage(info, waitID) }()
-		var res struct {
-			IP string `json:"ip"`
-		}
-		if err := funGetJSON(ctx, "https://api.seeip.org/jsonip", &res); err != nil || res.IP == "" {
-			if !ctxTimedOut(ctx) {
-				funFail(s, info, "SEEIP")
-			}
-			return
-		}
-		s.Reply(info, "*🔰 MY IP ADDRESS 🔰*\n\n*🌐 YOUR IP ❯ "+res.IP+"*")
-	})
-}
-
 func init() {
 	Register(Command{Name: "chuck", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM CHUCK NORRIS JOKE. USE IT AS .CHUCK.", Run: handleChuck})
 	Register(Command{Name: "dadjoke", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM DAD JOKE. USE IT AS .DADJOKE.", Run: handleDadjoke})
@@ -482,7 +458,6 @@ func init() {
 	Register(Command{Name: "mealdb", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM MEAL RECIPE. USE IT AS .MEALDB.", Run: handleMealdb})
 	Register(Command{Name: "uselessfact", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM USELESS FACT. USE IT AS .USELESSFACT.", Run: handleUselessfact})
 	Register(Command{Name: "ipgeo", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE GEOLOCATION OF YOUR IP ADDRESS. USE IT AS .IPGEO.", Run: handleIpgeo})
-	Register(Command{Name: "seeip", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET YOUR PUBLIC IP ADDRESS. USE IT AS .SEEIP.", Run: handleSeeip})
 
 	// hidden aliases
 	Register(Command{Name: "cnjoke", Category: "TOOLS", Desc: "Short alias of .chuck", Hidden: true, Run: handleChuck})
@@ -494,5 +469,4 @@ func init() {
 	Register(Command{Name: "mealrecipe", Category: "TOOLS", Desc: "Short alias of .mealdb", Hidden: true, Run: handleMealdb})
 	Register(Command{Name: "funfact", Category: "TOOLS", Desc: "Short alias of .uselessfact", Hidden: true, Run: handleUselessfact})
 	Register(Command{Name: "myipgeo", Category: "TOOLS", Desc: "Short alias of .ipgeo", Hidden: true, Run: handleIpgeo})
-	Register(Command{Name: "whatsmyip", Category: "TOOLS", Desc: "Short alias of .seeip", Hidden: true, Run: handleSeeip})
 }

@@ -143,6 +143,72 @@ func funPostJSON(ctx context.Context, rawURL string, body []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
+// funGetJSONRetry retries funGetJSON up to attempts times with a short
+// backoff between tries. Free public APIs (agify / genderize / nationalize)
+// rate-limit by IP and occasionally answer HTTP 429; a couple of quick
+// retries turn those transient failures into successes. The command's
+// watchdog context still bounds the total time, so a hard-down API can
+// never hang the command.
+func funGetJSONRetry(ctx context.Context, rawURL string, v any, attempts int) error {
+	if attempts < 1 {
+		attempts = 1
+	}
+	var err error
+	for i := 0; i < attempts; i++ {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Duration(i) * 1500 * time.Millisecond):
+			}
+		}
+		err = funGetJSON(ctx, rawURL, v)
+		if err == nil {
+			return nil
+		}
+	}
+	return err
+}
+
+// funGetJSONViaJina fetches a JSON API through the r.jina.ai text proxy.
+// Some free demographic APIs (agify / nationalize / genderize) rate-limit by
+// IP and answer HTTP 429 for a whole network; routing the request through the
+// Jina reader proxy uses a different egress IP and returns the raw JSON body
+// wrapped in a short markdown envelope, which we unwrap here.
+func funGetJSONViaJina(ctx context.Context, rawURL string, v any) error {
+	// NOTE: r.jina.ai sits behind Cloudflare and rejects browser-like
+	// User-Agents with a JS challenge (HTTP 403). A plain client UA passes.
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://r.jina.ai/"+rawURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "curl/8.5.0")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("jina http %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	if err != nil {
+		return err
+	}
+	text := string(body)
+	// The proxy wraps the payload as "...Markdown Content:\n{json}".
+	if i := strings.Index(text, "Markdown Content:"); i >= 0 {
+		text = text[i+len("Markdown Content:"):]
+	}
+	start := strings.Index(text, "{")
+	end := strings.LastIndex(text, "}")
+	if start < 0 || end < 0 || end <= start {
+		return fmt.Errorf("jina: no json payload")
+	}
+	return json.Unmarshal([]byte(text[start:end+1]), v)
+}
+
 // funFail sends the standard failure line.
 func funFail(s SessionBridge, info types.MessageInfo, what string) {
 	s.Reply(info, "*🔰 "+what+" FAILED, PLEASE TRY AGAIN*")
@@ -541,58 +607,6 @@ func handleCrypto(s SessionBridge, info types.MessageInfo, args []string, prefix
 }
 
 // ============================================================================
-// .IP — IP GEOLOCATION
-// ============================================================================
-
-func ipGuide(prefix string) string {
-	return "*🔰 IP LOOKUP 🔰*\n\n" +
-		"*GET DETAILS OF ANY IP ADDRESS*\n\n" +
-		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "IP <IP ADDRESS> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "IP 8.8.8.8 ❯*\n\n" +
-		"*LEAVE EMPTY TO LOOK UP YOUR OWN IP*"
-}
-
-func handleIP(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
-		ip := strings.TrimSpace(strings.Join(args, " "))
-		if ip == "" {
-			s.Reply(info, ipGuide(prefix))
-			return
-		}
-		waitID := s.ReplyWithID(info, "*LOOKING UP IP....*")
-		defer func() { _ = s.DeleteMessage(info, waitID) }()
-
-		var res struct {
-			Status      string `json:"status"`
-			Query       string `json:"query"`
-			Country     string `json:"country"`
-			RegionName  string `json:"regionName"`
-			City        string `json:"city"`
-			ISP         string `json:"isp"`
-			Org         string `json:"org"`
-			Timezone    string `json:"timezone"`
-		}
-		if err := funGetJSON(ctx, "http://ip-api.com/json/"+url.PathEscape(ip), &res); err != nil || res.Status != "success" {
-			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 INVALID IP OR LOOKUP FAILED*")
-			}
-			return
-		}
-		var b strings.Builder
-		b.WriteString("*🔰 IP LOOKUP 🔰*\n\n")
-		b.WriteString("*IP ❯ " + res.Query + "*\n")
-		b.WriteString("*COUNTRY ❯ " + res.Country + "*\n")
-		b.WriteString("*REGION ❯ " + res.RegionName + "*\n")
-		b.WriteString("*CITY ❯ " + res.City + "*\n")
-		b.WriteString("*ISP ❯ " + res.ISP + "*\n")
-		b.WriteString("*ORG ❯ " + res.Org + "*\n")
-		b.WriteString("*TIMEZONE ❯ " + res.Timezone + "*")
-		s.Reply(info, b.String())
-	})
-}
-
-// ============================================================================
 // REGISTRATION
 // ============================================================================
 
@@ -605,7 +619,6 @@ func init() {
 	Register(Command{Name: "quote", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET A RANDOM MOTIVATIONAL QUOTE. JUST TYPE .QUOTE.", Run: handleQuote})
 	Register(Command{Name: "shorten", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO SHORTEN ANY LONG LINK. USE IT AS .SHORTEN <LINK>.", Run: handleShorten})
 	Register(Command{Name: "crypto", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO GET THE LIVE PRICE OF ANY CRYPTO COIN IN USD AND PKR. USE IT AS .CRYPTO <COIN>.", Run: handleCrypto})
-	Register(Command{Name: "ip", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO LOOK UP THE DETAILS OF ANY IP ADDRESS. USE IT AS .IP <IP ADDRESS>.", Run: handleIP})
 
 	// aliases (Hidden)
 	Register(Command{Name: "qrcode", Hidden: true, Run: handleQR})
@@ -618,6 +631,5 @@ func init() {
 	Register(Command{Name: "smallurl", Hidden: true, Run: handleShorten})
 	Register(Command{Name: "shortlink", Hidden: true, Run: handleShorten})
 	Register(Command{Name: "tinyurl", Hidden: true, Run: handleShorten})
-	Register(Command{Name: "ipinfo", Hidden: true, Run: handleIP})
 	Register(Command{Name: "coin", Hidden: true, Run: handleCrypto})
 }

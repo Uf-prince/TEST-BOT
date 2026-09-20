@@ -90,11 +90,113 @@ func handleZip(s SessionBridge, info types.MessageInfo, args []string, prefix st
 // ── .HOLIDAY ────────────────────────────────────────────────────────────────
 
 func holidayGuide(prefix string) string {
-	return "*🔰 PUBLIC HOLIDAYS 🔰*\n\n" +
+	return "*\U0001f530 PUBLIC HOLIDAYS \U0001f530*\n\n" +
 		"*GET PUBLIC HOLIDAYS OF ANY COUNTRY*\n\n" +
 		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "HOLIDAY <COUNTRY> [YEAR] ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "HOLIDAY US 2025 ❯*"
+		"*\u276e " + prefix + "HOLIDAY <COUNTRY> [YEAR] \u276f*\n" +
+		"*EXAMPLE \u276e " + prefix + "HOLIDAY PAKISTAN 2025 \u276f*"
+}
+
+// holidayISO maps common country names (lower-case) to ISO-3166 alpha-2 codes
+// so users can type full country names instead of codes.
+var holidayISO = map[string]string{
+	"pakistan": "PK", "india": "IN", "china": "CN", "united states": "US",
+	"usa": "US", "america": "US", "united kingdom": "GB", "uk": "GB",
+	"england": "GB", "britain": "GB", "saudi arabia": "SA", "saudi": "SA",
+	"uae": "AE", "united arab emirates": "AE", "emirates": "AE",
+	"bangladesh": "BD", "indonesia": "ID", "malaysia": "MY", "turkey": "TR",
+	"turkiye": "TR", "egypt": "EG", "nigeria": "NG", "south africa": "ZA",
+	"kenya": "KE", "singapore": "SG", "philippines": "PH", "thailand": "TH",
+	"vietnam": "VN", "japan": "JP", "south korea": "KR", "korea": "KR",
+	"australia": "AU", "canada": "CA", "germany": "DE", "france": "FR",
+	"italy": "IT", "spain": "ES", "russia": "RU", "brazil": "BR",
+	"mexico": "MX", "iran": "IR", "iraq": "IQ", "afghanistan": "AF",
+	"nepal": "NP", "sri lanka": "LK", "myanmar": "MM", "netherlands": "NL",
+	"belgium": "BE", "switzerland": "CH", "austria": "AT", "sweden": "SE",
+	"norway": "NO", "denmark": "DK", "finland": "FI", "poland": "PL",
+	"portugal": "PT", "greece": "GR", "ireland": "IE", "new zealand": "NZ",
+	"argentina": "AR", "chile": "CL", "colombia": "CO", "peru": "PE",
+	"ukraine": "UA", "romania": "RO", "hungary": "HU", "czechia": "CZ",
+	"czech republic": "CZ", "israel": "IL", "qatar": "QA", "kuwait": "KW",
+	"bahrain": "BH", "oman": "OM", "jordan": "JO", "lebanon": "LB",
+	"morocco": "MA", "algeria": "DZ", "tunisia": "TN", "ethiopia": "ET",
+	"ghana": "GH", "tanzania": "TZ", "uganda": "UG", "zimbabwe": "ZW",
+	"hong kong": "HK", "taiwan": "TW", "cambodia": "KH", "laos": "LA",
+	"mongolia": "MN", "kazakhstan": "KZ", "uzbekistan": "UZ",
+	"azerbaijan": "AZ", "georgia": "GE", "armenia": "AM", "cyprus": "CY",
+	"croatia": "HR", "serbia": "RS", "bulgaria": "BG", "slovakia": "SK",
+	"slovenia": "SI", "lithuania": "LT", "latvia": "LV", "estonia": "EE",
+	"iceland": "IS", "luxembourg": "LU", "malta": "MT", "cuba": "CU",
+	"jamaica": "JM", "panama": "PA", "ecuador": "EC", "bolivia": "BO",
+	"uruguay": "UY", "paraguay": "PY", "venezuela": "VE", "syria": "SY",
+	"yemen": "YE", "libya": "LY", "sudan": "SD", "senegal": "SN",
+	"cameroon": "CM", "ivory coast": "CI", "angola": "AO", "mozambique": "MZ",
+	"zambia": "ZM", "botswana": "BW", "namibia": "NA", "maldives": "MV",
+	"bhutan": "BT", "brunei": "BN", "fiji": "FJ", "papua new guinea": "PG",
+}
+
+// holidayGoogleSlug maps ISO-2 codes to the Google Calendar holiday slug for
+// countries that the Nager.Date API does not cover (e.g. Pakistan, India).
+var holidayGoogleSlug = map[string]string{
+	"PK": "pk", "IN": "indian", "CN": "china", "US": "usa", "GB": "uk",
+	"AE": "ae", "MY": "malaysia", "SG": "singapore", "PH": "philippines",
+	"ES": "spain",
+}
+
+func holidayResolveCode(input string) string {
+	q := strings.ToLower(strings.TrimSpace(input))
+	if q == "" {
+		return ""
+	}
+	if len(q) == 2 {
+		return strings.ToUpper(q)
+	}
+	if c, ok := holidayISO[q]; ok {
+		return c
+	}
+	return ""
+}
+
+// holidayParseICS extracts (date, name) pairs for the given year from an
+// iCalendar (ICS) body.
+func holidayParseICS(body string, year int) []struct{ Date, Name string } {
+	var all []struct{ Date, Name string }
+	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
+	var curDate, curName string
+	flush := func() {
+		if curDate != "" && curName != "" {
+			all = append(all, struct{ Date, Name string }{curDate, curName})
+		}
+		curDate, curName = "", ""
+	}
+	for _, ln := range lines {
+		switch {
+		case strings.HasPrefix(ln, "BEGIN:VEVENT"):
+			curDate, curName = "", ""
+		case strings.HasPrefix(ln, "DTSTART"):
+			if i := strings.Index(ln, ":"); i >= 0 {
+				v := strings.TrimSpace(ln[i+1:])
+				if len(v) >= 8 {
+					curDate = v[:4] + "-" + v[4:6] + "-" + v[6:8]
+				}
+			}
+		case strings.HasPrefix(ln, "SUMMARY:"):
+			curName = strings.TrimSpace(strings.TrimPrefix(ln, "SUMMARY:"))
+			curName = strings.ReplaceAll(curName, "\\,", ",")
+			curName = strings.ReplaceAll(curName, "\\;", ";")
+			curName = strings.ReplaceAll(curName, "\\n", " ")
+		case strings.HasPrefix(ln, "END:VEVENT"):
+			flush()
+		}
+	}
+	var res []struct{ Date, Name string }
+	ys := strconv.Itoa(year)
+	for _, e := range all {
+		if strings.HasPrefix(e.Date, ys) {
+			res = append(res, e)
+		}
+	}
+	return res
 }
 
 func handleHoliday(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -103,42 +205,79 @@ func handleHoliday(s SessionBridge, info types.MessageInfo, args []string, prefi
 			s.Reply(info, holidayGuide(prefix))
 			return
 		}
-		cc := strings.ToUpper(strings.TrimSpace(args[0]))
+		// Extract an optional 4-digit year from anywhere in the args; the
+		// remaining words form the country name.
 		year := time.Now().Year()
-		if len(args) >= 2 {
-			if n, err := strconv.Atoi(strings.TrimSpace(args[1])); err == nil && n > 1900 && n < 2200 {
+		var nameParts []string
+		for _, a := range args {
+			if n, err := strconv.Atoi(strings.TrimSpace(a)); err == nil && n > 1900 && n < 2200 {
 				year = n
+				continue
 			}
+			nameParts = append(nameParts, a)
+		}
+		country := strings.TrimSpace(strings.Join(nameParts, " "))
+		if country == "" {
+			s.Reply(info, holidayGuide(prefix))
+			return
+		}
+		cc := holidayResolveCode(country)
+		if cc == "" {
+			s.Reply(info, "*\U0001f530 COUNTRY NOT FOUND, PLEASE CHECK THE NAME*")
+			return
 		}
 		waitID := s.ReplyWithID(info, "*FETCHING HOLIDAYS....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 
-		u := "https://date.nager.at/api/v3/PublicHolidays/" + strconv.Itoa(year) + "/" + url.PathEscape(cc)
+		type hol struct{ Date, Name string }
+		var holidays []hol
+
+		// 1) Nager.Date (covers ~100 countries, clean JSON).
 		var res []struct {
 			Date      string `json:"date"`
 			LocalName string `json:"localName"`
 			Name      string `json:"name"`
 		}
-		if err := funGetJSON(ctx, u, &res); err != nil || len(res) == 0 {
+		u := "https://date.nager.at/api/v3/PublicHolidays/" + strconv.Itoa(year) + "/" + url.PathEscape(cc)
+		if err := funGetJSON(ctx, u, &res); err == nil {
+			for _, h := range res {
+				name := h.LocalName
+				if name == "" {
+					name = h.Name
+				}
+				holidays = append(holidays, hol{h.Date, name})
+			}
+		}
+
+		// 2) Google Calendar ICS fallback (Pakistan, India, China, ...).
+		if len(holidays) == 0 {
+			if slug, ok := holidayGoogleSlug[cc]; ok {
+				ics := "https://calendar.google.com/calendar/ical/en." + slug +
+					"%23holiday%40group.v.calendar.google.com/public/basic.ics"
+				if data, err := funGetBytes(ctx, ics); err == nil {
+					for _, e := range holidayParseICS(string(data), year) {
+						holidays = append(holidays, hol{e.Date, e.Name})
+					}
+				}
+			}
+		}
+
+		if len(holidays) == 0 {
 			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 NO HOLIDAYS FOUND (CHECK COUNTRY CODE)*")
+				s.Reply(info, "*\U0001f530 NO HOLIDAYS FOUND FOR "+strings.ToUpper(country)+" ("+strconv.Itoa(year)+")*")
 			}
 			return
 		}
 		var b strings.Builder
-		b.WriteString("*🔰 PUBLIC HOLIDAYS 🔰*\n\n")
-		b.WriteString("*🌍 COUNTRY ❯ " + cc + "*\n")
-		b.WriteString("*📅 YEAR ❯ " + strconv.Itoa(year) + "*\n\n")
-		for i, h := range res {
-			if i >= 20 {
-				b.WriteString("• ...and " + strconv.Itoa(len(res)-20) + " more\n")
+		b.WriteString("*\U0001f530 PUBLIC HOLIDAYS \U0001f530*\n\n")
+		b.WriteString("*\U0001f30d COUNTRY \u276f " + strings.ToUpper(country) + " (" + cc + ")*\n")
+		b.WriteString("*\U0001f4c5 YEAR \u276f " + strconv.Itoa(year) + "*\n\n")
+		for i, h := range holidays {
+			if i >= 25 {
+				b.WriteString("\u2022 ...and " + strconv.Itoa(len(holidays)-25) + " more\n")
 				break
 			}
-			name := h.LocalName
-			if name == "" {
-				name = h.Name
-			}
-			b.WriteString("• " + h.Date + " — " + name + "\n")
+			b.WriteString("\u2022 " + h.Date + " \u2014 " + h.Name + "\n")
 		}
 		s.Reply(info, strings.TrimSpace(b.String()))
 	})
@@ -197,10 +336,10 @@ func handleUniversity(s SessionBridge, info types.MessageInfo, args []string, pr
 // ── .ISS ────────────────────────────────────────────────────────────────────
 
 func issGuide(prefix string) string {
-	return "*🔰 ISS TRACKER 🔰*\n\n" +
+	return "*\U0001f530 ISS TRACKER \U0001f530*\n\n" +
 		"*GET THE LIVE LOCATION OF THE INTERNATIONAL SPACE STATION*\n\n" +
 		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "ISS ❯*"
+		"*\u276e " + prefix + "ISS \u276f*"
 }
 
 func handleISS(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -208,26 +347,48 @@ func handleISS(s SessionBridge, info types.MessageInfo, args []string, prefix st
 		waitID := s.ReplyWithID(info, "*LOCATING ISS....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 
-		var res struct {
-			ISS struct {
-				Lat string `json:"latitude"`
-				Lon string `json:"longitude"`
-			} `json:"iss_position"`
-			Timestamp int64 `json:"timestamp"`
+		var lat, lon string
+		var ts int64
+
+		// Primary: wheretheiss.at (reliable, HTTPS, no key).
+		var w struct {
+			Latitude  float64 `json:"latitude"`
+			Longitude float64 `json:"longitude"`
+			Timestamp int64   `json:"timestamp"`
 		}
-		if err := funGetJSON(ctx, "http://api.open-notify.org/iss-now.json", &res); err != nil || res.ISS.Lat == "" {
+		if err := funGetJSONRetry(ctx, "https://api.wheretheiss.at/v1/satellites/25544", &w, 2); err == nil && (w.Latitude != 0 || w.Longitude != 0) {
+			lat = strconv.FormatFloat(w.Latitude, 'f', 4, 64)
+			lon = strconv.FormatFloat(w.Longitude, 'f', 4, 64)
+			ts = w.Timestamp
+		} else {
+			// Fallback: open-notify.org.
+			var res struct {
+				ISS struct {
+					Lat string `json:"latitude"`
+					Lon string `json:"longitude"`
+				} `json:"iss_position"`
+				Timestamp int64 `json:"timestamp"`
+			}
+			if err := funGetJSONRetry(ctx, "http://api.open-notify.org/iss-now.json", &res, 2); err == nil && res.ISS.Lat != "" {
+				lat, lon, ts = res.ISS.Lat, res.ISS.Lon, res.Timestamp
+			}
+		}
+
+		if lat == "" {
 			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 ISS DATA UNAVAILABLE, TRY AGAIN*")
+				s.Reply(info, "*\U0001f530 ISS DATA UNAVAILABLE, TRY AGAIN*")
 			}
 			return
 		}
 		var b strings.Builder
-		b.WriteString("*🔰 ISS TRACKER 🔰*\n\n")
-		b.WriteString("*🛰️ INTERNATIONAL SPACE STATION*\n\n")
-		b.WriteString("*📍 LATITUDE ❯ " + res.ISS.Lat + "*\n")
-		b.WriteString("*📍 LONGITUDE ❯ " + res.ISS.Lon + "*\n")
-		b.WriteString("*🕐 UPDATED ❯ " + time.Unix(res.Timestamp, 0).UTC().Format("15:04:05 UTC") + "*\n\n")
-		b.WriteString("*🗺️ MAP ❯ https://www.google.com/maps?q=" + res.ISS.Lat + "," + res.ISS.Lon + "*")
+		b.WriteString("*\U0001f530 ISS TRACKER \U0001f530*\n\n")
+		b.WriteString("*\U0001f6f0\ufe0f INTERNATIONAL SPACE STATION*\n\n")
+		b.WriteString("*\U0001f4cd LATITUDE \u276f " + lat + "*\n")
+		b.WriteString("*\U0001f4cd LONGITUDE \u276f " + lon + "*\n")
+		if ts > 0 {
+			b.WriteString("*\U0001f550 UPDATED \u276f " + time.Unix(ts, 0).UTC().Format("15:04:05 UTC") + "*\n\n")
+		}
+		b.WriteString("*\U0001f5fa\ufe0f MAP \u276f https://www.google.com/maps?q=" + lat + "," + lon + "*")
 		s.Reply(info, strings.TrimSpace(b.String()))
 	})
 }
@@ -235,17 +396,100 @@ func handleISS(s SessionBridge, info types.MessageInfo, args []string, prefix st
 // ── .EARTHQUAKE ─────────────────────────────────────────────────────────────
 
 func earthquakeGuide(prefix string) string {
-	return "*🔰 EARTHQUAKE FEED 🔰*\n\n" +
-		"*GET RECENT SIGNIFICANT EARTHQUAKES (PAST WEEK)*\n\n" +
+	return "*\U0001f530 EARTHQUAKE FEED \U0001f530*\n\n" +
+		"*GET PAST-WEEK EARTHQUAKES (WORLDWIDE OR BY COUNTRY)*\n\n" +
 		"*HOW TO USE:*\n" +
-		"*❮ " + prefix + "EARTHQUAKE ❯*"
+		"*\u276e " + prefix + "EARTHQUAKE \u276f*  (WORLDWIDE)\n" +
+		"*\u276e " + prefix + "EARTHQUAKE <COUNTRY> \u276f*\n" +
+		"*EXAMPLE \u276e " + prefix + "EARTHQUAKE PAKISTAN \u276f*"
+}
+
+// geoBBox resolves a country name to its bounding box via OpenStreetMap
+// Nominatim. Returns (minLat, maxLat, minLon, maxLon, ok).
+func geoBBox(ctx context.Context, country string) (float64, float64, float64, float64, bool) {
+	var res []struct {
+		BoundingBox []string `json:"boundingbox"`
+	}
+	u := "https://nominatim.openstreetmap.org/search?q=" + url.QueryEscape(country) + "&format=json&limit=1"
+	if err := funGetJSONRetry(ctx, u, &res, 2); err != nil || len(res) == 0 || len(res[0].BoundingBox) < 4 {
+		return 0, 0, 0, 0, false
+	}
+	bb := res[0].BoundingBox
+	minLat, e1 := strconv.ParseFloat(bb[0], 64)
+	maxLat, e2 := strconv.ParseFloat(bb[1], 64)
+	minLon, e3 := strconv.ParseFloat(bb[2], 64)
+	maxLon, e4 := strconv.ParseFloat(bb[3], 64)
+	if e1 != nil || e2 != nil || e3 != nil || e4 != nil {
+		return 0, 0, 0, 0, false
+	}
+	return minLat, maxLat, minLon, maxLon, true
 }
 
 func handleEarthquake(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
+		country := strings.TrimSpace(strings.Join(args, " "))
 		waitID := s.ReplyWithID(info, "*FETCHING EARTHQUAKE DATA....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 
+		type quake struct {
+			Mag   float64
+			Place string
+			Time  int64
+		}
+		var quakes []quake
+
+		start := time.Now().UTC().AddDate(0, 0, -7).Format("2006-01-02")
+		base := "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=" + start +
+			"&minmagnitude=4&orderby=time&limit=15"
+
+		if country != "" {
+			minLat, maxLat, minLon, maxLon, ok := geoBBox(ctx, country)
+			if !ok {
+				if !ctxTimedOut(ctx) {
+					s.Reply(info, "*\U0001f530 COUNTRY NOT FOUND, PLEASE CHECK THE NAME*")
+				}
+				return
+			}
+			u := base + "&minlatitude=" + strconv.FormatFloat(minLat, 'f', 4, 64) +
+				"&maxlatitude=" + strconv.FormatFloat(maxLat, 'f', 4, 64) +
+				"&minlongitude=" + strconv.FormatFloat(minLon, 'f', 4, 64) +
+				"&maxlongitude=" + strconv.FormatFloat(maxLon, 'f', 4, 64)
+			var res struct {
+				Features []struct {
+					Properties struct {
+						Mag   float64 `json:"mag"`
+						Place string  `json:"place"`
+						Time  int64   `json:"time"`
+					} `json:"properties"`
+				} `json:"features"`
+			}
+			if err := funGetJSONRetry(ctx, u, &res, 2); err == nil {
+				for _, f := range res.Features {
+					quakes = append(quakes, quake{f.Properties.Mag, f.Properties.Place, f.Properties.Time})
+				}
+			}
+			if len(quakes) == 0 {
+				if !ctxTimedOut(ctx) {
+					s.Reply(info, "*\U0001f530 NO EARTHQUAKES (MAG 4+) IN "+strings.ToUpper(country)+" THIS WEEK*")
+				}
+				return
+			}
+			var b strings.Builder
+			b.WriteString("*\U0001f530 EARTHQUAKE FEED \U0001f530*\n\n")
+			b.WriteString("*\U0001f30d " + strings.ToUpper(country) + " \u2014 PAST WEEK (MAG 4+)*\n\n")
+			for i, q := range quakes {
+				if i >= 10 {
+					break
+				}
+				b.WriteString("*\U0001f4a5 MAG " + strconv.FormatFloat(q.Mag, 'f', 1, 64) + "*\n")
+				b.WriteString("\u2022 " + q.Place + "\n")
+				b.WriteString("\u2022 " + time.Unix(q.Time/1000, 0).UTC().Format("02 Jan 15:04 UTC") + "\n\n")
+			}
+			s.Reply(info, strings.TrimSpace(b.String()))
+			return
+		}
+
+		// Worldwide: significant quakes this week.
 		var res struct {
 			Features []struct {
 				Properties struct {
@@ -256,22 +500,22 @@ func handleEarthquake(s SessionBridge, info types.MessageInfo, args []string, pr
 			} `json:"features"`
 		}
 		u := "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_week.geojson"
-		if err := funGetJSON(ctx, u, &res); err != nil || len(res.Features) == 0 {
+		if err := funGetJSONRetry(ctx, u, &res, 2); err != nil || len(res.Features) == 0 {
 			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 NO SIGNIFICANT EARTHQUAKES THIS WEEK*")
+				s.Reply(info, "*\U0001f530 NO SIGNIFICANT EARTHQUAKES THIS WEEK*")
 			}
 			return
 		}
 		var b strings.Builder
-		b.WriteString("*🔰 EARTHQUAKE FEED 🔰*\n\n")
-		b.WriteString("*🌍 SIGNIFICANT QUAKES (PAST WEEK)*\n\n")
+		b.WriteString("*\U0001f530 EARTHQUAKE FEED \U0001f530*\n\n")
+		b.WriteString("*\U0001f30d SIGNIFICANT QUAKES (PAST WEEK)*\n\n")
 		for i, f := range res.Features {
 			if i >= 8 {
 				break
 			}
-			b.WriteString("*💥 MAG " + strconv.FormatFloat(f.Properties.Mag, 'f', 1, 64) + "*\n")
-			b.WriteString("• " + f.Properties.Place + "\n")
-			b.WriteString("• " + time.Unix(f.Properties.Time/1000, 0).UTC().Format("02 Jan 15:04 UTC") + "\n\n")
+			b.WriteString("*\U0001f4a5 MAG " + strconv.FormatFloat(f.Properties.Mag, 'f', 1, 64) + "*\n")
+			b.WriteString("\u2022 " + f.Properties.Place + "\n")
+			b.WriteString("\u2022 " + time.Unix(f.Properties.Time/1000, 0).UTC().Format("02 Jan 15:04 UTC") + "\n\n")
 		}
 		s.Reply(info, strings.TrimSpace(b.String()))
 	})
@@ -304,11 +548,13 @@ func handleGender(s SessionBridge, info types.MessageInfo, args []string, prefix
 			Count       int     `json:"count"`
 		}
 		u := "https://api.genderize.io?name=" + url.QueryEscape(name)
-		if err := funGetJSON(ctx, u, &res); err != nil || res.Gender == "" {
-			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 COULD NOT PREDICT GENDER*")
+		if err := funGetJSONRetry(ctx, u, &res, 3); err != nil || res.Gender == "" {
+			if err2 := funGetJSONViaJina(ctx, u, &res); err2 != nil || res.Gender == "" {
+				if !ctxTimedOut(ctx) {
+					s.Reply(info, "*🔰 COULD NOT PREDICT GENDER*")
+				}
+				return
 			}
-			return
 		}
 		var b strings.Builder
 		b.WriteString("*🔰 NAME GENDER 🔰*\n\n")
@@ -345,11 +591,13 @@ func handleAge(s SessionBridge, info types.MessageInfo, args []string, prefix st
 			Count int    `json:"count"`
 		}
 		u := "https://api.agify.io?name=" + url.QueryEscape(name)
-		if err := funGetJSON(ctx, u, &res); err != nil || res.Age == 0 {
-			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 COULD NOT PREDICT AGE*")
+		if err := funGetJSONRetry(ctx, u, &res, 3); err != nil || res.Age == 0 {
+			if err2 := funGetJSONViaJina(ctx, u, &res); err2 != nil || res.Age == 0 {
+				if !ctxTimedOut(ctx) {
+					s.Reply(info, "*🔰 COULD NOT PREDICT AGE*")
+				}
+				return
 			}
-			return
 		}
 		var b strings.Builder
 		b.WriteString("*🔰 NAME AGE 🔰*\n\n")
@@ -366,7 +614,7 @@ func nationalityGuide(prefix string) string {
 		"*PREDICT THE NATIONALITY OF ANY NAME*\n\n" +
 		"*HOW TO USE:*\n" +
 		"*❮ " + prefix + "NATIONALITY <NAME> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "NATIONALITY ALI ❯*"
+		"*EXAMPLE ❮ " + prefix + "NATIONALITY UMAR ❯*"
 }
 
 func handleNationality(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -387,11 +635,13 @@ func handleNationality(s SessionBridge, info types.MessageInfo, args []string, p
 			} `json:"country"`
 		}
 		u := "https://api.nationalize.io?name=" + url.QueryEscape(name)
-		if err := funGetJSON(ctx, u, &res); err != nil || len(res.Country) == 0 {
-			if !ctxTimedOut(ctx) {
-				s.Reply(info, "*🔰 COULD NOT PREDICT NATIONALITY*")
+		if err := funGetJSONRetry(ctx, u, &res, 3); err != nil || len(res.Country) == 0 {
+			if err2 := funGetJSONViaJina(ctx, u, &res); err2 != nil || len(res.Country) == 0 {
+				if !ctxTimedOut(ctx) {
+					s.Reply(info, "*🔰 COULD NOT PREDICT NATIONALITY*")
+				}
+				return
 			}
-			return
 		}
 		var b strings.Builder
 		b.WriteString("*🔰 NAME NATIONALITY 🔰*\n\n")
