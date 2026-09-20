@@ -564,10 +564,10 @@ var (
 )
 
 // guardSessCacheTTL: ek pass ke andar saare JIDs same snapshot dekhein.
-// 30s = watchdog pass duration se zyada, staleness window chhota.
-const guardSessCacheTTL = 30 * time.Second
+// 60s = watchdog pass duration se zyada, staleness window chhota.
+const guardSessCacheTTL = 60 * time.Second
 
-// guardFetchSessions: serverURL ka /sessions payload (cached 30s).
+// guardFetchSessions: serverURL ka /sessions payload (cached 60s).
 // ok=false = fetch fail (network / non-200 / decode) — caller apni
 // safe-side policy lagata hai (online=false ya present=true).
 func guardFetchSessions(serverURL string) (guardSessionsSeen, bool) {

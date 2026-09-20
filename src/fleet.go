@@ -599,9 +599,9 @@ var fleetHTTPClient = &http.Client{
 // ka failover kabhi trigger nahi hota tha. Network error/DNS fail = dead.
 // ── SHARED PROBE CACHE (BANDWIDTH JUGAD, 0% behavior change) ──
 // fleetRemoteHealth + fleetProbeURL dono ek hi URL ko baar-baar probe
-// karte the (fleetScanAll, fleetHolderAlive, guards). Ab ek shared 15s
+// karte the (fleetScanAll, fleetHolderAlive, guards). Ab ek shared 60s
 // TTL cache: ek window me ek hi HTTP hit per URL. Data bilkul wahi
-// (real /health), bas <=15s purana — liveness decisions (jo 2min
+// (real /health), bas <=60s purana — liveness decisions (jo 2min
 // staleness already tolerate karte hain) pe 0% asar.
 type fleetProbeCacheEntry struct {
 	ok bool
@@ -613,7 +613,7 @@ var (
 	fleetProbeCache   = map[string]fleetProbeCacheEntry{}
 )
 
-const fleetProbeCacheTTL = 15 * time.Second
+const fleetProbeCacheTTL = 60 * time.Second
 
 func fleetProbeCached(url string) (bool, bool) {
 	fleetProbeCacheMu.Lock()
@@ -1661,7 +1661,7 @@ type fleetHealthFields struct {
 }
 
 // fleetRemoteHealth fetches another server's /health (6s timeout).
-// fleetHealthCache: fleetRemoteHealth ka shared 15s TTL cache (BANDWIDTH
+// fleetHealthCache: fleetRemoteHealth ka shared 60s TTL cache (BANDWIDTH
 // JUGAD, 0% behavior change). fleetScanAll / .server / .render5gb reports
 // ek hi URL ko baar-baar probe karte the — ab ek window me ek hi hit.
 type fleetHealthCacheEntry struct {
@@ -1674,7 +1674,7 @@ var (
 	fleetHealthCache   = map[string]fleetHealthCacheEntry{}
 )
 
-const fleetHealthCacheTTL = 15 * time.Second
+const fleetHealthCacheTTL = 60 * time.Second
 
 func fleetRemoteHealth(url string) (*fleetHealthFields, error) {
 	fleetHealthCacheMu.Lock()

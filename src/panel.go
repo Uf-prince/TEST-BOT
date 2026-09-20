@@ -804,10 +804,10 @@ func StartPanel(mgr *Manager, port int) {
 // "full" is true when sessions >= maxPerServer.
 //
 // checkAllServersCache: BANDWIDTH JUGAD (0% behavior change) - panel ke
-// /api/servers polls (aur koi bhi caller) ko 20s tak ek hi snapshot deta
-// hai. Pehle har poll 200 servers ko /health probe karta tha; ab 20s ke
+// /api/servers polls (aur koi bhi caller) ko 60s tak ek hi snapshot deta
+// hai. Pehle har poll 200 servers ko /health probe karta tha; ab 60s ke
 // andar sirf PEHLA poll probe karta hai, baaki cache se padhte hain.
-// Data bilkul wahi rehta hai (real /health), bas thoda (<=20s) purana -
+// Data bilkul wahi rehta hai (real /health), bas thoda (<=60s) purana -
 // UI status ke liye 0% farak. Cache miss/first-call pe hamesha fresh.
 var (
 	checkAllServersCacheMu sync.Mutex
@@ -815,7 +815,7 @@ var (
 	checkAllServersCacheAt time.Time
 )
 
-const checkAllServersCacheTTL = 20 * time.Second
+const checkAllServersCacheTTL = 60 * time.Second
 
 func checkAllServers(cfg serversConfig) []serverStatus {
 	if len(cfg.Servers) == 0 {
