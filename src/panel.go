@@ -324,11 +324,46 @@ func loadServersConfig() {
 	if cfg.MaxPerServer <= 0 {
 		cfg.MaxPerServer = 2
 	}
+	// OWNER FIX (.svr wrong info): servers.json me kabhi-kabhi ek hi URL do
+	// server numbers pe set ho jata hai (e.g. .svrchange ne SERVER 50 ko
+	// wahi link de diya jo SERVER 65 pe pehle se tha). Aise duplicate URL
+	// ko fleetScanAll / panel / .host5gb / .server sab DO BAAR probe karte
+	// the aur ek hi physical server ko do servers ginn lete the — is se
+	// ONLINE/OFFLINE/ACTIVE BOTS counts GALAT aa jate the. Yahan pehli
+	// entry rakhte hain aur baad wali duplicate URL entries drop kar dete
+	// hain, taake har physical server sirf EK BAAR count ho. (0% behavior
+	// change jab file clean ho — sirf duplicates par asar.)
+	cfg.Servers = dedupeServerEntries(cfg.Servers)
 	serversCfg = cfg
 	serversCfgLoaded = true
 	if statErr == nil {
 		serversCfgMtime = fi.ModTime()
 	}
+}
+
+// dedupeServerEntries drops later entries whose URL already appeared earlier
+// (case-insensitive, trailing-slash-insensitive). The FIRST occurrence wins,
+// so server numbering stays stable and each physical server is probed and
+// counted exactly once. Pure + order-preserving.
+func dedupeServerEntries(in []serverEntry) []serverEntry {
+	if len(in) == 0 {
+		return in
+	}
+	seen := make(map[string]bool, len(in))
+	out := make([]serverEntry, 0, len(in))
+	for _, e := range in {
+		key := strings.ToLower(strings.TrimRight(strings.TrimSpace(e.URL), "/"))
+		if key == "" {
+			out = append(out, e)
+			continue
+		}
+		if seen[key] {
+			continue // duplicate physical server — skip (pehli entry jeeti)
+		}
+		seen[key] = true
+		out = append(out, e)
+	}
+	return out
 }
 
 // corsMiddleware wraps an http.Handler so that every response carries

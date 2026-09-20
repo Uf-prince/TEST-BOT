@@ -57,13 +57,21 @@ type SessionBridge interface {
 	DeleteMessage(info types.MessageInfo, messageID string) error
 	SendVideo(info types.MessageInfo, data []byte, caption string, thumbnail []byte, seconds uint32, width uint32, height uint32) error
 	SendVideoFile(info types.MessageInfo, path string, caption string, thumbnail []byte, seconds uint32, width uint32, height uint32) error
+	// SendVideoFileRaw sends a video with NO caption / NO thumbnail / NO
+	// footer (raw). Used by .video3. Still runs the guard compressor.
+	SendVideoFileRaw(info types.MessageInfo, path string) error
 	SendAudio(info types.MessageInfo, data []byte, caption string, seconds uint32) error
 	SendAudioFile(info types.MessageInfo, path string, caption string, seconds uint32) error
+	// SendAudioFileRaw sends audio with NO caption / NO footer (raw). Used by
+	// .play3. Still runs the guard compressor.
+	SendAudioFileRaw(info types.MessageInfo, path string) error
 	SendImage(info types.MessageInfo, data []byte, caption string) error
 	SetVideoSession(jid string, results []VideoResult)
 	SetVideoSession2(jid string, results []VideoResult, hd bool)
+	SetVideoSession3(jid string, results []VideoResult, hd bool)
 	SetAudioSession(jid string, results []VideoResult)
 	SetAudioSession2(jid string, results []VideoResult, play2 bool)
+	SetAudioSession3(jid string, results []VideoResult)
 	// ClearSearchSession drops any pending search-list pick window for this
 	// JID — called whenever a play/video search replaces the pick context.
 	ClearSearchSession(jid string)

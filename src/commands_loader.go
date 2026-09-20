@@ -261,6 +261,86 @@ func (b *bridge) SendAudioFile(info types.MessageInfo, path string, caption stri
 	return err
 }
 
+// SendVideoFileRaw is the .video3 raw variant of SendVideoFile: it runs the
+// SAME guard compressor (bandwidth shield) but sends the video with NO
+// caption, NO thumbnail and NO botname footer — just the bare video file.
+func (b *bridge) SendVideoFileRaw(info types.MessageInfo, path string) error {
+	// GUARD (Render bandwidth shield): same compressor policy as SendVideoFile.
+	g := b.guardPath(info, guardVideo, path, "")
+	if g.blocked() {
+		return nil // guard ne chat me block message bhej diya
+	}
+	defer g.cleanupAll()
+	var seconds, width, height uint32
+	if g.usePath {
+		path = g.path
+		secs, w, h := guardProbeMeta(path)
+		if secs > 0 {
+			seconds, width, height = secs, w, h
+		}
+	} else {
+		secs, w, h := guardProbeMeta(path)
+		if secs > 0 {
+			seconds, width, height = secs, w, h
+		}
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	resp, err := b.s.Client.UploadReader(context.Background(), f, nil, whatsmeow.MediaVideo)
+	if err != nil {
+		return err
+	}
+	// RAW: no caption, no thumbnail, no footer — sirf video.
+	videoMsg := &waProto.VideoMessage{
+		URL: proto.String(resp.URL), DirectPath: proto.String(resp.DirectPath),
+		Mimetype: proto.String("video/mp4"), MediaKey: resp.MediaKey, FileLength: proto.Uint64(resp.FileLength),
+		FileSHA256: resp.FileSHA256, FileEncSHA256: resp.FileEncSHA256,
+		Seconds: proto.Uint32(seconds), Height: proto.Uint32(height), Width: proto.Uint32(width), GifPlayback: proto.Bool(false),
+	}
+	_, err = b.s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{VideoMessage: videoMsg})
+	return err
+}
+
+// SendAudioFileRaw is the .play3 raw variant of SendAudioFile: it runs the
+// SAME guard compressor (bandwidth shield) but sends the audio with NO
+// caption and NO botname footer — just the bare audio file.
+func (b *bridge) SendAudioFileRaw(info types.MessageInfo, path string) error {
+	// GUARD (Render bandwidth shield): same compressor policy as SendAudioFile.
+	g := b.guardPath(info, guardAudio, path, "")
+	if g.blocked() {
+		return nil
+	}
+	defer g.cleanupAll()
+	var seconds uint32
+	if g.usePath {
+		path = g.path
+		if d := guardProbeDuration(path); d > 0 {
+			seconds = uint32(d)
+		}
+	} else if d := guardProbeDuration(path); d > 0 {
+		seconds = uint32(d)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	resp, err := b.s.Client.UploadReader(context.Background(), f, nil, whatsmeow.MediaAudio)
+	if err != nil {
+		return err
+	}
+	// RAW: no caption, no footer — sirf audio.
+	_, err = b.s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{AudioMessage: &waProto.AudioMessage{
+		URL: proto.String(resp.URL), DirectPath: proto.String(resp.DirectPath), Mimetype: proto.String("audio/mpeg"),
+		MediaKey: resp.MediaKey, FileLength: proto.Uint64(resp.FileLength), FileSHA256: resp.FileSHA256,
+		FileEncSHA256: resp.FileEncSHA256, Seconds: proto.Uint32(seconds), PTT: proto.Bool(false),
+	}})
+	return err
+}
+
 // SendAudio uploads and sends an audio message.
 func (b *bridge) SendAudio(info types.MessageInfo, data []byte, caption string, seconds uint32) error {
 	// GUARD (Render bandwidth shield): 50MB+ audio → compressor room
@@ -408,6 +488,34 @@ func (b *bridge) SetVideoSession2(jid string, results []goldcmds.VideoResult, hd
 		})
 	}
 	setVideoSession2(jid, internalResults, hd)
+}
+
+// SetVideoSession3 stores a .video3 (raw video) search session so number
+// picks route back through the video3 engine (raw video, no thumbnail/caption).
+func (b *bridge) SetVideoSession3(jid string, results []goldcmds.VideoResult, hd bool) {
+	goldcmds.ClearYTSList(jid) // a new video search replaces any .yts pick
+	var internalResults []VideoResult
+	for _, r := range results {
+		internalResults = append(internalResults, VideoResult{
+			Title:     r.Title,
+			URL:       r.URL,
+			Thumbnail: r.Thumbnail,
+			Duration:  r.Duration,
+		})
+	}
+	setVideoSession3(jid, internalResults, hd)
+}
+
+// SetAudioSession3 stores a .play3 (raw audio) search session so number picks
+// route back through the play3 engine (raw audio, no thumbnail/caption).
+func (b *bridge) SetAudioSession3(jid string, results []goldcmds.VideoResult) {
+	goldcmds.ClearSearchSession(jid) // a new play search replaces any search pick
+	goldcmds.ClearYTSList(jid)       // ...and any .yts pick
+	internal := make([]VideoResult, 0, len(results))
+	for _, r := range results {
+		internal = append(internal, VideoResult{URL: r.URL, Thumbnail: r.Thumbnail, Title: r.Title, Duration: r.Duration})
+	}
+	setAudioSession3(jid, internal)
 }
 
 // extractMediaMessage returns the first downloadable whatsmeow

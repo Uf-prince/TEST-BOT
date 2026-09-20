@@ -597,9 +597,12 @@ func (s *Session) HandleMessage(evt *events.Message) {
 			if sess.Play2 {
 				cmdName = "play2"
 			}
+			if sess.Play3 {
+				cmdName = "play3"
+			}
 			if cmd, ok := Commands[cmdName]; ok {
-				if sess.Play2 {
-					// turbo engine quick-pick: URL + metadata (fast path)
+				if sess.Play2 || sess.Play3 {
+					// turbo/raw engine quick-pick: URL + metadata (fast path)
 					cmd(s, info, []string{selected.URL, selected.Thumbnail, selected.Title, selected.Duration}, prefix)
 				} else {
 					cmd(s, info, []string{selected.URL}, prefix)
@@ -649,8 +652,11 @@ func (s *Session) HandleMessage(evt *events.Message) {
 			if sess.Video2 {
 				cmdName = "video2"
 			}
+			if sess.Video3 {
+				cmdName = "video3"
+			}
 			if cmd, ok := Commands[cmdName]; ok {
-				if sess.Video2 {
+				if sess.Video2 || sess.Video3 {
 					args := []string{selected.URL, selected.Thumbnail, selected.Title, selected.Duration}
 					if sess.HD {
 						args = append(args, "HD")

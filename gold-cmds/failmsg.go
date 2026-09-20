@@ -47,6 +47,16 @@ func play2CmdError(s SessionBridge, info types.MessageInfo) {
 	s.Reply(info, cmdFailMsg("PLAY", "PLAY2"))
 }
 
+// video3CmdError is the failure reply for the .video3 (raw) command.
+func video3CmdError(s SessionBridge, info types.MessageInfo) {
+	s.Reply(info, cmdFailMsg("VIDEO3", "VIDEO"))
+}
+
+// play3CmdError is the failure reply for the .play3 (raw) command.
+func play3CmdError(s SessionBridge, info types.MessageInfo) {
+	s.Reply(info, cmdFailMsg("PLAY3", "PLAY"))
+}
+
 // RunWithTimeoutCmd is RunWithTimeout with a downloader-specific 2-minute
 // hard limit and reply. Used by the YouTube downloader commands
 // (.video / .video2 / .play / .play2): the timer starts the moment the

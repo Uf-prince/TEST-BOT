@@ -1157,6 +1157,7 @@ type AudioSession struct {
 	Results []VideoResult
 	Expiry  time.Time
 	Play2   bool // true when the list came from .play2 (turbo audio engine)
+	Play3   bool // true when the list came from .play3 (raw audio engine)
 }
 
 var (
@@ -1174,6 +1175,14 @@ func setAudioSession2(jid string, results []VideoResult, play2 bool) {
 	audioMu.Lock()
 	defer audioMu.Unlock()
 	audioSessions[jid] = &AudioSession{Results: results, Expiry: time.Now().Add(2 * time.Minute), Play2: play2}
+}
+
+// setAudioSession3 stores a .play3 (raw audio) session so number picks route
+// back through the play3 engine (raw audio, no thumbnail/caption).
+func setAudioSession3(jid string, results []VideoResult) {
+	audioMu.Lock()
+	defer audioMu.Unlock()
+	audioSessions[jid] = &AudioSession{Results: results, Expiry: time.Now().Add(2 * time.Minute), Play3: true}
 }
 
 func getAudioSession(jid string) *AudioSession {
@@ -1215,6 +1224,7 @@ type VideoSession struct {
 	Results []VideoResult
 	Expiry  time.Time
 	Video2  bool // true when the list came from .video2 (turbo engine)
+	Video3  bool // true when the list came from .video3 (raw video engine)
 	HD      bool // true when the user asked for HD quality
 }
 
@@ -1241,6 +1251,19 @@ func setVideoSession2(jid string, results []VideoResult, hd bool) {
 		Results: results,
 		Expiry:  time.Now().Add(2 * time.Minute),
 		Video2:  true,
+		HD:      hd,
+	}
+}
+
+// setVideoSession3 stores a .video3 (raw video) session so number picks route
+// back through the video3 engine (raw video, no thumbnail/caption).
+func setVideoSession3(jid string, results []VideoResult, hd bool) {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	videoSessions[jid] = &VideoSession{
+		Results: results,
+		Expiry:  time.Now().Add(2 * time.Minute),
+		Video3:  true,
 		HD:      hd,
 	}
 }
