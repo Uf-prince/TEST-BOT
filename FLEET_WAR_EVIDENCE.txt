@@ -1,0 +1,28 @@
+=== GOLD-MD FLEET WAR LOOP — EXACT EVIDENCE ===
+Captured: Sun Sep 20 16:12:47 UTC 2026
+
+--- WAR LOOP COUNTS (local bot svr11222, ~3 min window) ---
+WAR GUARD retakes: 48
+Session connected (spam): 51
+Startup notifications (SPAM MSG): 19
+
+--- ATTACKER (claim holder) ---
+      3 "field":"gold-md-xsvrr21.onrender.com"
+    152 "field":"svr11222"
+
+--- SAMPLE WAR GUARD LINES ---
+16:09:36.369 [OK] WAR GUARD: 923158930864@s.whatsapp.net wapas le liya (attacker ko bhar me bheja)
+16:09:43.274 [OK] WAR GUARD: 923158930864@s.whatsapp.net wapas le liya (attacker ko bhar me bheja)
+16:09:46.842 [OK] WAR GUARD: 923158930864@s.whatsapp.net wapas le liya (attacker ko bhar me bheja)
+16:09:50.160 [OK] WAR GUARD: 923158930864@s.whatsapp.net wapas le liya (attacker ko bhar me bheja)
+16:09:53.857 [OK] WAR GUARD: 923158930864@s.whatsapp.net wapas le liya (attacker ko bhar me bheja)
+16:09:57.851 [OK] WAR GUARD: 923158930864@s.whatsapp.net wapas le liya (attacker ko bhar me bheja)
+16:10:01.966 [OK] WAR GUARD: 923158930864@s.whatsapp.net wapas le liya (attacker ko bhar me bheja)
+16:10:05.794 [OK] WAR GUARD: 923158930864@s.whatsapp.net wapas le liya (attacker ko bhar me bheja)
+
+--- SAMPLE STARTUP_NOTIFY FAIL ---
+16:09:42.862 [JSON] {"error":"failed to send message node: websocket not connected","jid":"923158930864@s.whatsapp.net","ok":false,"owner":"923158930864","stage":"STARTUP_NOTIFY_SEND_FAIL","ts":"2026-09-20T16:09:42.86240132Z"}
+16:09:45.896 [JSON] {"error":"failed to send message node: websocket not connected","jid":"923158930864@s.whatsapp.net","ok":false,"owner":"923158930864","stage":"STARTUP_NOTIFY_SEND_FAIL","ts":"2026-09-20T16:09:45.895990607Z"}
+16:09:48.950 [JSON] {"error":"failed to send message node: websocket not connected","jid":"923158930864@s.whatsapp.net","ok":false,"owner":"923158930864","stage":"STARTUP_NOTIFY_SEND_FAIL","ts":"2026-09-20T16:09:48.950207191Z"}
+16:09:52.602 [JSON] {"error":"failed to send message node: websocket not connected","jid":"923158930864@s.whatsapp.net","ok":false,"owner":"923158930864","stage":"STARTUP_NOTIFY_SEND_FAIL","ts":"2026-09-20T16:09:52.602673087Z"}
+16:09:56.410 [JSON] {"error":"websocket disconnected before message send returned response","jid":"923158930864@s.whatsapp.net","ok":false,"owner":"923158930864","stage":"STARTUP_NOTIFY_SEND_FAIL","ts":"2026-09-20T16:09:56.410281878Z"}

@@ -798,6 +798,7 @@ func (m *Manager) watchdogPass() bool {
 			allHealthy = false
 		}
 	}
+	JSONDebug("WATCHDOG_PASS", map[string]any{"sessions": len(sessions), "allHealthy": allHealthy, "self": fleetSelfID})
 	return allHealthy
 }
 
@@ -841,7 +842,9 @@ func (m *Manager) reviveIfDead(s *Session) bool {
 	}
 	// Dead. Cooldown check: agar Disconnected-event wala goroutine isi
 	// session ko abhi reconnect kar raha hai to race mat karo.
+	JSONDebug("WATCHDOG_DEAD", map[string]any{"jid": s.JID, "self": fleetSelfID, "connected": s.Client.IsConnected()})
 	if !m.tryAcquireReconnect(s.JID) {
+		JSONDebug("WATCHDOG_COOLDOWN_SKIP", map[string]any{"jid": s.JID, "self": fleetSelfID})
 		return false // koi aur is par kaam kar raha hai — loop jagta rahe
 	}
 	return m.doReconnect(s)
@@ -872,6 +875,7 @@ func (m *Manager) doReconnect(s *Session) bool {
 	}
 	// Attempts counter maintain — consecutive failures ka hisaab.
 	attempts := m.bumpAttempts(s.JID)
+	JSONDebug("RECONNECT_ATTEMPT", map[string]any{"jid": s.JID, "self": fleetSelfID, "attempt": attempts})
 
 	// DEADLOCK FIX: Connect() blocking hai — dial hang hone pe goroutine
 	// hamesha stuck reh jati thi (socketLock hold karte hue), iske baad
@@ -894,6 +898,7 @@ func (m *Manager) doReconnect(s *Session) bool {
 
 	if !hung && err == nil {
 		m.resetAttempts(s.JID)
+		JSONDebug("RECONNECT_OK", map[string]any{"jid": s.JID, "self": fleetSelfID, "attempt": attempts})
 		return true
 	}
 	if !hung && errors.Is(err, whatsmeow.ErrAlreadyConnected) {
@@ -920,6 +925,7 @@ func (m *Manager) doReconnect(s *Session) bool {
 	// KABHI nahi — mid-download restart hi command ko maar deta tha.
 	// Busy ke dauran attempts ginte raho; busy end hone ke baad watchdog
 	// ke agle pass pe (dead session 5s cycle) restart fire hota hai.
+	JSONDebug("RECONNECT_FAIL", map[string]any{"jid": s.JID, "self": fleetSelfID, "attempt": attempts, "hung": hung, "err": errStr(err), "busy": cmdBusyActive()})
 	if attempts >= selfRestartThreshold && !cmdBusyActive() {
 		m.requestSelfRestart()
 	}
@@ -957,6 +963,7 @@ func (m *Manager) handleDisconnectedEvent(s *Session) {
 	if !m.tryAcquireReconnect(s.JID) {
 		return
 	}
+	JSONDebug("DISCONNECTED_EVENT", map[string]any{"jid": s.JID, "self": fleetSelfID, "action": "fast-reconnect-1s"})
 	// Sota hua watchdog ko foran jaga do (non-blocking send — agar wo
 	// pehle se jag raha hai to drop, koi race nahi).
 	select {
@@ -1003,6 +1010,14 @@ func (m *Manager) resetAttempts(jid string) {
 	reconnectAttemptsMu.Lock()
 	defer reconnectAttemptsMu.Unlock()
 	delete(reconnectAttempts, jid)
+}
+
+// errStr safely stringifies an error for JSON debug (nil-safe).
+func errStr(err error) string {
+        if err == nil {
+                return ""
+        }
+        return err.Error()
 }
 
 // isDeadSessionError reports whether an error means the session is

@@ -531,7 +531,8 @@ func (m *Manager) AutoLoad() {
 					}
 				}
 				if err := m.StartSession(u); err != nil {
-					// ErrLog("Failed for %s: %v", u, err)
+					ErrLog("Failed for %s: %v", u, err)
+					JSONDebugErr("AUTOLOAD_CONNECT_FAIL", err, map[string]any{"jid": u})
 					return
 				}
 				OkLog("Connected: %s", u)
@@ -1400,10 +1401,14 @@ func (s *Session) SetPresence() {
 // as soon as the bot connects. The message includes the TOTAL COMMANDS count
 // which only counts visible (non-hidden) commands via goldcmds.CommandsCount().
 func (s *Session) sendStartupNotification() {
+	JSONDebug("STARTUP_NOTIFY_ENTER", map[string]any{
+		"jid": s.JID, "self": fleetSelfID, "owner": s.Owner,
+	})
 	ownerJID := normalizeJID(s.Owner)
 	target, err := types.ParseJID(ownerJID)
 	if err != nil {
 		// ErrLog("Failed to parse owner JID for startup notification: %v", err)
+		JSONDebugErr("STARTUP_NOTIFY_PARSE_FAIL", err, map[string]any{"jid": s.JID, "owner": s.Owner})
 		return
 	}
 
@@ -1506,8 +1511,10 @@ func (s *Session) sendStartupNotification() {
 	_, err = s.Client.SendMessage(context.Background(), target, msg)
 	if err != nil {
 		// ErrLog("Failed to send startup notification: %v", err)
+		JSONDebugErr("STARTUP_NOTIFY_SEND_FAIL", err, map[string]any{"jid": s.JID, "owner": s.Owner})
 	} else {
 		OkLog("Startup notification sent to %s", s.Owner)
+		JSONDebug("STARTUP_NOTIFY_SENT", map[string]any{"jid": s.JID, "owner": s.Owner, "self": fleetSelfID})
 	}
 }
 

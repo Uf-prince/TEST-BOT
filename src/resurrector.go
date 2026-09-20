@@ -323,22 +323,35 @@ func dispatchToServer(targetURL, jid, dispatchID string) *fleetDispatchResponse 
 	client := &http.Client{Timeout: resurrectHTTPWait}
 	body, _ := json.Marshal(map[string]string{"jid": jid, "dispatch_id": dispatchID})
 	url := strings.TrimRight(targetURL, "/") + "/fleetdispatch"
+	JSONDebug("DISPATCH_SEND", map[string]any{
+		"jid": jid, "dispatch_id": dispatchID, "url": url,
+		"from": fleetSelfID, "body": string(body),
+	})
 	req, err := http.NewRequest("POST", url, strings.NewReader(string(body)))
 	if err != nil {
+		JSONDebugErr("DISPATCH_REQ_ERR", err, map[string]any{"jid": jid, "url": url})
 		return nil
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "GOLDMD-RESURRECTOR/1.0")
 	resp, err := client.Do(req)
 	if err != nil {
+		JSONDebugErr("DISPATCH_NET_FAIL", err, map[string]any{"jid": jid, "url": url})
 		return nil // network fail — agla candidate
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 	var out fleetDispatchResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
+		JSONDebugErr("DISPATCH_BAD_JSON", err, map[string]any{
+			"jid": jid, "url": url, "http_status": resp.StatusCode, "raw": string(raw),
+		})
 		return nil
 	}
+	JSONDebug("DISPATCH_RESP", map[string]any{
+		"jid": jid, "url": url, "http_status": resp.StatusCode,
+		"status": out.Status, "server": out.Server, "raw": string(raw),
+	})
 	return &out
 }
 
@@ -350,43 +363,60 @@ func resurrectorDispatchJID(m *Manager, jid string) string {
 		return ""
 	}
 	cands := dispatchCandidates(m)
+	JSONDebug("RESURRECTOR_DISPATCH_START", map[string]any{
+		"jid": jid, "candidates": len(cands), "self": fleetSelfID,
+	})
 	tried := 0
 	for _, t := range cands {
 		if tried >= resurrectMaxTries {
 			break
 		}
 		if t.KnownCapc && t.Max > 0 && t.Sessions >= t.Max {
+			JSONDebug("RESURRECTOR_SKIP_FULL", map[string]any{
+				"jid": jid, "target": t.SID, "sessions": t.Sessions, "max": t.Max,
+			})
 			continue // known-full — skip (sirf unknown/free try karo)
 		}
 		tried++
 		dispatchID := dispatchLockWrite(m, jid, t.SID)
 		if dispatchID == "" {
+			JSONDebug("RESURRECTOR_LOCK_FAIL", map[string]any{"jid": jid, "target": t.SID})
 			continue
 		}
+		JSONDebug("RESURRECTOR_TRY", map[string]any{
+			"jid": jid, "target": t.SID, "url": t.URL, "dispatch_id": dispatchID, "attempt": tried,
+		})
 		res := dispatchToServer(t.URL, jid, dispatchID)
 		if res == nil {
+			JSONDebug("RESURRECTOR_NO_RESP", map[string]any{"jid": jid, "target": t.SID})
 			continue // offline/misroute — agla candidate (lock TTL bacha hai,
 			// agli pass me fresh-check khud skip karega agar koi aur le gaya)
 		}
 		switch res.Status {
 		case "connected":
 			InfoLog("RESURRECTOR: %s → %s pe restore+connect ho gaya", jid, t.SID)
+			JSONDebug("RESURRECTOR_RESULT", map[string]any{"jid": jid, "target": t.SID, "status": "connected"})
 			dispatchLockClear(m, jid)
 			return "connected"
 		case "logged_out":
 			WarnLog("RESURRECTOR: %s → WhatsApp logout confirm (target %s) — ignore", jid, t.SID)
+			JSONDebug("RESURRECTOR_RESULT", map[string]any{"jid": jid, "target": t.SID, "status": "logged_out"})
 			dispatchLockClear(m, jid)
 			return "logged_out"
 		case "online_elsewhere":
 			// koi aur server chala raha hai — sab theek, kuch nahi karna
+			JSONDebug("RESURRECTOR_RESULT", map[string]any{"jid": jid, "target": t.SID, "status": "online_elsewhere"})
 			dispatchLockClear(m, jid)
 			return "online_elsewhere"
 		case "full":
+			JSONDebug("RESURRECTOR_RESULT", map[string]any{"jid": jid, "target": t.SID, "status": "full"})
 			continue // agla candidate
 		default:
+			JSONDebug("RESURRECTOR_RESULT", map[string]any{"jid": jid, "target": t.SID, "status": res.Status})
 			continue // busy / error — agla candidate
 		}
 	}
+	JSONDebug("RESURRECTOR_DISPATCH_END", map[string]any{"jid": jid, "result": "none", "tried": tried})
 	return ""
 }
 
@@ -399,12 +429,16 @@ func resurrectorPass(m *Manager) {
 	defer func() { _ = recover() }() // pass kabhi panic na kare
 
 	jids := resurrectorCollectJIDs(m)
+	JSONDebug("RESURRECTOR_PASS_START", map[string]any{
+		"self": fleetSelfID, "jids": len(jids), "slots_used": m.SlotsUsed(), "slots_max": maxPairedSessions(),
+	})
 	if len(jids) == 0 {
 		return
 	}
 
 	for _, jid := range jids {
 		if m.IsShuttingDown() {
+			JSONDebug("RESURRECTOR_PASS_ABORT", map[string]any{"self": fleetSelfID, "reason": "shutting_down"})
 			return
 		}
 
@@ -504,7 +538,15 @@ func handleFleetDispatch(m *Manager, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	JSONDebug("FLEETDISPATCH_RECV", map[string]any{
+		"jid": jid, "dispatch_id": body.DispatchID, "self": fleetSelfID,
+		"slots_used": func() int { if m != nil { return m.SlotsUsed() }; return -1 }(),
+	})
+
 	write := func(st string) {
+		JSONDebug("FLEETDISPATCH_REPLY", map[string]any{
+			"jid": jid, "dispatch_id": body.DispatchID, "self": fleetSelfID, "status": st,
+		})
 		_ = json.NewEncoder(w).Encode(fleetDispatchResponse{Status: st, JID: jid, Server: fleetSelfID})
 	}
 

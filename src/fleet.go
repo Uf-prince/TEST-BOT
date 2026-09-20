@@ -247,6 +247,9 @@ func fleetWatchdog() {
 			return
 		}
 
+		JSONDebug("FLEET_WATCHDOG_TICK", map[string]any{
+			"self": fleetSelfID, "tick": tick, "slots_used": fleetMgr.SlotsUsed(),
+		})
 		fleetHeartbeat()
 		fleetPushEgress()
 		fleetWarnPreCrash()
@@ -299,6 +302,9 @@ func fleetHeartbeat() {
 		strconv.Itoa(maxPairedSessions()) + "|" +
 		fleetSelfURL()
 	_, _ = fleetMgr.Redis.cmd("HSET", fleetServersHash, fleetSelfID, val)
+	JSONDebug("FLEET_HEARTBEAT", map[string]any{
+		"self": fleetSelfID, "value": val, "slots_used": fleetMgr.SlotsUsed(), "slots_max": maxPairedSessions(),
+	})
 }
 
 // fleetSelfURL: is server ka PUBLIC URL (fleet discoverability — owner fix
@@ -786,6 +792,12 @@ func fleetRestoreAndConnect(jid string) {
 	}
 	now := strconv.FormatInt(time.Now().Unix(), 10)
 
+	// FULL-TO-FULL JSON DEBUG (owner order): claim flow ka poora state.
+	JSONDebug("FLEET_CLAIM_START", map[string]any{
+		"jid": jid, "self": fleetSelfID, "slots": m.SlotsUsed(), "max": maxPairedSessions(),
+		"deviceLocal": fleetDeviceExists(jid),
+	})
+
 	// 0. FAILOVER detection — orphanSweep ne dead-holder claims release
 	// kiye the (isliye holders ab empty lagte hain) + failover MARKER
 	// save kiya tha (goldmd:fleet:fail:<jid> = dead sid). marker se dead
@@ -797,6 +809,7 @@ func fleetRestoreAndConnect(jid string) {
 
 	// 1. claim stamp daalo.
 	_, _ = m.Redis.cmd("HSET", fleetClaimPrefix+jid, fleetSelfID, now)
+	JSONDebug("FLEET_CLAIM_STAMP", map[string]any{"jid": jid, "self": fleetSelfID, "ts": now, "takeoverFrom": takeoverFrom})
 
 	// 2. race window — doosre servers ko bhi ye milega hoga.
 	time.Sleep(fleetRaceWait)
@@ -814,6 +827,7 @@ func fleetRestoreAndConnect(jid string) {
 			break
 		}
 	}
+	JSONDebug("FLEET_CLAIM_TIEBREAK", map[string]any{"jid": jid, "self": fleetSelfID, "myTS": myTS, "holders": holders, "won": won})
 	if !won {
 		_, _ = m.Redis.cmd("HDEL", fleetClaimPrefix+jid, fleetSelfID)
 		return // doosre server ne jeet liya — hum chup
@@ -826,6 +840,7 @@ func fleetRestoreAndConnect(jid string) {
 	// chalane do — double-connect war WhatsApp logout karva sakta hai.
 	if fleetSessionOnlineElsewhere(jid) {
 		_, _ = m.Redis.cmd("HDEL", fleetClaimPrefix+jid, fleetSelfID)
+		JSONDebug("FLEET_CLAIM_ONLINE_ELSEWHERE", map[string]any{"jid": jid, "self": fleetSelfID, "action": "release-claim-no-reconnect"})
 		InfoLog("FLEET: session %s already ONLINE on another server — claim released, no reconnect", jid)
 		return
 	}
@@ -877,6 +892,7 @@ func fleetRestoreAndConnect(jid string) {
 		WarnLog("FLEET: connect failed for %s: %v", jid, err)
 		return
 	}
+	JSONDebug("FLEET_CLAIM_CONNECTED", map[string]any{"jid": jid, "self": fleetSelfID, "takeoverFrom": takeoverFrom})
 	OkLog("FLEET: session %s restored from Storj and connected (server %s)", jid, fleetSelfID)
 
 	// FAILOVER: ye session kisi aur (dead) server ka tha — owner ko batado
@@ -899,8 +915,10 @@ func fleetRestoreAndConnect(jid string) {
 // dusre server pe online hoon, reconnect ho gaya".
 func fleetNotifyFailover(jid string, deadServer string) {
 	defer func() { _ = recover() }()
+	JSONDebug("FAILOVER_NOTIFY_ENTER", map[string]any{"jid": jid, "deadServer": deadServer, "self": fleetSelfID})
 	m := fleetMgr
 	if m == nil {
+		JSONDebug("FAILOVER_NOTIFY_SKIP", map[string]any{"jid": jid, "reason": "no manager"})
 		return
 	}
 	// client settle hone do (connect ke turant baad message queues full
@@ -950,8 +968,10 @@ func fleetNotifyFailover(jid string, deadServer string) {
 	})
 	if err != nil {
 		WarnLog("FLEET: failover notify send failed for %s: %v", jid, err)
+		JSONDebugErr("FAILOVER_NOTIFY_SEND_FAIL", err, map[string]any{"jid": jid, "owner": ownerJID.String()})
 	} else {
 		OkLog("FLEET: failover notification sent to owner of %s (from server %s → %s)", jid, deadNum, srvNum)
+		JSONDebug("FAILOVER_NOTIFY_SENT", map[string]any{"jid": jid, "owner": ownerJID.String(), "deadNum": deadNum, "srvNum": srvNum, "self": fleetSelfID})
 	}
 }
 
@@ -1266,6 +1286,7 @@ func fleetOwnerFor(jid string) string {
 // owner pairing panel se aata hai — Redis "owner" setting me save hota hai
 // (failover notification isi JID pe jata hai; fleetOwnerFor padhta hai).
 func fleetOnPairSuccess(jid string, owner string) {
+	JSONDebug("FLEET_PAIR_SUCCESS", map[string]any{"jid": jid, "owner": owner, "self": fleetSelfID})
 	fleetSaveBlob(jid)
 	go func() {
 		defer func() { _ = recover() }()
@@ -1288,6 +1309,7 @@ func fleetOnPairSuccess(jid string, owner string) {
 
 // fleetOnConnected: session live hua → claim refresh (hum iske owner hain).
 func fleetOnConnected(jid string) {
+	JSONDebug("FLEET_ON_CONNECTED", map[string]any{"jid": jid, "self": fleetSelfID})
 	go func() {
 		defer func() { _ = recover() }()
 		m := fleetMgr

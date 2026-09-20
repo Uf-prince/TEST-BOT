@@ -1,5 +1,5 @@
 {
-  "_comment": "GOLD-MD multi-server panel + hidden .server menu config. 200 Render free deployments (512MB RAM / 5GB bandwidth each, max 2 pairings per server). SERVER 1-13 owner ki updated list se (xsvr1-4, botxd2, svrr10/11/12, svrr7/8/9, svrr13, svrr13). SERVER 14-200 = xsvr5-xsvr191 (auto-generated). Owner baad me on kar dega \u2014 off servers .server report me STOPPED dikhenge.",
+  "_comment": "GOLD-MD multi-server panel config. All 200 Render servers ACTIVE. Local test servers removed.",
   "maxPerServer": 2,
   "servers": [
     {

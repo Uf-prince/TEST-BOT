@@ -287,6 +287,65 @@ func serversJSONPath() string {
 	return "servers.json"
 }
 
+// stripJSONComments removes `//` line comments and `/* */` block comments
+// from a JSONC-style document WITHOUT touching comment-like sequences inside
+// quoted strings (e.g. a URL "https://..." must survive intact). Owner order:
+// servers.json me kuch server lines ko `//` se TEMP comment kiya jata hai.
+func stripJSONComments(in []byte) []byte {
+	out := make([]byte, 0, len(in))
+	inStr := false
+	esc := false
+	for i := 0; i < len(in); i++ {
+		c := in[i]
+		if inStr {
+			out = append(out, c)
+			if esc {
+				esc = false
+				continue
+			}
+			if c == '\\' {
+				esc = true
+				continue
+			}
+			if c == '"' {
+				inStr = false
+			}
+			continue
+		}
+		// not in string
+		if c == '"' {
+			inStr = true
+			out = append(out, c)
+			continue
+		}
+		if c == '/' && i+1 < len(in) {
+			n := in[i+1]
+			if n == '/' {
+				// line comment -> skip till newline (keep the newline)
+				i += 2
+				for i < len(in) && in[i] != '\n' {
+					i++
+				}
+				if i < len(in) {
+					out = append(out, '\n')
+				}
+				continue
+			}
+			if n == '*' {
+				// block comment -> skip till */
+				i += 2
+				for i+1 < len(in) && !(in[i] == '*' && in[i+1] == '/') {
+					i++
+				}
+				i++ // land on '/'
+				continue
+			}
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 // loadServersConfig loads servers.json into serversCfg. OWNER ORDER: it
 // re-reads the file whenever its mtime changes (not just once at boot), so
 // after .svrchange pushes new links the running bot picks them up —
@@ -309,6 +368,11 @@ func loadServersConfig() {
 		}
 		return
 	}
+	// OWNER ORDER: servers.json me `//` commented lines allowed hain (owner
+	// kuch server lines ko TEMP comment karta hai). Standard JSON comments
+	// support nahi karta, is liye pehle JSONC-style comments strip karte hain
+	// (string-safe: quoted strings ke andar `//` ko haath nahi lagate).
+	raw = stripJSONComments(raw)
 	var cfg serversConfig
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		// FALLBACK: file present but invalid JSON -> keep previous/defaults.

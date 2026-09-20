@@ -107,7 +107,7 @@ type storjShard struct {
 	access string
 	secret string
 	bucket string
-	client *minio.Client
+	client objStore // TEMP: Storj (minioStore) -> LOCAL DB (localStore)
 }
 
 type StorjStore struct {
@@ -119,6 +119,11 @@ type StorjStore struct {
 
 var storj = &StorjStore{}
 
+// TEMP: Storj init commented out (local DB active). Ye blank reference
+// `credentials` import ko zinda rakhta hai taake Storj block wapas
+// uncomment karne pe turant compile ho jaye.
+var _ = credentials.NewStaticV4
+
 // storjDebug prints a STORJ_* JSON debug line, always-on (not gated by
 // GOLDMD_DEBUG) so the owner can verify everything from the logs.
 // ALL STORJ DEBUG CONSOLE LOGS — COMMENTED OUT (owner requested all debugs off).
@@ -127,21 +132,18 @@ var storj = &StorjStore{}
 // stderr pe jaati hai (bot_*.log me) — Storadera data-flow (ja raha / aa raha
 // kya hai) is se verify hota hai. Tag [KV-JSON] grep-friendly hai.
 func storjDebug(stage string, fields map[string]any) {
-	// OWNER REQUEST (2026-09-16): "sare json logs comment kr" — ALL JSON debug
-	// output DISABLED. storjDebug is a NO-OP so every call site stays compiled
-	// (no dead-code churn) but prints nothing. Uncomment body to re-enable.
-	// out := map[string]any{"stage": stage, "ts": time.Now().Format(time.RFC3339Nano)}
-	// for k, v := range fields {
-	// 	out[k] = v
-	// }
-	// raw, err := json.Marshal(out)
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "%s [KV-JSON] marshal-err: %v stage=%s\n", time.Now().Format("15:04:05"), err, stage)
-	// 	return
-	// }
-	// fmt.Fprintf(os.Stderr, "%s [KV-JSON] %s\n", time.Now().Format("15:04:05"), string(raw))
-	_ = stage
-	_ = fields
+	// FULL DEBUGGING ENABLED (owner order): har storage stage ki ek JSON line
+	// stderr pe jaati hai (bot_11222.log me) — [KV-JSON] tag grep-friendly.
+	out := map[string]any{"stage": stage, "ts": time.Now().Format(time.RFC3339Nano)}
+	for k, v := range fields {
+		out[k] = v
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s [KV-JSON] marshal-err: %v stage=%s\n", time.Now().Format("15:04:05.000"), err, stage)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%s [KV-JSON] %s\n", time.Now().Format("15:04:05.000"), string(raw))
 }
 
 // hardcodedStorjShards — embedded credentials (NO .env FILE — EVER) so
@@ -190,30 +192,32 @@ func InitStorj() error {
 	defer storj.mu.Unlock()
 
 	storj.shards = storj.shards[:0]
-	ctx := context.Background()
 
+	// ════════════════════════════════════════════════════════════════════════
+	//   TEMP TEST (owner order): Storj/Storadera buckets COMMENTED OUT.
+	//   Unki jagah apna LOCAL DATABASE (SQLite) use ho raha hai — saara
+	//   session/config data + saare debugs ek hi local DB me aate hain.
+	//
+	//   Wapas Storj pe jaana ho to neeche wala commented block uncomment karo
+	//   aur local-store block comment kar do.
+	// ════════════════════════════════════════════════════════════════════════
+	ctx := context.Background()
 	for i := 1; i <= 10; i++ {
-		// OWNER DIRECTIVE (2026-09-16): env NAHI — seedha hardcoded creds.
-		// (Purana Storj env-set (STORJ_ACCESS_KEY_1..10) agar kahin host pe
-		// pada ho to wo IGNORE hoga — hardcodedStorjShards hi source of truth.)
 		access := hardcodedStorjShards[i-1][0]
 		secret := hardcodedStorjShards[i-1][1]
 		bucket := hardcodedStorjShards[i-1][2]
 		if access == "" || secret == "" || bucket == "" {
 			continue
 		}
-
 		cli, err := minio.New(storjEndpoint, &minio.Options{
 			Creds:  credentials.NewStaticV4(access, secret, ""),
 			Secure: true,
-			Region: storjRegion, // Storadera eu-east-1 (hardcoded const).
+			Region: storjRegion,
 		})
 		if err != nil {
 			storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "ok": false})
 			return fmt.Errorf("storj shard %d: new client: %w", i, err)
 		}
-
-		// Ensure bucket exists (idempotent).
 		exists, err := cli.BucketExists(ctx, bucket)
 		if err != nil {
 			storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "op": "BucketExists", "ok": false})
@@ -224,28 +228,50 @@ func InitStorj() error {
 				storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "error": err.Error(), "op": "MakeBucket", "ok": false})
 				return fmt.Errorf("storj shard %d: make bucket: %w", i, err)
 			}
-			storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "ok": true, "op": "MakeBucket", "created": true})
-		} else {
-			storjDebug("STORJ_INIT", map[string]any{"shard": i, "bucket": bucket, "ok": true, "op": "BucketExists", "created": false})
 		}
-
 		storj.shards = append(storj.shards, &storjShard{
-			idx:    i,
-			access: access,
-			secret: secret,
-			bucket: bucket,
-			client: cli,
+			idx: i, access: access, secret: secret, bucket: bucket, client: &minioStore{c: cli},
 		})
 	}
 
 	if len(storj.shards) == 0 {
-		storjDebug("STORJ_INIT", map[string]any{"ok": false, "reason": "no hardcoded credentials (hardcodedStorjShards empty)", "shardCount": 0})
-		return errors.New("storj: hardcodedStorjShards me koi credential set configured nahi hai")
+		storjDebug("STORJ_INIT", map[string]any{"ok": false, "reason": "no shards", "shardCount": 0})
+		return errors.New("storj: koi shard configured nahi hai")
 	}
 	storj.ready = true
-	storjDebug("STORJ_INIT", map[string]any{"ok": true, "shardCount": len(storj.shards), "buckets": storjBucketList(), "maxBytes": maxStorjBytes, "ttlHours": int(ttlDuration.Hours()), "guardIntervalHours": int(guardInterval.Hours())})
+	storjDebug("STORJ_INIT", map[string]any{"ok": true, "backend": "storadera-s3", "shardCount": len(storj.shards), "buckets": storjBucketList(), "maxBytes": maxStorjBytes, "ttlHours": int(ttlDuration.Hours()), "guardIntervalHours": int(guardInterval.Hours())})
 	return nil
 }
+
+	/* TEMP: LOCAL DB backend DISABLED — Storj/Storadera ACTIVE
+	// ── LOCAL DB backend (ACTIVE) ──────────────────────────────────────────
+	ls, err := InitLocalStore()
+	if err != nil {
+		storjDebug("LOCALDB_INIT", map[string]any{"ok": false, "error": err.Error()})
+		return fmt.Errorf("localdb init: %w", err)
+	}
+	// 10 logical shards — sab ek hi local DB pe point karte hain (bucket PK ka
+	// hissa hai). Is se sharding behaviour (FNV-1a % 10) bilkul same rehta hai.
+	for i := 1; i <= 10; i++ {
+		bucket := hardcodedStorjShards[i-1][2]
+		if bucket == "" {
+			bucket = fmt.Sprintf("gold%d", i)
+		}
+		storj.shards = append(storj.shards, &storjShard{
+			idx:    i,
+			bucket: bucket,
+			client: ls,
+		})
+	}
+
+	if len(storj.shards) == 0 {
+		storjDebug("LOCALDB_INIT", map[string]any{"ok": false, "reason": "no shards", "shardCount": 0})
+		return errors.New("localdb: koi shard configured nahi hai")
+	}
+	storj.ready = true
+	storjDebug("LOCALDB_INIT", map[string]any{"ok": true, "backend": "local-sqlite", "shardCount": len(storj.shards), "buckets": storjBucketList(), "maxBytes": maxStorjBytes, "ttlHours": int(ttlDuration.Hours()), "guardIntervalHours": int(guardInterval.Hours())})
+	return nil
+} */
 
 func storjBucketList() []string {
 	out := make([]string, 0, len(storj.shards))

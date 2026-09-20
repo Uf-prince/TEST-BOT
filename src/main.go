@@ -86,7 +86,7 @@ func main() {
 	// Startup sweep (leaked files clean) + har 10 min periodic sweep.
 	tmpSweepInit()
 
-	InfoLog("Starting GOLD-MD server...")
+	InfoLog("Starting GOLD-MD server... [BUILD=FRESH-LOCALDB-DEBUG-2]")
 	cfg := LoadConfig()
 
 	//	JSONDebug("BOOT_CONFIG", map[string]any{

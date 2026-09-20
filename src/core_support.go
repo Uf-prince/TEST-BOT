@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	signalLogger "go.mau.fi/libsignal/logger"
 	"go.mau.fi/whatsmeow/types"
@@ -10,6 +11,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -184,67 +186,89 @@ func initDebug() bool {
 }
 
 // ============================================================================
-// ALL LOG FUNCTIONS ARE NO-OPS (silent) — owner requested zero console output.
-// To re-enable any of these, uncomment the fmt.Fprintf lines inside each body.
+// FULL DEBUGGING ENABLED (owner order — "full debugging laga do hr jga").
+// Har log line stderr pe jaati hai (bot_11222.log me) — timestamp + tag ke
+// sath. Ye TEMP TEST build hai: saara fleet claim / watchdog / reconnect /
+// KV / storage flow visible hoga.
 // ============================================================================
 
-func errLine(tag, msg string, args ...any) {
-	// DISABLED — no console output
-	_ = tag
-	_ = msg
-	_ = args
+// logMu serialises writes so concurrent goroutines ke lines interleave na hon.
+var logMu sync.Mutex
+
+// logLine writes one timestamped line to stderr (and stdout fallback).
+func logLine(tag, msg string, args ...any) {
+	logMu.Lock()
+	defer logMu.Unlock()
+	line := msg
+	if len(args) > 0 {
+		line = fmt.Sprintf(msg, args...)
+	}
+	fmt.Fprintf(os.Stderr, "%s [%s] %s\n", time.Now().Format("15:04:05.000"), tag, line)
 }
 
+func errLine(tag, msg string, args ...any) { logLine("ERR:"+tag, msg, args...) }
+
 func infoLine(tag, color, msg string, args ...any) {
-	// DISABLED — no console output
-	_ = tag
 	_ = color
-	_ = msg
-	_ = args
+	logLine(tag, msg, args...)
 }
 
 // When GOLDMD_DEBUG is set, these print. Otherwise they are silent (original behavior).
-// NOW: always silent (no-op) per owner request.
-func InfoLog(msg string, args ...any)  { _ = msg; _ = args }
-func WarnLog(msg string, args ...any)  { _ = msg; _ = args }
-func OkLog(msg string, args ...any)    { _ = msg; _ = args }
-func DebugLog(msg string, args ...any) { _ = msg; _ = args }
+// NOW: FULL DEBUGGING — sab print hote hain (owner order).
+func InfoLog(msg string, args ...any)  { logLine("INFO", msg, args...) }
+func WarnLog(msg string, args ...any)  { logLine("WARN", msg, args...) }
+func OkLog(msg string, args ...any)    { logLine("OK", msg, args...) }
+func DebugLog(msg string, args ...any) { logLine("DEBUG", msg, args...) }
 
-func ErrLog(msg string, args ...any) { _ = msg; _ = args }
+func ErrLog(msg string, args ...any) { logLine("ERROR", msg, args...) }
 
 func FatalLog(msg string, args ...any) {
-	// DISABLED — no console output, but still exit on fatal
-	_ = msg
-	_ = args
+	logLine("FATAL", msg, args...)
 	os.Exit(1)
 }
 
 // antiDebugAlwaysOn forces the antidelete/antiedit JSON debugging in the MAIN
 // package to ALWAYS print (regardless of GOLDMD_DEBUG).
-// NOW: disabled — all JSONDebug calls are silent no-ops.
+// NOW: enabled — all JSONDebug calls print.
 const antiDebugAlwaysOn = true
 
 // isAntiStage reports whether a JSONDebug stage belongs to the
 // antidelete/antiedit/antistatus subsystem (so it should always be printed).
-// NOW: always returns false so JSONDebug never prints.
+// NOW: always returns true so JSONDebug always prints.
 func isAntiStage(stage string) bool {
 	_ = stage
-	return false
+	return true
 }
 
 // JSONDebug prints a structured JSON log line tagged with a stage label.
-// NOW: silent no-op per owner request (zero console output).
+// NOW: FULL DEBUGGING — always prints.
 func JSONDebug(stage string, fields map[string]any) {
-	_ = stage
-	_ = fields
+	out := map[string]any{"stage": stage, "ts": time.Now().Format(time.RFC3339Nano)}
+	for k, v := range fields {
+		out[k] = v
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		logLine("JSON", "marshal-err: %v stage=%s", err, stage)
+		return
+	}
+	logMu.Lock()
+	fmt.Fprintf(os.Stderr, "%s [JSON] %s\n", time.Now().Format("15:04:05.000"), string(raw))
+	logMu.Unlock()
 }
 
 // JSONDebugErr is a convenience wrapper that prints an error-tagged JSON line.
-// NOW: silent no-op per owner request.
+// NOW: FULL DEBUGGING — always prints.
 func JSONDebugErr(stage string, err error, extra map[string]any) {
-	_ = stage
-	_ = err
-	_ = extra
+	f := map[string]any{}
+	for k, v := range extra {
+		f[k] = v
+	}
+	if err != nil {
+		f["error"] = err.Error()
+	}
+	f["ok"] = err == nil
+	JSONDebug(stage, f)
 }
 
 func jsonCompact(m map[string]any) string {
