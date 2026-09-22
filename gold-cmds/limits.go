@@ -1,26 +1,18 @@
 package goldcmds
 
 // ============================================================================
-// GOLD-MD — Command Limits (3-min watchdog + 700MB max file)
+// GOLD-MD — Command Limits (3-min watchdog; NO file-size cap)
 // File: limits.go
 // ============================================================================
-// PUBLIC RELEASE SAFETY (10 users):
+// OWNER ORDER (2026): the 700MB file-size cap is REMOVED — the bot now runs
+// on Heroku (plenty of RAM/disk/bandwidth), so there is NO download limit.
 //
-//   1. Every media command runs under the 3-minute hard watchdog
+//   1. Every media command still runs under the 3-minute hard watchdog
 //      (cmdTimeout in timeout.go). On timeout: context cancelled → every
 //      ffmpeg/ffprobe/gs/brotli/libreoffice/python process tied to that
-//      context is KILLED instantly (no zombie processes eating CPU on the
-//      Modal container) and the user gets "*TRY AGAIN LATER*".
+//      context is KILLED instantly and the user gets "*TRY AGAIN LATER*".
 //
-//   2. 700MB hard cap on any file the bot will process. Checked BEFORE the
-//      download (from WhatsApp message metadata — the fileLength field) so
-//      oversized media is rejected instantly without loading it into RAM.
-//      Double-checked after download as a safety net.
-//
-//   3. 0% SPEED IMPACT: the watchdog is a pure goroutine + select — fast
-//      commands finish exactly as before, the timer only fires on a hang.
-//      The size pre-check is a single integer compare on already-received
-//      message metadata. Nothing blocks, nothing polls, nothing sleeps.
+//   2. NO file-size cap. The old 700MB pre-check / post-check are gone.
 // ============================================================================
 
 import (
@@ -30,13 +22,14 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// maxMediaBytes is the hard cap on any media file the bot will process.
-// 700MB as configured for public release. Media above this size is rejected
-// instantly (pre-download via message metadata, post-download as a net).
-const maxMediaBytes = 700 * 1024 * 1024
+// maxMediaBytes — OWNER ORDER (2026): the 700MB cap is REMOVED. The bot now
+// runs on Heroku (plenty of RAM/disk/bandwidth), so there is NO file-size
+// limit. Kept as a very large sentinel so the (now no-op) checks still compile.
+const maxMediaBytes = 1 << 62
 
-// mediaTooBigText is the reply for oversized media.
-const mediaTooBigText = "*🔰 FILE TOO BIG — MAX 700MB*"
+// mediaTooBigText is the reply for oversized media. With the cap removed this
+// never fires, but the string is kept for compatibility.
+const mediaTooBigText = "*🔰 FILE TOO BIG*"
 
 // mediaTooBigReply sends the oversized-file reply once.
 func mediaTooBigReply(s SessionBridge, info types.MessageInfo) {
@@ -93,9 +86,10 @@ func mediaPrecheckSize(s SessionBridge, info types.MessageInfo) uint64 {
 	return 0
 }
 
-// bytesWithinLimit is the post-download safety net (len(data) check).
+// bytesWithinLimit — OWNER ORDER (2026): NO size limit. Always true.
 func bytesWithinLimit(n int) bool {
-	return n <= maxMediaBytes
+	_ = n
+	return true
 }
 
 // ctxTimedOut reports whether the watchdog context has been cancelled
@@ -117,20 +111,11 @@ func ctxTimedOut(ctx context.Context) bool {
 //	ok=false    → no media found / download failed; the caller shows its
 //	              own command-specific help or error text.
 func downloadMediaLimited(s SessionBridge, info types.MessageInfo) (data []byte, mime string, ok bool, tooBig bool) {
-	// ── 700MB PRE-CHECK: metadata only, instant reject, no download ──
-	if fl := mediaPrecheckSize(s, info); fl > maxMediaBytes {
-		mediaTooBigReply(s, info)
-		return nil, "", false, true
-	}
-
+	// OWNER ORDER (2026): the 700MB pre-check / post-check are REMOVED — no
+	// file-size limit on Heroku. Download whatever the user sent.
 	data, mime, ok = s.DownloadQuotedMedia(info)
 	if !ok || len(data) == 0 {
 		return nil, "", false, false
-	}
-	// ── 700MB POST-CHECK: safety net for missing metadata ──
-	if !bytesWithinLimit(len(data)) {
-		mediaTooBigReply(s, info)
-		return nil, "", false, true
 	}
 	return data, mime, true, false
 }

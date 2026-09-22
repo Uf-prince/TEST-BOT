@@ -41,7 +41,7 @@ import (
 const (
 	yt2RaceTimeout = 8 * time.Second   // overall player race deadline
 	yt2DlTimeout   = 150 * time.Second // media download deadline
-	yt2MaxWASend   = 95 * 1024 * 1024  // WhatsApp-safe cap (fallback to 360p above)
+	// OWNER ORDER (2026): yt2MaxWASend (95MB cap) REMOVED — no size limit.
 )
 
 // yt2HTTP is the shared HTTP client for the player race.
@@ -555,13 +555,8 @@ func downloadAndSendVideo2(ctx context.Context, s SessionBridge, info types.Mess
 	var dlErr error
 	if useHD {
 		finalPath, dlErr = yt2FetchMerged(ctx, dlClient, vURL, aURL)
-		// WhatsApp-safe size cap → fall back to 360p for huge HD files
-		if dlErr == nil && st.itag18 != "" {
-			if fi, err := os.Stat(finalPath); err == nil && fi.Size() > yt2MaxWASend {
-				os.Remove(finalPath)
-				finalPath, dlErr = yt2FetchSimple(ctx, dlClient, st.itag18)
-			}
-		}
+		// OWNER ORDER (2026): the 95MB WhatsApp-safe cap is REMOVED — HD videos
+		// of any size are sent as-is (no 360p fallback on size).
 		// HD pipeline failed → try 360p before giving up
 		if dlErr != nil && st.itag18 != "" {
 			finalPath, dlErr = yt2FetchSimple(ctx, dlClient, st.itag18)

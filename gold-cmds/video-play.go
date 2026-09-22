@@ -39,8 +39,8 @@ const (
 	ytLoaderAPI      = "https://loader.to/ajax/download.php"
 	ytLoaderProgress = "https://lto2.affadaffa.com/api/progress"
 
-	maxVideoMB      = 90
-	maxVideoBytes   = maxVideoMB * 1024 * 1024
+	// OWNER ORDER (2026): the 90MB video cap is REMOVED — no download-size
+	// limit on Heroku. (maxVideoMB / maxVideoBytes deleted.)
 	videoMaxResults = 15
 
 	// ── STORJ CONFIG ────────────────────────────────────────────────────────

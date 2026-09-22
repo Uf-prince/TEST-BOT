@@ -349,12 +349,9 @@ func compressSelfFileName(m *waProtoMessage) string {
 // compressDownloadMedia downloads the media bytes for the detected target
 // (quoted first, else self). Returns bytes, mimetype, ok.
 func compressDownloadMedia(s SessionBridge, info types.MessageInfo) ([]byte, string, bool, bool) {
-	// ── 700MB PRE-CHECK: metadata only, no download, instant reject ──
-	if fl := mediaPrecheckSize(s, info); fl > maxMediaBytes {
-		mediaTooBigReply(s, info)
-		return nil, "", false, true
-	}
-
+	// OWNER ORDER (2026): the 700MB pre-check / post-check are REMOVED — no
+	// file-size limit on Heroku. Compress whatever the user sent.
+	//
 	// DownloadQuotedMedia on the bridge handles quoted OR direct media of
 	// the INCOMING message (it walks extractMediaMessage which prefers
 	// direct media, then view-once wrappers, then quoted).
@@ -369,10 +366,6 @@ func compressDownloadMedia(s SessionBridge, info types.MessageInfo) ([]byte, str
 			// Pure text reply → quoted media download path.
 			data, mime, ok := s.DownloadQuotedMedia(info)
 			if ok && len(data) > 0 {
-				if !bytesWithinLimit(len(data)) { // 700MB post-download net
-					mediaTooBigReply(s, info)
-					return nil, "", false, true
-				}
 				return data, mime, true, false
 			}
 			return nil, "", false, false
@@ -380,10 +373,6 @@ func compressDownloadMedia(s SessionBridge, info types.MessageInfo) ([]byte, str
 	}
 	data, mime, ok := s.DownloadQuotedMedia(info)
 	if ok && len(data) > 0 {
-		if !bytesWithinLimit(len(data)) { // 700MB post-download net
-			mediaTooBigReply(s, info)
-			return nil, "", false, true
-		}
 		return data, mime, true, false
 	}
 	return nil, "", false, false

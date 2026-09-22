@@ -1412,17 +1412,16 @@ func init() {
 	Register(Command{Name: "x", Hidden: true, Run: handleTWTSearch})
 
 	// ══════════════════════════════════════════════════════════════════
-	// OWNER ORDER (bandwidth bachao): .apk family DISABLED — pura comment.
-	// host change karte waqt neeche wali 7 lines uncomment karni hai.
-	// (apkdl.go ka code preserved hai — kuch delete NAHI hua.)
+	// OWNER ORDER (2026): .apk family RE-ENABLED — bot now runs on Heroku
+	// (plenty of RAM/disk/bandwidth), so the bandwidth-saving disable is lifted.
 	// ══════════════════════════════════════════════════════════════════
-	// Register(Command{Name: "apk", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO SEARCH AND DOWNLOAD ANDROID APPS. TYPE AN APP NAME TO SEARCH AND GET ITS APK FILE.", Run: handleAPKSearch})
-	// Register(Command{Name: "apksearch", Hidden: true, Run: handleAPKSearch})
-	// Register(Command{Name: "apks", Hidden: true, Run: handleAPKSearch})
-	// Register(Command{Name: "apkdl", Hidden: true, Run: handleAPKSearch})
-	// Register(Command{Name: "app", Hidden: true, Run: handleAPKSearch})
-	// Register(Command{Name: "apps", Hidden: true, Run: handleAPKSearch})
-	// Register(Command{Name: "application", Hidden: true, Run: handleAPKSearch})
+	Register(Command{Name: "apk", Category: "DOWNLOADER", Desc: "THIS COMMAND IS USED TO SEARCH AND DOWNLOAD ANDROID APPS. TYPE AN APP NAME TO SEARCH AND GET ITS APK FILE.", Run: handleAPKSearch})
+	Register(Command{Name: "apksearch", Hidden: true, Run: handleAPKSearch})
+	Register(Command{Name: "apks", Hidden: true, Run: handleAPKSearch})
+	Register(Command{Name: "apkdl", Hidden: true, Run: handleAPKSearch})
+	Register(Command{Name: "app", Hidden: true, Run: handleAPKSearch})
+	Register(Command{Name: "apps", Hidden: true, Run: handleAPKSearch})
+	Register(Command{Name: "application", Hidden: true, Run: handleAPKSearch})
 }
 
 // FBProfileSearchLive - exported wrapper for the live sandbox test binary.
