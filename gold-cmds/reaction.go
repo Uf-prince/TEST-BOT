@@ -4,7 +4,7 @@ package goldcmds
 // GOLD-MD — ANIME REACTION COMMANDS  (.b* BOYS / .g* GIRLS)
 // File: reaction.go
 // ============================================================================
-// Two categories, each with the SAME full reaction set:
+// Two categories, each with 500 UNIQUE English reaction commands:
 //   BREACTION → .b<name>  (e.g. .bhappy .bsad .bangry)  — SOLO BOY anime
 //   GREACTION → .g<name>  (e.g. .ghappy .gsad .gangry)  — SOLO GIRL anime
 //
@@ -13,10 +13,11 @@ package goldcmds
 // the caption:  I AM HAPPY 😄
 //
 // SOURCES (all free, no API key), tried in order:
-//   1. gifukai   https://api.gifukai.com/v1/<action>?pairing=<m|f>   (gender!)
-//   2. otakugifs https://api.otakugifs.xyz/gif?reaction=<name>
-//   3. purrbot   https://api.purrbot.site/v2/img/sfw/<name>/gif
-//   4. nekos.life https://nekos.life/api/v2/img/<name>
+//   1. Tenor      https://tenor.googleapis.com/v2/search?q=anime+<boy|girl>+<name>
+//   2. gifukai    https://api.gifukai.com/v1/<action>?pairing=<m|f>
+//   3. otakugifs  https://api.otakugifs.xyz/gif?reaction=<name>
+//   4. nekos.best https://nekos.best/api/v2/<name>
+//   5. purrbot    https://api.purrbot.site/v2/img/sfw/<name>/gif
 // ============================================================================
 
 import (
@@ -24,176 +25,334 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
 	"go.mau.fi/whatsmeow/types"
 )
 
-// reactionDef describes one reaction and where to fetch it from.
-type reactionDef struct {
-	Name    string // user-facing name (happy, sad, angry, ...)
-	Emoji   string // emoji shown in the caption
-	Gifukai string // gifukai action (supports gender pairing)
-	Otaku   string // otakugifs reaction
-	Purr    string // purrbot path
-	Neko    string // nekos.life path
+// tenorKey is the public web key embedded in Tenor's own pages (no signup).
+const tenorKey = "AIzaSyCZt6SSh5VgVPzD9fhyzG1DprdPRhtoaR4"
+
+// tenorClientKey is Tenor's own web client key.
+const tenorClientKey = "tenor_web"
+
+// reactionNames is the catalog of 500 unique English reaction words.
+var reactionNames = []string{
+	"happy", "sad", "angry", "excited", "bored", "confused", "scared", "surprised",
+	"shocked", "nervous", "anxious", "calm", "relaxed", "tired", "sleepy", "energetic",
+	"cheerful", "joyful", "delighted", "pleased", "content", "satisfied", "grateful", "thankful",
+	"hopeful", "optimistic", "proud", "confident", "brave", "courageous", "fearless", "worried",
+	"stressed", "frustrated", "annoyed", "irritated", "furious", "enraged", "jealous", "envious",
+	"lonely", "depressed", "miserable", "heartbroken", "devastated", "disappointed", "embarrassed", "ashamed",
+	"guilty", "regretful", "sorry", "apologetic", "humble", "shy", "timid", "bashful",
+	"flustered", "blushing", "charmed", "smitten", "lovestruck", "affectionate", "caring", "kind",
+	"gentle", "warm", "friendly", "welcoming", "generous", "helpful", "supportive", "encouraging",
+	"inspiring", "motivated", "determined", "focused", "curious", "interested", "fascinated", "amazed",
+	"astonished", "awed", "impressed", "enlightened", "thoughtful", "pensive", "reflective", "dreamy",
+	"wistful", "nostalgic", "sentimental", "emotional", "touched", "moved", "overwhelmed", "speechless",
+	"dumbfounded", "baffled", "puzzled", "perplexed", "bewildered", "mystified", "skeptical", "doubtful",
+	"uncertain", "unsure", "indecisive", "hesitant", "reluctant", "unwilling", "resistant", "stubborn",
+	"defiant", "rebellious", "mischievous", "playful", "silly", "goofy", "funny", "hilarious",
+	"amused", "entertained", "laughing", "giggling", "chuckling", "smiling", "grinning", "beaming",
+	"smirking", "winking", "teasing", "mocking", "taunting", "sarcastic", "ironic", "cynical",
+	"bitter", "resentful", "spiteful", "vengeful", "hateful", "disgusted", "repulsed", "revolted",
+	"appalled", "horrified", "terrified", "petrified", "panicked", "alarmed", "startled", "frightened",
+	"trembling", "shaking", "shivering", "quivering", "cowering", "hiding", "fleeing", "running",
+	"escaping", "chasing", "pursuing", "hunting", "searching", "seeking", "exploring", "wandering",
+	"roaming", "traveling", "journeying", "adventuring", "discovering", "finding", "losing", "winning",
+	"failing", "succeeding", "achieving", "accomplishing", "completing", "finishing", "starting", "beginning",
+	"ending", "stopping", "pausing", "waiting", "resting", "sleeping", "dreaming", "waking",
+	"rising", "standing", "sitting", "lying", "kneeling", "bowing", "praying", "meditating",
+	"contemplating", "thinking", "pondering", "wondering", "questioning", "asking", "answering", "replying",
+	"responding", "reacting", "ignoring", "avoiding", "evading", "dodging", "blocking", "defending",
+	"protecting", "guarding", "shielding", "saving", "rescuing", "helping", "aiding", "assisting",
+	"serving", "giving", "sharing", "donating", "contributing", "volunteering", "participating", "joining",
+	"gathering", "meeting", "greeting", "hugging", "embracing", "cuddling", "snuggling", "kissing",
+	"smooching", "pecking", "nuzzling", "holding", "touching", "patting", "stroking", "petting",
+	"rubbing", "massaging", "tickling", "pinching", "poking", "prodding", "nudging", "pushing",
+	"pulling", "dragging", "lifting", "carrying", "throwing", "catching", "dropping", "releasing",
+	"letting", "allowing", "permitting", "accepting", "rejecting", "refusing", "denying", "admitting",
+	"confessing", "revealing", "concealing", "disguising", "pretending", "acting", "performing", "dancing",
+	"singing", "playing", "gaming", "competing", "racing", "fighting", "battling", "struggling",
+	"striving", "trying", "attempting", "practicing", "training", "learning", "studying", "teaching",
+	"explaining", "describing", "narrating", "telling", "speaking", "talking", "chatting", "conversing",
+	"discussing", "debating", "arguing", "quarreling", "reconciling", "forgiving", "apologizing", "thanking",
+	"praising", "complimenting", "flattering", "admiring", "respecting", "honoring", "celebrating", "partying",
+	"feasting", "dining", "eating", "drinking", "sipping", "tasting", "savoring", "enjoying",
+	"relishing", "appreciating", "valuing", "treasuring", "cherishing", "loving", "adoring", "worshiping",
+	"idolizing", "obsessing", "craving", "desiring", "wanting", "needing", "wishing", "hoping",
+	"imagining", "visualizing", "creating", "inventing", "designing", "building", "constructing", "making",
+	"crafting", "shaping", "forming", "molding", "sculpting", "painting", "drawing", "sketching",
+	"coloring", "writing", "reading", "reciting", "memorizing", "remembering", "forgetting", "recalling",
+	"reminiscing", "reflecting", "concentrating", "noticing", "observing", "watching", "looking", "seeing",
+	"gazing", "staring", "glancing", "peeking", "spying", "inspecting", "examining", "analyzing",
+	"evaluating", "judging", "assessing", "measuring", "comparing", "contrasting", "distinguishing", "separating",
+	"dividing", "splitting", "breaking", "shattering", "smashing", "crushing", "destroying", "demolishing",
+	"ruining", "wrecking", "damaging", "harming", "hurting", "injuring", "wounding", "healing",
+	"curing", "treating", "mending", "repairing", "fixing", "restoring", "renewing", "refreshing",
+	"revitalizing", "rejuvenating", "energizing", "invigorating", "stimulating", "thrilling", "exhilarating", "astonishing",
+	"stunning", "breathtaking", "magnificent", "splendid", "glorious", "wonderful", "marvelous", "fantastic",
+	"fabulous", "incredible", "unbelievable", "extraordinary", "remarkable", "exceptional", "outstanding", "excellent",
+	"superb", "perfect", "flawless", "ideal", "supreme", "ultimate", "divine", "heavenly",
+	"blissful", "ecstatic", "euphoric", "elated", "overjoyed", "thrilled", "enchanted", "captivated",
+	"mesmerized", "hypnotized", "spellbound", "intrigued", "inquisitive", "nosy", "prying", "snooping",
+	"investigating", "researching", "uncovering", "exposing", "disclosing", "divulging", "leaking", "spilling",
+	"spreading", "broadcasting", "announcing", "declaring", "proclaiming", "stating", "asserting", "claiming",
+	"alleging", "accusing", "blaming", "criticizing", "condemning", "scolding", "reprimanding", "punishing",
+	"disciplining", "correcting", "guiding", "directing", "leading", "following", "obeying", "disobeying",
+	"rebelling", "revolting", "protesting", "demonstrating",
 }
 
-// reactionDefs is the full reaction catalog shared by BOTH categories.
-var reactionDefs = []reactionDef{
-	{Name: "agree", Emoji: "👍", Gifukai: "nod", Otaku: "", Purr: "", Neko: ""},
-	{Name: "airkiss", Emoji: "😘", Gifukai: "", Otaku: "airkiss", Purr: "", Neko: ""},
-	{Name: "angry", Emoji: "😠", Gifukai: "angry", Otaku: "", Purr: "angry", Neko: ""},
-	{Name: "glare", Emoji: "😠", Gifukai: "", Otaku: "angrystare", Purr: "", Neko: ""},
-	{Name: "bang", Emoji: "🎬", Gifukai: "shoot", Otaku: "", Purr: "", Neko: ""},
-	{Name: "bite", Emoji: "😬", Gifukai: "bite", Otaku: "bite", Purr: "bite", Neko: ""},
-	{Name: "disgust", Emoji: "😝", Gifukai: "bleh", Otaku: "bleh", Purr: "", Neko: ""},
-	{Name: "blowkiss", Emoji: "😘", Gifukai: "blowkiss", Otaku: "", Purr: "", Neko: ""},
-	{Name: "blush", Emoji: "😊", Gifukai: "blush", Otaku: "blush", Purr: "blush", Neko: ""},
-	{Name: "bump", Emoji: "🔨", Gifukai: "bonk", Otaku: "", Purr: "", Neko: ""},
-	{Name: "nudge", Emoji: "👉", Gifukai: "poke", Otaku: "", Purr: "", Neko: ""},
-	{Name: "bored", Emoji: "😒", Gifukai: "bored", Otaku: "", Purr: "", Neko: ""},
-	{Name: "fistbump", Emoji: "👊", Gifukai: "", Otaku: "brofist", Purr: "", Neko: ""},
-	{Name: "bye", Emoji: "👋", Gifukai: "bye", Otaku: "", Purr: "", Neko: ""},
-	{Name: "carry", Emoji: "🫂", Gifukai: "carry", Otaku: "", Purr: "", Neko: ""},
-	{Name: "celebrate", Emoji: "🎉", Gifukai: "", Otaku: "celebrate", Purr: "", Neko: ""},
-	{Name: "cheers", Emoji: "🍻", Gifukai: "", Otaku: "cheers", Purr: "", Neko: ""},
-	{Name: "clap", Emoji: "👏", Gifukai: "clap", Otaku: "clap", Purr: "", Neko: ""},
-	{Name: "applause", Emoji: "👏", Gifukai: "clap", Otaku: "", Purr: "", Neko: ""},
-	{Name: "comfortable", Emoji: "😌", Gifukai: "", Otaku: "", Purr: "comfy", Neko: ""},
-	{Name: "confused", Emoji: "😕", Gifukai: "confused", Otaku: "confused", Purr: "", Neko: ""},
-	{Name: "cool", Emoji: "😎", Gifukai: "", Otaku: "cool", Purr: "", Neko: ""},
-	{Name: "cry", Emoji: "😭", Gifukai: "cry", Otaku: "cry", Purr: "cry", Neko: ""},
-	{Name: "cuddle", Emoji: "🫂", Gifukai: "cuddle", Otaku: "cuddle", Purr: "cuddle", Neko: "cuddle"},
-	{Name: "seeyou", Emoji: "👋", Gifukai: "bye", Otaku: "", Purr: "", Neko: ""},
-	{Name: "dance", Emoji: "💃", Gifukai: "dance", Otaku: "dance", Purr: "dance", Neko: ""},
-	{Name: "deny", Emoji: "🙅", Gifukai: "nope", Otaku: "", Purr: "", Neko: ""},
-	{Name: "drink", Emoji: "🥤", Gifukai: "sip", Otaku: "", Purr: "", Neko: ""},
-	{Name: "drool", Emoji: "🤤", Gifukai: "", Otaku: "drool", Purr: "", Neko: ""},
-	{Name: "dontknow", Emoji: "🤷", Gifukai: "shrug", Otaku: "", Purr: "", Neko: ""},
-	{Name: "eat", Emoji: "🍽️", Gifukai: "eat", Otaku: "", Purr: "", Neko: ""},
-	{Name: "sinisterlaugh", Emoji: "😈", Gifukai: "", Otaku: "evillaugh", Purr: "", Neko: ""},
-	{Name: "facepalm", Emoji: "🤦", Gifukai: "facepalm", Otaku: "facepalm", Purr: "", Neko: ""},
-	{Name: "feed", Emoji: "🍽️", Gifukai: "feed", Otaku: "", Purr: "feed", Neko: "feed"},
-	{Name: "fluff", Emoji: "☁️", Gifukai: "", Otaku: "", Purr: "fluff", Neko: ""},
-	{Name: "flustered", Emoji: "😳", Gifukai: "blush", Otaku: "", Purr: "", Neko: ""},
-	{Name: "gaze", Emoji: "👀", Gifukai: "stare", Otaku: "", Purr: "", Neko: ""},
-	{Name: "goodbye", Emoji: "👋", Gifukai: "bye", Otaku: "", Purr: "", Neko: ""},
-	{Name: "holdhands", Emoji: "🤝", Gifukai: "handhold", Otaku: "handhold", Purr: "", Neko: ""},
-	{Name: "handshake", Emoji: "🤝", Gifukai: "handshake", Otaku: "", Purr: "", Neko: ""},
-	{Name: "happy", Emoji: "😄", Gifukai: "happy", Otaku: "happy", Purr: "", Neko: ""},
-	{Name: "headbang", Emoji: "🤘", Gifukai: "", Otaku: "headbang", Purr: "", Neko: ""},
-	{Name: "pathead", Emoji: "🫳", Gifukai: "pat", Otaku: "", Purr: "", Neko: ""},
-	{Name: "hello", Emoji: "👋", Gifukai: "hi", Otaku: "", Purr: "", Neko: ""},
-	{Name: "hey", Emoji: "👋", Gifukai: "hi", Otaku: "", Purr: "", Neko: ""},
-	{Name: "hi", Emoji: "👋", Gifukai: "hi", Otaku: "", Purr: "", Neko: ""},
-	{Name: "highfive", Emoji: "🙌", Gifukai: "highfive", Otaku: "", Purr: "", Neko: ""},
-	{Name: "hug", Emoji: "🤗", Gifukai: "hug", Otaku: "hug", Purr: "hug", Neko: "hug"},
-	{Name: "puzzled", Emoji: "❓", Gifukai: "", Otaku: "huh", Purr: "", Neko: ""},
-	{Name: "unsure", Emoji: "🤷", Gifukai: "shrug", Otaku: "", Purr: "", Neko: ""},
-	{Name: "wallpin", Emoji: "🧱", Gifukai: "wallslam", Otaku: "", Purr: "", Neko: ""},
-	{Name: "kick", Emoji: "🦵", Gifukai: "kick", Otaku: "", Purr: "", Neko: ""},
-	{Name: "kill", Emoji: "☠️", Gifukai: "kill", Otaku: "", Purr: "", Neko: ""},
-	{Name: "kiss", Emoji: "💋", Gifukai: "kiss", Otaku: "kiss", Purr: "kiss", Neko: "kiss"},
-	{Name: "lappillow", Emoji: "🛋️", Gifukai: "lappillow", Otaku: "", Purr: "", Neko: ""},
-	{Name: "laugh", Emoji: "😂", Gifukai: "laugh", Otaku: "laugh", Purr: "", Neko: ""},
-	{Name: "lay", Emoji: "🛌", Gifukai: "", Otaku: "", Purr: "lay", Neko: ""},
-	{Name: "lick", Emoji: "👅", Gifukai: "lick", Otaku: "lick", Purr: "lick", Neko: ""},
-	{Name: "like", Emoji: "👍", Gifukai: "thumbsup", Otaku: "", Purr: "", Neko: ""},
-	{Name: "laughing", Emoji: "😂", Gifukai: "laugh", Otaku: "", Purr: "", Neko: ""},
-	{Name: "chuckle", Emoji: "😂", Gifukai: "laugh", Otaku: "", Purr: "", Neko: ""},
-	{Name: "love", Emoji: "❤️", Gifukai: "", Otaku: "love", Purr: "", Neko: ""},
-	{Name: "mad", Emoji: "😠", Gifukai: "angry", Otaku: "mad", Purr: "", Neko: ""},
-	{Name: "cat", Emoji: "🐱", Gifukai: "nya", Otaku: "", Purr: "", Neko: "meow"},
-	{Name: "murder", Emoji: "☠️", Gifukai: "kill", Otaku: "", Purr: "", Neko: ""},
-	{Name: "smooch", Emoji: "😘", Gifukai: "blowkiss", Otaku: "", Purr: "", Neko: ""},
-	{Name: "nap", Emoji: "😴", Gifukai: "sleep", Otaku: "", Purr: "", Neko: ""},
-	{Name: "nervous", Emoji: "😰", Gifukai: "", Otaku: "nervous", Purr: "", Neko: ""},
-	{Name: "no", Emoji: "❌", Gifukai: "nope", Otaku: "no", Purr: "", Neko: ""},
-	{Name: "nod", Emoji: "🙂", Gifukai: "nod", Otaku: "", Purr: "", Neko: ""},
-	{Name: "chew", Emoji: "😋", Gifukai: "eat", Otaku: "nom", Purr: "", Neko: ""},
-	{Name: "refuse", Emoji: "🙅", Gifukai: "nope", Otaku: "", Purr: "", Neko: ""},
-	{Name: "nosebleed", Emoji: "🩸", Gifukai: "", Otaku: "nosebleed", Purr: "", Neko: ""},
-	{Name: "nuzzle", Emoji: "🥰", Gifukai: "", Otaku: "nuzzle", Purr: "", Neko: ""},
-	{Name: "kitty", Emoji: "🐱", Gifukai: "nya", Otaku: "", Purr: "", Neko: ""},
-	{Name: "catcry", Emoji: "🐱", Gifukai: "", Otaku: "nyah", Purr: "", Neko: ""},
-	{Name: "pat", Emoji: "🫳", Gifukai: "pat", Otaku: "pat", Purr: "pat", Neko: "pat"},
-	{Name: "peck", Emoji: "😗", Gifukai: "kiss", Otaku: "", Purr: "", Neko: ""},
-	{Name: "peek", Emoji: "👀", Gifukai: "peek", Otaku: "peek", Purr: "", Neko: ""},
-	{Name: "pinch", Emoji: "🤏", Gifukai: "", Otaku: "pinch", Purr: "", Neko: ""},
-	{Name: "poke", Emoji: "👉", Gifukai: "poke", Otaku: "poke", Purr: "poke", Neko: ""},
-	{Name: "pout", Emoji: "😤", Gifukai: "pout", Otaku: "pout", Purr: "pout", Neko: ""},
-	{Name: "punch", Emoji: "👊", Gifukai: "punch", Otaku: "punch", Purr: "", Neko: ""},
-	{Name: "rage", Emoji: "😠", Gifukai: "angry", Otaku: "", Purr: "", Neko: ""},
-	{Name: "roll", Emoji: "🔄", Gifukai: "", Otaku: "roll", Purr: "", Neko: ""},
-	{Name: "run", Emoji: "🏃", Gifukai: "run", Otaku: "run", Purr: "", Neko: ""},
-	{Name: "sad", Emoji: "😢", Gifukai: "", Otaku: "sad", Purr: "", Neko: ""},
-	{Name: "salute", Emoji: "🫡", Gifukai: "salute", Otaku: "", Purr: "", Neko: ""},
-	{Name: "scared", Emoji: "😨", Gifukai: "scared", Otaku: "scared", Purr: "", Neko: ""},
-	{Name: "shake", Emoji: "🤝", Gifukai: "shake", Otaku: "", Purr: "", Neko: ""},
-	{Name: "shocked", Emoji: "😱", Gifukai: "shocked", Otaku: "", Purr: "", Neko: ""},
-	{Name: "shoot", Emoji: "🔫", Gifukai: "shoot", Otaku: "", Purr: "", Neko: ""},
-	{Name: "shout", Emoji: "📢", Gifukai: "", Otaku: "shout", Purr: "", Neko: ""},
-	{Name: "shrug", Emoji: "🤷", Gifukai: "shrug", Otaku: "shrug", Purr: "", Neko: ""},
-	{Name: "shy", Emoji: "😳", Gifukai: "shy", Otaku: "shy", Purr: "", Neko: ""},
-	{Name: "sigh", Emoji: "😮💨", Gifukai: "", Otaku: "sigh", Purr: "", Neko: ""},
-	{Name: "sing", Emoji: "🎤", Gifukai: "sing", Otaku: "sing", Purr: "", Neko: ""},
-	{Name: "sip", Emoji: "🥤", Gifukai: "sip", Otaku: "sip", Purr: "", Neko: ""},
-	{Name: "slap", Emoji: "✋", Gifukai: "slap", Otaku: "slap", Purr: "slap", Neko: "slap"},
-	{Name: "sleep", Emoji: "😴", Gifukai: "sleep", Otaku: "sleep", Purr: "", Neko: ""},
-	{Name: "slowclap", Emoji: "👏", Gifukai: "", Otaku: "slowclap", Purr: "", Neko: ""},
-	{Name: "smack", Emoji: "👋", Gifukai: "", Otaku: "smack", Purr: "", Neko: ""},
-	{Name: "smile", Emoji: "🙂", Gifukai: "smile", Otaku: "smile", Purr: "smile", Neko: ""},
-	{Name: "smug", Emoji: "😏", Gifukai: "smug", Otaku: "smug", Purr: "", Neko: "smug"},
-	{Name: "sneeze", Emoji: "🤧", Gifukai: "", Otaku: "sneeze", Purr: "", Neko: ""},
-	{Name: "snuggle", Emoji: "🫂", Gifukai: "cuddle", Otaku: "", Purr: "", Neko: ""},
-	{Name: "sob", Emoji: "😭", Gifukai: "cry", Otaku: "", Purr: "", Neko: ""},
-	{Name: "sorry", Emoji: "🙏", Gifukai: "sorry", Otaku: "sorry", Purr: "", Neko: ""},
-	{Name: "spin", Emoji: "🌀", Gifukai: "spin", Otaku: "", Purr: "", Neko: ""},
-	{Name: "stare", Emoji: "👀", Gifukai: "stare", Otaku: "stare", Purr: "", Neko: ""},
-	{Name: "stop", Emoji: "✋", Gifukai: "", Otaku: "stop", Purr: "", Neko: ""},
-	{Name: "surprised", Emoji: "😱", Gifukai: "surprised", Otaku: "surprised", Purr: "", Neko: ""},
-	{Name: "sweat", Emoji: "💦", Gifukai: "", Otaku: "sweat", Purr: "", Neko: ""},
-	{Name: "taunt", Emoji: "😜", Gifukai: "taunt", Otaku: "", Purr: "", Neko: ""},
-	{Name: "giggle", Emoji: "😁", Gifukai: "teehee", Otaku: "", Purr: "", Neko: ""},
-	{Name: "think", Emoji: "🤔", Gifukai: "think", Otaku: "", Purr: "", Neko: ""},
-	{Name: "ponder", Emoji: "🤔", Gifukai: "think", Otaku: "", Purr: "", Neko: ""},
-	{Name: "thumbsup", Emoji: "👍", Gifukai: "thumbsup", Otaku: "thumbsup", Purr: "", Neko: ""},
-	{Name: "tickle", Emoji: "🤣", Gifukai: "tickle", Otaku: "tickle", Purr: "tickle", Neko: "tickle"},
-	{Name: "tired", Emoji: "😫", Gifukai: "tired", Otaku: "tired", Purr: "", Neko: ""},
-	{Name: "wag", Emoji: "🐕", Gifukai: "wag", Otaku: "", Purr: "", Neko: ""},
-	{Name: "wallslam", Emoji: "🧱", Gifukai: "wallslam", Otaku: "", Purr: "", Neko: ""},
-	{Name: "wave", Emoji: "👋", Gifukai: "wave", Otaku: "wave", Purr: "", Neko: ""},
-	{Name: "amazed", Emoji: "😲", Gifukai: "", Otaku: "woah", Purr: "", Neko: ""},
-	{Name: "yawn", Emoji: "🥱", Gifukai: "yawn", Otaku: "yawn", Purr: "", Neko: ""},
-	{Name: "excited", Emoji: "🎉", Gifukai: "yay", Otaku: "yay", Purr: "", Neko: ""},
-	{Name: "throw", Emoji: "🚀", Gifukai: "yeet", Otaku: "", Purr: "", Neko: ""},
-	{Name: "yes", Emoji: "✅", Gifukai: "nod", Otaku: "yes", Purr: "", Neko: ""},
-	{Name: "sleeping", Emoji: "😴", Gifukai: "sleep", Otaku: "", Purr: "", Neko: ""},
+var reactionEmojiMap = map[string]string{
+	"happy": "😄", "sad": "😢", "angry": "😠", "excited": "🤩", "bored": "😑",
+	"confused": "😕", "scared": "😨", "surprised": "😲", "shocked": "😱", "nervous": "😰",
+	"anxious": "😟", "calm": "😌", "relaxed": "😎", "tired": "😩", "sleepy": "😴",
+	"energetic": "⚡", "cheerful": "😊", "joyful": "😁", "delighted": "😃", "pleased": "🙂",
+	"content": "😊", "satisfied": "😌", "grateful": "🙏", "thankful": "🙏", "hopeful": "🤞",
+	"optimistic": "🌤️", "proud": "😤", "confident": "😏", "brave": "🦁", "courageous": "🦁",
+	"fearless": "💪", "worried": "😟", "stressed": "😖", "frustrated": "😤", "annoyed": "😒",
+	"irritated": "😠", "furious": "🤬", "enraged": "🤬", "jealous": "😒", "envious": "😒",
+	"lonely": "🥺", "depressed": "😞", "miserable": "😭", "heartbroken": "💔", "devastated": "😭",
+	"disappointed": "😞", "embarrassed": "😳", "ashamed": "😳", "guilty": "😔", "regretful": "😔",
+	"sorry": "🙇", "apologetic": "🙇", "humble": "🙇", "shy": "😳", "timid": "😳",
+	"bashful": "😊", "flustered": "😳", "blushing": "😊", "charmed": "😍", "smitten": "😍",
+	"lovestruck": "😍", "affectionate": "🥰", "caring": "🤗", "kind": "😊", "gentle": "😌",
+	"warm": "🤗", "friendly": "😊", "welcoming": "🤗", "generous": "🤲", "helpful": "🤝",
+	"supportive": "🤝", "encouraging": "💪", "inspiring": "✨", "motivated": "💪", "determined": "😤",
+	"focused": "🧐", "curious": "🤔", "interested": "🤔", "fascinated": "🤩", "amazed": "😲",
+	"astonished": "😲", "awed": "😮", "impressed": "😮", "enlightened": "💡", "thoughtful": "🤔",
+	"pensive": "🤔", "reflective": "🤔", "dreamy": "😍", "wistful": "🥺", "nostalgic": "🥺",
+	"sentimental": "🥺", "emotional": "🥹", "touched": "🥹", "moved": "🥹", "overwhelmed": "😵",
+	"speechless": "😶", "dumbfounded": "😶", "baffled": "😕", "puzzled": "🤔", "perplexed": "😕",
+	"bewildered": "😵", "mystified": "🤔", "skeptical": "🤨", "doubtful": "🤨", "uncertain": "😕",
+	"unsure": "🤔", "indecisive": "🤔", "hesitant": "😬", "reluctant": "😬", "unwilling": "🙅",
+	"resistant": "🙅", "stubborn": "😤", "defiant": "😠", "rebellious": "😈", "mischievous": "😏",
+	"playful": "😜", "silly": "🤪", "goofy": "🤪", "funny": "😂", "hilarious": "🤣",
+	"amused": "😄", "entertained": "😄", "laughing": "😂", "giggling": "🤭", "chuckling": "😄",
+	"smiling": "😊", "grinning": "😁", "beaming": "😁", "smirking": "😏", "winking": "😉",
+	"teasing": "😜", "mocking": "😝", "taunting": "😜", "sarcastic": "😏", "ironic": "😏",
+	"cynical": "😒", "bitter": "😖", "resentful": "😒", "spiteful": "😒", "vengeful": "😠",
+	"hateful": "😠", "disgusted": "🤢", "repulsed": "🤢", "revolted": "🤮", "appalled": "😱",
+	"horrified": "😱", "terrified": "😱", "petrified": "😱", "panicked": "😱", "alarmed": "😨",
+	"startled": "😲", "frightened": "😨", "trembling": "😰", "shaking": "😰", "shivering": "🥶",
+	"quivering": "😰", "cowering": "😨", "hiding": "🙈", "fleeing": "🏃", "running": "🏃",
+	"escaping": "🏃", "chasing": "🏃", "pursuing": "🏃", "hunting": "🏹", "searching": "🔍",
+	"seeking": "🔍", "exploring": "🧭", "wandering": "🚶", "roaming": "🚶", "traveling": "✈️",
+	"journeying": "🧳", "adventuring": "🗺️", "discovering": "🔍", "finding": "🔍", "losing": "😞",
+	"winning": "🏆", "failing": "😞", "succeeding": "🏆", "achieving": "🏆", "accomplishing": "🏆",
+	"completing": "✅", "finishing": "✅", "starting": "🚀", "beginning": "🚀", "ending": "🔚",
+	"stopping": "✋", "pausing": "⏸️", "waiting": "⏳", "resting": "😌", "sleeping": "😴",
+	"dreaming": "💭", "waking": "🌅", "rising": "🌅", "standing": "🧍", "sitting": "🪑",
+	"lying": "🛌", "kneeling": "🧎", "bowing": "🙇", "praying": "🙏", "meditating": "🧘",
+	"contemplating": "🤔", "thinking": "🤔", "pondering": "🤔", "wondering": "🤔", "questioning": "❓",
+	"asking": "❓", "answering": "💬", "replying": "💬", "responding": "💬", "reacting": "😮",
+	"ignoring": "🙄", "avoiding": "🙈", "evading": "🏃", "dodging": "💨", "blocking": "🛡️",
+	"defending": "🛡️", "protecting": "🛡️", "guarding": "🛡️", "shielding": "🛡️", "saving": "💰",
+	"rescuing": "🦸", "helping": "🤝", "aiding": "🤝", "assisting": "🤝", "serving": "🤝",
+	"giving": "🎁", "sharing": "🤝", "donating": "🎁", "contributing": "🤝", "volunteering": "🙋",
+	"participating": "🙋", "joining": "🤝", "gathering": "👥", "meeting": "🤝", "greeting": "👋",
+	"hugging": "🤗", "embracing": "🤗", "cuddling": "🥰", "snuggling": "🥰", "kissing": "😘",
+	"smooching": "😘", "pecking": "😘", "nuzzling": "🥰", "holding": "🤝", "touching": "🤝",
+	"patting": "🤚", "stroking": "🤚", "petting": "🤚", "rubbing": "🤚", "massaging": "💆",
+	"tickling": "🤣", "pinching": "🤏", "poking": "👉", "prodding": "👉", "nudging": "👉",
+	"pushing": "🫸", "pulling": "🫷", "dragging": "🫷", "lifting": "🏋️", "carrying": "🏋️",
+	"throwing": "🤾", "catching": "🤲", "dropping": "⬇️", "releasing": "🕊️", "letting": "🕊️",
+	"allowing": "✅", "permitting": "✅", "accepting": "✅", "rejecting": "❌", "refusing": "🙅",
+	"denying": "🙅", "admitting": "😅", "confessing": "😅", "revealing": "😮", "concealing": "🤫",
+	"disguising": "🥸", "pretending": "🎭", "acting": "🎭", "performing": "🎭", "dancing": "💃",
+	"singing": "🎤", "playing": "🎮", "gaming": "🎮", "competing": "🏁", "racing": "🏁",
+	"fighting": "🥊", "battling": "⚔️", "struggling": "😖", "striving": "💪", "trying": "💪",
+	"attempting": "💪", "practicing": "🎯", "training": "🏋️", "learning": "📚", "studying": "📚",
+	"teaching": "👨‍🏫", "explaining": "💬", "describing": "💬", "narrating": "📖", "telling": "💬",
+	"speaking": "🗣️", "talking": "💬", "chatting": "💬", "conversing": "💬", "discussing": "💬",
+	"debating": "🗣️", "arguing": "🗣️", "quarreling": "😠", "reconciling": "🤝", "forgiving": "🤝",
+	"apologizing": "🙇", "thanking": "🙏", "praising": "👏", "complimenting": "👏", "flattering": "😊",
+	"admiring": "😍", "respecting": "🙇", "honoring": "🎖️", "celebrating": "🎉", "partying": "🎉",
+	"feasting": "🍽️", "dining": "🍽️", "eating": "🍽️", "drinking": "🥤", "sipping": "🥤",
+	"tasting": "😋", "savoring": "😋", "enjoying": "😄", "relishing": "😋", "appreciating": "🙏",
+	"valuing": "💎", "treasuring": "💎", "cherishing": "🥰", "loving": "❤️", "adoring": "😍",
+	"worshiping": "🙏", "idolizing": "🤩", "obsessing": "😍", "craving": "🤤", "desiring": "😍",
+	"wanting": "🙏", "needing": "🙏", "wishing": "🌠", "hoping": "🤞", "imagining": "💭",
+	"visualizing": "💭", "creating": "🎨", "inventing": "💡", "designing": "🎨", "building": "🔨",
+	"constructing": "🏗️", "making": "🔨", "crafting": "🧶", "shaping": "🔨", "forming": "🔨",
+	"molding": "🔨", "sculpting": "🗿", "painting": "🎨", "drawing": "✏️", "sketching": "✏️",
+	"coloring": "🖍️", "writing": "✍️", "reading": "📖", "reciting": "📖", "memorizing": "🧠",
+	"remembering": "🧠", "forgetting": "🤷", "recalling": "🧠", "reminiscing": "💭", "reflecting": "🤔",
+	"concentrating": "🧐", "noticing": "👀", "observing": "👀", "watching": "👀", "looking": "👀",
+	"seeing": "👀", "gazing": "👀", "staring": "👀", "glancing": "👀", "peeking": "👀",
+	"spying": "🕵️", "inspecting": "🔍", "examining": "🔍", "analyzing": "🔍", "evaluating": "📊",
+	"judging": "⚖️", "assessing": "📊", "measuring": "📏", "comparing": "⚖️", "contrasting": "⚖️",
+	"distinguishing": "🔍", "separating": "✂️", "dividing": "➗", "splitting": "✂️", "breaking": "💔",
+	"shattering": "💥", "smashing": "💥", "crushing": "💥", "destroying": "💥", "demolishing": "💥",
+	"ruining": "💥", "wrecking": "💥", "damaging": "💥", "harming": "💢", "hurting": "💢",
+	"injuring": "🤕", "wounding": "🤕", "healing": "💚", "curing": "💚", "treating": "💊",
+	"mending": "🩹", "repairing": "🔧", "fixing": "🔧", "restoring": "🔧", "renewing": "🔄",
+	"refreshing": "🔄", "revitalizing": "⚡", "rejuvenating": "⚡", "energizing": "⚡", "invigorating": "⚡",
+	"stimulating": "⚡", "thrilling": "🤩", "exhilarating": "🤩", "astonishing": "😲", "stunning": "😍",
+	"breathtaking": "😍", "magnificent": "🤩", "splendid": "🤩", "glorious": "🤩", "wonderful": "😄",
+	"marvelous": "😄", "fantastic": "🤩", "fabulous": "🤩", "incredible": "🤩", "unbelievable": "😲",
+	"extraordinary": "🤩", "remarkable": "🤩", "exceptional": "🤩", "outstanding": "🤩", "excellent": "👏",
+	"superb": "👏", "perfect": "💯", "flawless": "💯", "ideal": "💯", "supreme": "👑",
+	"ultimate": "👑", "divine": "😇", "heavenly": "😇", "blissful": "😌", "ecstatic": "🤩",
+	"euphoric": "🤩", "elated": "😄", "overjoyed": "😄", "thrilled": "🤩", "enchanted": "😍",
+	"captivated": "😍", "mesmerized": "😍", "hypnotized": "😵‍💫", "spellbound": "😍", "intrigued": "🤔",
+	"inquisitive": "🤔", "nosy": "👀", "prying": "👀", "snooping": "🕵️", "investigating": "🕵️",
+	"researching": "🔍", "uncovering": "🔍", "exposing": "😮", "disclosing": "😮", "divulging": "😮",
+	"leaking": "💧", "spilling": "💧", "spreading": "📢", "broadcasting": "📢", "announcing": "📢",
+	"declaring": "📢", "proclaiming": "📢", "stating": "💬", "asserting": "💬", "claiming": "💬",
+	"alleging": "💬", "accusing": "👉", "blaming": "👉", "criticizing": "👎", "condemning": "👎",
+	"scolding": "😠", "reprimanding": "😠", "punishing": "😠", "disciplining": "😠", "correcting": "✏️",
+	"guiding": "🧭", "directing": "🧭", "leading": "🧭", "following": "🚶", "obeying": "🙇",
+	"disobeying": "🙅", "rebelling": "😈", "revolting": "😠", "protesting": "📢", "demonstrating": "🎤",
+	"marching": "🚶", "rallying": "📢", "campaigning": "📢", "advocating": "📢", "endorsing": "👍",
+	"promoting": "📢", "advertising": "📢", "marketing": "📢", "selling": "💰", "buying": "🛒",
+	"trading": "💱", "exchanging": "💱", "swapping": "🔄", "bargaining": "🤝", "negotiating": "🤝",
+	"dealing": "🤝", "transacting": "💱", "paying": "💰", "spending": "💸", "investing": "📈",
+	"earning": "💰", "gaining": "📈", "profiting": "📈", "gambling": "🎲", "betting": "🎲",
+	"risking": "🎲", "daring": "😏", "challenging": "😤", "defying": "😠", "confronting": "😤",
+	"facing": "😐", "encountering": "😮", "experiencing": "😮", "enduring": "😤", "surviving": "💪",
+	"thriving": "🌱", "flourishing": "🌱", "blooming": "🌸", "blossoming": "🌸", "growing": "🌱",
+	"developing": "📈", "evolving": "🔄", "transforming": "🔄", "changing": "🔄", "adapting": "🔄",
+	"adjusting": "🔧", "modifying": "🔧", "altering": "🔧", "revising": "✏️", "editing": "✏️",
+	"rewriting": "✏️", "repeating": "🔁", "rehearsing": "🎭", "perfecting": "💯", "mastering": "🏆",
+	"excelling": "🏆", "surpassing": "📈", "exceeding": "📈", "outdoing": "🏆", "outperforming": "🏆",
+	"triumphing": "🏆", "conquering": "🏆", "overcoming": "💪", "prevailing": "🏆", "fulfilling": "✅",
+	"realizing": "💡", "actualizing": "✨", "manifesting": "✨", "materializing": "✨", "appearing": "👋",
+	"emerging": "🌅", "arising": "🌅", "originating": "🌱", "initiating": "🚀", "launching": "🚀",
+	"commencing": "🚀", "opening": "🚪", "introducing": "👋", "presenting": "🎤", "showcasing": "🎤",
+	"displaying": "🖼️", "exhibiting": "🖼️", "showing": "👀", "unveiling": "🎭", "debuting": "🌟",
+	"premiering": "🌟", "entertaining": "🎭", "amusing": "😄", "delighting": "😄", "pleasing": "😊",
+	"gratifying": "😊", "comforting": "🤗", "soothing": "😌", "calming": "😌", "pacifying": "😌",
+	"placating": "😌", "appeasing": "😌", "mollifying": "😌", "reassuring": "🤗", "uplifting": "✨",
+	"elevating": "📈", "raising": "📈", "boosting": "📈", "cheering": "📣", "benefiting": "🎁",
+	"rewarding": "🏆", "compensating": "💰", "repaying": "💰", "returning": "🔙", "recovering": "💚",
+	"recuperating": "💚", "rebuilding": "🏗️", "reconstructing": "🏗️", "renovating": "🏗️", "remodeling": "🏗️",
+	"refurbishing": "🏗️", "redecorating": "🎨", "cleaning": "🧹", "washing": "🧼", "scrubbing": "🧽",
+	"polishing": "✨", "shining": "✨", "gleaming": "✨", "glowing": "✨", "radiating": "✨",
+	"sparkling": "✨", "twinkling": "✨", "glittering": "✨", "shimmering": "✨", "glistening": "✨",
+	"dazzling": "✨", "blinding": "✨", "illuminating": "💡", "brightening": "💡", "lighting": "💡",
+	"warming": "🔥", "heating": "🔥", "cooling": "❄️", "freezing": "🥶", "chilling": "❄️",
+	"icing": "🧊", "melting": "🫠", "thawing": "🌡️", "burning": "🔥", "blazing": "🔥",
+	"flaming": "🔥", "igniting": "🔥", "kindling": "🔥", "sparking": "✨", "electrifying": "⚡",
+	"zapping": "⚡", "striking": "💥", "hitting": "👊", "punching": "👊", "kicking": "🦵",
+	"slapping": "✋", "smacking": "✋", "whacking": "✋", "bashing": "💥", "beating": "👊",
+	"thrashing": "💥", "pounding": "👊", "hammering": "🔨", "battering": "💥", "clobbering": "💥",
+	"walloping": "💥", "thumping": "👊", "bumping": "💥", "knocking": "🚪", "tapping": "👆",
+	"rapping": "👆", "clicking": "🖱️", "clacking": "👆", "snapping": "🫰", "cracking": "💥",
+	"popping": "🎈", "bursting": "💥", "exploding": "💥", "erupting": "🌋", "blasting": "💥",
+	"booming": "💥", "thundering": "⛈️", "roaring": "🦁", "screaming": "😱", "yelling": "📢",
+	"shouting": "📢", "hollering": "📢", "bellowing": "📢", "howling": "🐺", "wailing": "😭",
+	"crying": "😭", "sobbing": "😭", "weeping": "😭", "tearing": "😢", "sniffling": "🤧",
+	"whimpering": "🥺", "moaning": "😩", "groaning": "😩", "sighing": "😮‍💨", "gasping": "😮",
+	"panting": "😮‍💨", "breathing": "🌬️", "inhaling": "🌬️", "exhaling": "🌬️", "sniffing": "👃",
+	"sneezing": "🤧", "coughing": "🤧", "hiccuping": "😅", "burping": "😅", "yawning": "🥱",
+	"stretching": "🙆", "flexing": "💪", "bending": "🤸", "twisting": "🌀", "turning": "🔄",
+	"spinning": "🌀", "rotating": "🔄", "revolving": "🔄", "circling": "🔄", "orbiting": "🪐",
+	"looping": "🔁", "curling": "🌀", "coiling": "🌀", "winding": "🌀", "wrapping": "🎁",
+	"binding": "🔗", "tying": "🪢", "knotting": "🪢", "tangling": "🪢", "weaving": "🧶",
+	"braiding": "🪢", "threading": "🧵", "sewing": "🧵", "stitching": "🧵", "knitting": "🧶",
+	"crocheting": "🧶", "embroidering": "🧵", "quilting": "🧵", "patching": "🩹", "darning": "🧵",
+	"regenerating": "🔄", "resurrecting": "✨", "reviving": "✨", "awakening": "🌅", "rousing": "📣",
+	"stirring": "🥄", "ascending": "⬆️", "climbing": "🧗", "mounting": "⬆️", "scaling": "🧗",
+	"surmounting": "🧗", "subduing": "😤", "quelling": "😤", "suppressing": "😤", "repressing": "😤",
+	"oppressing": "😤", "tyrannizing": "😈", "dominating": "😈", "controlling": "🎮", "commanding": "👑",
+	"ruling": "👑", "reigning": "👑", "governing": "👑", "managing": "📋", "organizing": "📋",
+	"coordinating": "📋", "orchestrating": "🎼", "arranging": "📋", "planning": "📝", "scheming": "😈",
+	"plotting": "😈", "conspiring": "😈", "conniving": "😈", "colluding": "😈", "collaborating": "🤝",
+	"cooperating": "🤝", "uniting": "🤝", "merging": "🔗", "combining": "🔗", "blending": "🌀",
+	"mixing": "🥄", "whisking": "🥄", "whipping": "🥄", "folding": "📄", "kneading": "🍞",
+	"rolling": "🌀", "pressing": "👇", "squeezing": "🤏", "compressing": "🗜️", "grinding": "⚙️",
+	"milling": "⚙️", "shredding": "📄", "cutting": "✂️", "slicing": "🔪", "dicing": "🔪",
+	"chopping": "🔪", "mincing": "🔪", "grating": "🧀", "peeling": "🍌", "carving": "🔪",
+	"casting": "🎣", "forging": "🔨", "welding": "🔧", "soldering": "🔧", "gluing": "🧴",
+	"taping": "📼", "stapling": "📎", "clipping": "📎", "pinning": "📌", "nailing": "🔨",
+	"screwing": "🔩", "bolting": "🔩", "riveting": "🔩", "fastening": "🔗", "securing": "🔒",
+	"locking": "🔒", "latching": "🔒", "hooking": "🪝", "clasping": "🤝", "clutching": "🤲",
+	"gripping": "🤲", "grasping": "🤲", "grabbing": "🤲", "seizing": "🤲", "snatching": "🤲",
+	"capturing": "🤲", "trapping": "🪤", "netting": "🕸️", "ensnaring": "🕸️", "entangling": "🕸️",
+	"enmeshing": "🕸️", "embroiling": "🌀", "involving": "🤝", "engaging": "🤝", "occupying": "📋",
+	"busying": "📋", "working": "💼", "laboring": "💼", "toiling": "💼", "sweating": "💦",
+	"straining": "😤", "exerting": "💪", "driving": "🚗", "propelling": "🚀", "urging": "📣",
+	"prompting": "👉", "spurring": "👉", "goading": "👉", "extracting": "⛏️", "eliciting": "💬",
+	"evoking": "✨", "attracting": "🧲", "luring": "🎣", "enticing": "😍", "tempting": "😈",
+	"seducing": "😏", "alluring": "😍", "bewitching": "🧙", "absorbing": "🌀", "engrossing": "📖",
+	"immersing": "🌊", "maneuvering": "🎮", "operating": "🎮", "steering": "🚗", "piloting": "✈️",
+	"navigating": "🧭", "sailing": "⛵", "cruising": "🚢", "flying": "✈️", "soaring": "🦅",
+	"gliding": "🛩️", "floating": "🎈", "drifting": "🌊", "wafting": "🌬️", "hovering": "🚁",
+	"levitating": "🪄", "ravaging": "💥", "pillaging": "🏴‍☠️", "plundering": "🏴‍☠️", "looting": "🏴‍☠️",
+	"ransacking": "🏴‍☠️", "raiding": "🏴‍☠️", "invading": "⚔️", "attacking": "⚔️", "assaulting": "⚔️",
 }
 
-// reactionFind resolves a reaction name to its definition.
-func reactionFind(name string) (reactionDef, bool) {
-	n := strings.ToLower(strings.TrimSpace(name))
-	for _, d := range reactionDefs {
-		if d.Name == n {
-			return d, true
-		}
+var gifukaiSet = map[string]bool{
+	"angry": true, "bite": true, "bleh": true, "blowkiss": true, "blush": true, "bonk": true,
+	"bored": true, "bye": true, "carry": true, "clap": true, "confused": true, "cry": true,
+	"cuddle": true, "dance": true, "eat": true, "facepalm": true, "feed": true, "handhold": true,
+	"handshake": true, "happy": true, "hi": true, "highfive": true, "hug": true, "kick": true,
+	"kill": true, "kiss": true, "lappillow": true, "laugh": true, "lick": true, "nod": true,
+	"nope": true, "nya": true, "pat": true, "peek": true, "poke": true, "pout": true,
+	"punch": true, "run": true, "salute": true, "scared": true, "shake": true, "shocked": true,
+	"shoot": true, "shrug": true, "shy": true, "sing": true, "sip": true, "slap": true,
+	"sleep": true, "smile": true, "smug": true, "sorry": true, "spin": true, "stare": true,
+	"surprised": true, "taunt": true, "teehee": true, "think": true, "thumbsup": true, "tickle": true,
+	"tired": true, "wag": true, "wallslam": true, "wave": true, "wink": true, "yawn": true,
+	"yay": true, "yeet": true,
+}
+
+var otakuSet = map[string]bool{
+	"airkiss": true, "angrystare": true, "bite": true, "bleh": true, "blush": true, "brofist": true,
+	"celebrate": true, "cheers": true, "clap": true, "confused": true, "cool": true, "cry": true,
+	"cuddle": true, "dance": true, "drool": true, "evillaugh": true, "facepalm": true, "handhold": true,
+	"happy": true, "headbang": true, "hug": true, "huh": true, "kiss": true, "laugh": true,
+	"lick": true, "love": true, "mad": true, "nervous": true, "no": true, "nom": true,
+	"nosebleed": true, "nuzzle": true, "nyah": true, "pat": true, "peek": true, "pinch": true,
+	"poke": true, "pout": true, "punch": true, "roll": true, "run": true, "sad": true,
+	"scared": true, "shout": true, "shrug": true, "shy": true, "sigh": true, "sing": true,
+	"sip": true, "slap": true, "sleep": true, "slowclap": true, "smack": true, "smile": true,
+	"smug": true, "sneeze": true, "sorry": true, "stare": true, "stop": true, "surprised": true,
+	"sweat": true, "thumbsup": true, "tickle": true, "tired": true, "wave": true, "wink": true,
+	"woah": true, "yawn": true, "yay": true, "yes": true,
+}
+
+var nekosBestSet = map[string]bool{
+	"angry": true, "baka": true, "bite": true, "bleh": true, "blowkiss": true, "blush": true,
+	"bonk": true, "bored": true, "carry": true, "clap": true, "confused": true, "cry": true,
+	"cuddle": true, "dance": true, "facepalm": true, "feed": true, "handhold": true, "handshake": true,
+	"happy": true, "highfive": true, "hug": true, "husbando": true, "kabedon": true, "kick": true,
+	"kiss": true, "kitsune": true, "lappillow": true, "laugh": true, "lurk": true, "neko": true,
+	"nod": true, "nom": true, "nope": true, "nya": true, "pat": true, "peck": true,
+	"poke": true, "pout": true, "punch": true, "run": true, "salute": true, "shake": true,
+	"shocked": true, "shoot": true, "shrug": true, "sip": true, "slap": true, "sleep": true,
+	"smile": true, "smug": true, "spin": true, "stare": true, "tableflip": true, "teehee": true,
+	"think": true, "thumbsup": true, "tickle": true, "wag": true, "waifu": true, "wave": true,
+	"wink": true, "yawn": true, "yeet": true,
+}
+
+var purrSet = map[string]bool{
+	"angry": true, "blush": true, "comfy": true, "cry": true, "cuddle": true, "dance": true,
+	"feed": true, "fluff": true, "hug": true, "kiss": true, "lick": true, "neko": true,
+	"pat": true, "poke": true, "slap": true, "smile": true, "tail": true, "tickle": true,
+}
+
+
+// reactionEmoji returns the emoji for a reaction name (default sparkle).
+func reactionEmoji(name string) string {
+	if e, ok := reactionEmojiMap[name]; ok {
+		return e
 	}
-	return reactionDef{}, false
+	return "\u2728"
 }
 
 // reactionHTTPGet fetches a URL with a byte cap and a browser-ish UA.
-func reactionHTTPGet(ctx context.Context, url string, cap int64) ([]byte, bool) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+func reactionHTTPGet(ctx context.Context, rawurl string, cap int64) ([]byte, bool) {
+	req, err := http.NewRequestWithContext(ctx, "GET", rawurl, nil)
 	if err != nil {
 		return nil, false
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (GOLD-MD)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, false
@@ -227,29 +386,80 @@ func reactionTryProvider(ctx context.Context, apiURL, field string) ([]byte, boo
 	return reactionHTTPGet(ctx, u, 25<<20)
 }
 
+// tenorSearch queries Tenor v2 and returns the first GIF url for the query.
+func tenorSearch(ctx context.Context, query string) (string, bool) {
+	api := "https://tenor.googleapis.com/v2/search?q=" + url.QueryEscape(query) +
+		"&key=" + tenorKey + "&client_key=" + tenorClientKey +
+		"&limit=1&media_filter=gif&contentfilter=high"
+	body, ok := reactionHTTPGet(ctx, api, 1<<20)
+	if !ok {
+		return "", false
+	}
+	var d struct {
+		Results []struct {
+			MediaFormats map[string]struct {
+				URL string `json:"url"`
+			} `json:"media_formats"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(body, &d); err != nil || len(d.Results) == 0 {
+		return "", false
+	}
+	mf := d.Results[0].MediaFormats
+	if g, ok := mf["gif"]; ok && g.URL != "" {
+		return g.URL, true
+	}
+	if g, ok := mf["tinygif"]; ok && g.URL != "" {
+		return g.URL, true
+	}
+	return "", false
+}
+
 // reactionFetchGif tries every provider in order and returns the first GIF.
-// pairing is "m" (solo boy) or "f" (solo girl) for gifukai.
-func reactionFetchGif(ctx context.Context, def reactionDef, pairing string) ([]byte, bool) {
-	if def.Gifukai != "" {
-		if d, ok := reactionTryProvider(ctx, "https://api.gifukai.com/v1/"+def.Gifukai+"?pairing="+pairing, "url"); ok {
-			return d, true
-		}
-		if d, ok := reactionTryProvider(ctx, "https://api.gifukai.com/v1/"+def.Gifukai, "url"); ok {
+// gender is "m" (solo boy) or "f" (solo girl).
+func reactionFetchGif(ctx context.Context, name, gender string) ([]byte, bool) {
+	genderWord := "boy"
+	if gender == "f" {
+		genderWord = "girl"
+	}
+
+	// 1) Tenor \u2014 gender-specific anime search.
+	if u, ok := tenorSearch(ctx, "anime "+genderWord+" "+name); ok {
+		if d, ok := reactionHTTPGet(ctx, u, 25<<20); ok {
 			return d, true
 		}
 	}
-	if def.Otaku != "" {
-		if d, ok := reactionTryProvider(ctx, "https://api.otakugifs.xyz/gif?reaction="+def.Otaku, "url"); ok {
+	// 1b) Tenor \u2014 generic anime search.
+	if u, ok := tenorSearch(ctx, "anime "+name); ok {
+		if d, ok := reactionHTTPGet(ctx, u, 25<<20); ok {
 			return d, true
 		}
 	}
-	if def.Purr != "" {
-		if d, ok := reactionTryProvider(ctx, "https://api.purrbot.site/v2/img/sfw/"+def.Purr+"/gif", "link"); ok {
+
+	// 2) gifukai (gender pairing).
+	if gifukaiSet[name] {
+		if d, ok := reactionTryProvider(ctx, "https://api.gifukai.com/v1/"+name+"?pairing="+gender, "url"); ok {
+			return d, true
+		}
+		if d, ok := reactionTryProvider(ctx, "https://api.gifukai.com/v1/"+name, "url"); ok {
 			return d, true
 		}
 	}
-	if def.Neko != "" {
-		if d, ok := reactionTryProvider(ctx, "https://nekos.life/api/v2/img/"+def.Neko, "url"); ok {
+	// 3) otakugifs.
+	if otakuSet[name] {
+		if d, ok := reactionTryProvider(ctx, "https://api.otakugifs.xyz/gif?reaction="+name, "url"); ok {
+			return d, true
+		}
+	}
+	// 4) nekos.best.
+	if nekosBestSet[name] {
+		if d, ok := reactionTryProvider(ctx, "https://nekos.best/api/v2/"+name, "url"); ok {
+			return d, true
+		}
+	}
+	// 5) purrbot.
+	if purrSet[name] {
+		if d, ok := reactionTryProvider(ctx, "https://api.purrbot.site/v2/img/sfw/"+name+"/gif", "link"); ok {
 			return d, true
 		}
 	}
@@ -306,74 +516,56 @@ func reactionGifToMp4(ctx context.Context, gifData []byte) ([]byte, uint32, uint
 
 // handleReaction deletes the user's command message, fetches the anime GIF,
 // converts it and sends it with the "I AM <NAME> <EMOJI>" caption.
-func handleReaction(s SessionBridge, info types.MessageInfo, def reactionDef, pairing string) {
-	go handleReactionAsync(s, info, def, pairing)
+func handleReaction(s SessionBridge, info types.MessageInfo, name, gender string) {
+	go handleReactionAsync(s, info, name, gender)
 }
 
-func handleReactionAsync(s SessionBridge, info types.MessageInfo, def reactionDef, pairing string) {
+func handleReactionAsync(s SessionBridge, info types.MessageInfo, name, gender string) {
 	// 1) Delete the user's command message first (owner order).
 	_ = s.DeleteMessage(info, info.ID)
 
 	client := s.GetClient()
 	if client == nil || !client.IsConnected() {
-		s.Reply(info, "⚡ *REACTION ERROR ⚡*\n*BOT CLIENT NOT CONNECTED*")
+		s.Reply(info, "\u26a1 *REACTION ERROR \u26a1*\n*BOT CLIENT NOT CONNECTED*")
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	gifData, ok := reactionFetchGif(ctx, def, pairing)
+	gifData, ok := reactionFetchGif(ctx, name, gender)
 	if !ok {
-		s.Reply(info, "*🎬 REACTION ERROR 🎬*\n*COULD NOT FETCH GIF, TRY AGAIN*")
+		s.Reply(info, "*\U0001f3ac REACTION ERROR \U0001f3ac*\n*COULD NOT FETCH GIF, TRY AGAIN*")
 		return
 	}
 
 	mp4, secs, w, h, ok := reactionGifToMp4(ctx, gifData)
 	if !ok {
-		s.Reply(info, "*🎬 REACTION ERROR 🎬*\n*CONVERSION FAILED, TRY AGAIN*")
+		s.Reply(info, "*\U0001f3ac REACTION ERROR \U0001f3ac*\n*CONVERSION FAILED, TRY AGAIN*")
 		return
 	}
 
-	caption := "I AM " + strings.ToUpper(def.Name) + " " + def.Emoji
+	caption := "I AM " + strings.ToUpper(name) + " " + reactionEmoji(name)
 	_ = s.SendGif(info, mp4, caption, secs, w, h)
 }
 
 func init() {
-	// Register 500 commands per category. The 129-entry reaction catalog is
-	// the source; we cycle through it with numeric suffixes to reach 500
-	// (e.g. .bhappy, .bhappy2, .bhappy3, .bhappy4, ...). Every numbered
-	// variant maps back to its base reaction + gender pairing.
+	// Register 500 UNIQUE commands per category from the reaction catalog.
 	registerReactionCategory("BREACTION", "b", "BOYS", "m")
 	registerReactionCategory("GREACTION", "g", "GIRLS", "f")
 }
 
-// registerReactionCategory registers exactly `total` commands for a category
-// by cycling the reaction catalog with numeric suffixes.
-func registerReactionCategory(category, prefix, label, pairing string) {
-	const total = 500
-	count := 0
-	suffix := 1
-	for count < total {
-		for _, d := range reactionDefs {
-			if count >= total {
-				break
-			}
-			def := d
-			name := prefix + def.Name
-			if suffix > 1 {
-				name = name + strconv.Itoa(suffix)
-			}
-			Register(Command{
-				Name:     name,
-				Category: category,
-				Desc:     label + " " + strings.ToUpper(def.Name) + " ANIME REACTION",
-				Run: func(s SessionBridge, info types.MessageInfo, args []string, pfx string) {
-					handleReaction(s, info, def, pairing)
-				},
-			})
-			count++
-		}
-		suffix++
+// registerReactionCategory registers one command per reaction name.
+func registerReactionCategory(category, prefix, label, gender string) {
+	for _, n := range reactionNames {
+		name := n
+		Register(Command{
+			Name:     prefix + name,
+			Category: category,
+			Desc:     label + " " + strings.ToUpper(name) + " ANIME REACTION",
+			Run: func(s SessionBridge, info types.MessageInfo, args []string, pfx string) {
+				handleReaction(s, info, name, gender)
+			},
+		})
 	}
 }
