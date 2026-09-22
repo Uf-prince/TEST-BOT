@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"go.mau.fi/whatsmeow/types"
@@ -105,7 +106,7 @@ func searchProgressPlay2(ctx context.Context, s SessionBridge, info types.Messag
 // downloadAndSendAudio2 is the turbo audio download pipeline:
 // 1. Wait msg → 2. 3-client race fetch → 3. loader.to fallback (blocked)
 // 4. metadata + thumbnail (held) → 5. fast audio download → 6. 128k MP3 remux
-// 7. delete wait → 8. SendImage+caption → 9. SendAudioFile
+// 7. compress (guard) → 8. SendImage+caption → 9. SendAudioFile → 10. delete wait
 func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.MessageInfo, videoURL string, picked *VideoResult) {
 	waitMsgID := s.ReplyWithID(info, "*DOWNLOADING AUDIO FROM YOUTUBE.....*")
 
@@ -121,6 +122,18 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 	// STEP 1: parallel Innertube race (turbo path)
 	var st *yt2Stream
 	videoID := ytDirectExtractID(videoURL)
+
+	// Fetch rich metadata (author/views/comments) in PARALLEL with the race.
+	var meta *yt2Meta
+	var metaWG sync.WaitGroup
+	if videoID != "" {
+		metaWG.Add(1)
+		go func() {
+			defer metaWG.Done()
+			meta = yt2FetchMeta(ctx, videoID)
+		}()
+	}
+
 	if videoID != "" {
 		st = yt2RaceFetch(ctx, videoID, false)
 	}
@@ -128,22 +141,32 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 	if st == nil {
 		ws, err := ytLoaderToFallback(ctx, linkClient, videoURL, "mp3")
 		if err != nil || ws == nil || ws.Result.AudioURL == "" {
+			metaWG.Wait()
 			clearWait()
 			play2CmdError(s, info)
 			return
 		}
 		st = &yt2Stream{title: ws.Metadata.Title, itag18: ws.Result.AudioURL}
 	}
+	metaWG.Wait()
 
-	// STEP 2: metadata (picked result wins, race data fills gaps)
+	// STEP 2: metadata (picked result wins, race data fills gaps, /next fills N/A)
 	title := "N/A"
 	if picked != nil && picked.Title != "" {
 		title = picked.Title
 	} else if st.title != "" {
 		title = st.title
+	} else if meta != nil && meta.title != "" {
+		title = meta.title
 	}
 
-	author := st.author
+	author := ""
+	if meta != nil {
+		author = meta.author
+	}
+	if author == "" {
+		author = st.author
+	}
 	if author == "" {
 		author = "N/A"
 	}
@@ -155,7 +178,17 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 	if duration == "" {
 		duration = "N/A"
 	}
-	views := formatMetadataNumber(st.views)
+	views := ""
+	if meta != nil {
+		views = meta.views
+	}
+	if views == "" {
+		views = formatMetadataNumber(st.views)
+	}
+	comments := "N/A"
+	if meta != nil && meta.comments != "" {
+		comments = meta.comments
+	}
 
 	thumbURL := st.thumb
 	if picked != nil && picked.Thumbnail != "" {
@@ -163,8 +196,8 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 	}
 	thumbnail := downloadThumbnail(ctx, dlClient, thumbURL)
 
-	infoCaption := fmt.Sprintf("*%s* \n\n🔰 *AUTHOR :\u276f %s* \n🔰 *DURATION :\u276f %s* \n🔰 *VIEWS :\u276f %s*",
-		strings.ToUpper(title), strings.ToUpper(author), strings.ToUpper(duration), strings.ToUpper(views))
+	infoCaption := fmt.Sprintf("*%s* \n\n🔰 *AUTHOR :\u276f %s* \n🔰 *COMMENTS :\u276f %s* \n🔰 *VIEWS :\u276f %s* \n🔰 *DURATION :\u276f %s*",
+		strings.ToUpper(title), strings.ToUpper(author), strings.ToUpper(comments), strings.ToUpper(views), strings.ToUpper(duration))
 
 	// STEP 3: pick the audio stream — itag 140 (AAC 128k) preferred, 139 fallback.
 	// If neither adaptive audio stream is available (e.g. loader.to path), the
@@ -203,18 +236,12 @@ func downloadAndSendAudio2(ctx context.Context, s SessionBridge, info types.Mess
 		defer os.Remove(audioPath)
 	}
 
-	// STEP 6: delete waiting message
+	// STEP 6: send — the audio is FULLY compressed FIRST (guard), then the
+	// thumbnail + info caption, and only then the already-compressed audio.
+	// The waiting message is deleted ONLY after the media has been sent.
+	sendErr := s.SendAudioThumbFirst(info, audioPath, infoCaption, thumbnail)
 	clearWait()
-
-	// STEP 7: send thumbnail + info
-	if len(thumbnail) > 0 {
-		_ = s.SendImage(info, thumbnail, infoCaption)
-	} else {
-		s.Reply(info, infoCaption)
-	}
-
-	// STEP 8: send audio
-	if err := s.SendAudioFile(info, audioPath, "", 0); err != nil {
+	if sendErr != nil {
 		play2CmdError(s, info)
 	}
 }

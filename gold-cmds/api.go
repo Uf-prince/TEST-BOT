@@ -65,6 +65,13 @@ type SessionBridge interface {
 	// SendAudioFileRaw sends audio with NO caption / NO footer (raw). Used by
 	// .play3. Still runs the guard compressor.
 	SendAudioFileRaw(info types.MessageInfo, path string) error
+	// SendVideoThumbFirst is the OWNER-ORDERED flow for .play/.play2/.video/
+	// .video2: the video is FULLY compressed FIRST (guard), then the thumbnail
+	// + info caption is sent, and only then the already-compressed video. This
+	// guarantees the thumbnail never arrives before compression finishes.
+	SendVideoThumbFirst(info types.MessageInfo, path string, caption string, thumbnail []byte) error
+	// SendAudioThumbFirst is the audio variant of SendVideoThumbFirst.
+	SendAudioThumbFirst(info types.MessageInfo, path string, caption string, thumbnail []byte) error
 	SendImage(info types.MessageInfo, data []byte, caption string) error
 	SetVideoSession(jid string, results []VideoResult)
 	SetVideoSession2(jid string, results []VideoResult, hd bool)

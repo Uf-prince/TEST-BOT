@@ -189,23 +189,10 @@ func (b *bridge) SendVideo(info types.MessageInfo, data []byte, caption string, 
 	return err
 }
 
-// SendVideoFile uploads and sends a video from a seekable file without loading it into RAM.
-func (b *bridge) SendVideoFile(info types.MessageInfo, path string, caption string, thumbnail []byte, seconds uint32, width uint32, height uint32) error {
-	// GUARD (Render bandwidth shield): 50MB+ video → compressor room
-	g := b.guardPath(info, guardVideo, path, caption)
-	if g.blocked() {
-		return nil // guard ne chat me block message bhej diya
-	}
-	defer g.cleanupAll()
-	if g.usePath {
-		path = g.path
-		caption += g.note
-		secs, w, h := guardProbeMeta(path)
-		if secs > 0 {
-			seconds = secs
-			width, height = w, h
-		}
-	}
+// sendVideoFileCore uploads and sends a video file WITHOUT running the guard
+// compressor. Callers must have already compressed the file (or decided not
+// to). Kept private so the guard policy stays in one place.
+func (b *bridge) sendVideoFileCore(info types.MessageInfo, path string, caption string, thumbnail []byte, seconds uint32, width uint32, height uint32) error {
 	caption = b.s.withCaptionFooter(caption) // botname footer on every video
 	f, err := os.Open(path)
 	if err != nil {
@@ -226,21 +213,60 @@ func (b *bridge) SendVideoFile(info types.MessageInfo, path string, caption stri
 	return err
 }
 
-// SendAudioFile uploads and sends audio from a seekable file without loading it into RAM.
-func (b *bridge) SendAudioFile(info types.MessageInfo, path string, caption string, seconds uint32) error {
-	// GUARD (Render bandwidth shield): 50MB+ audio → compressor room
-	g := b.guardPath(info, guardAudio, path, caption)
+// SendVideoFile uploads and sends a video from a seekable file without loading it into RAM.
+func (b *bridge) SendVideoFile(info types.MessageInfo, path string, caption string, thumbnail []byte, seconds uint32, width uint32, height uint32) error {
+	// GUARD (Render bandwidth shield): 50MB+ video → compressor room
+	g := b.guardPath(info, guardVideo, path, caption)
 	if g.blocked() {
-		return nil
+		return nil // guard ne chat me block message bhej diya
 	}
 	defer g.cleanupAll()
 	if g.usePath {
 		path = g.path
-		// audio compressed → seconds re-probe
-		if d := guardProbeDuration(path); d > 0 {
-			seconds = uint32(d)
+		caption += g.note
+		secs, w, h := guardProbeMeta(path)
+		if secs > 0 {
+			seconds = secs
+			width, height = w, h
 		}
 	}
+	return b.sendVideoFileCore(info, path, caption, thumbnail, seconds, width, height)
+}
+
+// SendVideoThumbFirst is the OWNER-ORDERED send flow for .play/.play2/.video/
+// .video2: the video is FULLY compressed FIRST (guard), and only once it is
+// ready to send does the bot send the thumbnail + info caption, followed by
+// the already-compressed video. This guarantees the thumbnail can never
+// arrive before compression has finished. The video itself carries NO caption
+// (the author/comments/views info lives on the thumbnail).
+func (b *bridge) SendVideoThumbFirst(info types.MessageInfo, path string, caption string, thumbnail []byte) error {
+	// STEP 1: GUARD compress FIRST — nothing is sent until this completes.
+	g := b.guardPath(info, guardVideo, path, caption)
+	if g.blocked() {
+		return nil // guard ne chat me block message bhej diya
+	}
+	defer g.cleanupAll()
+	if g.usePath {
+		path = g.path
+		caption += g.note
+	}
+	var seconds, width, height uint32
+	if secs, w, h := guardProbeMeta(path); secs > 0 {
+		seconds, width, height = secs, w, h
+	}
+	// STEP 2: send thumbnail + info caption FIRST (video is already compressed)
+	if len(thumbnail) > 0 {
+		_ = b.SendImage(info, thumbnail, caption)
+	} else {
+		b.Reply(info, caption)
+	}
+	// STEP 3: send the already-compressed video (no caption, no footer)
+	return b.sendVideoFileCore(info, path, "", nil, seconds, width, height)
+}
+
+// sendAudioFileCore uploads and sends an audio file WITHOUT running the guard
+// compressor. Callers must have already compressed the file (or decided not to).
+func (b *bridge) sendAudioFileCore(info types.MessageInfo, path string, caption string, seconds uint32) error {
 	// audio messages carry no visible caption on WhatsApp; footer is applied
 	// only when a text caption is present
 	caption = b.s.withCaptionFooter(caption)
@@ -259,6 +285,53 @@ func (b *bridge) SendAudioFile(info types.MessageInfo, path string, caption stri
 		FileEncSHA256: resp.FileEncSHA256, Seconds: proto.Uint32(seconds), PTT: proto.Bool(false),
 	}})
 	return err
+}
+
+// SendAudioFile uploads and sends audio from a seekable file without loading it into RAM.
+func (b *bridge) SendAudioFile(info types.MessageInfo, path string, caption string, seconds uint32) error {
+	// GUARD (Render bandwidth shield): 50MB+ audio → compressor room
+	g := b.guardPath(info, guardAudio, path, caption)
+	if g.blocked() {
+		return nil
+	}
+	defer g.cleanupAll()
+	if g.usePath {
+		path = g.path
+		// audio compressed → seconds re-probe
+		if d := guardProbeDuration(path); d > 0 {
+			seconds = uint32(d)
+		}
+	}
+	return b.sendAudioFileCore(info, path, caption, seconds)
+}
+
+// SendAudioThumbFirst is the OWNER-ORDERED send flow for .play/.play2: the
+// audio is FULLY compressed FIRST (guard), then the thumbnail + info caption
+// is sent, and only then the already-compressed audio. Guarantees the
+// thumbnail never arrives before compression finishes.
+func (b *bridge) SendAudioThumbFirst(info types.MessageInfo, path string, caption string, thumbnail []byte) error {
+	// STEP 1: GUARD compress FIRST — nothing is sent until this completes.
+	g := b.guardPath(info, guardAudio, path, caption)
+	if g.blocked() {
+		return nil
+	}
+	defer g.cleanupAll()
+	var seconds uint32
+	if g.usePath {
+		path = g.path
+		caption += g.note
+	}
+	if d := guardProbeDuration(path); d > 0 {
+		seconds = uint32(d)
+	}
+	// STEP 2: send thumbnail + info caption FIRST (audio is already compressed)
+	if len(thumbnail) > 0 {
+		_ = b.SendImage(info, thumbnail, caption)
+	} else {
+		b.Reply(info, caption)
+	}
+	// STEP 3: send the already-compressed audio (no caption, no footer)
+	return b.sendAudioFileCore(info, path, "", seconds)
 }
 
 // SendVideoFileRaw is the .video3 raw variant of SendVideoFile: it runs the

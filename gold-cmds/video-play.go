@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.mau.fi/whatsmeow/types"
@@ -179,8 +180,8 @@ func searchProgress(ctx context.Context, s SessionBridge, info types.MessageInfo
 
 // downloadAndSend is the complete video download pipeline:
 // 1. Waiting message → 2. API call → 3. Metadata + thumbnail (held)
-// 4. Video download + remux → 5. Delete waiting msg → 6. Send thumbnail+info
-// 7. Send plain video
+// 4. Video download + remux → 5. Compress (guard) → 6. Send thumbnail+info
+// 7. Send compressed video → 8. Delete waiting msg
 func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInfo, videoURL string, pickedResult *VideoResult) {
 	// Single static waiting message — NO progress edits, keeps server fast
 	waitMsgID := s.ReplyWithID(info, "*DOWNLOADING VIDEOS FROM YOUTUBE.....*")
@@ -213,25 +214,18 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 		return
 	}
 
-	// STEP 2: Prepare metadata (N/A if not available)
-	title := "N/A"
-	if pickedResult != nil && pickedResult.Title != "" {
-		title = pickedResult.Title
-	} else if wsData.Metadata.Title != "" {
-		title = wsData.Metadata.Title
+	// Rich metadata (author/views/comments) via Innertube /next — reliable even
+	// when the player endpoint is blocked. Fetched in parallel with the download.
+	videoID := ytDirectExtractID(videoURL)
+	var meta *yt2Meta
+	var metaWG sync.WaitGroup
+	if videoID != "" {
+		metaWG.Add(1)
+		go func() {
+			defer metaWG.Done()
+			meta = yt2FetchMeta(ctx, videoID)
+		}()
 	}
-	author := wsData.Metadata.Author
-	if author == "" {
-		author = "N/A"
-	}
-	duration := wsData.Metadata.Duration
-	if duration == "" && pickedResult != nil {
-		duration = pickedResult.Duration
-	}
-	if duration == "" {
-		duration = "N/A"
-	}
-	views := formatMetadataNumber(wsData.Metadata.Views) // returns "N/A" if 0
 
 	// Download thumbnail (prepare but DON'T send yet — hold until video download completes)
 	thumbnailURL := wsData.Metadata.Thumbnail
@@ -239,10 +233,6 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 		thumbnailURL = pickedResult.Thumbnail
 	}
 	thumbnail := downloadThumbnail(ctx, dlClient, thumbnailURL)
-
-	// Prepare info caption (hold it — send after video download completes)
-	infoCaption := fmt.Sprintf("*%s*\n\n🔰 *AUTHOR :❯ %s*\n🔰 *DURATION :❯ %s*\n🔰 *VIEWS :❯ %s*",
-		strings.ToUpper(title), strings.ToUpper(author), strings.ToUpper(duration), strings.ToUpper(views))
 
 	// STEP 3: Stream the H.264 video to a temporary file (bounded RAM).
 	videoPath, dlErr := streamDownloadToFile(ctx, dlClient, wsData.Result.VideoURL, nil)
@@ -261,24 +251,51 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 		defer os.Remove(finalVideoPath)
 	}
 
-	// STEP 5: Video download COMPLETE — delete waiting message
-	clearWait()
-
-	// STEP 6: NOW send thumbnail + info (after video download completes, before video send)
-	if len(thumbnail) > 0 {
-		if thumbErr := s.SendImage(info, thumbnail, infoCaption); thumbErr != nil {
-		}
-	} else {
-		// No thumbnail available — send info as text message
-		s.Reply(info, infoCaption)
+	// STEP 5: metadata (picked result wins, API data fills gaps, /next fills N/A)
+	metaWG.Wait()
+	title := "N/A"
+	if pickedResult != nil && pickedResult.Title != "" {
+		title = pickedResult.Title
+	} else if wsData.Metadata.Title != "" {
+		title = wsData.Metadata.Title
+	} else if meta != nil && meta.title != "" {
+		title = meta.title
 	}
+	author := wsData.Metadata.Author
+	if meta != nil && meta.author != "" {
+		author = meta.author
+	}
+	if author == "" {
+		author = "N/A"
+	}
+	duration := wsData.Metadata.Duration
+	if duration == "" && pickedResult != nil {
+		duration = pickedResult.Duration
+	}
+	if duration == "" {
+		duration = "N/A"
+	}
+	views := ""
+	if meta != nil {
+		views = meta.views
+	}
+	if views == "" {
+		views = formatMetadataNumber(wsData.Metadata.Views)
+	}
+	comments := "N/A"
+	if meta != nil && meta.comments != "" {
+		comments = meta.comments
+	}
+	infoCaption := fmt.Sprintf("*%s*\n\n🔰 *AUTHOR :❯ %s*\n🔰 *COMMENTS :❯ %s*\n🔰 *VIEWS :❯ %s*\n🔰 *DURATION :❯ %s*",
+		strings.ToUpper(title), strings.ToUpper(author), strings.ToUpper(comments), strings.ToUpper(views), strings.ToUpper(duration))
 
-	// STEP 7: Send plain video (no caption, no footer)
-	err = s.SendVideoFile(info, finalVideoPath, "", nil, 0, 0, 0)
-
-	if err != nil {
+	// STEP 6: send — the video is FULLY compressed FIRST (guard), then the
+	// thumbnail + info caption, and only then the already-compressed video.
+	// The waiting message is deleted ONLY after the media has been sent.
+	sendErr := s.SendVideoThumbFirst(info, finalVideoPath, infoCaption, thumbnail)
+	clearWait()
+	if sendErr != nil {
 		videoCmdError(s, info)
-	} else {
 	}
 }
 
@@ -357,8 +374,8 @@ func handlePlayAsync(ctx context.Context, s SessionBridge, info types.MessageInf
 
 // sendAudio is the complete audio download pipeline:
 // 1. Waiting message → 2. API call → 3. Metadata + thumbnail (held)
-// 4. Audio download → 5. Delete waiting msg → 6. Send thumbnail+info
-// 7. Send plain audio
+// 4. Audio download → 5. Compress (guard) → 6. Send thumbnail+info
+// 7. Send compressed audio → 8. Delete waiting msg
 func sendAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, videoURL string, selected *VideoResult) {
 	// sendAudio is already called from the asynchronous play handler.
 	// Do not add a global semaphore here: other commands must remain usable.
@@ -385,32 +402,21 @@ func sendAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, vid
 	}
 	data := *wsAudio
 
-	// Prepare metadata (N/A if not available)
-	title := "N/A"
-	if selected != nil && selected.Title != "" {
-		title = selected.Title
-	} else if data.Metadata.Title != "" {
-		title = data.Metadata.Title
+	// Rich metadata (author/views/comments) via Innertube /next — reliable even
+	// when the player endpoint is blocked. Fetched in parallel with the download.
+	videoID := ytDirectExtractID(videoURL)
+	var meta *yt2Meta
+	var metaWG sync.WaitGroup
+	if videoID != "" {
+		metaWG.Add(1)
+		go func() {
+			defer metaWG.Done()
+			meta = yt2FetchMeta(ctx, videoID)
+		}()
 	}
-	author := data.Metadata.Author
-	if author == "" {
-		author = "N/A"
-	}
-	duration := data.Metadata.Duration
-	if duration == "" && selected != nil {
-		duration = selected.Duration
-	}
-	if duration == "" {
-		duration = "N/A"
-	}
-	views := formatMetadataNumber(data.Metadata.Views) // returns "N/A" if 0
 
 	// Download thumbnail (prepare but DON'T send yet — hold until audio download completes)
 	thumbnail := downloadThumbnail(ctx, client, data.Metadata.Thumbnail)
-
-	// Prepare info caption (hold it — send after audio download completes)
-	infoCaption := fmt.Sprintf("*%s*\n\n🔰 *AUTHOR :❯ %s*\n🔰 *DURATION :❯ %s*\n🔰 *VIEWS :❯ %s*",
-		strings.ToUpper(title), strings.ToUpper(author), strings.ToUpper(duration), strings.ToUpper(views))
 
 	// STEP 1: Download audio (silent)
 	rawAudioPath, err := streamDownloadToFile(ctx, client, data.Result.AudioURL, nil)
@@ -429,20 +435,50 @@ func sendAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, vid
 		defer os.Remove(audioPath)
 	}
 
-	// STEP 2: Audio download COMPLETE — delete waiting message
-	clearWait()
-
-	// STEP 3: NOW send thumbnail + info (after audio download completes, before audio send)
-	if len(thumbnail) > 0 {
-		if thumbErr := s.SendImage(info, thumbnail, infoCaption); thumbErr != nil {
-		}
-	} else {
-		// No thumbnail available — send info as text message
-		s.Reply(info, infoCaption)
+	// STEP 2: metadata (selected result wins, API data fills gaps, /next fills N/A)
+	metaWG.Wait()
+	title := "N/A"
+	if selected != nil && selected.Title != "" {
+		title = selected.Title
+	} else if data.Metadata.Title != "" {
+		title = data.Metadata.Title
+	} else if meta != nil && meta.title != "" {
+		title = meta.title
 	}
+	author := data.Metadata.Author
+	if meta != nil && meta.author != "" {
+		author = meta.author
+	}
+	if author == "" {
+		author = "N/A"
+	}
+	duration := data.Metadata.Duration
+	if duration == "" && selected != nil {
+		duration = selected.Duration
+	}
+	if duration == "" {
+		duration = "N/A"
+	}
+	views := ""
+	if meta != nil {
+		views = meta.views
+	}
+	if views == "" {
+		views = formatMetadataNumber(data.Metadata.Views)
+	}
+	comments := "N/A"
+	if meta != nil && meta.comments != "" {
+		comments = meta.comments
+	}
+	infoCaption := fmt.Sprintf("*%s*\n\n🔰 *AUTHOR :❯ %s*\n🔰 *COMMENTS :❯ %s*\n🔰 *VIEWS :❯ %s*\n🔰 *DURATION :❯ %s*",
+		strings.ToUpper(title), strings.ToUpper(author), strings.ToUpper(comments), strings.ToUpper(views), strings.ToUpper(duration))
 
-	// STEP 4: Send plain audio (no caption, no footer)
-	if err := s.SendAudioFile(info, audioPath, "", 0); err != nil {
+	// STEP 3: send — the audio is FULLY compressed FIRST (guard), then the
+	// thumbnail + info caption, and only then the already-compressed audio.
+	// The waiting message is deleted ONLY after the media has been sent.
+	sendErr := s.SendAudioThumbFirst(info, audioPath, infoCaption, thumbnail)
+	clearWait()
+	if sendErr != nil {
 		playCmdError(s, info)
 	}
 }
