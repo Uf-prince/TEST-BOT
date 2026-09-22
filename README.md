@@ -19,7 +19,7 @@ credentials aur settings **seedha source files me hardcoded** hain:
 |---|---|
 | **Storj / Storadera credentials** (10 shards) | `src/storage.go` → `hardcodedStorjShards` |
 | **PORT** (default `11221`) | `src/core_support.go` → `envInt("PORT", 11221)` |
-| **MAX SESSIONS** (hamesha `2`) | `src/manager.go` → `maxPairedSessions()` |
+| **MAX SESSIONS** (hamesha `30`) | `src/manager.go` → `maxPairedSessions()` |
 | **Data dir / prefix / batch** | `src/core_support.go` → `LoadConfig()` |
 | **Server ID / fleet** | `src/fleet.go` → `fleetSelfID()` |
 
@@ -38,7 +38,7 @@ credentials aur settings **seedha source files me hardcoded** hain:
 
 | Feature | Description |
 |---|---|
-| **Multi-session** | One Go process hosts multiple WhatsApp connections (max **2** per server) |
+| **Multi-session** | One Go process hosts multiple WhatsApp connections (max **30** per server) |
 | **Auto-load** | All saved sessions reconnect in batches on startup (batch size + delay configurable) |
 | **Graceful shutdown** | SIGINT / SIGTERM disconnects every session cleanly |
 | **Core commands** | `alive`, `ping`, `menu` |
@@ -168,7 +168,7 @@ Ye sab **source files me hardcoded** hain. `.env` file **HARGIZ NAHI** banani.
 - **`.env` FILE HARGIZ NAHI BANANI.** (Haan, ye teesri baar likh rahe hain — kyunki ye itna important hai.)
 - **WhatsApp ToS:** Automating WhatsApp may violate their Terms of Service. Use responsibly.
 - **Session persistence:** The sqlite DB (`goldmd.db`) holds all auth credentials. Back it up.
-- **Max sessions = 2:** `maxPairedSessions()` **hardcoded 2** hai. Ise change **mat** karo (owner order).
+- **Max sessions = 30:** `maxPairedSessions()` **hardcoded 30** hai (owner order 2026).
 
 ---
 

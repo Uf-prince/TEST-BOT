@@ -37,6 +37,7 @@ bot.pid
 start_detached.sh
 start_tunnel.sh
 run_local.sh
+launch_daemon.sh
 tunnel.log
 run_11242.sh
 fix_emoji.py

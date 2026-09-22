@@ -55,7 +55,7 @@ export STORJ_BUCKET_10=umar10
 export PORT=11233
 export GOLDMD_DEBUG=0
 export GOLDMD_PANEL_ENABLED=true
-export GOLDMD_MAX_SESSIONS=2  # ⛔ HARDCODED 2 — DO NOT CHANGE (owner order)
+export GOLDMD_MAX_SESSIONS=30  # ✅ HARDCODED 30 — owner order 2026
 export GOLDMD_SERVER_ID=svr1
 
 # ── Watchdog loop ──
