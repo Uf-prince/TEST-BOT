@@ -1,0 +1,44 @@
+# ============================================================================
+# GOLD-MD — Dockerfile.heroku (linux/amd64)
+#
+# Heroku dynos run on linux/amd64 (NOT ARM64). The main Dockerfile cross-compiles
+# for ARM64 (Snapdeploy / AWS Graviton), so it CANNOT be used on Heroku directly
+# ("exec format error"). This file builds a native amd64 binary for Heroku.
+#
+# Deploy: Heroku Container Registry via heroku.yml (build.docker.web: Dockerfile.heroku).
+# The bot reads the $PORT env var (Heroku assigns it dynamically) — see
+# src/core_support.go (PanelPort: envInt("PORT", 11221)).
+#
+# Multi-stage: Stage-1 golang:1.26-bookworm compiles the vendored source
+# (CGO_ENABLED=0, modernc.org/sqlite — CGO-free). Stage-2 debian:bookworm-slim
+# runtime with ffmpeg / python3+Pillow / libreoffice / poppler / jpegoptim / pngquant.
+# ============================================================================
+
+# ── Stage 1: builder (source -> static amd64 CGO-free binary) ────────────────
+FROM golang:1.26-bookworm AS builder
+WORKDIR /build
+COPY . .
+RUN echo "GOLD-MD build-stamp heroku-amd64 source-build"
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -ldflags="-s -w" -o /build/gold-md ./src
+
+# ── Stage 2: runtime (amd64) ─────────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates libc6 ffmpeg python3 python3-pil \
+        jpegoptim pngquant poppler-utils \
+        libreoffice-writer libreoffice-calc libreoffice-impress \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=builder /build/gold-md ./gold-md
+COPY servers.json .
+COPY start.sh .
+RUN chmod +x ./gold-md && chmod +x ./start.sh && mkdir -p nexstore/pairing
+
+# Heroku assigns $PORT at runtime; default kept for local runs.
+ENV PORT=11221
+# SUPERVISOR_ENABLED=1 — start.sh is the supervisor (single fresh process on exit).
+ENV SUPERVISOR_ENABLED=1
+EXPOSE 11221
+CMD ["./start.sh"]

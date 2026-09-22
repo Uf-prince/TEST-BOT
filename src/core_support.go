@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	signalLogger "go.mau.fi/libsignal/logger"
 	"go.mau.fi/whatsmeow/types"
@@ -196,14 +195,20 @@ func initDebug() bool {
 var logMu sync.Mutex
 
 // logLine writes one timestamped line to stderr (and stdout fallback).
+//
+// OWNER ORDER: ALL debug/console logs are COMMENTED OUT (silent). The only
+// line that ever prints is the single startup banner (StartupLog below).
 func logLine(tag, msg string, args ...any) {
-	logMu.Lock()
-	defer logMu.Unlock()
-	line := msg
-	if len(args) > 0 {
-		line = fmt.Sprintf(msg, args...)
-	}
-	fmt.Fprintf(os.Stderr, "%s [%s] %s\n", time.Now().Format("15:04:05.000"), tag, line)
+	// logMu.Lock()
+	// defer logMu.Unlock()
+	// line := msg
+	// if len(args) > 0 {
+	// 	line = fmt.Sprintf(msg, args...)
+	// }
+	// fmt.Fprintf(os.Stderr, "%s [%s] %s\n", time.Now().Format("15:04:05.000"), tag, line)
+	_ = tag
+	_ = msg
+	_ = args
 }
 
 func errLine(tag, msg string, args ...any) { logLine("ERR:"+tag, msg, args...) }
@@ -227,6 +232,12 @@ func FatalLog(msg string, args ...any) {
 	os.Exit(1)
 }
 
+// StartupLog prints the ONE allowed startup line (owner order). It bypasses the
+// silenced logger so it always appears exactly once, after the bot is fully up.
+func StartupLog() {
+	fmt.Fprintln(os.Stdout, "GOLD-MD HAS BEEN STARTED AND WORKING WELL TEST THE GOLD-MD PANEL")
+}
+
 // antiDebugAlwaysOn forces the antidelete/antiedit JSON debugging in the MAIN
 // package to ALWAYS print (regardless of GOLDMD_DEBUG).
 // NOW: enabled — all JSONDebug calls print.
@@ -243,18 +254,21 @@ func isAntiStage(stage string) bool {
 // JSONDebug prints a structured JSON log line tagged with a stage label.
 // NOW: FULL DEBUGGING — always prints.
 func JSONDebug(stage string, fields map[string]any) {
-	out := map[string]any{"stage": stage, "ts": time.Now().Format(time.RFC3339Nano)}
-	for k, v := range fields {
-		out[k] = v
-	}
-	raw, err := json.Marshal(out)
-	if err != nil {
-		logLine("JSON", "marshal-err: %v stage=%s", err, stage)
-		return
-	}
-	logMu.Lock()
-	fmt.Fprintf(os.Stderr, "%s [JSON] %s\n", time.Now().Format("15:04:05.000"), string(raw))
-	logMu.Unlock()
+	// OWNER ORDER: ALL JSON debug logs COMMENTED OUT (silent).
+	// out := map[string]any{"stage": stage, "ts": time.Now().Format(time.RFC3339Nano)}
+	// for k, v := range fields {
+	// 	out[k] = v
+	// }
+	// raw, err := json.Marshal(out)
+	// if err != nil {
+	// 	logLine("JSON", "marshal-err: %v stage=%s", err, stage)
+	// 	return
+	// }
+	// logMu.Lock()
+	// fmt.Fprintf(os.Stderr, "%s [JSON] %s\n", time.Now().Format("15:04:05.000"), string(raw))
+	// logMu.Unlock()
+	_ = stage
+	_ = fields
 }
 
 // JSONDebugErr is a convenience wrapper that prints an error-tagged JSON line.

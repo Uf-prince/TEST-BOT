@@ -132,18 +132,20 @@ var _ = credentials.NewStaticV4
 // stderr pe jaati hai (bot_*.log me) — Storadera data-flow (ja raha / aa raha
 // kya hai) is se verify hota hai. Tag [KV-JSON] grep-friendly hai.
 func storjDebug(stage string, fields map[string]any) {
-	// FULL DEBUGGING ENABLED (owner order): har storage stage ki ek JSON line
-	// stderr pe jaati hai (bot_11222.log me) — [KV-JSON] tag grep-friendly.
-	out := map[string]any{"stage": stage, "ts": time.Now().Format(time.RFC3339Nano)}
-	for k, v := range fields {
-		out[k] = v
-	}
-	raw, err := json.Marshal(out)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s [KV-JSON] marshal-err: %v stage=%s\n", time.Now().Format("15:04:05.000"), err, stage)
-		return
-	}
-	fmt.Fprintf(os.Stderr, "%s [KV-JSON] %s\n", time.Now().Format("15:04:05.000"), string(raw))
+	// OWNER ORDER (2026): ALL debug console/JSON logs COMMENTED OUT.
+	// The [KV-JSON] stderr lines are disabled so the bot prints nothing extra.
+	_ = stage
+	_ = fields
+	// out := map[string]any{"stage": stage, "ts": time.Now().Format(time.RFC3339Nano)}
+	// for k, v := range fields {
+	// 	out[k] = v
+	// }
+	// raw, err := json.Marshal(out)
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "%s [KV-JSON] marshal-err: %v stage=%s\n", time.Now().Format("15:04:05.000"), err, stage)
+	// 	return
+	// }
+	// fmt.Fprintf(os.Stderr, "%s [KV-JSON] %s\n", time.Now().Format("15:04:05.000"), string(raw))
 }
 
 // hardcodedStorjShards — embedded credentials (NO .env FILE — EVER) so

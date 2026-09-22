@@ -1,0 +1,19 @@
+# ============================================================================
+# GOLD-MD — heroku.yml (Heroku Container Registry deploy)
+#
+# Heroku dynos are linux/amd64, so we build with Dockerfile.heroku (amd64),
+# NOT the ARM64 Dockerfile used by Snapdeploy.
+#
+# Deploy steps:
+#   heroku stack:set container -a <app>
+#   heroku container:push web -a <app>
+#   heroku container:release web -a <app>
+#
+# The web process runs start.sh, which launches ./gold-md. The bot binds to
+# $PORT (Heroku sets it dynamically) — see src/core_support.go.
+# ============================================================================
+build:
+  docker:
+    web: Dockerfile.heroku
+run:
+  web: ./start.sh

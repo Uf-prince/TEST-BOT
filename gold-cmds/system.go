@@ -14,14 +14,13 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-const memoryRestartThreshold uint64 = 500 * 1024 * 1024
-
 func init() {
 	Register(Command{Name: "system", Category: "OWNER & SYSTEM", Desc: "THIS COMMAND IS USED TO SHOW THE FULL SYSTEM INFO OF THE SERVER LIKE RAM, CPU AND STORAGE.", Run: handleSystem})
 }
 
-// MemoryRestartThresholdBytes exposes the watchdog threshold to the main package.
-func MemoryRestartThresholdBytes() uint64 { return memoryRestartThreshold }
+// NOTE (owner order): the old 450/480 MB self-restart threshold and the RAM
+// TTL watchdog were REMOVED. The bot now runs on Heroku (plenty of RAM/disk),
+// so no memory-based restart / cache-TTL system exists anymore.
 
 // cgroupV1Path builds the flat cgroup v1 file path used by hosts like Modal.com
 // (Modal exposes cgroup v1 mounts, NOT v2 — that's why limits previously showed
@@ -164,6 +163,10 @@ func detectPlatform() string {
 	if v := strings.TrimSpace(os.Getenv("GOLDMD_PLATFORM")); v != "" {
 		return v
 	}
+	// Heroku: DYNO is always set (e.g. "web.1"). Heroku runs cgroup v1.
+	if dyno := strings.TrimSpace(os.Getenv("DYNO")); dyno != "" {
+		return "HEROKU (" + dyno + ")"
+	}
 	if strings.TrimSpace(os.Getenv("MODAL_IS_REMOTE")) != "" {
 		p := "GOLD"
 		if r := strings.TrimSpace(os.Getenv("MODAL_REGION")); r != "" {
@@ -176,6 +179,9 @@ func detectPlatform() string {
 
 // diskQuotaText replaces the old hardcoded "Not exposed by Render" line.
 func diskQuotaText(platform string) string {
+	if strings.Contains(platform, "HEROKU") {
+		return "Ephemeral dyno filesystem (no fixed quota)"
+	}
 	if strings.Contains(platform, "GOLD") || strings.Contains(platform, "Modal") {
 		return "No fixed quota (volume-backed)"
 	}
@@ -207,6 +213,20 @@ type cpuInfo struct {
 // (Modal.com). If neither exposes a real per-container quota it reports
 // unavailable rather than displaying the host machine's RAM as the bot's quota.
 func readContainerMemory() memoryInfo {
+	// ── Heroku: MEMORY_AVAILABLE (MB) is the dyno's RAM quota ──
+	// Heroku sets MEMORY_AVAILABLE on every dyno (e.g. 512 for standard-1x).
+	// This is the authoritative per-dyno limit; cgroup v1 below is the fallback.
+	if v := strings.TrimSpace(os.Getenv("MEMORY_AVAILABLE")); v != "" {
+		if mb, err := strconv.ParseUint(v, 10, 64); err == nil && mb > 0 {
+			limit := mb * 1024 * 1024
+			current := CurrentContainerMemoryBytes()
+			available := uint64(0)
+			if limit > current {
+				available = limit - current
+			}
+			return memoryInfo{formatBytes(limit), formatBytes(current), formatBytes(available), formatPercent(current, limit), formatCgroupBytes("memory.peak"), formatCgroupBytes("memory.swap.max"), formatCgroupBytes("memory.swap.current")}
+		}
+	}
 	// ── cgroup v2 ──
 	currentPath := findCgroupFile("memory.current")
 	maxPath := findCgroupFile("memory.max")

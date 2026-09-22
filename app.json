@@ -1,0 +1,30 @@
+{
+  "name": "gold-md",
+  "description": "GOLD-MD — multi-session WhatsApp bot (Go / whatsmeow). Heroku container deploy.",
+  "keywords": ["whatsapp", "bot", "golang", "whatsmeow", "gold-md"],
+  "stack": "container",
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "env": {
+    "SUPERVISOR_ENABLED": {
+      "description": "start.sh supervisor mode (single fresh process on exit).",
+      "value": "1",
+      "required": false
+    },
+    "PORT": {
+      "description": "HTTP panel port. Heroku sets this automatically at runtime.",
+      "required": false
+    },
+    "GOLDMD_DEBUG": {
+      "description": "Set to 1 to enable verbose debug logging (off by default — owner order).",
+      "required": false
+    }
+  },
+  "buildpacks": [],
+  "scripts": {},
+  "addons": []
+}

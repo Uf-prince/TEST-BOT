@@ -74,7 +74,14 @@ func (k guardKind) label() string {
 
 // ── env knobs ───────────────────────────────────────────────────────────────
 
-func guardEnabled() bool { return os.Getenv("GOLDMD_GUARD_DISABLED") != "1" }
+// guardEnabled: OWNER ORDER (2026) — the compressor shield is REMOVED from the
+// media downloader AND from antidelete. The bot now runs on Heroku (plenty of
+// RAM/disk/bandwidth), so no compression is needed on downloads or recovered
+// media. The `.botpic` image flow does NOT use this guard, so it is unaffected.
+//
+// This returns false unconditionally → guardPolicy() always passes media
+// through untouched and guardAntideleteBytes() returns the original bytes.
+func guardEnabled() bool { return false }
 
 // guardForceMode: HAR media compressor room me (owner order v2). Default ON.
 // GOLDMD_GUARD_FORCE=0 → purana limit-only mode.

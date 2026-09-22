@@ -551,6 +551,13 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		return
 	}
 
+	// 🔰 CLEAR SESSION (.clear 1/2 prompt — owner order). A bare "1"/"2" reply
+	// after the `.clear` prompt is swallowed here: the bot clears the chat per
+	// the choice, then deletes the prompt + the reply message.
+	if goldcmds.ClearTryHandle(brCP, info, body, prefix) {
+		return
+	}
+
 	// 🔰 YTS CHOICE SESSION (.yts number → thumbnail → 1=AUDIO / 2=VIDEO).
 	// A bare "1"/"2" after a .yts pick sends the audio (play turbo → play2
 	// classic) or the video (video turbo → video2 classic) directly.
