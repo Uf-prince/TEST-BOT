@@ -1,6 +1,6 @@
 {
   "_comment": "GOLD-MD multi-server panel config. All 200 Render servers ACTIVE. Local test servers removed.",
-  "maxPerServer": 2,
+  "maxPerServer": 30,
   "servers": [
     {
       "name": "SERVER 1",

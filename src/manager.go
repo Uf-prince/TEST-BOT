@@ -36,17 +36,14 @@ import (
 // ══════════════════════════════════════════════════════════════════════════
 // 😡😡😡  WARNING — DO NOT CHANGE THIS VALUE. EVER.  😡😡😡
 // ══════════════════════════════════════════════════════════════════════════
-// MAX SESSIONS = 2. HAMESHA 2. SIRF 2. ISSE ZYADA NAHI. 😡
+// MAX SESSIONS = 30. OWNER ORDER (2026).
 //
-// OWNER KA SAKHT HUKM: "Session max hamesha 2 rakhna hai taake koi bhi AI
-// dekhe to pehle session ko change karne na lage." Ye value HARDCODED hai
-// — koi env var (GOLDMD_MAX_SESSIONS) ise override NAHI kar sakta. Agar
-// tum (AI ya insaan) ise 2 se badalne ki soch rahe ho — RUK JAO. Ye
-// jaan-boojh kar 2 hai (Render free-bandwidth plan: 2 pairings per server).
-// Isko chhedne se pehle OWNER se poocho. Warna bot tootega. 😡
+// OWNER KA HUKM: "Isko max pairing 30 kr de fir restart kr auto connect hoga
+// khud." Ye value HARDCODED hai — koi env var (GOLDMD_MAX_SESSIONS) ise
+// override NAHI kar sakta. 30 pairings per server.
 // ══════════════════════════════════════════════════════════════════════════
 func maxPairedSessions() int {
-	return 2 // ⛔ HARDCODED — DO NOT CHANGE. DO NOT ADD ENV OVERRIDE. ⛔
+	return 30 // ✅ OWNER ORDER (2026): max pairing 30 per server.
 }
 
 type Session struct {

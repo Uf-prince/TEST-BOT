@@ -363,7 +363,7 @@ func loadServersConfig() {
 		// FALLBACK: file missing (e.g. not copied in Docker image) -> use
 		// built-in defaults so the panel still shows all servers.
 		if !serversCfgLoaded {
-			serversCfg = serversConfig{MaxPerServer: 2, Servers: defaultServers}
+			serversCfg = serversConfig{MaxPerServer: 30, Servers: defaultServers}
 			serversCfgLoaded = true
 		}
 		return
@@ -377,7 +377,7 @@ func loadServersConfig() {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		// FALLBACK: file present but invalid JSON -> keep previous/defaults.
 		if !serversCfgLoaded {
-			serversCfg = serversConfig{MaxPerServer: 2, Servers: defaultServers}
+			serversCfg = serversConfig{MaxPerServer: 30, Servers: defaultServers}
 			serversCfgLoaded = true
 		}
 		return
@@ -386,7 +386,7 @@ func loadServersConfig() {
 		cfg.Servers = defaultServers
 	}
 	if cfg.MaxPerServer <= 0 {
-		cfg.MaxPerServer = 2
+		cfg.MaxPerServer = 30
 	}
 	// OWNER FIX (.svr wrong info): servers.json me kabhi-kabhi ek hi URL do
 	// server numbers pe set ho jata hai (e.g. .svrchange ne SERVER 50 ko
@@ -761,7 +761,7 @@ func StartPanel(mgr *Manager, port int) {
 				"bot":     "GOLD-MD",
 				"error":   "servers.json not loaded: " + serversCfgErr.Error(),
 				"servers": []serverStatus{},
-				"max":     2, // ⛔ HARDCODED 2 — DO NOT CHANGE (owner order)
+				"max":     30, // ✅ OWNER ORDER (2026): max pairing 30
 			})
 			return
 		}
@@ -873,7 +873,7 @@ func StartPanel(mgr *Manager, port int) {
 		//     This is the local/tunnel single-instance panel — only the owner
 		//     should pair here.
 		//   - Server-selected pairing (dropdown → remote server's /pair): uses
-		//     maxPairedSessions() = HARDCODED 2 (⛔ owner order — DO NOT CHANGE).
+		//     maxPairedSessions() = HARDCODED 30 (✅ owner order 2026).
 		//     This caps how many users each Render instance accepts.
 		isDirect := r.URL.Query().Get("direct") == "1"
 		var effectiveMax int

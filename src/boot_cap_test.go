@@ -18,17 +18,16 @@ func TestFleetActiveDefaultOff(t *testing.T) {
 	}
 }
 
-// maxPairedSessions: HARDCODED 2 — owner ka sakht hukm, koi env override
-// NAHI. (Pehle env override tha; owner ne kaha "session max hamesha 2".)
-func TestMaxPairedSessionsHardcodedTwo(t *testing.T) {
-	// env set karne ke baad bhi 2 hi rehna chahiye — override band hai.
+// maxPairedSessions: OWNER ORDER (2026) — max pairing 30 per server.
+func TestMaxPairedSessionsHardcodedThirty(t *testing.T) {
+	// env set karne ke baad bhi 30 hi rehna chahiye — override band hai.
 	t.Setenv("GOLDMD_MAX_SESSIONS", "5")
-	if got := maxPairedSessions(); got != 2 {
-		t.Errorf("env 5 ke bawajood max 2 hona chahiye, got %d", got)
+	if got := maxPairedSessions(); got != 30 {
+		t.Errorf("env 5 ke bawajood max 30 hona chahiye, got %d", got)
 	}
 	os.Unsetenv("GOLDMD_MAX_SESSIONS")
-	if got := maxPairedSessions(); got != 2 {
-		t.Errorf("default 2 -> got %d", got)
+	if got := maxPairedSessions(); got != 30 {
+		t.Errorf("default 30 -> got %d", got)
 	}
 }
 
