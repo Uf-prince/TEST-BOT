@@ -1,32 +1,22 @@
 package goldcmds
 
 // ============================================================================
-// GOLD-MD — .BREACTION / .GREACTION  (ANIME REACTION GIFS)
+// GOLD-MD — ANIME REACTION COMMANDS  (.b* BOYS / .g* GIRLS)
 // File: reaction.go
 // ============================================================================
-// COMMANDS:
-//   .breaction              -> menu of 5 BOY anime reactions
-//   .breaction <name>       -> sends a BOY anime reaction gif
-//   .greaction              -> menu of 5 GIRL anime reactions
-//   .greaction <name>       -> sends a GIRL anime reaction gif
+// Two categories, each with the SAME full reaction set:
+//   BREACTION → .b<name>  (e.g. .bhappy .bsad .bangry)  — SOLO BOY anime
+//   GREACTION → .g<name>  (e.g. .ghappy .gsad .gangry)  — SOLO GIRL anime
 //
-// REACTIONS (both menus): happy · smile · angry · teeth · sad
-//   happy  -> gifukai action "happy"
-//   smile  -> gifukai action "smile"
-//   angry  -> gifukai action "angry"
-//   teeth  -> gifukai action "teehee"  (grin showing teeth)
-//   sad    -> gifukai action "cry"
+// FLOW: user types .bhappy → the command message is DELETED → an anime
+// reaction GIF is fetched → converted to mp4 → sent as a looping GIF with
+// the caption:  I AM HAPPY 😄
 //
-// SOURCE: gifukai API (https://api.gifukai.com/v1/<action>?pairing=<m|f>)
-//   pairing=m -> SOLO BOY  (BREACTION)
-//   pairing=f -> SOLO GIRL (GREACTION)
-//   Response JSON: { action, pairing, anime, url, filename, content_type }
-//
-// FLOW: fetch JSON -> download .gif -> ffmpeg convert to mp4 -> SendGif
-//   (SendGif sends a VideoMessage with GifPlayback=true so WhatsApp loops it
-//    exactly like a GIF.)
-//
-// CATEGORIES: "BREACTION" and "GREACTION" — both appear in the .menu.
+// SOURCES (all free, no API key), tried in order:
+//   1. gifukai   https://api.gifukai.com/v1/<action>?pairing=<m|f>   (gender!)
+//   2. otakugifs https://api.otakugifs.xyz/gif?reaction=<name>
+//   3. purrbot   https://api.purrbot.site/v2/img/sfw/<name>/gif
+//   4. nekos.life https://nekos.life/api/v2/img/<name>
 // ============================================================================
 
 import (
@@ -42,23 +32,150 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// reactionDef maps a user-facing reaction name to the gifukai action + emoji.
+// reactionDef describes one reaction and where to fetch it from.
 type reactionDef struct {
-	Name   string // user-facing (happy, smile, angry, teeth, sad)
-	Action string // gifukai action
-	Emoji  string
+	Name    string // user-facing name (happy, sad, angry, ...)
+	Emoji   string // emoji shown in the caption
+	Gifukai string // gifukai action (supports gender pairing)
+	Otaku   string // otakugifs reaction
+	Purr    string // purrbot path
+	Neko    string // nekos.life path
 }
 
-// reactionDefs is the fixed 5-reaction set shown in BOTH menus.
+// reactionDefs is the full reaction catalog shared by BOTH categories.
 var reactionDefs = []reactionDef{
-	{Name: "happy", Action: "happy", Emoji: "\U0001F604"},  // 😄
-	{Name: "smile", Action: "smile", Emoji: "\U0001F642"},  // 🙂
-	{Name: "angry", Action: "angry", Emoji: "\U0001F620"},  // 😠
-	{Name: "teeth", Action: "teehee", Emoji: "\U0001F601"}, // 😁
-	{Name: "sad", Action: "cry", Emoji: "\U0001F622"},      // 😢
+	{Name: "agree", Emoji: "👍", Gifukai: "nod", Otaku: "", Purr: "", Neko: ""},
+	{Name: "airkiss", Emoji: "😘", Gifukai: "", Otaku: "airkiss", Purr: "", Neko: ""},
+	{Name: "angry", Emoji: "😠", Gifukai: "angry", Otaku: "", Purr: "angry", Neko: ""},
+	{Name: "angrystare", Emoji: "😠", Gifukai: "", Otaku: "angrystare", Purr: "", Neko: ""},
+	{Name: "bang", Emoji: "🎬", Gifukai: "shoot", Otaku: "", Purr: "", Neko: ""},
+	{Name: "bite", Emoji: "😬", Gifukai: "bite", Otaku: "bite", Purr: "bite", Neko: ""},
+	{Name: "bleh", Emoji: "😝", Gifukai: "bleh", Otaku: "bleh", Purr: "", Neko: ""},
+	{Name: "blowkiss", Emoji: "😘", Gifukai: "blowkiss", Otaku: "", Purr: "", Neko: ""},
+	{Name: "blush", Emoji: "😊", Gifukai: "blush", Otaku: "blush", Purr: "blush", Neko: ""},
+	{Name: "bonk", Emoji: "🔨", Gifukai: "bonk", Otaku: "", Purr: "", Neko: ""},
+	{Name: "boop", Emoji: "👉", Gifukai: "poke", Otaku: "", Purr: "", Neko: ""},
+	{Name: "bored", Emoji: "😒", Gifukai: "bored", Otaku: "", Purr: "", Neko: ""},
+	{Name: "brofist", Emoji: "👊", Gifukai: "", Otaku: "brofist", Purr: "", Neko: ""},
+	{Name: "bye", Emoji: "👋", Gifukai: "bye", Otaku: "", Purr: "", Neko: ""},
+	{Name: "carry", Emoji: "🫂", Gifukai: "carry", Otaku: "", Purr: "", Neko: ""},
+	{Name: "celebrate", Emoji: "🎉", Gifukai: "", Otaku: "celebrate", Purr: "", Neko: ""},
+	{Name: "cheers", Emoji: "🍻", Gifukai: "", Otaku: "cheers", Purr: "", Neko: ""},
+	{Name: "clap", Emoji: "👏", Gifukai: "clap", Otaku: "clap", Purr: "", Neko: ""},
+	{Name: "claps", Emoji: "👏", Gifukai: "clap", Otaku: "", Purr: "", Neko: ""},
+	{Name: "comfy", Emoji: "😌", Gifukai: "", Otaku: "", Purr: "comfy", Neko: ""},
+	{Name: "confused", Emoji: "😕", Gifukai: "confused", Otaku: "confused", Purr: "", Neko: ""},
+	{Name: "cool", Emoji: "😎", Gifukai: "", Otaku: "cool", Purr: "", Neko: ""},
+	{Name: "cry", Emoji: "😭", Gifukai: "cry", Otaku: "cry", Purr: "cry", Neko: ""},
+	{Name: "cuddle", Emoji: "🫂", Gifukai: "cuddle", Otaku: "cuddle", Purr: "cuddle", Neko: "cuddle"},
+	{Name: "cya", Emoji: "👋", Gifukai: "bye", Otaku: "", Purr: "", Neko: ""},
+	{Name: "dance", Emoji: "💃", Gifukai: "dance", Otaku: "dance", Purr: "dance", Neko: ""},
+	{Name: "deny", Emoji: "🙅", Gifukai: "nope", Otaku: "", Purr: "", Neko: ""},
+	{Name: "drink", Emoji: "🥤", Gifukai: "sip", Otaku: "", Purr: "", Neko: ""},
+	{Name: "drool", Emoji: "🤤", Gifukai: "", Otaku: "drool", Purr: "", Neko: ""},
+	{Name: "dunno", Emoji: "🤷", Gifukai: "shrug", Otaku: "", Purr: "", Neko: ""},
+	{Name: "eat", Emoji: "🍽️", Gifukai: "eat", Otaku: "", Purr: "", Neko: ""},
+	{Name: "evillaugh", Emoji: "😈", Gifukai: "", Otaku: "evillaugh", Purr: "", Neko: ""},
+	{Name: "facepalm", Emoji: "🤦", Gifukai: "facepalm", Otaku: "facepalm", Purr: "", Neko: ""},
+	{Name: "feed", Emoji: "🍽️", Gifukai: "feed", Otaku: "", Purr: "feed", Neko: "feed"},
+	{Name: "fluff", Emoji: "☁️", Gifukai: "", Otaku: "", Purr: "fluff", Neko: ""},
+	{Name: "flustered", Emoji: "😳", Gifukai: "blush", Otaku: "", Purr: "", Neko: ""},
+	{Name: "gaze", Emoji: "👀", Gifukai: "stare", Otaku: "", Purr: "", Neko: ""},
+	{Name: "goodbye", Emoji: "👋", Gifukai: "bye", Otaku: "", Purr: "", Neko: ""},
+	{Name: "handhold", Emoji: "🤝", Gifukai: "handhold", Otaku: "handhold", Purr: "", Neko: ""},
+	{Name: "handshake", Emoji: "🤝", Gifukai: "handshake", Otaku: "", Purr: "", Neko: ""},
+	{Name: "happy", Emoji: "😄", Gifukai: "happy", Otaku: "happy", Purr: "", Neko: ""},
+	{Name: "headbang", Emoji: "🤘", Gifukai: "", Otaku: "headbang", Purr: "", Neko: ""},
+	{Name: "headpat", Emoji: "🫳", Gifukai: "pat", Otaku: "", Purr: "", Neko: ""},
+	{Name: "hello", Emoji: "👋", Gifukai: "hi", Otaku: "", Purr: "", Neko: ""},
+	{Name: "hey", Emoji: "👋", Gifukai: "hi", Otaku: "", Purr: "", Neko: ""},
+	{Name: "hi", Emoji: "👋", Gifukai: "hi", Otaku: "", Purr: "", Neko: ""},
+	{Name: "highfive", Emoji: "🙌", Gifukai: "highfive", Otaku: "", Purr: "", Neko: ""},
+	{Name: "hug", Emoji: "🤗", Gifukai: "hug", Otaku: "hug", Purr: "hug", Neko: "hug"},
+	{Name: "huh", Emoji: "❓", Gifukai: "", Otaku: "huh", Purr: "", Neko: ""},
+	{Name: "idk", Emoji: "🤷", Gifukai: "shrug", Otaku: "", Purr: "", Neko: ""},
+	{Name: "kabedon", Emoji: "🧱", Gifukai: "wallslam", Otaku: "", Purr: "", Neko: ""},
+	{Name: "kick", Emoji: "🦵", Gifukai: "kick", Otaku: "", Purr: "", Neko: ""},
+	{Name: "kill", Emoji: "☠️", Gifukai: "kill", Otaku: "", Purr: "", Neko: ""},
+	{Name: "kiss", Emoji: "💋", Gifukai: "kiss", Otaku: "kiss", Purr: "kiss", Neko: "kiss"},
+	{Name: "lappillow", Emoji: "🛋️", Gifukai: "lappillow", Otaku: "", Purr: "", Neko: ""},
+	{Name: "laugh", Emoji: "😂", Gifukai: "laugh", Otaku: "laugh", Purr: "", Neko: ""},
+	{Name: "lay", Emoji: "🛌", Gifukai: "", Otaku: "", Purr: "lay", Neko: ""},
+	{Name: "lick", Emoji: "👅", Gifukai: "lick", Otaku: "lick", Purr: "lick", Neko: ""},
+	{Name: "like", Emoji: "👍", Gifukai: "thumbsup", Otaku: "", Purr: "", Neko: ""},
+	{Name: "lmao", Emoji: "😂", Gifukai: "laugh", Otaku: "", Purr: "", Neko: ""},
+	{Name: "lol", Emoji: "😂", Gifukai: "laugh", Otaku: "", Purr: "", Neko: ""},
+	{Name: "love", Emoji: "❤️", Gifukai: "", Otaku: "love", Purr: "", Neko: ""},
+	{Name: "mad", Emoji: "😠", Gifukai: "angry", Otaku: "mad", Purr: "", Neko: ""},
+	{Name: "meow", Emoji: "🐱", Gifukai: "nya", Otaku: "", Purr: "", Neko: "meow"},
+	{Name: "murder", Emoji: "☠️", Gifukai: "kill", Otaku: "", Purr: "", Neko: ""},
+	{Name: "mwah", Emoji: "😘", Gifukai: "blowkiss", Otaku: "", Purr: "", Neko: ""},
+	{Name: "nap", Emoji: "😴", Gifukai: "sleep", Otaku: "", Purr: "", Neko: ""},
+	{Name: "nervous", Emoji: "😰", Gifukai: "", Otaku: "nervous", Purr: "", Neko: ""},
+	{Name: "no", Emoji: "❌", Gifukai: "nope", Otaku: "no", Purr: "", Neko: ""},
+	{Name: "nod", Emoji: "🙂", Gifukai: "nod", Otaku: "", Purr: "", Neko: ""},
+	{Name: "nom", Emoji: "😋", Gifukai: "eat", Otaku: "nom", Purr: "", Neko: ""},
+	{Name: "nope", Emoji: "🙅", Gifukai: "nope", Otaku: "", Purr: "", Neko: ""},
+	{Name: "nosebleed", Emoji: "🩸", Gifukai: "", Otaku: "nosebleed", Purr: "", Neko: ""},
+	{Name: "nuzzle", Emoji: "🥰", Gifukai: "", Otaku: "nuzzle", Purr: "", Neko: ""},
+	{Name: "nya", Emoji: "🐱", Gifukai: "nya", Otaku: "", Purr: "", Neko: ""},
+	{Name: "nyah", Emoji: "🐱", Gifukai: "", Otaku: "nyah", Purr: "", Neko: ""},
+	{Name: "pat", Emoji: "🫳", Gifukai: "pat", Otaku: "pat", Purr: "pat", Neko: "pat"},
+	{Name: "peck", Emoji: "😗", Gifukai: "kiss", Otaku: "", Purr: "", Neko: ""},
+	{Name: "peek", Emoji: "👀", Gifukai: "peek", Otaku: "peek", Purr: "", Neko: ""},
+	{Name: "pinch", Emoji: "🤏", Gifukai: "", Otaku: "pinch", Purr: "", Neko: ""},
+	{Name: "poke", Emoji: "👉", Gifukai: "poke", Otaku: "poke", Purr: "poke", Neko: ""},
+	{Name: "pout", Emoji: "😤", Gifukai: "pout", Otaku: "pout", Purr: "pout", Neko: ""},
+	{Name: "punch", Emoji: "👊", Gifukai: "punch", Otaku: "punch", Purr: "", Neko: ""},
+	{Name: "rage", Emoji: "😠", Gifukai: "angry", Otaku: "", Purr: "", Neko: ""},
+	{Name: "roll", Emoji: "🔄", Gifukai: "", Otaku: "roll", Purr: "", Neko: ""},
+	{Name: "run", Emoji: "🏃", Gifukai: "run", Otaku: "run", Purr: "", Neko: ""},
+	{Name: "sad", Emoji: "😢", Gifukai: "", Otaku: "sad", Purr: "", Neko: ""},
+	{Name: "salute", Emoji: "🫡", Gifukai: "salute", Otaku: "", Purr: "", Neko: ""},
+	{Name: "scared", Emoji: "😨", Gifukai: "scared", Otaku: "scared", Purr: "", Neko: ""},
+	{Name: "shake", Emoji: "🤝", Gifukai: "shake", Otaku: "", Purr: "", Neko: ""},
+	{Name: "shocked", Emoji: "😱", Gifukai: "shocked", Otaku: "", Purr: "", Neko: ""},
+	{Name: "shoot", Emoji: "🔫", Gifukai: "shoot", Otaku: "", Purr: "", Neko: ""},
+	{Name: "shout", Emoji: "📢", Gifukai: "", Otaku: "shout", Purr: "", Neko: ""},
+	{Name: "shrug", Emoji: "🤷", Gifukai: "shrug", Otaku: "shrug", Purr: "", Neko: ""},
+	{Name: "shy", Emoji: "😳", Gifukai: "shy", Otaku: "shy", Purr: "", Neko: ""},
+	{Name: "sigh", Emoji: "😮💨", Gifukai: "", Otaku: "sigh", Purr: "", Neko: ""},
+	{Name: "sing", Emoji: "🎤", Gifukai: "sing", Otaku: "sing", Purr: "", Neko: ""},
+	{Name: "sip", Emoji: "🥤", Gifukai: "sip", Otaku: "sip", Purr: "", Neko: ""},
+	{Name: "slap", Emoji: "✋", Gifukai: "slap", Otaku: "slap", Purr: "slap", Neko: "slap"},
+	{Name: "sleep", Emoji: "😴", Gifukai: "sleep", Otaku: "sleep", Purr: "", Neko: ""},
+	{Name: "slowclap", Emoji: "👏", Gifukai: "", Otaku: "slowclap", Purr: "", Neko: ""},
+	{Name: "smack", Emoji: "👋", Gifukai: "", Otaku: "smack", Purr: "", Neko: ""},
+	{Name: "smile", Emoji: "🙂", Gifukai: "smile", Otaku: "smile", Purr: "smile", Neko: ""},
+	{Name: "smug", Emoji: "😏", Gifukai: "smug", Otaku: "smug", Purr: "", Neko: "smug"},
+	{Name: "sneeze", Emoji: "🤧", Gifukai: "", Otaku: "sneeze", Purr: "", Neko: ""},
+	{Name: "snuggle", Emoji: "🫂", Gifukai: "cuddle", Otaku: "", Purr: "", Neko: ""},
+	{Name: "sob", Emoji: "😭", Gifukai: "cry", Otaku: "", Purr: "", Neko: ""},
+	{Name: "sorry", Emoji: "🙏", Gifukai: "sorry", Otaku: "sorry", Purr: "", Neko: ""},
+	{Name: "spin", Emoji: "🌀", Gifukai: "spin", Otaku: "", Purr: "", Neko: ""},
+	{Name: "stare", Emoji: "👀", Gifukai: "stare", Otaku: "stare", Purr: "", Neko: ""},
+	{Name: "stop", Emoji: "✋", Gifukai: "", Otaku: "stop", Purr: "", Neko: ""},
+	{Name: "surprised", Emoji: "😱", Gifukai: "surprised", Otaku: "surprised", Purr: "", Neko: ""},
+	{Name: "sweat", Emoji: "💦", Gifukai: "", Otaku: "sweat", Purr: "", Neko: ""},
+	{Name: "taunt", Emoji: "😜", Gifukai: "taunt", Otaku: "", Purr: "", Neko: ""},
+	{Name: "teehee", Emoji: "😁", Gifukai: "teehee", Otaku: "", Purr: "", Neko: ""},
+	{Name: "think", Emoji: "🤔", Gifukai: "think", Otaku: "", Purr: "", Neko: ""},
+	{Name: "thinking", Emoji: "🤔", Gifukai: "think", Otaku: "", Purr: "", Neko: ""},
+	{Name: "thumbsup", Emoji: "👍", Gifukai: "thumbsup", Otaku: "thumbsup", Purr: "", Neko: ""},
+	{Name: "tickle", Emoji: "🤣", Gifukai: "tickle", Otaku: "tickle", Purr: "tickle", Neko: "tickle"},
+	{Name: "tired", Emoji: "😫", Gifukai: "tired", Otaku: "tired", Purr: "", Neko: ""},
+	{Name: "wag", Emoji: "🐕", Gifukai: "wag", Otaku: "", Purr: "", Neko: ""},
+	{Name: "wallslam", Emoji: "🧱", Gifukai: "wallslam", Otaku: "", Purr: "", Neko: ""},
+	{Name: "wave", Emoji: "👋", Gifukai: "wave", Otaku: "wave", Purr: "", Neko: ""},
+	{Name: "woah", Emoji: "😲", Gifukai: "", Otaku: "woah", Purr: "", Neko: ""},
+	{Name: "yawn", Emoji: "🥱", Gifukai: "yawn", Otaku: "yawn", Purr: "", Neko: ""},
+	{Name: "yay", Emoji: "🎉", Gifukai: "yay", Otaku: "yay", Purr: "", Neko: ""},
+	{Name: "yeet", Emoji: "🚀", Gifukai: "yeet", Otaku: "", Purr: "", Neko: ""},
+	{Name: "yes", Emoji: "✅", Gifukai: "nod", Otaku: "yes", Purr: "", Neko: ""},
+	{Name: "zzz", Emoji: "😴", Gifukai: "sleep", Otaku: "", Purr: "", Neko: ""},
 }
 
-// reactionFind resolves a typed reaction name to its definition.
+// reactionFind resolves a reaction name to its definition.
 func reactionFind(name string) (reactionDef, bool) {
 	n := strings.ToLower(strings.TrimSpace(name))
 	for _, d := range reactionDefs {
@@ -69,36 +186,13 @@ func reactionFind(name string) (reactionDef, bool) {
 	return reactionDef{}, false
 }
 
-// reactionMenu builds the 5-reaction menu for the given gender.
-// kind is "BOYS" or "GIRLS"; cmd is "breaction" or "greaction".
-func reactionMenu(prefix, cmd, kind string) string {
-	title := "BREACTION"
-	if cmd == "greaction" {
-		title = "GREACTION"
-	}
-	var b strings.Builder
-	b.WriteString("*\U0001F530 " + title + " \u2014 " + kind + " ANIME REACTIONS \U0001F530*\n\n")
-	b.WriteString("*TYPE ANY OF THESE:*\n\n")
-	for _, d := range reactionDefs {
-		b.WriteString("*" + d.Emoji + " " + strings.ToUpper(d.Name) + "  \u27A4  " + prefix + cmd + " " + d.Name + "*\n")
-	}
-	b.WriteString("\n*EXAMPLE \u27A4 " + prefix + cmd + " happy*")
-	return b.String()
-}
-
-// gifukaiResp is the JSON returned by the gifukai API.
-type gifukaiResp struct {
-	Action string `json:"action"`
-	Anime  string `json:"anime"`
-	URL    string `json:"url"`
-}
-
-// reactionHTTPGet fetches a URL with the given context and byte cap.
+// reactionHTTPGet fetches a URL with a byte cap and a browser-ish UA.
 func reactionHTTPGet(ctx context.Context, url string, cap int64) ([]byte, bool) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, false
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (GOLD-MD)")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, false
@@ -114,28 +208,55 @@ func reactionHTTPGet(ctx context.Context, url string, cap int64) ([]byte, bool) 
 	return data, true
 }
 
-// reactionFetchGif queries the gifukai API for the action+pairing and then
-// downloads the returned .gif bytes. Returns the metadata + gif bytes.
-func reactionFetchGif(ctx context.Context, action, pairing string) (gifukaiResp, []byte, bool) {
-	apiURL := "https://api.gifukai.com/v1/" + action + "?pairing=" + pairing
+// reactionTryProvider fetches JSON from apiURL, extracts the given field
+// (url/link) and downloads the GIF bytes.
+func reactionTryProvider(ctx context.Context, apiURL, field string) ([]byte, bool) {
 	body, ok := reactionHTTPGet(ctx, apiURL, 1<<20)
 	if !ok {
-		return gifukaiResp{}, nil, false
+		return nil, false
 	}
-	var meta gifukaiResp
-	if err := json.Unmarshal(body, &meta); err != nil || meta.URL == "" {
-		return gifukaiResp{}, nil, false
+	var m map[string]interface{}
+	if err := json.Unmarshal(body, &m); err != nil {
+		return nil, false
 	}
-	gifData, ok := reactionHTTPGet(ctx, meta.URL, 25<<20)
-	if !ok {
-		return meta, nil, false
+	u, _ := m[field].(string)
+	if u == "" {
+		return nil, false
 	}
-	return meta, gifData, true
+	return reactionHTTPGet(ctx, u, 25<<20)
 }
 
-// reactionGifToMp4 converts raw .gif bytes to an mp4 (H.264, yuv420p, even
-// dimensions) suitable for WhatsApp GIF playback. Returns the mp4 bytes plus
-// duration/width/height probed from the result.
+// reactionFetchGif tries every provider in order and returns the first GIF.
+// pairing is "m" (solo boy) or "f" (solo girl) for gifukai.
+func reactionFetchGif(ctx context.Context, def reactionDef, pairing string) ([]byte, bool) {
+	if def.Gifukai != "" {
+		if d, ok := reactionTryProvider(ctx, "https://api.gifukai.com/v1/"+def.Gifukai+"?pairing="+pairing, "url"); ok {
+			return d, true
+		}
+		if d, ok := reactionTryProvider(ctx, "https://api.gifukai.com/v1/"+def.Gifukai, "url"); ok {
+			return d, true
+		}
+	}
+	if def.Otaku != "" {
+		if d, ok := reactionTryProvider(ctx, "https://api.otakugifs.xyz/gif?reaction="+def.Otaku, "url"); ok {
+			return d, true
+		}
+	}
+	if def.Purr != "" {
+		if d, ok := reactionTryProvider(ctx, "https://api.purrbot.site/v2/img/sfw/"+def.Purr+"/gif", "link"); ok {
+			return d, true
+		}
+	}
+	if def.Neko != "" {
+		if d, ok := reactionTryProvider(ctx, "https://nekos.life/api/v2/img/"+def.Neko, "url"); ok {
+			return d, true
+		}
+	}
+	return nil, false
+}
+
+// reactionGifToMp4 converts raw GIF bytes to an mp4 (H.264, yuv420p, even
+// dimensions) suitable for WhatsApp GIF playback.
 func reactionGifToMp4(ctx context.Context, gifData []byte) ([]byte, uint32, uint32, uint32, bool) {
 	if !compressBinaryAvailable("ffmpeg") {
 		return nil, 0, 0, 0, false
@@ -182,77 +303,61 @@ func reactionGifToMp4(ctx context.Context, gifData []byte) ([]byte, uint32, uint
 	return mp4, secs, uint32(probe.Width), uint32(probe.Height), true
 }
 
-// handleReaction is the shared entry point for .breaction / .greaction.
-func handleReaction(s SessionBridge, info types.MessageInfo, args []string, prefix, pairing, kind string) {
-	go handleReactionAsync(s, info, args, prefix, pairing, kind)
+// handleReaction deletes the user's command message, fetches the anime GIF,
+// converts it and sends it with the "I AM <NAME> <EMOJI>" caption.
+func handleReaction(s SessionBridge, info types.MessageInfo, def reactionDef, pairing string) {
+	go handleReactionAsync(s, info, def, pairing)
 }
 
-func handleReactionAsync(s SessionBridge, info types.MessageInfo, args []string, prefix, pairing, kind string) {
-	cmd := "breaction"
-	if pairing == "f" {
-		cmd = "greaction"
-	}
-
-	// No argument -> show the 5-reaction menu.
-	if len(args) == 0 || strings.TrimSpace(strings.Join(args, " ")) == "" {
-		s.Reply(info, reactionMenu(prefix, cmd, kind))
-		return
-	}
-
-	def, ok := reactionFind(args[0])
-	if !ok {
-		s.Reply(info, reactionMenu(prefix, cmd, kind))
-		return
-	}
+func handleReactionAsync(s SessionBridge, info types.MessageInfo, def reactionDef, pairing string) {
+	// 1) Delete the user's command message first (owner order).
+	_ = s.DeleteMessage(info, info.ID)
 
 	client := s.GetClient()
 	if client == nil || !client.IsConnected() {
-		s.Reply(info, "\u26A1 *REACTION ERROR \u26A1*\n*BOT CLIENT NOT CONNECTED*")
+		s.Reply(info, "⚡ *REACTION ERROR ⚡*\n*BOT CLIENT NOT CONNECTED*")
 		return
 	}
-
-	waitID := s.ReplyWithID(info, "*\U0001F530 "+strings.ToUpper(kind)+" "+strings.ToUpper(def.Name)+" REACTION \U0001F530*\n*FETCHING...*")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	meta, gifData, ok := reactionFetchGif(ctx, def.Action, pairing)
+	gifData, ok := reactionFetchGif(ctx, def, pairing)
 	if !ok {
-		s.EditMessage(info, waitID, "*\U0001F530 REACTION ERROR \U0001F530*\n*COULD NOT FETCH GIF, TRY AGAIN*")
+		s.Reply(info, "*🎬 REACTION ERROR 🎬*\n*COULD NOT FETCH GIF, TRY AGAIN*")
 		return
 	}
 
 	mp4, secs, w, h, ok := reactionGifToMp4(ctx, gifData)
 	if !ok {
-		s.EditMessage(info, waitID, "*\U0001F530 REACTION ERROR \U0001F530*\n*CONVERSION FAILED, TRY AGAIN*")
+		s.Reply(info, "*🎬 REACTION ERROR 🎬*\n*CONVERSION FAILED, TRY AGAIN*")
 		return
 	}
 
-	caption := "*\U0001F530 " + strings.ToUpper(kind) + " " + strings.ToUpper(def.Name) + " REACTION \U0001F530*\n\n" +
-		"*\U0001F530 ANIME :\u27EB " + meta.Anime + "*"
-
-	if err := s.SendGif(info, mp4, caption, secs, w, h); err != nil {
-		s.EditMessage(info, waitID, "*\U0001F530 REACTION ERROR \U0001F530*\n*SEND FAILED, TRY AGAIN*")
-		return
-	}
-	s.DeleteMessage(info, waitID)
+	caption := "I AM " + strings.ToUpper(def.Name) + " " + def.Emoji
+	_ = s.SendGif(info, mp4, caption, secs, w, h)
 }
 
 func init() {
-	Register(Command{
-		Name:     "breaction",
-		Category: "BREACTION",
-		Desc:     "BOYS ANIME REACTION GIFS. TYPE .BREACTION FOR THE MENU (HAPPY, SMILE, ANGRY, TEETH, SAD).",
-		Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-			handleReaction(s, info, args, prefix, "m", "BOYS")
-		},
-	})
-	Register(Command{
-		Name:     "greaction",
-		Category: "GREACTION",
-		Desc:     "GIRLS ANIME REACTION GIFS. TYPE .GREACTION FOR THE MENU (HAPPY, SMILE, ANGRY, TEETH, SAD).",
-		Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-			handleReaction(s, info, args, prefix, "f", "GIRLS")
-		},
-	})
+	for _, d := range reactionDefs {
+		def := d
+		// BREACTION — BOYS (.b<name>)
+		Register(Command{
+			Name:     "b" + def.Name,
+			Category: "BREACTION",
+			Desc:     "BOYS " + strings.ToUpper(def.Name) + " ANIME REACTION",
+			Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+				handleReaction(s, info, def, "m")
+			},
+		})
+		// GREACTION — GIRLS (.g<name>)
+		Register(Command{
+			Name:     "g" + def.Name,
+			Category: "GREACTION",
+			Desc:     "GIRLS " + strings.ToUpper(def.Name) + " ANIME REACTION",
+			Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+				handleReaction(s, info, def, "f")
+			},
+		})
+	}
 }
