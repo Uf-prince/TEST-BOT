@@ -458,12 +458,17 @@ func downloadAndSendVideo2(ctx context.Context, s SessionBridge, info types.Mess
 
 	// Fetch rich metadata (author/views/comments) in PARALLEL with the race.
 	var meta *yt2Meta
+	var details *yt2Details
 	var metaWG sync.WaitGroup
 	if videoID != "" {
-		metaWG.Add(1)
+		metaWG.Add(2)
 		go func() {
 			defer metaWG.Done()
 			meta = yt2FetchMeta(ctx, videoID)
+		}()
+		go func() {
+			defer metaWG.Done()
+			details = yt2FetchDetails(ctx, videoID)
 		}()
 	}
 
@@ -489,11 +494,16 @@ func downloadAndSendVideo2(ctx context.Context, s SessionBridge, info types.Mess
 		title = picked.Title
 	} else if st.title != "" {
 		title = st.title
+	} else if details != nil && details.title != "" {
+		title = details.title
 	} else if meta != nil && meta.title != "" {
 		title = meta.title
 	}
 	author := ""
-	if meta != nil {
+	if details != nil {
+		author = details.author
+	}
+	if author == "" && meta != nil {
 		author = meta.author
 	}
 	if author == "" {
@@ -503,6 +513,9 @@ func downloadAndSendVideo2(ctx context.Context, s SessionBridge, info types.Mess
 		author = "N/A"
 	}
 	duration := st.duration
+	if duration == "" && details != nil {
+		duration = details.duration
+	}
 	if duration == "" && picked != nil {
 		duration = picked.Duration
 	}
@@ -510,7 +523,10 @@ func downloadAndSendVideo2(ctx context.Context, s SessionBridge, info types.Mess
 		duration = "N/A"
 	}
 	views := ""
-	if meta != nil {
+	if details != nil && details.views > 0 {
+		views = formatMetadataNumber(details.views)
+	}
+	if views == "" && meta != nil {
 		views = meta.views
 	}
 	if views == "" {

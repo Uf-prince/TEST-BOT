@@ -218,12 +218,17 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 	// when the player endpoint is blocked. Fetched in parallel with the download.
 	videoID := ytDirectExtractID(videoURL)
 	var meta *yt2Meta
+	var details *yt2Details
 	var metaWG sync.WaitGroup
 	if videoID != "" {
-		metaWG.Add(1)
+		metaWG.Add(2)
 		go func() {
 			defer metaWG.Done()
 			meta = yt2FetchMeta(ctx, videoID)
+		}()
+		go func() {
+			defer metaWG.Done()
+			details = yt2FetchDetails(ctx, videoID)
 		}()
 	}
 
@@ -258,17 +263,28 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 		title = pickedResult.Title
 	} else if wsData.Metadata.Title != "" {
 		title = wsData.Metadata.Title
+	} else if details != nil && details.title != "" {
+		title = details.title
 	} else if meta != nil && meta.title != "" {
 		title = meta.title
 	}
-	author := wsData.Metadata.Author
-	if meta != nil && meta.author != "" {
+	author := ""
+	if details != nil {
+		author = details.author
+	}
+	if author == "" {
+		author = wsData.Metadata.Author
+	}
+	if author == "" && meta != nil {
 		author = meta.author
 	}
 	if author == "" {
 		author = "N/A"
 	}
 	duration := wsData.Metadata.Duration
+	if duration == "" && details != nil {
+		duration = details.duration
+	}
 	if duration == "" && pickedResult != nil {
 		duration = pickedResult.Duration
 	}
@@ -276,7 +292,10 @@ func downloadAndSend(ctx context.Context, s SessionBridge, info types.MessageInf
 		duration = "N/A"
 	}
 	views := ""
-	if meta != nil {
+	if details != nil && details.views > 0 {
+		views = formatMetadataNumber(details.views)
+	}
+	if views == "" && meta != nil {
 		views = meta.views
 	}
 	if views == "" {
@@ -406,12 +425,17 @@ func sendAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, vid
 	// when the player endpoint is blocked. Fetched in parallel with the download.
 	videoID := ytDirectExtractID(videoURL)
 	var meta *yt2Meta
+	var details *yt2Details
 	var metaWG sync.WaitGroup
 	if videoID != "" {
-		metaWG.Add(1)
+		metaWG.Add(2)
 		go func() {
 			defer metaWG.Done()
 			meta = yt2FetchMeta(ctx, videoID)
+		}()
+		go func() {
+			defer metaWG.Done()
+			details = yt2FetchDetails(ctx, videoID)
 		}()
 	}
 
@@ -442,17 +466,28 @@ func sendAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, vid
 		title = selected.Title
 	} else if data.Metadata.Title != "" {
 		title = data.Metadata.Title
+	} else if details != nil && details.title != "" {
+		title = details.title
 	} else if meta != nil && meta.title != "" {
 		title = meta.title
 	}
-	author := data.Metadata.Author
-	if meta != nil && meta.author != "" {
+	author := ""
+	if details != nil {
+		author = details.author
+	}
+	if author == "" {
+		author = data.Metadata.Author
+	}
+	if author == "" && meta != nil {
 		author = meta.author
 	}
 	if author == "" {
 		author = "N/A"
 	}
 	duration := data.Metadata.Duration
+	if duration == "" && details != nil {
+		duration = details.duration
+	}
 	if duration == "" && selected != nil {
 		duration = selected.Duration
 	}
@@ -460,7 +495,10 @@ func sendAudio(ctx context.Context, s SessionBridge, info types.MessageInfo, vid
 		duration = "N/A"
 	}
 	views := ""
-	if meta != nil {
+	if details != nil && details.views > 0 {
+		views = formatMetadataNumber(details.views)
+	}
+	if views == "" && meta != nil {
 		views = meta.views
 	}
 	if views == "" {
