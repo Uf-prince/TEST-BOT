@@ -560,9 +560,10 @@ func registerReactionCategory(category, prefix, label, gender string) {
 	for _, n := range reactionNames {
 		name := n
 		Register(Command{
-			Name:     prefix + name,
-			Category: category,
-			Desc:     label + " " + strings.ToUpper(name) + " ANIME REACTION",
+			Name:      prefix + name,
+			Category:  category,
+			Desc:      label + " " + strings.ToUpper(name) + " ANIME REACTION",
+			OwnerOnly: true,
 			Run: func(s SessionBridge, info types.MessageInfo, args []string, pfx string) {
 				handleReaction(s, info, name, gender)
 			},

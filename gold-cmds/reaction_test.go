@@ -76,3 +76,26 @@ func TestReactionEmoji(t *testing.T) {
 		}
 	}
 }
+
+// TestReactionOwnerOnly verifies every BREACTION/GREACTION command is
+// owner-only (owner order: reaction commands sirf owner chala sakta hai,
+// lekin .breaction/.greaction category MENU public rehta hai).
+func TestReactionOwnerOnly(t *testing.T) {
+	for _, c := range Commands() {
+		if c.Category == "BREACTION" || c.Category == "GREACTION" {
+			if !c.OwnerOnly {
+				t.Fatalf("command .%s (%s) is not OwnerOnly", c.Name, c.Category)
+			}
+		}
+	}
+	// OwnerOnlySet must contain all 1000 reaction commands.
+	set := OwnerOnlySet()
+	for _, n := range reactionNames {
+		if !set["b"+n] {
+			t.Fatalf("OwnerOnlySet missing b%s", n)
+		}
+		if !set["g"+n] {
+			t.Fatalf("OwnerOnlySet missing g%s", n)
+		}
+	}
+}
