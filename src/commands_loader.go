@@ -170,7 +170,6 @@ func (b *bridge) SendVideo(info types.MessageInfo, data []byte, caption string, 
 	videoMsg := &waProto.VideoMessage{
 		URL:           proto.String(resp.URL),
 		DirectPath:    proto.String(resp.DirectPath),
-		Caption:       proto.String(caption),
 		Mimetype:      proto.String("video/mp4"),
 		MediaKey:      resp.MediaKey,
 		FileLength:    proto.Uint64(uint64(len(data))),
@@ -598,6 +597,9 @@ func (b *bridge) SendGif(info types.MessageInfo, data []byte, caption string, se
 		Height:        proto.Uint32(height),
 		Width:         proto.Uint32(width),
 		GifPlayback:   proto.Bool(true),
+	}
+	if caption != "" {
+		videoMsg.Caption = proto.String(caption)
 	}
 	_, err = b.s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{
 		VideoMessage: videoMsg,

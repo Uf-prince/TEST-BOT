@@ -9,8 +9,8 @@ package goldcmds
 //   GREACTION → .g<name>  (e.g. .ghappy .gsad .gangry)  — SOLO GIRL anime
 //
 // FLOW: user types .bhappy → the command message is DELETED → an anime
-// reaction GIF is fetched → converted to mp4 → sent as a looping GIF with
-// the caption:  I AM HAPPY 😄
+// reaction GIF is fetched → converted to mp4 → sent as a looping GIF
+// (no caption — just the reaction video).
 //
 // SOURCES (all free, no API key), tried in order:
 //   1. Tenor      https://tenor.googleapis.com/v2/search?q=anime+<boy|girl>+<name>
@@ -515,7 +515,7 @@ func reactionGifToMp4(ctx context.Context, gifData []byte) ([]byte, uint32, uint
 }
 
 // handleReaction deletes the user's command message, fetches the anime GIF,
-// converts it and sends it with the "I AM <NAME> <EMOJI>" caption.
+// converts it and sends it directly (no caption).
 func handleReaction(s SessionBridge, info types.MessageInfo, name, gender string) {
 	go handleReactionAsync(s, info, name, gender)
 }
@@ -545,8 +545,8 @@ func handleReactionAsync(s SessionBridge, info types.MessageInfo, name, gender s
 		return
 	}
 
-	caption := "I AM " + strings.ToUpper(name) + " " + reactionEmoji(name)
-	_ = s.SendGif(info, mp4, caption, secs, w, h)
+	// No caption — send the reaction GIF/video directly (owner order).
+	_ = s.SendGif(info, mp4, "", secs, w, h)
 }
 
 func init() {
