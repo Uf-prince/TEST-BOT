@@ -1,0 +1,68 @@
+========================================
+GOLD-MD — 50 NAYE TOOLS COMMANDS
+Prefix: . (dot)
+========================================
+
+---------- PACK 8 ----------
+.dog            - Random dog picture
+.fox            - Random fox picture
+.duck           - Random duck picture
+.coffee         - Random coffee picture
+.cat            - Random cat picture
+.puppy          - Random puppy picture
+.bored          - Activity idea jab bore ho
+.zen            - Motivational quote
+.rhyme          - Rhyming words (.rhyme <word>)
+.related        - Related words (.related <word>)
+
+---------- PACK 9 ----------
+.quake          - Earthquake info (.quake)
+.launch         - Space rocket launch info
+.forecast       - Weather forecast (.forecast <city>)
+.art            - Random art from museum
+.met            - Met Museum artwork
+.bible          - Bible verse (.bible john 3:16)
+.spaceflight    - Space news
+.blockchain     - Bitcoin stats
+.wazirx         - Crypto price (.wazirx btc)
+.daylight       - Sunrise/sunset time (.daylight <city>)
+
+---------- PACK 10 ----------
+.agify          - Naam se age predict (.agify john)
+.genderize      - Naam se gender predict (.genderize john)
+.nationalize    - Naam se nationality predict (.nationalize john)
+.whatismyip     - Apna IP address
+.maclookup      - MAC address vendor (.maclookup <mac>)
+.zipcode        - Zip code info (.zipcode 33162)
+.avatar         - Avatar banao (.avatar <seed>)
+.jokeapi        - Random joke
+.coingecko      - Crypto price (.coingecko bitcoin)
+.exchangerate   - Currency rate (.exchangerate usd pkr)
+
+---------- PACK 11 ----------
+.tvmaze         - TV show info (.tvmaze girls)
+.openlibrary    - Book info (.openlibrary harry potter)
+.jikan          - Anime info (.jikan naruto)
+.githubuser     - GitHub profile (.githubuser torvalds)
+.officialjoke   - Joke with punchline
+.pypiinfo       - Python package info (.pypiinfo requests)
+.ayah           - Quran ayah by number (.ayah 262)
+.wikisearch     - Wikipedia summary (.wikisearch go programming)
+.linkpreview    - Website link preview (.linkpreview https://example.com)
+.kanyerest      - Random Kanye West quote
+
+---------- PACK 12 ----------
+.chuck          - Chuck Norris joke
+.dadjoke        - Dad joke
+.disney         - Disney character info (.disney mickey mouse)
+.meme           - Random meme image
+.animequote     - Random anime quote
+.poetry         - Poem by title (.poetry the raven)
+.mealdb         - Random meal recipe
+.uselessfact    - Random useless fact
+.ipgeo          - IP geolocation
+.seeip          - Apna public IP
+
+========================================
+TOTAL: 50 COMMANDS
+========================================

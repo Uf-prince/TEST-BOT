@@ -1,0 +1,80 @@
+╔══════════════════════════════════════════════════════════════╗
+║   GOLD-MD  •  CONVERTER CATEGORY  •  50 NEW COMMANDS (Round 5) ║
+║   Packs 38–42  •  Prefix: .  •  Usage: .<command> <value>      ║
+╚══════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PACK 38 — ENERGY & POWER (10)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 1. .joulestocalories        J → CAL
+ 2. .caloriestojoules        CAL → J
+ 3. .watttokilowatt          W → KW
+ 4. .kilowatttowatt          KW → W
+ 5. .wattttohorsepower       W → HP
+ 6. .horsepowertowatt        HP → W
+ 7. .kilowatthourtojoules    KWH → J
+ 8. .jouletokilojoule        J → KJ
+ 9. .kilojouletocalorie      KJ → KCAL
+10. .kilocaloriestojoules    KCAL → J
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PACK 39 — PRESSURE & FORCE (10)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. .bartopsi                BAR → PSI
+12. .psitobar                PSI → BAR
+13. .pascaltobar             PA → BAR
+14. .bartopascal             BAR → PA
+15. .atmtopsi                ATM → PSI
+16. .psitoatm                PSI → ATM
+17. .newtontokgforce         N → KGF
+18. .kgforcetonewton         KGF → N
+19. .mmhgtopascal            MMHG → PA
+20. .pascaltommhg            PA → MMHG
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PACK 40 — FREQUENCY, TORQUE & FUEL ECONOMY (10)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+21. .hzrtokhz                HZ → KHZ
+22. .khztomhz                KHZ → MHZ
+23. .mhztoghz                MHZ → GHZ
+24. .mpgtokmpl               MPG → KM/L
+25. .kmpltompg               KM/L → MPG
+26. .lp100kmtompg            L/100KM → MPG
+27. .nmtolf                  NM → FT-LB
+28. .lftonm                  FT-LB → NM
+29. .rpmtorad                RPM → RAD/S
+30. .radtorpm                RAD/S → RPM
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PACK 41 — COOKING VOLUME & TEMPERATURE (10)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+31. .gramstoml               G → ML (water)
+32. .mltograms               ML → G (water)
+33. .oztoml                  FL OZ → ML
+34. .mltofluidoz             ML → FL OZ
+35. .tbspoml                 TBSP → ML
+36. .mltotbsp                ML → TBSP
+37. .tspoml                  TSP → ML
+38. .mltotsp                 ML → TSP
+39. .celsiusrankine          C → R
+40. .rankinetocelsius        R → C
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PACK 42 — TEMPERATURE, ANGLE & TIME (10)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+41. .fahrenheittokelvin      F → K
+42. .kelvintofahrenheit      K → F
+43. .degreestoradians        DEG → RAD
+44. .radianstodegrees        RAD → DEG
+45. .weekstodays             WK → D
+46. .monthstoweeks           MO → WK
+47. .yearstomonths           YR → MO
+48. .decadestoyears          DEC → YR
+49. .hourstominutes          HR → MIN
+50. .daystohours             D → HR
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOTAL: 50 new CONVERTER commands (Packs 38–42)
+CONVERTER category now holds 150 visible commands (100 + 50).
+Each command also has a hidden short alias (works but not counted).
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

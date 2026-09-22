@@ -1,0 +1,12 @@
+{
+  "name": "gold-md-panel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GOLD-MD control panel — static page + /api/servers serverless function (Vercel mirror of the Go panel).",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "sync-panel": "node scripts/sync-panel.js"
+  }
+}

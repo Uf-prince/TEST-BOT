@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GOLD-MD · Control Panel</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#f2f3f5;color:#000;font-weight:700;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;padding-bottom:75px}.card{background:#ffffff;border:1px solid #d7dade;border-radius:16px;padding:32px;max-width:640px;width:100%;box-shadow:0 2px 10px rgba(0,0,0,.06)}h1{color:#000;font-size:28px;margin-bottom:8px;text-align:center;font-weight:800}.sub{color:#000;text-align:center;margin-bottom:28px;font-size:14px;font-weight:700}label{display:block;margin-bottom:6px;color:#000;font-size:14px;font-weight:800;margin-top:16px}input{width:100%;padding:13px 14px;background:#fff;border:1px solid #b9bec5;border-radius:8px;color:#000;font-weight:700;font-size:16px;margin-bottom:16px}#phone{border:3px solid #c22a2a}input:focus{outline:none;border-color:#c9a300}.btn{width:100%;padding:14px;background:#ffd700;color:#000;border:3px solid #c22a2a;border-radius:8px;font-size:15px;font-weight:800;cursor:pointer}.btn:disabled{opacity:.5;cursor:not-allowed}.videoBtn{position:fixed;left:20px;right:20px;bottom:16px;width:auto;margin:0;padding:14px;background:#ffd700;color:#000;border:4px solid #c22a2a;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;text-align:center;z-index:999;box-shadow:0 2px 10px rgba(0,0,0,.15)}.videoBtn:hover{background:#ffde33}.result{margin-top:16px;padding:18px;background:#f2f3f5;border-radius:8px;font-size:14px;font-weight:700;display:none;text-align:center}.pair-code{display:block;margin:14px auto;padding:14px 10px;background:#e7f7ec;border:3px solid #c22a2a;border-radius:12px;color:#177a34;font-weight:800;font-size:20px;letter-spacing:5px;cursor:pointer;user-select:none;text-align:center;max-width:220px}.hint{color:#000;font-size:12px;font-weight:700}.error{color:#c22a2a}.warn{color:#a3690a}.links{margin-top:24px;text-align:center;font-size:13px;font-weight:700}.links a{color:#0b5fcc;text-decoration:none;margin:0 8px;font-weight:800}
+/* ── Custom server dropdown (replaces native <select>) ──────────────────
+   Native <select> opens as an OS modal on Android and flickers/closes on
+   every 15s refresh. This custom dropdown lives in the page DOM, so it
+   stays open and keeps the user's place while status refreshes in place. */
+.srvBox{width:100%;padding:13px 14px;background:#fff;border:3px solid #c22a2a;border-radius:8px;color:#000;font-weight:800;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none}
+.srvBox .caret{font-size:12px;transition:transform .15s}
+.srvBox.open .caret{transform:rotate(180deg)}
+.srvList{display:none;margin-top:6px;max-height:320px;overflow-y:auto;border:3px solid #c22a2a;border-radius:10px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+.srvList.open{display:block}
+.srvItem{display:flex;align-items:center;gap:10px;padding:12px 14px;border:2px solid #000;border-radius:8px;margin:6px;cursor:pointer;font-size:15px;font-weight:800;color:#000}
+.srvItem:hover{background:#fffbe6}
+.srvItem.sel{background:#fff3b0}
+.srvItem.disabled{opacity:.45;cursor:not-allowed}
+.srvItem .dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
+.srvItem .nm{flex:1 1 auto}
+.srvItem .st{font-size:12px;font-weight:800;color:#555;flex:0 0 auto}
+.srvItem .tick{color:#177a34;font-weight:900;flex:0 0 auto}
+</style><script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head><body><div class="card">
+<h1>🔰 GOLD-MD 🔰</h1>
+<label style="text-align:center;font-size:18px;font-weight:900">SELECT SERVER TO PAIR</label>
+<div class="srvBox" id="srvBox" onclick="toggleList()">
+  <span id="srvBoxText">— Select a server —</span>
+  <span class="caret">▼</span>
+</div>
+<div class="srvList" id="srvList"></div>
+
+<label for="phone" style="text-align:center">TYPE YOUR NUMBER HERE IN THIS BOX</label>
+<input id="phone" type="tel" inputmode="numeric" pattern="[0-9]*" autocomplete="tel" placeholder="e.g. 923xxxxxxxxx" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+<button class="btn" id="pairBtn" onclick="pair()">GET PAIR CODE</button>
+<div class="result" id="result"></div>
+</div>
+<div class="videoBtn" id="videoBtn" onclick="openVideoBox()">I NEED THE BOT CREATING VIDEO</div>
+<script>
+let SERVERS=[],MAXP=10,selURL='',lastSig='';
+function openVideoBox(){
+  const link='https://youtu.be/w4a_3wYUMr0?si=nUrgD6IvUMrFoz_S9';
+  window.open(link,'_blank');
+}
+function toggleList(){
+  const box=document.getElementById('srvBox'),list=document.getElementById('srvList');
+  const open=list.classList.toggle('open');
+  box.classList.toggle('open',open);
+}
+function closeList(){
+  document.getElementById('srvList').classList.remove('open');
+  document.getElementById('srvBox').classList.remove('open');
+}
+function pickServer(url){
+  selURL=url;
+  const s=SERVERS.find(x=>x.url===url);
+  document.getElementById('srvBoxText').textContent=s?(s.name+' — '+(s.online?'online '+s.sessions+'/'+s.max:'offline')):'— Select a server —';
+  renderList();
+  closeList();
+}
+function renderList(){
+  const list=document.getElementById('srvList');
+  const sig=SERVERS.map(s=>s.url).join('|');
+  // Rebuild ONLY when the server list itself changed (add/remove).
+  if(sig!==lastSig){
+    list.innerHTML='';
+    SERVERS.forEach(s=>{
+      const it=document.createElement('div');
+      it.className='srvItem';
+      it.dataset.url=s.url;
+      it.innerHTML='<span class="dot"></span><span class="nm"></span><span class="st"></span><span class="tick"></span>';
+      it.onclick=()=>{ if(!it.classList.contains('disabled')) pickServer(s.url); };
+      list.appendChild(it);
+    });
+    lastSig=sig;
+  }
+  // In-place update of every item (never rebuilds → list stays open).
+  SERVERS.forEach(s=>{
+    const it=list.querySelector('.srvItem[data-url="'+CSS.escape(s.url)+'"]');
+    if(!it)return;
+    it.querySelector('.dot').style.background=s.online?'#2ea043':'#c22a2a';
+    it.querySelector('.nm').textContent=s.name;
+    it.querySelector('.st').textContent=s.full?'FULL '+s.sessions+'/'+s.max:(s.online?'online '+s.sessions+'/'+s.max:'offline');
+    it.querySelector('.tick').textContent=(s.url===selURL)?'✓':'';
+    it.classList.toggle('disabled',!!s.full);
+    it.classList.toggle('sel',s.url===selURL);
+  });
+}
+async function loadServers(){
+  try{
+    const r=await fetch('/api/servers'),d=await r.json();
+    SERVERS=d.servers||[];MAXP=d.max||10;
+    if(!SERVERS.length){document.getElementById('srvBoxText').textContent='No servers configured';return;}
+    renderList();
+    // Update the box label: show the selected server, or the placeholder.
+    const s=selURL?SERVERS.find(x=>x.url===selURL):null;
+    document.getElementById('srvBoxText').textContent=s
+      ?(s.name+' — '+(s.online?'online '+s.sessions+'/'+s.max:'offline'))
+      :'— Select a server —';
+  }catch(e){document.getElementById('srvBoxText').textContent='Failed to load servers';}
+}
+async function pair(){
+  const phone=document.getElementById('phone').value.trim(),
+        srv=selURL,
+        res=document.getElementById('result');
+  if(!phone){res.className='result error';res.style.display='block';res.textContent='Enter your phone number first';return;}
+  if(!srv){res.className='result error';res.style.display='block';res.innerHTML='⛔ <strong>Select any free server first</strong><br><div class="hint">Tap the server box above, pick a 🟢 green server, then pair.</div>';return;}
+  const url=(srv.endsWith('/')?srv.slice(0,-1):srv)+'/pair';
+  res.className='result';res.style.display='block';res.textContent='PLEASE WAIT.......';
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone})}),
+          d=await r.json();
+    if(d.status==='max_pairing_reached'||d.status==='error'){
+      res.className='result error';res.style.display='block';
+      res.innerHTML='⛔ <strong>MAX PAIRING REACHED</strong><br>TRY ANOTHER SERVER<br><div class="hint">Tap the server box, pick a different 🟢 server and try again.</div>';
+      loadServers();return;
+    }
+    if(!r.ok||d.error){res.className='result error';res.textContent=d.error||('Server error ('+r.status+')');return;}
+    if(d.status==='already_connected'){res.className='result';res.style.display='block';res.innerHTML='✅ <strong>BOT ALREADY CONNECTED AND WORKING WELL</strong><div class="hint">Redis session found. Pairing dobara zaroori nahi.</div>';return;}
+    res.innerHTML='CLICK TO COPY CODE<button class="pair-code" id="pairCode" data-code="'+d.code+'" onclick="copyCode()">'+d.code+'</button><div class="hint">WhatsApp → Linked Devices → Link with phone number instead</div>';
+    loadServers();
+  }catch(e){res.className='result error';res.style.display='block';res.textContent='Request failed: '+e.message+' — server may be stopped. Try another 🟢 server.';}
+}
+async function copyCode(){const el=document.getElementById('pairCode');try{await navigator.clipboard.writeText(el.textContent);el.textContent='COPIED';setTimeout(()=>{el.textContent=el.dataset.code||''},1200)}catch(e){const range=document.createRange();range.selectNodeContents(el);getSelection().removeAllRanges();getSelection().addRange(range)}}
+loadServers();setInterval(loadServers,15000);
+</script></body></html>

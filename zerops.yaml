@@ -1,0 +1,88 @@
+# ============================================================================
+# GOLD-MD — Zerops (ZeoOps) deployment configuration
+# ============================================================================
+# STRATEGY (owner request: 1 mahina stable, AI + 5 users, no crash):
+#   1. PREBUILT BINARY deploy — repo me committed `gold-md-cgofree` (static,
+#      CGO-free, go 1.26 build) seedha copy hota hai. Zerops pe compile NAHI
+#      hota, isliye go.mod (1.26) vs Zerops base (go@1.22) ka version mismatch
+#      kabhi issue nahi banega. Build sirf 2 minute ka copy-step hai (15h/mo
+#      build limit ka ~0.1% use).
+#   2. NATIVE RUNTIME (ubuntu) — Docker mode NAHI (Docker = VM + no
+#      autoscaling = slow). Native = shared bare-metal container = fast.
+#   3. START = seedha ./gold-md — start.sh ka crash-restart loop yahan use
+#      NAHI hota (Zerops khud supervisor hai; bot SUPERVISOR_ENABLED=1 pe
+#      clean exit karta hai aur Zerops respawn karta hai — duplicate process
+#      bug impossible).
+#   4. Sessions Storj cloud pe backed-up hain — container restart/redeploy
+#      pe bhi pairing 2-3 second me wapas aa jaati hai. Ephemeral disk safe.
+# ============================================================================
+
+zerops:
+  - setup: goldmd2
+    build:
+      # Build base me Go ki zaroorat nahi (compile nahi hota) — ubuntu base
+      # cheapest standard runtime base hai.
+      base: ubuntu@24.04
+      buildCommands:
+        # Prebuilt static binary ko runtime naam pe copy karo (start.sh/
+        # Dockerfile convention: ./gold-md). Koi compile nahi — version
+        # mismatch impossible.
+        - cp gold-md-cgofree gold-md && chmod +x gold-md
+      deployFiles:
+        - gold-md
+        - servers.json
+
+    deploy:
+      # Single container hai — naya container pehle start hota hai, purana
+      # baad me band hota hai (zero-downtime default, temporaryShutdown false).
+      readinessCheck:
+        httpGet:
+          port: 11224
+          path: /health
+
+    run:
+      # Ubuntu runtime: ffmpeg/python/libreoffice apt se install hote hain.
+      # (Alpine nahi — libreoffice + python3-pil ubuntu par stable hain.)
+      base: ubuntu@24.04
+      ports:
+        - port: 11224
+          protocol: tcp
+          httpSupport: true   # panel + /pair + /health — GUI me subdomain toggle
+      prepareCommands:
+        # GOLD-MD runtime tools — Dockerfile ke same packages (apt, ubuntu):
+        # ffmpeg (media), python3+Pillow (image->pdf), poppler (pdf->img),
+        # libreoffice writer/calc/impress (docx/xlsx/pptx->pdf),
+        # jpegoptim+pngquant (image optimize).
+        # NOTE: ye runtime image me install hote hain aur cache ho jaate hain
+        # (agle deploy pe dobara install nahi hota).
+        - sudo apt-get update
+        - sudo apt-get install -y --no-install-recommends ffmpeg python3 python3-pil poppler-utils jpegoptim pngquant libreoffice-writer libreoffice-calc libreoffice-impress ca-certificates
+      envVariables:
+        # Panel port (bot default 11224 hi hai — explicit for clarity)
+        PORT: 11224
+        # CRITICAL (Zerops ke liye): bot ki memory-watchdog sirf APNA RSS
+        # ginti hai (cgroup page-cache nahi — false restarts se bachav) aur
+        # self-restart pe FORK+EXEC ki jagah CLEAN EXIT karta hai — Zerops
+        # supervisor khud single fresh process utha leta hai (duplicate-process
+        # bug impossible).
+        SUPERVISOR_ENABLED: 1
+        # 10 users / 10 pairings is server pe (owner request — 1GB RAM/5GB disk).
+        GOLDMD_MAX_SESSIONS: 10
+        # Watchdog thresholds (1GB container, 10 sessions): cleanup 850MB,
+        # hard restart 900MB — normal RAM growth pe restart kabhi nahi.
+        GOLDMD_CLEANUP_MB: 850
+        GOLDMD_RESTART_MB: 900
+        # Storj archival uploads 512KB cap — media-heavy protos skip (deleted-msg
+        # recovery phir bhi 100% kaam karta hai). Zerops 100GB/mo egress bachao.
+        GOLDMD_STORJ_MAX_UPLOAD_KB: 512
+      start: ./gold-md
+      healthCheck:
+        httpGet:
+          port: 11224
+          path: /health
+        # Boot me Storj-restore ~10-30s lagta hai — generous timeouts taake
+        # slow-boot ko "failed" samajh kar restart-loop na chale.
+        failureTimeout: 300s   # 5 min consecutive fail ke baad hi failed
+        disconnectTimeout: 60s # public access disconnect 60s baad
+        recoveryTimeout: 10s   # healthy hone pe 10s me wapas public
+        execPeriod: 10s        # har 10s me check

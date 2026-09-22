@@ -1,0 +1,596 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"runtime/debug"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/store/sqlstore"
+
+	goldcmds "gold-md/gold-cmds"
+
+	waLog "go.mau.fi/whatsmeow/util/log"
+	_ "modernc.org/sqlite" // pure-Go driver — CGO-free, cross-compile (FreeBSD/ARM) possible
+)
+
+// ============================================================================
+// GOLD-MD — Go (Golang) multi-session WhatsApp bot
+// Commands   : alive , ping , menu (+ pair , restart-session , sessions)
+// Architecture: one server , many WhatsApp connectors (whatsmeow)
+// ============================================================================
+
+const Banner = `
+ ▄████  ▒█████   ██▓    ▓█████▄  ▄▄▄▄    ██▓ ▄▄▄       ███▄    █ 
+ ██▒ ▀█▒▒██▒  ██▒▓██▒    ▒██▀ ██▌▓█████▄ ▓██▒▒████▄     ██ ▀█   █ 
+▒██░▄▄▄░▒██░  ██▒▒██░    ░██   █▌▒██▒ ▄██▒██▒▒██  ▀█▄  ▓██  ▀█ ██▒
+░▓█  ██▓▒██   ██░▒██░    ░▓█▄   ▌▒██░█▀  ░██░░██▄▄▄▄██ ▓██▒  ▐▌██▒
+░▒▓███▀▒░ ████▓▒░░██████▒░▒████▓ ░▓█  ▀█▓░██░ ▓█   ▓██▒▒██░   ▓██░
+ ░▒   ▒ ░ ▒░▒░▒░ ░ ▒░▓  ░ ▒▒▓  ▒ ░▒▓███▀▒░▓   ▒▒   ▓▒█░░ ▒░   ▒ ▒ 
+  ░   ░   ░ ▒ ▒░ ░ ░ ▒  ░ ░ ▒  ▒ ▒░▒   ░  ▒ ░  ▒   ▒▒ ░░ ░░   ░ ▒░
+░ ░   ░ ░ ░ ░ ▒    ░ ░    ░ ░  ░  ░    ░  ▒ ░  ░   ▒      ░   ░ ░ 
+      ░     ░ ░      ░  ░   ░     ░       ░        ░  ░         ░ 
+                           ░            ░                          
+     GOLD-MD · Go Multi-Session WhatsApp Bot
+`
+
+// legacySvr1BlobExists: purane (pre-fleet) version ka shared "svr1"
+// session-DB blob KV me abhi bhi pada hai? (one-time migration check —
+// main boot flow isko dekh kar svr1 backup ko ek baar restore + delete
+// karta hai taake do upgraded servers kabhi shared key se conflict na karein.)
+func legacySvr1BlobExists(redis *Upstash) bool {
+	if redis == nil {
+		return false
+	}
+	r, err := redis.cmd("GET", sessionDBKeyConst+"svr1"+sessionDBKeySuffix)
+	if err != nil {
+		return false
+	}
+	return trimQuotes(string(r), "") != ""
+}
+
+func hasUsableWhatsAppDevice(path string) bool {
+	if _, err := os.Stat(path); err != nil {
+		return false
+	}
+	// Open read-only so the probe cannot mutate or lock the auth database.
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return false
+	}
+	defer db.Close()
+	var count int
+	err = db.QueryRow(`SELECT COUNT(1) FROM whatsmeow_device WHERE jid IS NOT NULL AND registration_id > 0`).Scan(&count)
+	return err == nil && count > 0
+}
+
+func main() {
+	// ⚠️ NO .env FILE — EVER. All credentials/settings are hardcoded in
+	// source (storage.go / core_support.go). See README.md warning.
+	// (loadDotEnv() removed on owner's order — .env file hargiz nahi banani.)
+
+	// OWNER REQUEST: RAM sirf 30-40 MB - ultra-low-RAM runtime pinned FIRST.
+	memlowInit()
+
+	// OWNER REQUEST: downloaded files bhejne ke baad delete — disk free rahe.
+	// Startup sweep (leaked files clean) + har 10 min periodic sweep.
+	tmpSweepInit()
+
+	InfoLog("Starting GOLD-MD server... [BUILD=FRESH-LOCALDB-DEBUG-2]")
+	cfg := LoadConfig()
+
+	//	JSONDebug("BOOT_CONFIG", map[string]any{
+	//		"dataDir":    cfg.DataDir,
+	//		"pairingDir": cfg.PairingDir,
+	//		"panelPort":  cfg.PanelPort,
+	//		"upstashURL": cfg.UpstashURL,
+	//		"upstashSet": cfg.UpstashURL != "" && cfg.UpstashToken != "",
+	//		"owners":     cfg.OwnerNumbers,
+	//		"debug":      debugEnabled,
+	//	})
+
+	// ensure the data dir exists before we touch anything inside it
+	_ = os.MkdirAll(cfg.DataDir, 0o755)
+	dbPath := filepath.Join(cfg.DataDir, "goldmd.db")
+
+	// ── STORJ: init the Storj S3-compatible store FIRST — it now backs BOTH
+	// the antidelete/antiedit message store AND the config/session storage
+	// layer (Redis/Upstash is fully removed). 10 shards + 48h TTL guard
+	// (guard only sweeps msgs/, the kv/ config data is permanent).
+	if err := InitStorj(); err != nil {
+		FatalLog("Storj init failed: %v (config + session storage require Storj)", err)
+	}
+	OkLog("Storj store ready (%d shards)", len(storj.shards))
+	storj.StartTTLGuard()
+
+	// ── DISK-CACHE (owner order — bandwidth bachao) ──────────────────────
+	// Har KV op ab DISK se serve hota hai; Storj sirf read-miss / write pe
+	// touch hota hai. Boot pe GUARD: disk khali ho to ek baar Storj se
+	// bulk-load, phir hamesha disk se. Slow background refresh (default
+	// 5 min) cross-server freshness ke liye. Is se fleet watchdog ke
+	// per-60s HGETALL/SMEMBERS Storj reads ~90% kam → Render 5GB bachta hai.
+	diskCacheInit()
+	go dcGuardLoad() // background — boot block na ho (read-through miss safe hai)
+	dcGuardLoop()    // continuous guard — disk khali ho to foran reload (0 bandwidth check)
+	dcStartRefresher()
+	dcStartFleetRefresher()
+
+	// ── config + session persistence layer (Storj-backed) ──
+	// Per-session prefix / sudo / settings AND the full WhatsApp auth store
+	// now live in Storj (same shards/buckets as antidelete) and survive
+	// across redeployments — even on ephemeral disks (Modal/Railway/Fly).
+	var redis *Upstash
+	if os.Getenv("GOLDMD_DISABLE_UPSTASH") != "1" {
+		redis = NewUpstash(cfg.UpstashURL, cfg.UpstashToken)
+		if !redis.Ping() {
+			ErrLog("Storj storage health check failed; session persistence may be unavailable")
+		}
+
+		// URL-ISOLATED PAIRING (owner demand): ye URL sirf APNE namespace
+		// (goldmd:sessiondb:<this-url>:*) se restore karta hai. Purane
+		// pre-fleet version ka shared "svr1" blob DOOSRE servers ke pairs
+		// rakhta tha — usko kabhi restore NAHI karte. Har boot pe ek sasta
+		// GET check karke uska naamo-nishan Storj se mita do (blob hatne ke
+		// baad ye check khud false ho jata hai — self-extinguishing).
+		if redis.ServerID() != "svr1" && legacySvr1BlobExists(redis) {
+			redis.DeleteLegacySvr1Backup()
+			OkLog("Legacy shared svr1 blob purged from Storj (URL-scoped pairing: sirf is URL ke apne pairs restore honge)")
+		}
+
+		// Restore before opening sqlstore whenever the local DB is missing or
+		// does not contain a usable WhatsApp device. A plain file-exists check
+		// is not enough: an empty/stale sqlite file can survive a restart while
+		// the real auth DB is safely stored in Storj.
+		localOK := hasUsableWhatsAppDevice(dbPath)
+		if !localOK {
+			InfoLog("Local session DB has no usable WhatsApp device — checking Storj for a backup...")
+			tmpPath := dbPath + ".restore.tmp"
+			_ = os.Remove(tmpPath)
+			// Path A fix: pehle apna URL-namespace, phir CROSS-NAMESPACE fallback
+			// (kisi bhi doosre server ke namespace ka sabse naya blob). Isse naye
+			// hostname/instance pe boot hone par bhi session local folder me aata hai.
+			restored, srcSID, rerr := redis.RestoreSessionDBAnyNamespace(tmpPath)
+			if rerr != nil {
+				ErrLog("Could not restore session DB from Storj: %v", rerr)
+			} else if restored {
+				if rerr = os.Rename(tmpPath, dbPath); rerr != nil {
+					ErrLog("Could not activate restored session DB: %v", rerr)
+				} else {
+					InfoLog("Storj session DB restored successfully (source namespace=%s)", srcSID)
+					// recreate the pairing marker folders AutoLoad() scans for
+					jids := redis.ListJIDs()
+					for _, jid := range jids {
+						_ = os.MkdirAll(filepath.Join(cfg.PairingDir, jid), 0o755)
+					}
+					OkLog("Recreated %d pairing folder(s) from Storj JID registry", len(jids))
+				}
+			} else {
+				ErrLog("Storj has no session DB backup in ANY namespace; starting fresh")
+			}
+		} else {
+			InfoLog("Local WhatsApp session DB is valid; keeping it and skipping Storj overwrite")
+		}
+	} else {
+		WarnLog("GOLDMD_DISABLE_UPSTASH=1 — sessions will NOT survive a disk wipe/restart.")
+	}
+
+	// ── container holds every session's SQLite auth store ──
+	// whatsmeow keeps each WhatsApp session inside its own sqlite file so
+	// one process can safely run many connectors (multi-session).
+	ctx := context.Background()
+	container, err := sqlstore.New(
+		ctx,
+		"sqlite", // modernc.org/sqlite (pure-Go, CGO-free)
+		fmt.Sprintf("file:%s?_foreign_keys=on&_busy_timeout=5000", dbPath),
+		waLog.Noop,
+	)
+	if err != nil {
+		FatalLog("Failed to open session container: %v", err)
+	}
+
+	// ── manager owns the live sessions and the autoload loop ──
+	mgr := NewManager(cfg, container)
+	if redis != nil {
+		mgr.Redis = redis
+	}
+
+	// ── amute/aunmute scheduler: live session lookup bridge (Node ke
+	// _UmarFindTrackerForBotNumber + setInterval(30s) equivalent) ──
+	goldcmds.AmuteAttachSessionLookup(func(digits string) *whatsmeow.Client {
+		dgOnly := func(s string) string {
+			return strings.Map(func(r rune) rune {
+				if r >= '0' && r <= '9' {
+					return r
+				}
+				return -1
+			}, s)
+		}
+		for _, sess := range mgr.List() {
+			if sess.Client == nil || !sess.Client.IsConnected() {
+				continue
+			}
+			if dgOnly(sess.JID) == digits || dgOnly(sess.Owner) == digits {
+				return sess.Client
+			}
+		}
+		return nil
+	})
+
+	// ── cmdname: full dispatchable command-name set for rename validation ──
+	// .cmdname ping to umar karne se pehle bot check karta hai ki "ping"
+	// waqai ek command hai — gold-cmds registry + main-package core
+	// commands (ping, menu, alive, uptime, sessions) dono se.
+	goldcmds.CmdNameAttachKnownCommands(func() []string {
+		names := make([]string, 0, len(Commands))
+		for name := range Commands {
+			names = append(names, name)
+		}
+		return names
+	})
+
+	// self-restart (reconnect_watchdog.go) ke liye DB path expose
+	selfRestartDBPath = dbPath
+
+	go memoryWatchdog(mgr, redis, dbPath)
+
+	// ── HTTP control panel (pair new sessions / list sessions) ──
+	if cfg.PanelEnabled {
+		go StartPanel(mgr, cfg.PanelPort)
+		InfoLog("Pairing panel → http://0.0.0.0:%d (POST /pair , GET /sessions)", cfg.PanelPort)
+	}
+
+	// ── Render self-ping keep-alive (keepalive.go) ──
+	// Har deploy pe RENDER_EXTERNAL_URL auto-milta hai → bot khud apni
+	// server URL ko har 5 min me /health se ping karta hai → Render
+	// free-tier 15-min idle sleep kabhi trigger nahi hota. Local run
+	// pe URL nahi hota → keep-alive fully OFF (zero goroutine).
+	StartSelfPingKeepAlive()
+
+	// ── Pair bridge REMOVED (owner order) ──
+	// Purana ntfy/gist/hb.json + Telegram relay system khatam. Ab sirf
+	// panel.go ka built-in HTTP panel chalta hai (POST /pair, GET /sessions)
+	// — pairing URLs servers.json se aate hain, owner khud set karta hai.
+
+	// ── ffmpeg self-installer (owner rule: jaha b deploy kro ho jaye) ──
+	// Background goroutine — boot speed pe 0% asar. Static ffmpeg download
+	// karke PATH me daal deta hai agar system pe na mile (Render/Docker/VPS
+	// jahan ffmpeg pre-installed nahi). tomp3/sticker/tg-audio/play sab
+	// isFfmpegAvailable() se self-heal ho jate hain.
+	go func() {
+		_ = goldcmds.EnsureFfmpegPublic()
+	}()
+
+	// ── FLEET BIND (AutoLoad se pehle) ───────────────────────────────────────────
+	// fleetMgr set (watchdog NAHI — wo AutoLoad ke baad fleetInit me).
+	// AutoLoad ka zombie-return guard isi pe depend karta hai.
+
+	// ── DISK-ONLY UPLOAD GUARD (owner order — direct /code?phone=) ──────
+	// SaveSessionDB (whole-DB Storj upload) se PEHLE ye guard puchta hai:
+	// koi direct/local-only session disk pe hai? Ha → upload cancel.
+	// Registration AutoLoad se pehle — boot ke waqt hi sealed.
+	RegisterLocalOnlyUploadGuard(func() bool {
+		return anyLocalOnlyOnDisk(cfg.PairingDir)
+	})
+
+	fleetBind(mgr, dbPath)
+
+	// ── SESSION-FOLDER GUARD (owner order — crash/restart recovery) ──
+	// Boot pe ek baar + phir har 60s (light, 0 network) check: disk pe
+	// sessions/configs available hain? HAAN → kuch nahi. NAHI → Storj se
+	// session DB + pairing folders + configs wapas disk pe. Har cheez disk
+	// se read hoti hai. Background goroutine — boot speed pe 0% asar.
+	StartSessionFolderGuard(mgr)
+
+	// ── auto-load every saved session (batched, like autoload.js) ──
+	mgr.AutoLoad()
+
+	// ── FLEET ENGINE (Render 5GB survival) ─────────────────────────────
+	// Session-distribution watchdog: Storj se sessions claim karke connect
+	// karta hai (max 2/server), dead servers ki claims release karta hai,
+	// real egress (/proc/net/dev) Storj pe persist karta hai. Sab kuch
+	// background goroutine me — bot speed pe 0% asar.
+	// OWNER ORDER: cross-server claim/handoff engine BAND (default). Sirf
+	// local 15s session-folder watchdog (watchReconnects) chalta hai.
+	if fleetHandoffEnabled() {
+		fleetInit(mgr, dbPath)
+	}
+	fleetLoadEgress()
+
+	// ── Session Resurrector (owner's watchdog enhancement) ───────────────
+	// Disk + Storj dono side ke saare sessions hamesha monitor: jo session
+	// WhatsApp se logged-in hai magar kahin bhi OFFLINE hai, use ek FREE
+	// server (servers.json) pe dispatch kar ke dobara ONLINE kar deta hai.
+	// Logged-out ignore, online-elsewhere skip, local-only revive-only.
+	// Pure background goroutine — bot speed / RAM / disk pe 0% asar.
+	// OWNER ORDER: resurrector (offline session ko doosre FREE server pe
+	// dispatch karna) bhi handoff ka hissa hai — BAND (default).
+	if fleetHandoffEnabled() {
+		StartSessionResurrector(mgr)
+	}
+
+	// ── Always-on reconnect watchdog ────────────────────────────────────────────────
+	// WhatsApp idle-disconnects sessions (login zinda, socket band). Ye
+	// watchdog har 30s sab sessions check karta hai aur dead socket ko
+	// foran Connect() se revive karta hai. Command speed pe 0% asar.
+	go mgr.watchReconnects()
+
+	// ── COMPREHENSIVE SESSION WATCHDOG (owner order, Request 10) ──
+	// Lagatar nazar: har session ka live status (true/false). Offline wale
+	// ko 3x check + 2 verify guards ke baad servers.json ke FREE server pe
+	// dispatch (reconnect). Logged-out → Storj + folder purge (configs
+	// SAFE). JID list SIRF disk se, KV disk-cache se — Render 5GB safe.
+	// Adaptive sleep (healthy 60s / dead 5s) — bot speed pe 0% asar.
+	if swEnabled() {
+		StartSessionWatchdog(mgr)
+	}
+
+	// ── LOCAL FLEET ONLINE GUARD (owner order) ──────────────────────────────
+	// Har 15s local folder ke sessions ka live status check. Jese hi koi
+	// session offline ho → fleet ko notify (local online=false + claim
+	// release + fail marker) → doosra FREE server EK BAAR claim karega.
+	// Session + claim + server info hamesha local file se read hoti hai.
+	// Pure background goroutine — bot speed pe 0% asar.
+	flStartOnlineGuard(mgr)
+
+	// ── periodic session-DB backup so mid-session key updates aren't lost ──
+	if redis != nil {
+		go func() {
+			// BANDWIDTH FIX (owner order — Render 5GB): per-SID poora-DB
+			// backup (goldmd.db ~62MB base64 ≈ 83MB) ab 24 GHANTE me EK
+			// baar. Failover/restore per-JID fleet blobs se hota hai (wo
+			// har 10-min slim hoti hain) — poora-DB sirf last-resort
+			// safety net hai, daily snapshot kaafi hai.
+			backupTick := time.NewTicker(24 * time.Hour)
+			defer backupTick.Stop()
+			// FLEET: connected sessions ke per-JID blobs refresh (key
+			// rotation / prekey updates fleet-wide available rahein).
+			// Per-JID blob ab SLIM hai (message_secrets/buffers out) —
+			// purana 44.8MB → naya ~300KB, 10-min refresh ab safe.
+			blobTick := time.NewTicker(10 * time.Minute)
+			defer blobTick.Stop()
+			for {
+				select {
+				case <-backupTick.C:
+					if mgr.IsShuttingDown() {
+						return
+					}
+					if err := redis.SaveSessionDB(dbPath); err != nil {
+						// ErrLog("Periodic Upstash session backup failed: %v", err)
+					}
+				case <-blobTick.C:
+					if mgr.IsShuttingDown() {
+						return
+					}
+					fleetRefreshBlobs()
+				}
+			}
+		}()
+		InfoLog("Periodic backup: per-JID blobs every 10 min, full-DB daily.")
+	}
+
+	// ── graceful shutdown on SIGINT / SIGTERM ──
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-sigCh
+	WarnLog("Received %s — shutting down all sessions gracefully...", sig)
+
+	// final backup before exiting, so the last few minutes aren't lost
+	if redis != nil {
+		if err := redis.SaveSessionDB(dbPath); err != nil {
+			// ErrLog("Final session DB backup failed: %v", err)
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	mgr.Shutdown(ctx)
+
+	InfoLog("GOLD-MD stopped. Bye!")
+}
+
+// ── memory watchdog thresholds (2-tier) ──
+//
+// Tier 1 (cleanupThreshold): when container memory crosses this, we clear
+//
+//	in-memory caches (Upstash settings cache, Go GC + FreeOSMemory).
+//	This frees ~50-150 MB without any restart — the background cache
+//	refresher re-populates the settings cache on its next tick.
+//
+// Tier 2 (restartThreshold): if memory STILL climbs past this after cleanup,
+//
+//	we do a graceful self-restart (SaveSessionDB → disconnect → fork+exec
+//	a fresh copy of the binary → os.Exit). The fresh process starts at
+//	~50-80 MB and all WhatsApp sessions reconnect from Redis/Storj.
+//
+// Both thresholds use cgroup memory.current (container view, not host).
+// On Render free (512 MB container) this gives: cleanup at 400 MB,
+// hard self-restart at 450 MB — sessions Storj se foran wapas aa jate
+// hain, isliye restart bilkul safe hai. Normal RAM-clean (cache TTL
+// clear + GC) 400 pe, hard self-restart 450 pe.
+var (
+	// OWNER REQUEST (Render free / 2 sessions per server): tight thresholds.
+	// GOLDMD_CLEANUP_MB (default 400) → normal RAM TTL clean (cache clear + GC)
+	// GOLDMD_RESTART_MB (default 450) → hard self-restart (Storj se sessions wapas)
+	cleanupThreshold uint64 = uint64(envInt("GOLDMD_CLEANUP_MB", 400)) * 1024 * 1024
+	restartThreshold uint64 = uint64(envInt("GOLDMD_RESTART_MB", 450)) * 1024 * 1024
+)
+
+// memoryWatchdog monitors container RAM in a background goroutine and
+// takes corrective action BEFORE the cgroup hard limit is hit.
+//
+// ADAPTIVE (owner request: "speed pe 0% farak, kaam kam"): RAM normal
+// (< 350 MB) -> 30s deep sleep. Warning zone (350 MB+) -> 5s fast check
+// taake 850/950 ke thresholds ko bilkul wakt pe pakre. Ye kabhi
+// message-processing path ko nahi chhoota, isliye bot speed pe asar
+// hamesha 0% rehta hai.
+func memoryWatchdog(mgr *Manager, redis *Upstash, dbPath string) {
+	cleanupDone := false // reset every cycle so cleanup can fire again later
+
+	for {
+		if mgr.IsShuttingDown() {
+			return
+		}
+
+		// FLEET RE status: memoryWatchdog zinda hai — /health me "re":"ACTIVE".
+		fleetTouchMemWatch()
+
+		used := goldcmds.CurrentContainerMemoryBytes()
+		if os.Getenv("SUPERVISOR_ENABLED") == "1" {
+			// Supervisor/sandbox (owner rule): cgroup counter POORE sandbox ka
+			// hai (browser/vnc/nginx siblings ~700MB+) — 500MB threshold hamesha
+			// cross dikhta tha aur bot bar bar self-restart karta tha. Yahan
+			// sirf apna RSS gino — siblings ka RAM bot ki zimmedari nahi.
+			used = selfRSSBytes()
+		} else if used == 0 {
+			// cgroup not exposed (local dev / non-Linux) — fall back to Go heap
+			used = goHeapBytes()
+		}
+
+		// ── Tier 1: cache cleanup at 850 MB (normal RAM clean) ──
+		if used >= cleanupThreshold && !cleanupDone {
+			WarnLog("Container memory at %.2f MB — clearing caches to free RAM", float64(used)/(1024*1024))
+			if redis != nil {
+				redis.ClearCache() // drop all settings/prefix cache entries
+			}
+			runtimeGC() // force Go GC + return memory to OS
+			cleanupDone = true
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		// ── Reset cleanup flag when memory drops back below (cleanup-50MB) ──
+		if used < cleanupThreshold-50*1024*1024 {
+			cleanupDone = false
+		}
+
+		// ── Tier 2: self-restart at 950 MB (hard restart) ──
+		// BUSY GUARD: koi command (download pipeline) in-flight ho to
+		// restart KABHI nahi. cgroup memory.current me file page-cache
+		// bhi ginta hai — media temp-file likhte hi counter 500+ ho
+		// jata tha aur mid-download process restart ho jata tha. Busy
+		// ke dauran sirf GC; agle cycle me dobara check (800 MB+ warning
+		// zone me loop 5s fast hai hi). Busy end ke baad hi restart.
+		if used >= restartThreshold && cmdBusyActive() {
+			runtimeGC() // free what we can without killing the download
+			continue
+		}
+		if used >= restartThreshold {
+			WarnLog("Container memory at %.2f MB — initiating self-restart", float64(used)/(1024*1024))
+			gracefulSelfRestart(mgr, redis, dbPath)
+			return // never reached (gracefulSelfRestart exits)
+		}
+
+		// ── ADAPTIVE SLEEP ──
+		// Normal RAM -> 30s deep sleep (kaam kam). Warning zone (800 MB+)
+		// -> 5s fast check (thresholds ko bilkul wakt pe pakarna hai).
+		if used < cleanupThreshold-50*1024*1024 {
+			time.Sleep(30 * time.Second)
+		} else {
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+// gracefulSelfRestart saves the session DB, disconnects all WhatsApp clients,
+// then spawns a fresh copy of the current binary and exits. The fresh process
+// inherits the same env (Storj creds, Upstash URL/token, PORT, etc.) and
+// restores all sessions from Redis on startup — typically reconnecting within
+// 2-3 seconds. This works on Render because the process never fully dies:
+// exec replaces it in-place with the child.
+func gracefulSelfRestart(mgr *Manager, redis *Upstash, dbPath string) {
+	// 1. Save session DB to Redis so the fresh process can restore it.
+	if redis != nil {
+		if err := redis.SaveSessionDB(dbPath); err != nil {
+			// ErrLog("Self-restart: session DB backup failed: %v", err)
+		} else {
+			InfoLog("Self-restart: session DB saved to Redis")
+		}
+	}
+
+	// 2. Gracefully disconnect all WhatsApp clients (quick).
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	mgr.Shutdown(ctx)
+	InfoLog("Self-restart: all sessions disconnected")
+
+	// 3. SUPERVISOR-AWARE EXIT (owner rule — duplicate-process fix):
+	// Supervisor ke under (SUPERVISOR_ENABLED=1) fork+exec KABHI nahi —
+	// Setsid-detached child + supervisor respawn = 2 processes same
+	// WhatsApp session pe lar rahe the (kick-kick reconnect loop).
+	// Supervisor ke liye sirf clean exit — autorestart khud single
+	// fresh process utha lega. Fork+exec sirf standalone (Render/VPS)
+	// hosting pe, jahan supervisor nahi hai.
+	if os.Getenv("SUPERVISOR_ENABLED") == "1" {
+		InfoLog("Self-restart: supervisor detected — clean exit (supervisor will respawn single process)")
+		os.Exit(0)
+	}
+
+	// 3b. Standalone mode: resolve our own executable path.
+	exe, err := os.Executable()
+	if err != nil {
+		// ErrLog("Self-restart: cannot find executable: %v — falling back to os.Exit", err)
+		os.Exit(0)
+	}
+
+	// 4. Spawn a fresh copy with the same args + env, inheriting stdout/stderr.
+	cmd := exec.Command(exe, os.Args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Env = os.Environ()
+	// Detach into a new session so it survives our exit.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+
+	if err := cmd.Start(); err != nil {
+		// ErrLog("Self-restart: failed to spawn fresh process: %v — falling back to os.Exit", err)
+		os.Exit(0)
+	}
+
+	InfoLog("Self-restart: fresh process spawned (PID %d), exiting old process", cmd.Process.Pid)
+	os.Exit(0)
+}
+
+// selfRSSBytes returns this process's own resident set size (VmRSS) from
+// /proc/self/status — zero when unavailable. Supervisor/sandbox deployments
+// me memory watchdog isi pe chalta hai: poore sandbox ka cgroup counter
+// siblings (browser, vnc, nginx…) ko bhi ginta hai jo bot ki memory nahi.
+func selfRSSBytes() uint64 {
+	data, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == "VmRSS:" {
+			value, err := strconv.ParseUint(fields[1], 10, 64)
+			if err == nil {
+				return value * 1024
+			}
+		}
+	}
+	return 0
+}
+
+// goHeapBytes returns the current Go heap allocation as a fallback when
+// cgroup memory.current is not available (local dev / macOS).
+func goHeapBytes() uint64 {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return m.HeapAlloc
+}
+
+// runtimeGC forces a garbage collection and returns unused memory to the OS.
+func runtimeGC() {
+	runtime.GC()
+	debug.FreeOSMemory()
+}
