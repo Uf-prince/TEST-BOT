@@ -80,6 +80,11 @@ type SessionBridge interface {
 	// SendAudioThumbFirst is the audio variant of SendVideoThumbFirst.
 	SendAudioThumbFirst(info types.MessageInfo, path string, caption string, thumbnail []byte) error
 	SendImage(info types.MessageInfo, data []byte, caption string) error
+	// SendGif sends an MP4 as a WhatsApp looping GIF (VideoMessage with
+	// GifPlayback=true). Used by the .breaction / .greaction anime reaction
+	// commands: the source .gif is converted to mp4 by the caller and then
+	// sent here so WhatsApp loops it like a GIF.
+	SendGif(info types.MessageInfo, data []byte, caption string, seconds uint32, width uint32, height uint32) error
 	SetVideoSession(jid string, results []VideoResult)
 	SetVideoSession2(jid string, results []VideoResult, hd bool)
 	SetVideoSession3(jid string, results []VideoResult, hd bool)
@@ -575,6 +580,8 @@ var CategoryOrder = []string{
 	"PRESENCE & STATUS",
 	"CONVERTER",
 	"TOOLS",
+	"BREACTION",
+	"GREACTION",
 }
 
 // CategoryEmoji maps each category to a decorative emoji used in the menu header.
@@ -588,6 +595,8 @@ var CategoryEmoji = map[string]string{
 	"TOOLS":             "🔰",
 	"PRESENCE & STATUS": "🔰",
 	"CONVERTER":         "🔰",
+	"BREACTION":         "🔰",
+	"GREACTION":         "🔰",
 }
 
 var registry []Command

@@ -1908,6 +1908,8 @@ var menuCategorySlugs = map[string]string{
 	"PRESENCE & STATUS": "presence",
 	"CONVERTER":         "converter",
 	"TOOLS":             "tools",
+	"BREACTION":         "breaction",
+	"GREACTION":         "greaction",
 }
 
 // menuCategoryDisplay maps an internal category name to the label shown to

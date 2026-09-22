@@ -32,6 +32,11 @@ func (f *lgBridge) SendImage(info types.MessageInfo, data []byte, caption string
 	f.replies = append(f.replies, caption)
 	return nil
 }
+func (f *lgBridge) SendGif(info types.MessageInfo, data []byte, caption string, _ uint32, _, _ uint32) error {
+	f.images++
+	f.replies = append(f.replies, caption)
+	return nil
+}
 func (f *lgBridge) lastReply() string {
 	if len(f.replies) == 0 {
 		return ""

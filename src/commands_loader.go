@@ -575,6 +575,36 @@ func (b *bridge) SendImage(info types.MessageInfo, data []byte, caption string) 
 	return err
 }
 
+// SendGif sends an MP4 as a WhatsApp looping GIF (VideoMessage with
+// GifPlayback=true). The caller (breaction/greaction) converts the source
+// .gif to mp4 first; here we just upload + send it with the gif flag so
+// WhatsApp loops it like a GIF. No caption footer is added (reaction cards
+// carry their own caption).
+func (b *bridge) SendGif(info types.MessageInfo, data []byte, caption string, seconds uint32, width uint32, height uint32) error {
+	resp, err := b.s.Client.Upload(context.Background(), data, whatsmeow.MediaVideo)
+	if err != nil {
+		return err
+	}
+	videoMsg := &waProto.VideoMessage{
+		URL:           proto.String(resp.URL),
+		DirectPath:    proto.String(resp.DirectPath),
+		Caption:       proto.String(caption),
+		Mimetype:      proto.String("video/mp4"),
+		MediaKey:      resp.MediaKey,
+		FileLength:    proto.Uint64(uint64(len(data))),
+		FileSHA256:    resp.FileSHA256,
+		FileEncSHA256: resp.FileEncSHA256,
+		Seconds:       proto.Uint32(seconds),
+		Height:        proto.Uint32(height),
+		Width:         proto.Uint32(width),
+		GifPlayback:   proto.Bool(true),
+	}
+	_, err = b.s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{
+		VideoMessage: videoMsg,
+	})
+	return err
+}
+
 // DownloadImage downloads the image attached to the incoming message
 // identified by info (direct image, view-once, or quoted image). Returns the
 // raw bytes and true if an image was present and downloaded; nil,false otherwise.

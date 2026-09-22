@@ -78,6 +78,10 @@ func (f *vvBridge) SendImage(info types.MessageInfo, data []byte, caption string
 	f.sentMedia++
 	return nil
 }
+func (f *vvBridge) SendGif(info types.MessageInfo, data []byte, caption string, _ uint32, _, _ uint32) error {
+	f.sentMedia++
+	return nil
+}
 func (f *vvBridge) SendVideo(info types.MessageInfo, data []byte, caption string, _ []byte, _, _, _ uint32) error {
 	f.sentMedia++
 	return nil
