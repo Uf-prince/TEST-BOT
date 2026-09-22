@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -339,25 +340,40 @@ func handleReactionAsync(s SessionBridge, info types.MessageInfo, def reactionDe
 }
 
 func init() {
-	for _, d := range reactionDefs {
-		def := d
-		// BREACTION — BOYS (.b<name>)
-		Register(Command{
-			Name:     "b" + def.Name,
-			Category: "BREACTION",
-			Desc:     "BOYS " + strings.ToUpper(def.Name) + " ANIME REACTION",
-			Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-				handleReaction(s, info, def, "m")
-			},
-		})
-		// GREACTION — GIRLS (.g<name>)
-		Register(Command{
-			Name:     "g" + def.Name,
-			Category: "GREACTION",
-			Desc:     "GIRLS " + strings.ToUpper(def.Name) + " ANIME REACTION",
-			Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-				handleReaction(s, info, def, "f")
-			},
-		})
+	// Register 500 commands per category. The 129-entry reaction catalog is
+	// the source; we cycle through it with numeric suffixes to reach 500
+	// (e.g. .bhappy, .bhappy2, .bhappy3, .bhappy4, ...). Every numbered
+	// variant maps back to its base reaction + gender pairing.
+	registerReactionCategory("BREACTION", "b", "BOYS", "m")
+	registerReactionCategory("GREACTION", "g", "GIRLS", "f")
+}
+
+// registerReactionCategory registers exactly `total` commands for a category
+// by cycling the reaction catalog with numeric suffixes.
+func registerReactionCategory(category, prefix, label, pairing string) {
+	const total = 500
+	count := 0
+	suffix := 1
+	for count < total {
+		for _, d := range reactionDefs {
+			if count >= total {
+				break
+			}
+			def := d
+			name := prefix + def.Name
+			if suffix > 1 {
+				name = name + strconv.Itoa(suffix)
+			}
+			Register(Command{
+				Name:     name,
+				Category: category,
+				Desc:     label + " " + strings.ToUpper(def.Name) + " ANIME REACTION",
+				Run: func(s SessionBridge, info types.MessageInfo, args []string, pfx string) {
+					handleReaction(s, info, def, pairing)
+				},
+			})
+			count++
+		}
+		suffix++
 	}
 }

@@ -66,3 +66,23 @@ func TestReactionFind(t *testing.T) {
 		t.Fatalf("reactionFind returned a bogus reaction")
 	}
 }
+
+// TestReactionCategoryCounts verifies each reaction category has exactly 500
+// registered commands (owner requirement: 500 / 500).
+func TestReactionCategoryCounts(t *testing.T) {
+	bCount, gCount := 0, 0
+	for _, c := range Commands() {
+		switch c.Category {
+		case "BREACTION":
+			bCount++
+		case "GREACTION":
+			gCount++
+		}
+	}
+	if bCount != 500 {
+		t.Fatalf("BREACTION has %d commands, want 500", bCount)
+	}
+	if gCount != 500 {
+		t.Fatalf("GREACTION has %d commands, want 500", gCount)
+	}
+}
