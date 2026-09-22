@@ -8,12 +8,20 @@ package goldcmds
 // audio engine (3-client Innertube race + loader.to mp3 fallback + 128k MP3
 // remux) and the EXACT same guard compressor, but the delivery is RAW:
 //
-//   .play3 <query>  →  WAITING MSG  →  (error + success) waiting msg DELETE
+//   .play3 <query>  →  ONE WAITING MSG (SEARCHING → EDITED to DOWNLOADING)
+//                      →  msg stays visible until download + compress done
+//                      →  msg DELETE right before the RAW audio is sent
 //                      →  DIRECT audio arrives with NO thumbnail, NO name,
 //                         NO caption, NO footer — just the bare audio file.
 //
+// OWNER ORDER (2026-09-22): query pe sirf EK message aata hai. Wo pehle
+// "SEARCHING..." dikhata hai, phir usi message ko EDIT kar ke "DOWNLOADING..."
+// bana diya jata hai (delete + naya msg NAHI). Ye message tab tak delete nahi
+// hota jab tak audio puri tarah download + compress na ho jaye; jab audio
+// sending pe ho tab ye message delete hota hai aur phir RAW audio jata hai.
+//
 // The compressor system (guard.go) is applied automatically inside
-// SendAudioFileRaw → guardPath(guardAudio) — same as .play / .play2.
+// SendAudioFileRawWait → guardPath(guardAudio) — same as .play / .play2.
 // ============================================================================
 
 import (
@@ -39,7 +47,7 @@ func handlePlay3Async(ctx context.Context, s SessionBridge, info types.MessageIn
 	// args = [URL, thumbnail, title, duration]
 	if len(args) >= 4 && (strings.Contains(args[0], "youtube.com/") || strings.Contains(args[0], "youtu.be/")) {
 		picked := &VideoResult{URL: args[0], Thumbnail: args[1], Title: args[2], Duration: args[3]}
-		downloadAndSendAudio3(ctx, s, info, args[0], picked)
+		downloadAndSendAudio3(ctx, s, info, args[0], picked, "")
 		return
 	}
 
@@ -52,7 +60,7 @@ func handlePlay3Async(ctx context.Context, s SessionBridge, info types.MessageIn
 
 	// Direct YouTube URL → immediate turbo download
 	if strings.Contains(input, "youtube.com/") || strings.Contains(input, "youtu.be/") {
-		downloadAndSendAudio3(ctx, s, info, input, nil)
+		downloadAndSendAudio3(ctx, s, info, input, nil, "")
 		return
 	}
 
@@ -61,13 +69,13 @@ func handlePlay3Async(ctx context.Context, s SessionBridge, info types.MessageIn
 	pickFirstPlay3(ctx, s, info, input)
 }
 
-// searchProgressPlay3 runs the search and shows the number-selection list.
-// The audio session is tagged "play3" so picks route back through the raw engine.
-// pickFirstPlay3 — OWNER ORDER (2026-09-21):
-// .play3 <query> ab LIST nahi bhejta. yts search (YouTube) chalti hai, PEHLA
-// result uthaya jata hai aur seedha RAW audio download ho kar jata hai — koi
-// title, koi thumbnail, koi caption, koi footer NAHI. Sirf waiting msg
-// (search + download) delete hota hai, phir bare audio file.
+// pickFirstPlay3 — OWNER ORDER (2026-09-22): .play3 <query> ab sirf EK message
+// bhejta hai. Pehle "SEARCHING AUDIOS FROM YOUTUBE....." dikhta hai; search
+// complete hone par usi message ko EDIT kar ke "DOWNLOADING AUDIO FROM
+// YOUTUBE....." bana diya jata hai (delete + naya msg NAHI). Phir PEHLA result
+// seedha RAW audio download ho kar jata hai — koi title, koi thumbnail, koi
+// caption, koi footer NAHI. Waiting msg tab tak rehta hai jab tak download +
+// compress mukammal na ho, phir delete ho kar RAW audio jata hai.
 func pickFirstPlay3(ctx context.Context, s SessionBridge, info types.MessageInfo, query string) {
 	waitMsgID := s.ReplyWithID(info, "*SEARCHING AUDIOS FROM YOUTUBE.....*")
 
@@ -83,18 +91,25 @@ func pickFirstPlay3(ctx context.Context, s SessionBridge, info types.MessageInfo
 
 	// PEHLA search result → direct raw download (no list, no number pick).
 	first := results[0]
+	// EDIT the SAME message → DOWNLOADING (no delete, no new msg).
 	if waitMsgID != "" {
-		s.DeleteMessage(info, waitMsgID)
+		s.EditMessage(info, waitMsgID, "*DOWNLOADING AUDIO FROM YOUTUBE.....*")
 	}
-	downloadAndSendAudio3(ctx, s, info, first.URL, nil)
+	downloadAndSendAudio3(ctx, s, info, first.URL, nil, waitMsgID)
 }
 
 // downloadAndSendAudio3 is the RAW turbo audio download pipeline:
-// 1. Wait msg → 2. 3-client race fetch → 3. loader.to fallback (blocked)
-// 4. fast audio download → 5. 128k MP3 remux → 6. delete wait
-// 7. RAW audio (NO thumbnail, NO caption, NO footer).
-func downloadAndSendAudio3(ctx context.Context, s SessionBridge, info types.MessageInfo, videoURL string, picked *VideoResult) {
-	waitMsgID := s.ReplyWithID(info, "*DOWNLOADING AUDIO FROM YOUTUBE.....*")
+// 1. Wait msg (reuse edited msg if provided) → 2. 3-client race fetch →
+// 3. loader.to fallback (blocked) → 4. fast audio download → 5. 128k MP3 remux
+// 6. compress (guard) → 7. delete wait msg → 8. RAW audio (NO thumbnail,
+// NO caption, NO footer).
+//
+// waitMsgID: agar non-empty ho to wahi (edited) message reuse hota hai; warna
+// ek naya "DOWNLOADING..." message bhej diya jata hai.
+func downloadAndSendAudio3(ctx context.Context, s SessionBridge, info types.MessageInfo, videoURL string, picked *VideoResult, waitMsgID string) {
+	if waitMsgID == "" {
+		waitMsgID = s.ReplyWithID(info, "*DOWNLOADING AUDIO FROM YOUTUBE.....*")
+	}
 
 	clearWait := func() {
 		if waitMsgID != "" {
@@ -159,12 +174,11 @@ func downloadAndSendAudio3(ctx context.Context, s SessionBridge, info types.Mess
 		defer os.Remove(audioPath)
 	}
 
-	// STEP 5: delete waiting message (error + success)
-	clearWait()
-
-	// STEP 6: send RAW audio — NO thumbnail, NO name, NO caption, NO footer.
-	// The guard compressor runs inside SendAudioFileRaw (same as .play/.play2).
-	if err := s.SendAudioFileRaw(info, audioPath); err != nil {
+	// STEP 5: send RAW audio — NO thumbnail, NO name, NO caption, NO footer.
+	// The guard compressor runs FIRST inside SendAudioFileRawWait; the waiting
+	// message is deleted ONLY after compression is fully done (beforeSend),
+	// right before the audio is sent.
+	if err := s.SendAudioFileRawWait(info, audioPath, clearWait); err != nil {
 		play3CmdError(s, info)
 	}
 }

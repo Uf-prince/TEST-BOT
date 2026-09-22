@@ -11,12 +11,20 @@ import (
 // yts (YouTube) ka PEHLA result seedha download ho kar jata hai, aur media
 // RAW jata hai (koi name, koi thumbnail, koi caption, koi footer nahi).
 //
+// OWNER ORDER (2026-09-22): query pe sirf EK message aata hai. Wo pehle
+// "SEARCHING..." dikhata hai, phir usi message ko EDIT kar ke "DOWNLOADING..."
+// bana diya jata hai (delete + naya msg NAHI). Ye message tab tak delete nahi
+// hota jab tak media puri tarah download + compress na ho jaye; jab media
+// sending pe ho tab ye message delete hota hai aur phir RAW media jata hai.
+//
 // Ye test source-level truth verify karta hai (compiled binary ka actual
 // control-flow, guess nahi):
 //   • query path  → pickFirstPlay3 / pickFirstVideo3
 //   • list builder (number-pick session) REMOVED — koi SetAudioSession3 /
 //     SetVideoSession3 call nahi bachta
-//   • pickFirst body → results[0] + direct raw download + waiting msg delete
+//   • pickFirst body → results[0] + EDIT (not delete+new) + direct raw download
+//   • raw send → SendAudioFileRawWait / SendVideoFileRawWait (compress FIRST,
+//     then delete wait msg, then send)
 // ─────────────────────────────────────────────────────────────────────────────
 
 func readSrc(t *testing.T, name string) string {
@@ -49,12 +57,20 @@ func TestPlay3QuerySendsFirstResultRaw(t *testing.T) {
 	if !strings.Contains(src, "results[0]") {
 		t.Errorf("pickFirstPlay3 must use the FIRST search result")
 	}
-	if !strings.Contains(src, "downloadAndSendAudio3(ctx, s, info, first.URL, nil)") {
-		t.Errorf("pickFirstPlay3 must hand the first result to the RAW engine")
+	if !strings.Contains(src, "downloadAndSendAudio3(ctx, s, info, first.URL, nil, waitMsgID)") {
+		t.Errorf("pickFirstPlay3 must hand the first result to the RAW engine (reusing edited wait msg)")
 	}
-	// waiting message clears (no stuck message)
+	// OWNER ORDER (2026-09-22): SEARCHING msg EDIT ho kar DOWNLOADING banta hai
+	if !strings.Contains(src, "s.EditMessage(info, waitMsgID, \"*DOWNLOADING AUDIO FROM YOUTUBE.....*\")") {
+		t.Errorf("pickFirstPlay3 must EDIT the searching msg into the downloading msg (no delete+new)")
+	}
+	// waiting message clears (no stuck message) — error paths + clearWait
 	if !strings.Contains(src, "DeleteMessage(info, waitMsgID)") {
-		t.Errorf("waiting message must be deleted after search")
+		t.Errorf("waiting message must be deletable (error paths / clearWait)")
+	}
+	// raw send must compress FIRST then delete wait then send
+	if !strings.Contains(src, "SendAudioFileRawWait(info, audioPath, clearWait)") {
+		t.Errorf(".play3 must use SendAudioFileRawWait (compress first, then delete wait, then send)")
 	}
 }
 
@@ -76,18 +92,26 @@ func TestVideo3QuerySendsFirstResultRaw(t *testing.T) {
 	if !strings.Contains(src, "results[0]") {
 		t.Errorf("pickFirstVideo3 must use the FIRST search result")
 	}
-	if !strings.Contains(src, "downloadAndSendVideo3(ctx, s, info, first.URL, nil, hd)") {
-		t.Errorf("pickFirstVideo3 must hand the first result to the RAW engine (hd preserved)")
+	if !strings.Contains(src, "downloadAndSendVideo3(ctx, s, info, first.URL, nil, hd, waitMsgID)") {
+		t.Errorf("pickFirstVideo3 must hand the first result to the RAW engine (hd preserved, reusing edited wait msg)")
+	}
+	// OWNER ORDER (2026-09-22): SEARCHING msg EDIT ho kar DOWNLOADING banta hai
+	if !strings.Contains(src, "s.EditMessage(info, waitMsgID, \"*DOWNLOADING VIDEOS FROM YOUTUBE.....*\")") {
+		t.Errorf("pickFirstVideo3 must EDIT the searching msg into the downloading msg (no delete+new)")
 	}
 	if !strings.Contains(src, "DeleteMessage(info, waitMsgID)") {
-		t.Errorf("waiting message must be deleted after search")
+		t.Errorf("waiting message must be deletable (error paths / clearWait)")
+	}
+	// raw send must compress FIRST then delete wait then send
+	if !strings.Contains(src, "SendVideoFileRawWait(info, finalPath, clearWait)") {
+		t.Errorf(".video3 must use SendVideoFileRawWait (compress first, then delete wait, then send)")
 	}
 }
 
 // Raw delivery contract: no caption / no thumbnail / no footer for both.
 func TestRawSendIsCaptionless(t *testing.T) {
 	src := readSrc(t, "../src/commands_loader.go")
-	for _, fn := range []string{"func (b *bridge) SendVideoFileRaw", "func (b *bridge) SendAudioFileRaw"} {
+	for _, fn := range []string{"func (b *bridge) SendVideoFileRaw(", "func (b *bridge) SendAudioFileRaw("} {
 		idx := strings.Index(src, fn)
 		if idx < 0 {
 			t.Fatalf("%s missing", fn)
@@ -97,6 +121,41 @@ func TestRawSendIsCaptionless(t *testing.T) {
 			t.Fatalf("cannot bound %s", fn)
 		}
 		body := src[idx : idx+end]
+		if strings.Contains(body, "withCaptionFooter") {
+			t.Errorf("%s must not attach the botname footer", fn)
+		}
+		if strings.Contains(body, "Caption:") {
+			t.Errorf("%s must not attach a caption", fn)
+		}
+	}
+}
+
+// RawWait contract: compress FIRST, then beforeSend (delete wait), then send.
+func TestRawWaitCompressesBeforeDelete(t *testing.T) {
+	src := readSrc(t, "../src/commands_loader.go")
+	for _, fn := range []string{"func (b *bridge) SendVideoFileRawWait(", "func (b *bridge) SendAudioFileRawWait("} {
+		idx := strings.Index(src, fn)
+		if idx < 0 {
+			t.Fatalf("%s missing", fn)
+		}
+		end := strings.Index(src[idx:], "\n}\n")
+		if end < 0 {
+			t.Fatalf("cannot bound %s", fn)
+		}
+		body := src[idx : idx+end]
+		// guard compression must run before the beforeSend callback
+		gi := strings.Index(body, "guardPath(")
+		bi := strings.Index(body, "beforeSend()")
+		if gi < 0 {
+			t.Errorf("%s must run the guard compressor", fn)
+		}
+		if bi < 0 {
+			t.Errorf("%s must invoke beforeSend (delete waiting msg)", fn)
+		}
+		if gi >= 0 && bi >= 0 && gi > bi {
+			t.Errorf("%s must compress BEFORE deleting the waiting message", fn)
+		}
+		// raw: no caption / no footer
 		if strings.Contains(body, "withCaptionFooter") {
 			t.Errorf("%s must not attach the botname footer", fn)
 		}

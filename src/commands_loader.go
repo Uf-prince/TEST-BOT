@@ -414,6 +414,98 @@ func (b *bridge) SendAudioFileRaw(info types.MessageInfo, path string) error {
 	return err
 }
 
+// SendVideoFileRawWait is the .video3 OWNER-ORDERED raw variant: it runs the
+// guard compressor FIRST (nothing is sent until compression is fully done),
+// then invokes beforeSend (used to delete the waiting message), and only then
+// sends the already-compressed RAW video (no caption / no thumbnail / no
+// footer). This guarantees the waiting message stays visible until the video
+// is fully downloaded AND compressed, and is removed only at send time.
+func (b *bridge) SendVideoFileRawWait(info types.MessageInfo, path string, beforeSend func()) error {
+	// GUARD (Render bandwidth shield): same compressor policy as SendVideoFile.
+	g := b.guardPath(info, guardVideo, path, "")
+	if g.blocked() {
+		if beforeSend != nil {
+			beforeSend()
+		}
+		return nil // guard ne chat me block message bhej diya
+	}
+	defer g.cleanupAll()
+	var seconds, width, height uint32
+	if g.usePath {
+		path = g.path
+	}
+	if secs, w, h := guardProbeMeta(path); secs > 0 {
+		seconds, width, height = secs, w, h
+	}
+	// Compression FULLY done -> now (and only now) remove the waiting message.
+	if beforeSend != nil {
+		beforeSend()
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	resp, err := b.s.Client.UploadReader(context.Background(), f, nil, whatsmeow.MediaVideo)
+	if err != nil {
+		return err
+	}
+	// RAW: no caption, no thumbnail, no footer - sirf video.
+	videoMsg := &waProto.VideoMessage{
+		URL: proto.String(resp.URL), DirectPath: proto.String(resp.DirectPath),
+		Mimetype: proto.String("video/mp4"), MediaKey: resp.MediaKey, FileLength: proto.Uint64(resp.FileLength),
+		FileSHA256: resp.FileSHA256, FileEncSHA256: resp.FileEncSHA256,
+		Seconds: proto.Uint32(seconds), Height: proto.Uint32(height), Width: proto.Uint32(width), GifPlayback: proto.Bool(false),
+	}
+	_, err = b.s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{VideoMessage: videoMsg})
+	return err
+}
+
+// SendAudioFileRawWait is the .play3 OWNER-ORDERED raw variant: it runs the
+// guard compressor FIRST (nothing is sent until compression is fully done),
+// then invokes beforeSend (used to delete the waiting message), and only then
+// sends the already-compressed RAW audio (no caption / no footer). This
+// guarantees the waiting message stays visible until the audio is fully
+// downloaded AND compressed, and is removed only at send time.
+func (b *bridge) SendAudioFileRawWait(info types.MessageInfo, path string, beforeSend func()) error {
+	// GUARD (Render bandwidth shield): same compressor policy as SendAudioFile.
+	g := b.guardPath(info, guardAudio, path, "")
+	if g.blocked() {
+		if beforeSend != nil {
+			beforeSend()
+		}
+		return nil
+	}
+	defer g.cleanupAll()
+	var seconds uint32
+	if g.usePath {
+		path = g.path
+	}
+	if d := guardProbeDuration(path); d > 0 {
+		seconds = uint32(d)
+	}
+	// Compression FULLY done -> now (and only now) remove the waiting message.
+	if beforeSend != nil {
+		beforeSend()
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	resp, err := b.s.Client.UploadReader(context.Background(), f, nil, whatsmeow.MediaAudio)
+	if err != nil {
+		return err
+	}
+	// RAW: no caption, no footer - sirf audio.
+	_, err = b.s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{AudioMessage: &waProto.AudioMessage{
+		URL: proto.String(resp.URL), DirectPath: proto.String(resp.DirectPath), Mimetype: proto.String("audio/mpeg"),
+		MediaKey: resp.MediaKey, FileLength: proto.Uint64(resp.FileLength), FileSHA256: resp.FileSHA256,
+		FileEncSHA256: resp.FileEncSHA256, Seconds: proto.Uint32(seconds), PTT: proto.Bool(false),
+	}})
+	return err
+}
+
 // SendAudio uploads and sends an audio message.
 func (b *bridge) SendAudio(info types.MessageInfo, data []byte, caption string, seconds uint32) error {
 	// GUARD (Render bandwidth shield): 50MB+ audio → compressor room

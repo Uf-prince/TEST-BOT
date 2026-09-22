@@ -65,6 +65,13 @@ type SessionBridge interface {
 	// SendAudioFileRaw sends audio with NO caption / NO footer (raw). Used by
 	// .play3. Still runs the guard compressor.
 	SendAudioFileRaw(info types.MessageInfo, path string) error
+	// SendVideoFileRawWait is the .video3 OWNER-ORDERED raw flow: the video is
+	// FULLY compressed FIRST (guard), then beforeSend runs (delete waiting msg),
+	// and only then the already-compressed RAW video is sent (no caption /
+	// thumbnail / footer). Keeps the waiting msg alive until compression ends.
+	SendVideoFileRawWait(info types.MessageInfo, path string, beforeSend func()) error
+	// SendAudioFileRawWait is the .play3 OWNER-ORDERED raw flow (audio variant).
+	SendAudioFileRawWait(info types.MessageInfo, path string, beforeSend func()) error
 	// SendVideoThumbFirst is the OWNER-ORDERED flow for .play/.play2/.video/
 	// .video2: the video is FULLY compressed FIRST (guard), then the thumbnail
 	// + info caption is sent, and only then the already-compressed video. This

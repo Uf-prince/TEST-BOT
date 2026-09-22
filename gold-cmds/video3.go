@@ -8,12 +8,20 @@ package goldcmds
 // turbo engine (3-client Innertube race + loader.to fallback + ffmpeg remux)
 // and the EXACT same guard compressor, but the delivery is RAW:
 //
-//   .video3 <query>  →  WAITING MSG  →  (error + success) waiting msg DELETE
+//   .video3 <query>  →  ONE WAITING MSG (SEARCHING → EDITED to DOWNLOADING)
+//                       →  msg stays visible until download + compress done
+//                       →  msg DELETE right before the RAW video is sent
 //                       →  DIRECT video arrives with NO thumbnail, NO name,
 //                          NO caption, NO footer — just the bare video file.
 //
+// OWNER ORDER (2026-09-22): query pe sirf EK message aata hai. Wo pehle
+// "SEARCHING..." dikhata hai, phir usi message ko EDIT kar ke "DOWNLOADING..."
+// bana diya jata hai (delete + naya msg NAHI). Ye message tab tak delete nahi
+// hota jab tak video puri tarah download + compress na ho jaye; jab video
+// sending pe ho tab ye message delete hota hai aur phir RAW video jata hai.
+//
 // The compressor system (guard.go) is applied automatically inside
-// SendVideoFileRaw → guardPath(guardVideo) — same as .video / .video2.
+// SendVideoFileRawWait → guardPath(guardVideo) — same as .video / .video2.
 // ============================================================================
 
 import (
@@ -41,7 +49,7 @@ func handleVideo3Async(ctx context.Context, s SessionBridge, info types.MessageI
 	if len(args) >= 4 && (strings.Contains(args[0], "youtube.com/") || strings.Contains(args[0], "youtu.be/")) {
 		hd := len(args) >= 5 && strings.EqualFold(strings.TrimSpace(args[4]), "HD")
 		picked := &VideoResult{URL: args[0], Thumbnail: args[1], Title: args[2], Duration: args[3]}
-		downloadAndSendVideo3(ctx, s, info, args[0], picked, hd)
+		downloadAndSendVideo3(ctx, s, info, args[0], picked, hd, "")
 		return
 	}
 
@@ -54,7 +62,7 @@ func handleVideo3Async(ctx context.Context, s SessionBridge, info types.MessageI
 
 	// Direct YouTube URL → immediate turbo download
 	if strings.Contains(input, "youtube.com/") || strings.Contains(input, "youtu.be/") {
-		downloadAndSendVideo3(ctx, s, info, input, nil, false)
+		downloadAndSendVideo3(ctx, s, info, input, nil, false, "")
 		return
 	}
 
@@ -82,14 +90,14 @@ func handleVideo3Async(ctx context.Context, s SessionBridge, info types.MessageI
 	pickFirstVideo3(ctx, s, info, query, hd)
 }
 
-// searchProgressVideo3 runs the search and shows the number-selection list.
-// The session is tagged "video3" so picks route back through the raw engine
-// (with HD when requested).
-// pickFirstVideo3 — OWNER ORDER (2026-09-21):
-// .video3 <query> ab LIST nahi bhejta. yts search chalti hai, PEHLA result
-// uthaya jata hai aur seedha RAW video download ho kar jata hai — koi title,
-// koi thumbnail, koi caption, koi footer NAHI. hd flag wahi kaam karta hai
-// (.video3 hd <query> → HD merge pipeline).
+// pickFirstVideo3 — OWNER ORDER (2026-09-22): .video3 <query> ab sirf EK
+// message bhejta hai. Pehle "SEARCHING ON YOUTUBE....." dikhta hai; search
+// complete hone par usi message ko EDIT kar ke "DOWNLOADING VIDEOS FROM
+// YOUTUBE....." bana diya jata hai (delete + naya msg NAHI). Phir PEHLA result
+// seedha RAW video download ho kar jata hai — koi title, koi thumbnail, koi
+// caption, koi footer NAHI. hd flag wahi kaam karta hai (.video3 hd <query> →
+// HD merge pipeline). Waiting msg tab tak rehta hai jab tak download + compress
+// mukammal na ho, phir delete ho kar RAW video jata hai.
 func pickFirstVideo3(ctx context.Context, s SessionBridge, info types.MessageInfo, query string, hd bool) {
 	waitMsgID := s.ReplyWithID(info, "*SEARCHING ON YOUTUBE.....*")
 
@@ -105,17 +113,24 @@ func pickFirstVideo3(ctx context.Context, s SessionBridge, info types.MessageInf
 
 	// PEHLA search result → direct raw download (no list, no number pick).
 	first := results[0]
+	// EDIT the SAME message → DOWNLOADING (no delete, no new msg).
 	if waitMsgID != "" {
-		s.DeleteMessage(info, waitMsgID)
+		s.EditMessage(info, waitMsgID, "*DOWNLOADING VIDEOS FROM YOUTUBE.....*")
 	}
-	downloadAndSendVideo3(ctx, s, info, first.URL, nil, hd)
+	downloadAndSendVideo3(ctx, s, info, first.URL, nil, hd, waitMsgID)
 }
 
 // downloadAndSendVideo3 is the RAW turbo pipeline:
-// waiting msg → parallel race → (HD merge | 360p stream) → remux →
-// delete waiting → RAW video (NO thumbnail, NO caption, NO footer).
-func downloadAndSendVideo3(ctx context.Context, s SessionBridge, info types.MessageInfo, videoURL string, picked *VideoResult, hd bool) {
-	waitMsgID := s.ReplyWithID(info, "*DOWNLOADING VIDEOS FROM YOUTUBE.....*")
+// waiting msg (reuse edited msg if provided) → parallel race →
+// (HD merge | 360p stream) → remux → compress (guard) → delete waiting →
+// RAW video (NO thumbnail, NO caption, NO footer).
+//
+// waitMsgID: agar non-empty ho to wahi (edited) message reuse hota hai; warna
+// ek naya "DOWNLOADING..." message bhej diya jata hai.
+func downloadAndSendVideo3(ctx context.Context, s SessionBridge, info types.MessageInfo, videoURL string, picked *VideoResult, hd bool, waitMsgID string) {
+	if waitMsgID == "" {
+		waitMsgID = s.ReplyWithID(info, "*DOWNLOADING VIDEOS FROM YOUTUBE.....*")
+	}
 
 	clearWait := func() {
 		if waitMsgID != "" {
@@ -179,12 +194,11 @@ func downloadAndSendVideo3(ctx context.Context, s SessionBridge, info types.Mess
 	}
 	defer os.Remove(finalPath)
 
-	// STEP 3: download complete — delete waiting message (error + success)
-	clearWait()
-
-	// STEP 4: send RAW video — NO thumbnail, NO name, NO caption, NO footer.
-	// The guard compressor runs inside SendVideoFileRaw (same as .video/.video2).
-	if err := s.SendVideoFileRaw(info, finalPath); err != nil {
+	// STEP 3: send RAW video — NO thumbnail, NO name, NO caption, NO footer.
+	// The guard compressor runs FIRST inside SendVideoFileRawWait; the waiting
+	// message is deleted ONLY after compression is fully done (beforeSend),
+	// right before the video is sent.
+	if err := s.SendVideoFileRawWait(info, finalPath, clearWait); err != nil {
 		video3CmdError(s, info)
 	}
 }
