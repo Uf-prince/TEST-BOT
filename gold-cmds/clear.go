@@ -20,9 +20,17 @@ package goldcmds
 //   ❮ 1 ❯ → clear EVERYTHING (starred messages included)
 //   ❮ 2 ❯ → clear everything EXCEPT starred messages (starred kept)
 //
-// whatsmeow: appstate.BuildDeleteChat(chatJID, ts, lastKey, deleteMedia) +
-//   Client.SendAppState(ctx, patch). This removes the chat from the bot's
-//   chat list (clears it), matching the UMAR "clear chat" behavior.
+// whatsmeow: this uses the WhatsApp "clear chat" app-state mutation
+//   (regular_high, apiVersion 6) with index
+//   ["clearChat", <jid>, <flag>, "0"] where:
+//       flag "1" → clear EVERYTHING (starred messages included)
+//       flag "0" → clear everything EXCEPT starred messages (starred kept)
+//   This mirrors Baileys' chatModify({ clear: ... }) implementation exactly.
+//
+//   NOTE: the previous implementation used appstate.BuildDeleteChat(...) whose
+//   `deleteMedia` flag only controls MEDIA deletion — it does NOT control
+//   starred-message retention, which is why BOTH `1` and `2` wiped starred
+//   messages. The clearChat index's 3rd element is the real starred switch.
 //
 // Aliases (Hidden): clearchat, purge
 // ============================================================================
@@ -33,7 +41,10 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"go.mau.fi/whatsmeow/appstate"
+	"go.mau.fi/whatsmeow/proto/waSyncAction"
 	"go.mau.fi/whatsmeow/types"
 )
 
@@ -150,9 +161,29 @@ func clearRun(s SessionBridge, info types.MessageInfo, promptID string, includeS
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// includeStarred=true  → deleteMedia=true  → clear EVERYTHING (starred too)
-	// includeStarred=false → deleteMedia=false → keep starred messages
-	patch := appstate.BuildDeleteChat(chat, time.Now(), nil, includeStarred)
+	// WhatsApp "clear chat" app-state mutation (regular_high, apiVersion 6).
+	// Index = ["clearChat", <jid>, <flag>, "0"] where:
+	//   flag "1" → clear EVERYTHING (starred messages included)
+	//   flag "0" → clear everything EXCEPT starred messages (starred kept)
+	clearFlag := "1"
+	if !includeStarred {
+		clearFlag = "0"
+	}
+
+	patch := appstate.PatchInfo{
+		Type: appstate.WAPatchRegularHigh,
+		Mutations: []appstate.MutationInfo{{
+			Index:   []string{appstate.IndexClearChat, chat.String(), clearFlag, "0"},
+			Version: 6,
+			Value: &waSyncAction.SyncActionValue{
+				ClearChatAction: &waSyncAction.ClearChatAction{
+					MessageRange: &waSyncAction.SyncActionMessageRange{
+						LastMessageTimestamp: proto.Int64(time.Now().Unix()),
+					},
+				},
+			},
+		}},
+	}
 	_ = client.SendAppState(ctx, patch)
 }
 

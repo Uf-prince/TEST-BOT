@@ -22,23 +22,138 @@ func init() {
 // TTL watchdog were REMOVED. The bot now runs on Heroku (plenty of RAM/disk),
 // so no memory-based restart / cache-TTL system exists anymore.
 
+// ============================================================================
+// cgroup helpers — robust across cgroup v1 (Heroku, Modal) AND cgroup v2
+// (Render, Fly, modern Docker). The previous version only searched for cgroup
+// v2 filenames (memory.current / memory.max), so on Heroku's cgroup v1 layout
+// it found nothing and every RAM/CPU/SWAP field showed "N/A".
+// ============================================================================
+
 // cgroupV1Path builds the flat cgroup v1 file path used by hosts like Modal.com
-// (Modal exposes cgroup v1 mounts, NOT v2 — that's why limits previously showed
-// "Unavailable (cgroup limit not exposed)").
+// and Heroku (e.g. /sys/fs/cgroup/memory/memory.limit_in_bytes).
 func cgroupV1Path(controller, file string) string {
 	return "/sys/fs/cgroup/" + controller + "/" + file
+}
+
+// findCgroupFileAny walks /sys/fs/cgroup and returns the first file whose base
+// name matches ANY of the given names. This works for both cgroup v1 (flat
+// controller dirs like memory/memory.limit_in_bytes) and cgroup v2 (unified
+// memory.max), so it finds the dyno's real limits on Heroku, Modal, Render, etc.
+func findCgroupFileAny(names ...string) string {
+	const root = "/sys/fs/cgroup"
+	want := make(map[string]bool, len(names))
+	for _, n := range names {
+		want[n] = true
+	}
+	var found string
+	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || found != "" {
+			return nil
+		}
+		if !entry.IsDir() && want[entry.Name()] {
+			found = path
+		}
+		return nil
+	})
+	return found
+}
+
+// cgroupExplicitPaths returns known-good direct paths for a cgroup file name,
+// covering cgroup v1 controller dirs and the cgroup v2 unified root, plus any
+// nested path declared in /proc/self/cgroup (used by some container runtimes).
+func cgroupExplicitPaths(name string) []string {
+	paths := []string{
+		"/sys/fs/cgroup/" + name,             // cgroup v2 unified root
+		"/sys/fs/cgroup/memory/" + name,      // cgroup v1 memory controller
+		"/sys/fs/cgroup/cpu/" + name,         // cgroup v1 cpu controller
+		"/sys/fs/cgroup/cpuacct/" + name,     // cgroup v1 cpuacct controller
+		"/sys/fs/cgroup/cpu,cpuacct/" + name, // cgroup v1 combined controller
+	}
+	if data, err := os.ReadFile("/proc/self/cgroup"); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			parts := strings.SplitN(strings.TrimSpace(line), ":", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			ctrl, cgPath := parts[1], strings.TrimSpace(parts[2])
+			if cgPath == "" || cgPath == "/" {
+				continue
+			}
+			for _, c := range strings.Split(ctrl, ",") {
+				if c == "" {
+					continue
+				}
+				paths = append(paths, "/sys/fs/cgroup/"+c+cgPath+"/"+name)
+			}
+			paths = append(paths, "/sys/fs/cgroup"+cgPath+"/"+name)
+		}
+	}
+	return paths
+}
+
+// readCgroupString returns the trimmed contents of the first matching cgroup
+// file: explicit known paths first (fast), then a full tree walk (robust).
+func readCgroupString(names ...string) (string, bool) {
+	for _, name := range names {
+		for _, p := range cgroupExplicitPaths(name) {
+			if data, err := os.ReadFile(p); err == nil {
+				return strings.TrimSpace(string(data)), true
+			}
+		}
+	}
+	if p := findCgroupFileAny(names...); p != "" {
+		if data, err := os.ReadFile(p); err == nil {
+			return strings.TrimSpace(string(data)), true
+		}
+	}
+	return "", false
+}
+
+// readCgroupUint parses the first matching cgroup file as an unsigned integer.
+func readCgroupUint(names ...string) (uint64, bool) {
+	raw, ok := readCgroupString(names...)
+	if !ok {
+		return 0, false
+	}
+	v, err := strconv.ParseUint(raw, 10, 64)
+	return v, err == nil
+}
+
+// readCgroupInt parses the first matching cgroup file as a signed integer.
+func readCgroupInt(names ...string) (int64, bool) {
+	raw, ok := readCgroupString(names...)
+	if !ok {
+		return 0, false
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	return v, err == nil
+}
+
+// cgroupBytesAny formats a cgroup byte-count file ("N/A (not exposed)" when
+// missing, "Unlimited/not exposed" for the kernel's "max"/huge sentinel).
+func cgroupBytesAny(names ...string) string {
+	raw, ok := readCgroupString(names...)
+	if !ok {
+		return "N/A (not exposed)"
+	}
+	if raw == "max" {
+		return "Unlimited/not exposed"
+	}
+	n, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return "N/A"
+	}
+	if n > (1 << 40) { // >1 TB = host RAM, not a real per-container quota
+		return "Unlimited/not exposed"
+	}
+	return formatBytes(n)
 }
 
 // CurrentContainerMemoryBytes returns the container's current memory usage from
 // cgroup v2 (memory.current) or cgroup v1 (memory.usage_in_bytes); zero when
 // neither is available.
 func CurrentContainerMemoryBytes() uint64 {
-	if path := findCgroupFile("memory.current"); path != "" {
-		if value, ok := readUintFile(path); ok {
-			return value
-		}
-	}
-	if value, ok := readUintFile(cgroupV1Path("memory", "memory.usage_in_bytes")); ok {
+	if value, ok := readCgroupUint("memory.current", "memory.usage_in_bytes"); ok {
 		return value
 	}
 	return 0
@@ -210,170 +325,123 @@ type cpuInfo struct {
 }
 
 // readContainerMemory reads cgroup v2 first (Render/Fly etc.), then cgroup v1
-// (Modal.com). If neither exposes a real per-container quota it reports
-// unavailable rather than displaying the host machine's RAM as the bot's quota.
+// (Heroku, Modal.com). If neither exposes a real per-container quota it falls
+// back to /proc/meminfo (host view, clearly labelled) rather than showing N/A.
 func readContainerMemory() memoryInfo {
-	// ── Heroku: MEMORY_AVAILABLE (MB) is the dyno's RAM quota ──
-	// Heroku sets MEMORY_AVAILABLE on every dyno (e.g. 512 for standard-1x).
-	// This is the authoritative per-dyno limit; cgroup v1 below is the fallback.
-	if v := strings.TrimSpace(os.Getenv("MEMORY_AVAILABLE")); v != "" {
-		if mb, err := strconv.ParseUint(v, 10, 64); err == nil && mb > 0 {
-			limit := mb * 1024 * 1024
-			current := CurrentContainerMemoryBytes()
-			available := uint64(0)
-			if limit > current {
-				available = limit - current
+	// ── cgroup v2 (unified) ──
+	if current, ok := readCgroupUint("memory.current"); ok {
+		if maxRaw, ok2 := readCgroupString("memory.max"); ok2 {
+			if maxRaw == "max" {
+				return memoryInfo{"Unlimited/not exposed", formatBytes(current), "N/A", "N/A",
+					cgroupBytesAny("memory.peak"), cgroupBytesAny("memory.swap.max"), cgroupBytesAny("memory.swap.current")}
 			}
-			return memoryInfo{formatBytes(limit), formatBytes(current), formatBytes(available), formatPercent(current, limit), formatCgroupBytes("memory.peak"), formatCgroupBytes("memory.swap.max"), formatCgroupBytes("memory.swap.current")}
-		}
-	}
-	// ── cgroup v2 ──
-	currentPath := findCgroupFile("memory.current")
-	maxPath := findCgroupFile("memory.max")
-	if currentPath != "" && maxPath != "" {
-		current, currentOK := readUintFile(currentPath)
-		limitText, err := os.ReadFile(maxPath)
-		if currentOK && err == nil {
-			limitValue := strings.TrimSpace(string(limitText))
-			if limitValue == "max" {
-				return memoryInfo{"Unlimited/not exposed", formatBytes(current), "N/A", "N/A", formatCgroupBytes("memory.peak"), formatCgroupBytes("memory.swap.max"), formatCgroupBytes("memory.swap.current")}
-			}
-			if limit, lerr := strconv.ParseUint(limitValue, 10, 64); lerr == nil && limit > 0 {
+			if limit, err := strconv.ParseUint(maxRaw, 10, 64); err == nil && limit > 0 {
 				available := uint64(0)
 				if limit > current {
 					available = limit - current
 				}
-				return memoryInfo{formatBytes(limit), formatBytes(current), formatBytes(available), formatPercent(current, limit), formatCgroupBytes("memory.peak"), formatCgroupBytes("memory.swap.max"), formatCgroupBytes("memory.swap.current")}
+				return memoryInfo{formatBytes(limit), formatBytes(current), formatBytes(available), formatPercent(current, limit),
+					cgroupBytesAny("memory.peak"), cgroupBytesAny("memory.swap.max"), cgroupBytesAny("memory.swap.current")}
 			}
-			return memoryInfo{"Unavailable (invalid cgroup limit)", formatBytes(current), "N/A", "N/A", formatCgroupBytes("memory.peak"), formatCgroupBytes("memory.swap.max"), formatCgroupBytes("memory.swap.current")}
 		}
 	}
-	// ── cgroup v1 (Modal.com) ──
-	limit, limitOK := readUintFile(cgroupV1Path("memory", "memory.limit_in_bytes"))
-	current, currentOK := readUintFile(cgroupV1Path("memory", "memory.usage_in_bytes"))
+	// ── cgroup v1 (Heroku, Modal.com) ──
+	limit, limitOK := readCgroupUint("memory.limit_in_bytes")
+	current, currentOK := readCgroupUint("memory.usage_in_bytes")
 	if limitOK && currentOK {
 		if limit == 0 || limit > (1<<40) { // >1 TB = host RAM, not a real quota
-			return memoryInfo{"Unlimited/not exposed", formatBytes(current), "N/A", "N/A", v1MemFile("memory.max_usage_in_bytes"), v1MemFile("memory.memsw_limit_in_bytes"), v1MemFile("memory.memsw_usage_in_bytes")}
+			return memoryInfo{"Unlimited/not exposed", formatBytes(current), "N/A", "N/A",
+				cgroupBytesAny("memory.max_usage_in_bytes"), cgroupBytesAny("memory.memsw.limit_in_bytes"), cgroupBytesAny("memory.memsw.usage_in_bytes")}
 		}
 		available := uint64(0)
 		if limit > current {
 			available = limit - current
 		}
-		return memoryInfo{formatBytes(limit), formatBytes(current), formatBytes(available), formatPercent(current, limit), v1MemFile("memory.max_usage_in_bytes"), v1MemFile("memory.memsw_limit_in_bytes"), v1MemFile("memory.memsw_usage_in_bytes")}
+		return memoryInfo{formatBytes(limit), formatBytes(current), formatBytes(available), formatPercent(current, limit),
+			cgroupBytesAny("memory.max_usage_in_bytes"), cgroupBytesAny("memory.memsw.limit_in_bytes"), cgroupBytesAny("memory.memsw.usage_in_bytes")}
+	}
+	// ── fallback: /proc/meminfo (host view, clearly labelled) ──
+	if total, avail, ok := readProcMeminfo(); ok {
+		used := uint64(0)
+		if total > avail {
+			used = total - avail
+		}
+		return memoryInfo{formatBytes(total) + " (host)", formatBytes(used), formatBytes(avail), formatPercent(used, total), "N/A", "N/A", "N/A"}
 	}
 	return memoryInfo{"Unavailable (cgroup limit not exposed)", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"}
 }
 
-// v1MemFile formats a cgroup v1 memory controller file ("N/A" when missing).
-func v1MemFile(name string) string {
-	value, ok := readUintFile(cgroupV1Path("memory", name))
-	if !ok {
-		return "N/A (not exposed)"
+// readProcMeminfo returns MemTotal and MemAvailable (bytes) from /proc/meminfo.
+func readProcMeminfo() (total, available uint64, ok bool) {
+	data, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0, 0, false
 	}
-	if value > (1 << 40) {
-		return "Unlimited/not exposed"
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		switch fields[0] {
+		case "MemTotal:":
+			if v, err := strconv.ParseUint(fields[1], 10, 64); err == nil {
+				total = v * 1024
+			}
+		case "MemAvailable:":
+			if v, err := strconv.ParseUint(fields[1], 10, 64); err == nil {
+				available = v * 1024
+			}
+		}
 	}
-	return formatBytes(value)
+	return total, available, total > 0
 }
 
 // readContainerCPU: GOLDMD_CPU_LIMIT (deploy-configured truth, e.g. Modal's
-// guaranteed 0.5 core) wins; then cgroup v2; then cgroup v1 (Modal exposes the
-// burst ceiling there, which can look larger than the billing limit).
+// guaranteed 0.5 core) wins; then cgroup v2; then cgroup v1 (Heroku/Modal).
 func readContainerCPU() cpuInfo {
 	if v := strings.TrimSpace(os.Getenv("GOLDMD_CPU_LIMIT")); v != "" {
 		return cpuInfo{v, readCPUUsageAny()}
 	}
 	// ── cgroup v2 ──
-	if path := findCgroupFile("cpu.max"); path != "" {
-		if data, err := os.ReadFile(path); err == nil {
-			fields := strings.Fields(string(data))
-			if len(fields) >= 2 {
-				if fields[0] == "max" {
-					return cpuInfo{"No cgroup limit", readCPUUsage(path)}
-				}
-				quota, qErr := strconv.ParseFloat(fields[0], 64)
-				period, pErr := strconv.ParseFloat(fields[1], 64)
-				if qErr == nil && pErr == nil && period > 0 {
-					return cpuInfo{fmt.Sprintf("%.2f core(s)", quota/period), readCPUUsage(path)}
+	if raw, ok := readCgroupString("cpu.max"); ok {
+		fields := strings.Fields(raw)
+		if len(fields) >= 2 {
+			if fields[0] == "max" {
+				return cpuInfo{"No cgroup limit", readCPUUsageAny()}
+			}
+			quota, qErr := strconv.ParseFloat(fields[0], 64)
+			period, pErr := strconv.ParseFloat(fields[1], 64)
+			if qErr == nil && pErr == nil && period > 0 {
+				return cpuInfo{fmt.Sprintf("%.2f core(s)", quota/period), readCPUUsageAny()}
+			}
+		}
+	}
+	// ── cgroup v1 (Heroku, Modal.com) ──
+	quota, qOK := readCgroupInt("cpu.cfs_quota_us")
+	period, pOK := readCgroupUint("cpu.cfs_period_us")
+	if qOK && pOK && quota > 0 && period > 0 {
+		return cpuInfo{fmt.Sprintf("%.2f core(s)", float64(quota)/float64(period)), readCPUUsageAny()}
+	}
+	return cpuInfo{"Unavailable (cgroup limit not exposed)", readCPUUsageAny()}
+}
+
+// readCPUUsageAny tries cgroup v2 cpu.stat (usage_usec) then cgroup v1
+// cpuacct.usage (nanoseconds).
+func readCPUUsageAny() string {
+	if p := findCgroupFileAny("cpu.stat"); p != "" {
+		if data, err := os.ReadFile(p); err == nil {
+			for _, line := range strings.Split(string(data), "\n") {
+				fields := strings.Fields(line)
+				if len(fields) == 2 && fields[0] == "usage_usec" {
+					return formatDurationSeconds(fields[1]) + " cumulative"
 				}
 			}
-			return cpuInfo{"Unavailable", readCPUUsage(path)}
 		}
 	}
-	// ── cgroup v1 (Modal.com) ──
-	quota, qOK := readIntFile(cgroupV1Path("cpu", "cpu.cfs_quota_us"))
-	period, pOK := readUintFile(cgroupV1Path("cpu", "cpu.cfs_period_us"))
-	if qOK && pOK && quota > 0 && period > 0 {
-		return cpuInfo{fmt.Sprintf("%.2f core(s) (cgroup burst ceiling)", float64(quota)/float64(period)), readCPUUsageV1()}
-	}
-	return cpuInfo{"Unavailable (cgroup limit not exposed)", "N/A"}
-}
-
-// readCPUUsageAny tries v2 cpu.stat then v1 cpuacct.usage.
-func readCPUUsageAny() string {
-	if path := findCgroupFile("cpu.max"); path != "" {
-		if u := readCPUUsage(path); u != "N/A" {
-			return u
-		}
-	}
-	return readCPUUsageV1()
-}
-
-func readCPUUsage(cpuMaxPath string) string {
-	statPath := filepath.Join(filepath.Dir(cpuMaxPath), "cpu.stat")
-	data, err := os.ReadFile(statPath)
-	if err != nil {
-		return "N/A"
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 2 && fields[0] == "usage_usec" {
-			return formatDurationSeconds(fields[1]) + " cumulative"
-		}
+	if usage, ok := readCgroupUint("cpuacct.usage"); ok {
+		return time.Duration(usage).Round(time.Second).String() + " cumulative"
 	}
 	return "N/A"
-}
-
-// readCPUUsageV1 reads cgroup v1 cpuacct.usage (nanoseconds).
-func readCPUUsageV1() string {
-	usage, ok := readUintFile(cgroupV1Path("cpuacct", "cpuacct.usage"))
-	if !ok {
-		return "N/A"
-	}
-	return time.Duration(usage).Round(time.Second).String() + " cumulative"
-}
-
-func findCgroupFile(name string) string {
-	const root = "/sys/fs/cgroup"
-	var found string
-	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || found != "" {
-			return nil
-		}
-		if !entry.IsDir() && entry.Name() == name {
-			found = path
-		}
-		return nil
-	})
-	return found
-}
-
-func readUintFile(path string) (uint64, bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0, false
-	}
-	value, err := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
-	return value, err == nil
-}
-
-func readIntFile(path string) (int64, bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0, false
-	}
-	value, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
-	return value, err == nil
 }
 
 func readProcessRSS() string {
@@ -391,26 +459,6 @@ func readProcessRSS() string {
 		}
 	}
 	return "N/A"
-}
-
-func formatCgroupBytes(name string) string {
-	path := findCgroupFile(name)
-	if path == "" {
-		return "N/A (not exposed)"
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "N/A"
-	}
-	value := strings.TrimSpace(string(data))
-	if value == "max" {
-		return "Unlimited/not exposed"
-	}
-	n, err := strconv.ParseUint(value, 10, 64)
-	if err != nil {
-		return "N/A"
-	}
-	return formatBytes(n)
 }
 
 func directorySize(path string) uint64 {
