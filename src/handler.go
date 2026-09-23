@@ -448,6 +448,21 @@ func (s *Session) HandleMessage(evt *events.Message) {
 	botJID := s.JID
 	prefix := s.resolvePrefix(botJID)
 
+	// ── PREFIX COMMAND (owner order — UNIVERSAL, ALWAYS-WORKS) ──────────────
+	// .prefix is the ONE command that ALWAYS works: it responds to the CURRENT
+	// prefix (whatever the owner set — ';', '+', '$', emoji, ...) AND to a
+	// leading '.' (dot). It is detected HERE, before all guards (bangcuser,
+	// anti-detection, mode, owner-only, bancmd, botblock, bangc, mine-mode),
+	// and dispatched directly, so the owner can ALWAYS change the prefix even
+	// if the bot is fully locked down. All OTHER commands keep using the
+	// normal prefix check below (set prefix or default prefix).
+	if pfArgs, ok := prefixCmdMatch(body, prefix); ok {
+		if cmd, ok := Commands["prefix"]; ok {
+			cmd(s, info, splitArgs(pfArgs), prefix)
+		}
+		return
+	}
+
 	// ── BANGCUSER (GROUP USER BAN) ENFORCEMENT ──────────────────────────────
 	// Ported from UMAR-MD pair.js (lines 10774-10865). If a user is banned
 	// in this group, ALL their messages are deleted (if bot is admin) and a
@@ -977,6 +992,35 @@ func splitArgs(s string) []string {
 		out = append(out, cur)
 	}
 	return out
+}
+
+// prefixCmdMatch reports whether body is the .prefix command and returns its
+// argument string. The .prefix command is UNIVERSAL (owner order): it ALWAYS
+// responds to the CURRENT prefix (whatever the owner set — ';', '+', '$',
+// emoji, ...) AND to a leading '.' (dot), so the owner can ALWAYS change the
+// prefix no matter what the active prefix is. All OTHER commands keep using
+// the normal prefix check (set prefix or default prefix).
+func prefixCmdMatch(body, prefix string) (string, bool) {
+	t := strings.TrimSpace(body)
+	matched := false
+	if prefix != "" && strings.HasPrefix(t, prefix) {
+		t = strings.TrimSpace(t[len(prefix):])
+		matched = true
+	} else if strings.HasPrefix(t, ".") {
+		t = strings.TrimSpace(t[1:])
+		matched = true
+	}
+	if !matched {
+		return "", false
+	}
+	low := strings.ToLower(t)
+	if low == "prefix" {
+		return "", true
+	}
+	if strings.HasPrefix(low, "prefix ") {
+		return strings.TrimSpace(t[len("prefix"):]), true
+	}
+	return "", false
 }
 
 func (s *Session) resolvePrefix(jid string) string {
