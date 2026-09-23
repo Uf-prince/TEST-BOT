@@ -240,7 +240,9 @@ func readProcIOStat(field string) string {
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) == 2 && fields[0] == field {
+		// /proc/self/io keys carry a trailing colon (e.g. "read_bytes:"), so
+		// strip it before comparing — otherwise every field looked "missing".
+		if len(fields) == 2 && strings.TrimSuffix(fields[0], ":") == field {
 			value, err := strconv.ParseUint(fields[1], 10, 64)
 			if err != nil {
 				return "N/A"
