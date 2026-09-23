@@ -40,6 +40,11 @@ var diskCacheRefreshMin = envInt("GOLDMD_DISK_CACHE_REFRESH_MIN", 30)
 //   Type "set"    → Set (members)
 //   Type "hash"   → Hash (field→value)
 type keyState struct {
+	// Key = the logical Redis key this file represents. Stored INSIDE the
+	// file (the filename is only a sha256 hash, so the key is otherwise
+	// unrecoverable). Used by dcPreloadRAM to rebuild the RAM cache from
+	// disk without any network round-trip.
+	Key  string            `json:"k,omitempty"`
 	Type string            `json:"t"`
 	Str  string            `json:"s,omitempty"`
 	Set  []string          `json:"m,omitempty"`
@@ -96,6 +101,7 @@ func dcSave(key string, st *keyState) {
 	if !dcReady {
 		return
 	}
+	st.Key = key
 	st.TS = time.Now().Unix()
 	data, err := json.Marshal(st)
 	if err != nil {

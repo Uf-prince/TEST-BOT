@@ -1149,6 +1149,9 @@ func (u *Upstash) cmdCore(args ...string) (json.RawMessage, error) {
 	// DISK-CACHE fast path (read ops): disk se serve — 0 Storj bandwidth.
 	if diskCacheEnabled && dcReady && !dcSkipKey(args) && dcIsReadOp(op) {
 		if res, ok := dcRead(args); ok {
+			// READ-THROUGH (owner order): RAM miss → disk hit → RAM me bhi
+			// likh do, taake agli read 0ms ho. Pure local map write, 0 network.
+			u.dcPopulateRAM(args, res)
 			return res, nil
 		}
 	}

@@ -125,6 +125,13 @@ func main() {
 	dcStartRefresher()
 	dcStartFleetRefresher()
 
+	// ── RAM RESPONSE CACHE WARM (owner order) ──
+	// Pre-build the common lone-command guidance responses (antidelete /
+	// antiedit / fb / ig / apk) into RAM so the very first user request is
+	// already served from memory (0 string building, 0 storage round-trip).
+	// Pure RAM — adds 0% load to the bot's speed.
+	goldcmds.RespCacheWarm(".")
+
 	// ── config + session persistence layer (Storj-backed) ──
 	// Per-session prefix / sudo / settings AND the full WhatsApp auth store
 	// now live in Storj (same shards/buckets as antidelete) and survive
@@ -202,6 +209,7 @@ func main() {
 	mgr := NewManager(cfg, container)
 	if redis != nil {
 		mgr.Redis = redis
+		dcStartRAMGuard(redis) // RAM preload guard (owner order)
 	}
 
 	// ── amute/aunmute scheduler: live session lookup bridge (Node ke

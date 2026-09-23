@@ -71,12 +71,12 @@ func handleAntiDelete(s SessionBridge, info types.MessageInfo, args []string, pr
 		}
 		if sub == "here" {
 			s.SetAntiDeleteMode("here")
-			s.Reply(info, "*🔰 ANTIDELETE MODE SET*\n\n*MODE :› HERE*\n\n*🔰 DELETED MESSAGES WILL BE SENT TO THE SAME CHAT/GROUP*\n\n"+antideleteGuide(prefix))
+			s.Reply(info, "*🔰 ANTIDELETE MODE SET*\n\n*MODE :› HERE*\n\n*🔰 DELETED MESSAGES WILL BE SENT TO THE SAME CHAT/GROUP*\n\n"+CachedGuide("antidelete", prefix, antideleteGuide))
 			return
 		}
 		if sub == "inbox" {
 			s.SetAntiDeleteMode("inbox")
-			s.Reply(info, "*🔰 ANTIDELETE MODE SET*\n\n*MODE :› INBOX*\n\n*🔰 DELETED MESSAGES WILL BE SENT TO YOUR PRIVATE INBOX (YOU)*\n\n"+antideleteGuide(prefix))
+			s.Reply(info, "*🔰 ANTIDELETE MODE SET*\n\n*MODE :› INBOX*\n\n*🔰 DELETED MESSAGES WILL BE SENT TO YOUR PRIVATE INBOX (YOU)*\n\n"+CachedGuide("antidelete", prefix, antideleteGuide))
 			return
 		}
 		// ".antidelete msg" with no/invalid sub → show current mode + guide
@@ -84,7 +84,7 @@ func handleAntiDelete(s SessionBridge, info types.MessageInfo, args []string, pr
 		if curMode == "" {
 			curMode = "HERE"
 		}
-		s.Reply(info, "*🔰 ANTIDELETE MODE*\n\n*MODE :› "+curMode+"*\n\n"+antideleteGuide(prefix))
+		s.Reply(info, "*🔰 ANTIDELETE MODE*\n\n*MODE :› "+curMode+"*\n\n"+CachedGuide("antidelete", prefix, antideleteGuide))
 		return
 	}
 
@@ -94,7 +94,7 @@ func handleAntiDelete(s SessionBridge, info types.MessageInfo, args []string, pr
 		if curMode == "" {
 			curMode = "HERE"
 		}
-		s.Reply(info, "*🔰 ANTIDELETE ENABLED*\n\n*🔰 BOT WILL NOW CAPTURE DELETED MESSAGES*\n\n*SCOPE :› ALL (Inbox + Groups)*\n*MODE :› "+curMode+"*\n\n"+antideleteGuide(prefix))
+		s.Reply(info, "*🔰 ANTIDELETE ENABLED*\n\n*🔰 BOT WILL NOW CAPTURE DELETED MESSAGES*\n\n*SCOPE :› ALL (Inbox + Groups)*\n*MODE :› "+curMode+"*\n\n"+CachedGuide("antidelete", prefix, antideleteGuide))
 		return
 	}
 
@@ -104,7 +104,7 @@ func handleAntiDelete(s SessionBridge, info types.MessageInfo, args []string, pr
 		if curMode == "" {
 			curMode = "HERE"
 		}
-		s.Reply(info, "*🔰 ANTIDELETE ENABLED*\n\n*SCOPE :› INBOX ONLY*\n*MODE :› "+curMode+"*\n\n"+antideleteGuide(prefix))
+		s.Reply(info, "*🔰 ANTIDELETE ENABLED*\n\n*SCOPE :› INBOX ONLY*\n*MODE :› "+curMode+"*\n\n"+CachedGuide("antidelete", prefix, antideleteGuide))
 		return
 	}
 
@@ -114,7 +114,7 @@ func handleAntiDelete(s SessionBridge, info types.MessageInfo, args []string, pr
 		if curMode == "" {
 			curMode = "HERE"
 		}
-		s.Reply(info, "*🔰 ANTIDELETE ENABLED*\n\n*SCOPE :› GROUPS ONLY*\n*MODE :› "+curMode+"*\n\n"+antideleteGuide(prefix))
+		s.Reply(info, "*🔰 ANTIDELETE ENABLED*\n\n*SCOPE :› GROUPS ONLY*\n*MODE :› "+curMode+"*\n\n"+CachedGuide("antidelete", prefix, antideleteGuide))
 		return
 	}
 
@@ -138,7 +138,7 @@ func handleAntiDelete(s SessionBridge, info types.MessageInfo, args []string, pr
 	if modeStr == "" {
 		modeStr = "HERE"
 	}
-	s.Reply(info, "*🔰 ANTIDELETE STATUS*\n\n*STATUS :› "+statusStr+"*\n*SCOPE :› "+scopeStr+"*\n*MODE :› "+modeStr+"*\n\n"+antideleteGuide(prefix))
+	s.Reply(info, "*🔰 ANTIDELETE STATUS*\n\n*STATUS :› "+statusStr+"*\n*SCOPE :› "+scopeStr+"*\n*MODE :› "+modeStr+"*\n\n"+CachedGuide("antidelete", prefix, antideleteGuide))
 }
 
 func init() {
