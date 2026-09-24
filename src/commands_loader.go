@@ -730,6 +730,10 @@ func extractMediaMessage(msg *waProto.Message) (whatsmeow.DownloadableMessage, s
 	if msg.VideoMessage != nil {
 		return msg.VideoMessage, mt(msg.VideoMessage.Mimetype, "video/mp4"), true
 	}
+	if msg.PtvMessage != nil {
+		// Circle / video-note: PtvMessage IS a VideoMessage.
+		return msg.PtvMessage, mt(msg.PtvMessage.Mimetype, "video/mp4"), true
+	}
 	if msg.AudioMessage != nil {
 		return msg.AudioMessage, mt(msg.AudioMessage.Mimetype, "audio/mpeg"), true
 	}
@@ -751,12 +755,9 @@ func extractMediaMessage(msg *waProto.Message) (whatsmeow.DownloadableMessage, s
 			return d, m, ok
 		}
 	}
-	if msg.ExtendedTextMessage != nil && msg.ExtendedTextMessage.ContextInfo != nil {
-		q := msg.ExtendedTextMessage.ContextInfo.QuotedMessage
-		if q != nil {
-			if d, m, ok := extractMediaMessage(q); ok {
-				return d, m, ok
-			}
+	if ci := extractContextInfoFromMsg(msg); ci != nil && ci.QuotedMessage != nil {
+		if d, m, ok := extractMediaMessage(ci.QuotedMessage); ok {
+			return d, m, ok
 		}
 	}
 	return nil, "", false
@@ -915,15 +916,12 @@ func (b *bridge) GetQuotedMessageID(info types.MessageInfo) (string, string, boo
 	if msg == nil {
 		return "", "", false
 	}
-	if msg.ExtendedTextMessage != nil && msg.ExtendedTextMessage.ContextInfo != nil {
-		ci := msg.ExtendedTextMessage.ContextInfo
-		if ci.StanzaID != nil && *ci.StanzaID != "" {
-			sender := ""
-			if ci.Participant != nil {
-				sender = *ci.Participant
-			}
-			return *ci.StanzaID, sender, true
+	if ci := extractContextInfoFromMsg(msg); ci != nil && ci.StanzaID != nil && *ci.StanzaID != "" {
+		sender := ""
+		if ci.Participant != nil {
+			sender = *ci.Participant
 		}
+		return *ci.StanzaID, sender, true
 	}
 	return "", "", false
 }
@@ -2250,17 +2248,7 @@ func (b *bridge) GetQuotedMessageText(info types.MessageInfo) string {
 	if msg == nil {
 		return ""
 	}
-	var ci *waProto.ContextInfo
-	if msg.ExtendedTextMessage != nil {
-		ci = msg.ExtendedTextMessage.ContextInfo
-	} else if msg.ImageMessage != nil {
-		ci = msg.ImageMessage.ContextInfo
-	} else if msg.VideoMessage != nil {
-		ci = msg.VideoMessage.ContextInfo
-	} else if msg.Conversation != nil {
-		// bare conversation messages can also carry ContextInfo via
-		// ExtendedTextMessage in some clients; nothing to do here.
-	}
+	ci := extractContextInfoFromMsg(msg)
 	if ci == nil || ci.QuotedMessage == nil {
 		return ""
 	}
@@ -2344,12 +2332,25 @@ func extractContextInfoFromMsg(msg *waProto.Message) *waProto.ContextInfo {
 		return msg.ImageMessage.ContextInfo
 	case msg.VideoMessage != nil:
 		return msg.VideoMessage.ContextInfo
+	case msg.PtvMessage != nil:
+		return msg.PtvMessage.ContextInfo
 	case msg.AudioMessage != nil:
 		return msg.AudioMessage.ContextInfo
 	case msg.DocumentMessage != nil:
 		return msg.DocumentMessage.ContextInfo
 	case msg.StickerMessage != nil:
 		return msg.StickerMessage.ContextInfo
+	}
+	for _, inner := range []*waProto.Message{
+		msg.ViewOnceMessage.GetMessage(),
+		msg.ViewOnceMessageV2.GetMessage(),
+		msg.ViewOnceMessageV2Extension.GetMessage(),
+	} {
+		if inner != nil {
+			if ci := extractContextInfoFromMsg(inner); ci != nil {
+				return ci
+			}
+		}
 	}
 	return nil
 }
@@ -2401,22 +2402,32 @@ func (b *bridge) voicePath(name string) string {
 // recorded in a sidecar file (<name>.mime) so the trigger can replay it with
 // the correct mimetype.
 func (b *bridge) SaveCustomVoice(name string, data []byte, mime string) bool {
+	return b.saveVoiceLocal(name, data, mime, true)
+}
+
+// saveVoiceLocal writes the voice payload + .mime sidecar and maintains the
+// Redis name index. When backup is true the bytes are also mirrored to the
+// durable store (async) so a disk wipe can restore them later.
+func (b *bridge) saveVoiceLocal(name string, data []byte, mime string, backup bool) bool {
 	if name == "" || len(data) == 0 {
 		return false
 	}
 	dir := b.voicesDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		ErrLog("[%s] SaveCustomVoice mkdir: %v", b.s.JID, err)
+		ErrLog("[%s] saveVoiceLocal mkdir: %v", b.s.JID, err)
 		return false
 	}
 	if err := os.WriteFile(b.voicePath(name), data, 0o644); err != nil {
-		ErrLog("[%s] SaveCustomVoice write: %v", b.s.JID, err)
+		ErrLog("[%s] saveVoiceLocal write: %v", b.s.JID, err)
 		return false
 	}
 	_ = os.WriteFile(b.voicePath(name)+".mime", []byte(mime), 0o644)
 	// Track name in Redis set
 	if b.s.Manager.Redis != nil {
 		_ = b.s.Manager.Redis.setAdd("goldmd:"+b.s.JID+":voices", strings.ToLower(strings.TrimSpace(name)))
+	}
+	if backup {
+		go assetStorjPut(assetStorjNS("voice"), assetStorjID(b.s.JID, sanitiseAssetName(name)), data, mime, "")
 	}
 	return true
 }
@@ -2426,7 +2437,13 @@ func (b *bridge) GetCustomVoice(name string) ([]byte, string, bool) {
 	p := b.voicePath(name)
 	data, err := os.ReadFile(p)
 	if err != nil || len(data) == 0 {
-		return nil, "", false
+		// Local file gone (RAM-disk wipe / fresh host): rehydrate from store.
+		if b.voiceStorjRestoreInto(name) {
+			data, err = os.ReadFile(p)
+		}
+		if err != nil || len(data) == 0 {
+			return nil, "", false
+		}
 	}
 	mime := "audio/mp4"
 	if m, err := os.ReadFile(p + ".mime"); err == nil && len(m) > 0 {
@@ -2446,6 +2463,7 @@ func (b *bridge) DeleteCustomVoice(name string) bool {
 	if b.s.Manager.Redis != nil {
 		_ = b.s.Manager.Redis.setRem("goldmd:"+b.s.JID+":voices", strings.ToLower(strings.TrimSpace(name)))
 	}
+	go assetStorjDelete(assetStorjNS("voice"), assetStorjID(b.s.JID, sanitiseAssetName(name)))
 	return true
 }
 
@@ -2475,6 +2493,10 @@ func (b *bridge) ListCustomVoices() []string {
 				names = append(names, n)
 			}
 		}
+	}
+	if len(names) == 0 {
+		// Fresh disk + empty index: rebuild the name list from the store.
+		names = assetStorjListNames(assetStorjNS("voice"), b.s.JID)
 	}
 	sort.Strings(names)
 	return names

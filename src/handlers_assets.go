@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	goldcmds "gold-md/gold-cmds"
 
@@ -47,37 +48,58 @@ func (b *bridge) assetsDir(kind string) string {
 	return filepath.Join(b.s.Manager.cfg.DataDir, "assets", b.s.JID, sub)
 }
 
-// assetPath returns the on-disk path for a named asset. The name is sanitised
-// (lowercase, [a-z0-9_-] only) so a name can never escape the folder.
-func (b *bridge) assetPath(kind, name string) string {
-	safe := strings.Map(func(r rune) rune {
+// sanitiseAssetName maps a user-supplied asset name to the on-disk / object
+// key form (lowercase, [a-z0-9_-] only) so a name can never escape the folder
+// or collide with the Storj namespace separator.
+func sanitiseAssetName(name string) string {
+	return strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
 			return r
 		}
 		return '_'
 	}, strings.ToLower(strings.TrimSpace(name)))
+}
+
+// assetPath returns the on-disk path for a named asset.
+func (b *bridge) assetPath(kind, name string) string {
+	safe := sanitiseAssetName(name)
 	return filepath.Join(b.assetsDir(kind), safe+".bin")
 }
 
 // SaveCustomAsset stores bytes for a named asset of the given kind. mime is
 // recorded in a sidecar (<name>.mime); text assets keep their payload as-is.
 func (b *bridge) SaveCustomAsset(kind, name string, data []byte, mime string) bool {
+	return b.writeAssetLocal(kind, name, data, mime, "", true)
+}
+
+// writeAssetLocal writes the disk payload + sidecars and maintains the Redis
+// name index. When backup is true the bytes are also mirrored to the durable
+// store (async) so a disk wipe can restore them later.
+func (b *bridge) writeAssetLocal(kind, name string, data []byte, mime, meta string, backup bool) bool {
 	if name == "" || len(data) == 0 {
 		return false
 	}
 	dir := b.assetsDir(kind)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		ErrLog("[%s] SaveCustomAsset mkdir: %v", b.s.JID, err)
+		ErrLog("[%s] writeAssetLocal mkdir: %v", b.s.JID, err)
 		return false
 	}
 	p := b.assetPath(kind, name)
 	if err := os.WriteFile(p, data, 0o644); err != nil {
-		ErrLog("[%s] SaveCustomAsset write: %v", b.s.JID, err)
+		ErrLog("[%s] writeAssetLocal write: %v", b.s.JID, err)
 		return false
 	}
 	_ = os.WriteFile(p+".mime", []byte(mime), 0o644)
+	if meta != "" {
+		_ = os.WriteFile(p+".meta", []byte(meta), 0o644)
+	}
 	if b.s.Manager.Redis != nil {
 		_ = b.s.Manager.Redis.setAdd("goldmd:"+b.s.JID+":"+kind, strings.ToLower(strings.TrimSpace(name)))
+	}
+	if backup {
+		ns := assetStorjNS(kind)
+		id := assetStorjID(b.s.JID, sanitiseAssetName(name))
+		go assetStorjPut(ns, id, data, mime, meta)
 	}
 	return true
 }
@@ -86,13 +108,7 @@ func (b *bridge) SaveCustomAsset(kind, name string, data []byte, mime string) bo
 // (<name>.meta) used by .addcircle to remember seconds,width,height so the
 // asset can be replayed as a real WhatsApp circle later.
 func (b *bridge) SaveCustomAssetMeta(kind, name string, data []byte, mime, meta string) bool {
-	if !b.SaveCustomAsset(kind, name, data, mime) {
-		return false
-	}
-	if meta != "" {
-		_ = os.WriteFile(b.assetPath(kind, name)+".meta", []byte(meta), 0o644)
-	}
-	return true
+	return b.writeAssetLocal(kind, name, data, mime, meta, true)
 }
 
 // GetCustomAssetMeta loads bytes + mime + meta for a named asset. meta is ""
@@ -115,7 +131,14 @@ func (b *bridge) GetCustomAsset(kind, name string) ([]byte, string, bool) {
 	p := b.assetPath(kind, name)
 	data, err := os.ReadFile(p)
 	if err != nil || len(data) == 0 {
-		return nil, "", false
+		// Local file gone (RAM-disk wipe / fresh host): rehydrate from the
+		// durable store, which also rewrites the sidecars + index.
+		if b.assetStorjRestoreInto(kind, name) {
+			data, err = os.ReadFile(p)
+		}
+		if err != nil || len(data) == 0 {
+			return nil, "", false
+		}
 	}
 	mime := "application/octet-stream"
 	if m, err := os.ReadFile(p + ".mime"); err == nil && len(m) > 0 {
@@ -136,6 +159,7 @@ func (b *bridge) DeleteCustomAsset(kind, name string) bool {
 	if b.s.Manager.Redis != nil {
 		_ = b.s.Manager.Redis.setRem("goldmd:"+b.s.JID+":"+kind, strings.ToLower(strings.TrimSpace(name)))
 	}
+	go assetStorjDelete(assetStorjNS(kind), assetStorjID(b.s.JID, sanitiseAssetName(name)))
 	return true
 }
 
@@ -156,6 +180,11 @@ func (b *bridge) ListCustomAssets(kind string) []string {
 				names = append(names, strings.TrimSuffix(e.Name(), ".bin"))
 			}
 		}
+	}
+	if len(names) == 0 {
+		// Fresh disk + empty index: rebuild the name list from the durable
+		// store (no bodies downloaded here — GetCustomAsset handles that).
+		names = assetStorjListNames(assetStorjNS(kind), b.s.JID)
 	}
 	sort.Strings(names)
 	return names
@@ -254,38 +283,63 @@ func (s *Session) applyAssetTrigger(info types.MessageInfo, body string) {
 		return
 	}
 	br := &bridge{s: s}
-	for _, kind := range goldcmds.AssetTriggerOrder {
-		data, mime, meta, found := br.GetCustomAssetMeta(kind, name)
-		if !found || len(data) == 0 {
-			continue
+	// A bare name can be saved under several kinds at once (e.g. the same word
+	// used for a photo AND a sticker). Send the most recently saved match so a
+	// freshly-.addsticker'd name does not keep resolving to an older photo.
+	best := goldcmds.SelectNewestAssetKind(name, func(kind string) (time.Time, bool) {
+		if _, _, _, found := br.GetCustomAssetMeta(kind, name); !found {
+			return time.Time{}, false
 		}
-		switch kind {
-		case "img":
-			_ = br.SendImage(info, data, "")
-		case "video":
-			_ = br.SendVideo(info, data, "", nil, 0, 0, 0)
-		case "sticker":
-			_ = br.SendSticker(info, data)
-		case "circle":
-			f, err := os.CreateTemp("", "goldmd-circle-*"+extFromAssetMime(mime))
-			if err != nil {
-				continue
-			}
-			path := f.Name()
-			if _, werr := f.Write(data); werr != nil {
-				f.Close()
-				os.Remove(path)
-				continue
-			}
-			f.Close()
-			secs, w, h := parseAssetMeta(meta)
-			_ = br.SendCircleVideoFile(info, path, secs, w, h, nil)
-			os.Remove(path)
-		case "text":
-			br.Reply(info, string(data))
-		}
+		return br.assetModTime(kind, name), true
+	})
+	if best == "" {
 		return
 	}
+	kind := best
+	data, mime, meta, found := br.GetCustomAssetMeta(kind, name)
+	if !found || len(data) == 0 {
+		return
+	}
+	switch kind {
+	case "img":
+		_ = br.SendImage(info, data, "")
+	case "video":
+		_ = br.SendVideo(info, data, "", nil, 0, 0, 0)
+	case "sticker":
+		_ = br.SendSticker(info, data)
+	case "circle":
+		f, err := os.CreateTemp("", "goldmd-circle-*"+extFromAssetMime(mime))
+		if err != nil {
+			return
+		}
+		path := f.Name()
+		if _, werr := f.Write(data); werr != nil {
+			f.Close()
+			os.Remove(path)
+			return
+		}
+		f.Close()
+		secs, w, h := parseAssetMeta(meta)
+		_ = br.SendCircleVideoFile(info, path, secs, w, h, nil)
+		os.Remove(path)
+	case "text":
+		br.Reply(info, string(data))
+	}
+}
+
+// assetModTime returns the newest modtime among an asset's payload and sidecar
+// files, used to pick which kind wins when one name is saved under several
+// kinds. Zero time when nothing is on disk (missing asset).
+func (b *bridge) assetModTime(kind, name string) time.Time {
+	var newest time.Time
+	for _, suffix := range []string{"", ".mime", ".meta"} {
+		if st, err := os.Stat(b.assetPath(kind, name) + suffix); err == nil {
+			if st.ModTime().After(newest) {
+				newest = st.ModTime()
+			}
+		}
+	}
+	return newest
 }
 
 // extFromAssetMime maps the common asset mimetypes to a file extension.

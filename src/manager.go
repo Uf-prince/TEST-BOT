@@ -1200,6 +1200,20 @@ func (s *Session) EventHandler(raw interface{}) {
 			goldcmds.AutomsgRestoreSavedSchedules(brRestore)
 		}()
 
+		// ── ASSET / VOICE STORJ RESTORE ──────────────────────────────────────
+		// Saved .addimg/.addvideo/.addsticker/.addtext/.addcircle assets and
+		// .addvoice clips are mirrored to the durable store. After a RAM-disk
+		// wipe / restart, rebuild the local files + name index here so a bare
+		// asset name keeps auto-sending. Background — 0 blocking on connect.
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					_ = r
+				}
+			}()
+			(&bridge{s: s}).restoreAssetsFromStorj()
+		}()
+
 		// ── TIMED ADMIN RESTART-RESTORE ──────────────────────────────────────
 		// Bot ki MEMORY me saved pending .dissmisstime / .admintime timers ko
 		// phir se ARM karo (ya agar fire time nikal chuka hai to foran apply

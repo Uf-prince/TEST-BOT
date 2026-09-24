@@ -395,6 +395,27 @@ func addSubcommand(args []string) (int, []string) {
 // Exported so src.applyAssetTrigger and the tests share one source of truth.
 var AssetTriggerOrder = []string{"img", "video", "sticker", "circle", "text"}
 
+// SelectNewestAssetKind picks which kind should serve a bare asset name. A name
+// can be saved under several kinds at once (a photo AND a sticker, say), so the
+// caller supplies modtime per kind and the most recently saved kind wins — a
+// fresh .addsticker must not be shadowed by an older .addimg of the same word.
+// Ties (or all-zero modtimes) fall back to AssetTriggerOrder (media before
+// text). Returns "" when no kind matched.
+func SelectNewestAssetKind(name string, modTime func(kind string) (time.Time, bool)) string {
+	best := ""
+	var bestMod time.Time
+	for _, kind := range AssetTriggerOrder {
+		mod, ok := modTime(kind)
+		if !ok {
+			continue
+		}
+		if best == "" || mod.After(bestMod) {
+			best, bestMod = kind, mod
+		}
+	}
+	return best
+}
+
 func AssetTriggerMatch(body string) (string, bool) {
 	trimmed := strings.TrimSpace(body)
 	if trimmed == "" || len(trimmed) > 50 {

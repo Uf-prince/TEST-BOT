@@ -885,6 +885,40 @@ func (ss *StorjStore) ListJSONNS(ctx context.Context, ns string) ([]AutomsgEntry
 	return out, nil
 }
 
+// ListJSONNSKeys returns just the object IDs under <ns>/ without downloading
+// their bodies. The asset/voice restore path uses it so a boot-time rebuild
+// never pulls every saved media file into RAM unless the file is truly missing
+// locally.
+func (ss *StorjStore) ListJSONNSKeys(ctx context.Context, ns string) ([]string, error) {
+	if !ss.Ready() {
+		return nil, errors.New("storj not ready")
+	}
+	if ns == "" {
+		return nil, errors.New("empty ns")
+	}
+	prefix := ns + "/"
+	var out []string
+	for _, shard := range ss.shards {
+		if shard == nil || shard.client == nil {
+			continue
+		}
+		objCh := shard.client.ListObjects(ctx, shard.bucket, minio.ListObjectsOptions{
+			Prefix:    prefix,
+			Recursive: true,
+		})
+		for obj := range objCh {
+			if obj.Err != nil {
+				continue
+			}
+			id := strings.TrimSuffix(strings.TrimPrefix(obj.Key, prefix), ".json")
+			if id != "" {
+				out = append(out, id)
+			}
+		}
+	}
+	return out, nil
+}
+
 // ══════════════════ (merged from upstash.go) ══════════════════
 // ============================================================================
 // GOLD-MD — Storage layer (Storj-backed; Upstash Redis FULLY REMOVED)
