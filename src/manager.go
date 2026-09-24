@@ -1859,9 +1859,15 @@ func (s *Session) CmdAlive(info types.MessageInfo, args []string, prefix string)
 	// Case-insensitive {PUSHNAME} / {pushname} replacement.
 	msg := strings.ReplaceAll(strings.ReplaceAll(aliveMsgText, "{PUSHNAME}", pushName), "{pushname}", pushName)
 
-	// ── Send alive with the bot pic image (same as Node.js
-	//    where BOT_PIC_URL is used for both .menu and .alive). Fall back to
-	//    text-only if the image cannot be fetched. ──
+	// ── Send alive with the owner-set bot VIDEO when one exists (.botvideo),
+	//    otherwise the bot pic image (same as Node.js where BOT_PIC_URL is
+	//    used for both .menu and .alive). Fall back to text if both fail. ──
+	if vid := s.botVideoURL(); vid != "" {
+		if ok := s.SendAliveVideoWithNewsletter(info, vid, msg); ok {
+			return
+		}
+		// video send failed — fall through to the image path
+	}
 	imgURL := s.botPicURL()
 	imgData, fetchErr := fetchMenuImageURL(imgURL)
 	if fetchErr != nil || len(imgData) == 0 {
@@ -2318,6 +2324,13 @@ func (s *Session) CmdLogoMenu(info types.MessageInfo, args []string, prefix stri
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
 	caption := buildLogoMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
 
+	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
+	// bot pic image (.botpic / default) is used, then a text-only menu.
+	if vid := s.botVideoURL(); vid != "" {
+		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
+			return
+		}
+	}
 	imgURL := s.botPicURL()
 	imgData, fetchErr := fetchMenuImageURL(imgURL)
 	if fetchErr != nil || len(imgData) == 0 {
@@ -2427,6 +2440,13 @@ func (s *Session) CmdFontMenu(info types.MessageInfo, args []string, prefix stri
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
 	caption := buildFontMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
 
+	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
+	// bot pic image (.botpic / default) is used, then a text-only menu.
+	if vid := s.botVideoURL(); vid != "" {
+		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
+			return
+		}
+	}
 	imgURL := s.botPicURL()
 	imgData, fetchErr := fetchMenuImageURL(imgURL)
 	if fetchErr != nil || len(imgData) == 0 {
@@ -2475,6 +2495,13 @@ func (s *Session) CmdGameMenu(info types.MessageInfo, args []string, prefix stri
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
 	caption := buildGameMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
 
+	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
+	// bot pic image (.botpic / default) is used, then a text-only menu.
+	if vid := s.botVideoURL(); vid != "" {
+		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
+			return
+		}
+	}
 	imgURL := s.botPicURL()
 	imgData, fetchErr := fetchMenuImageURL(imgURL)
 	if fetchErr != nil || len(imgData) == 0 {
@@ -2522,6 +2549,13 @@ func (s *Session) CmdEqualizerMenu(info types.MessageInfo, args []string, prefix
 
 	caption := buildEqualizerMenu(menuUser, ownerNum, uptimeStr, prefix, sessCount)
 
+	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
+	// bot pic image (.botpic / default) is used, then a text-only menu.
+	if vid := s.botVideoURL(); vid != "" {
+		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
+			return
+		}
+	}
 	imgURL := s.botPicURL()
 	imgData, fetchErr := fetchMenuImageURL(imgURL)
 	if fetchErr != nil || len(imgData) == 0 {
@@ -2589,6 +2623,13 @@ func (s *Session) CmdMenu(info types.MessageInfo, args []string, prefix string) 
 
 	// ── Pick the header image: per-bot custom bot pic (.botpic)
 	//    if set, otherwise the default menu header image. ──
+	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
+	// bot pic image (.botpic / default) is used, then a text-only menu.
+	if vid := s.botVideoURL(); vid != "" {
+		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
+			return
+		}
+	}
 	imgURL := s.botPicURL()
 	imgData, fetchErr := fetchMenuImageURL(imgURL)
 	if fetchErr != nil || len(imgData) == 0 {
@@ -2643,6 +2684,18 @@ func (s *Session) botPicURL() string {
 		}
 	}
 	return menuHeaderImageURL
+}
+
+// botVideoURL returns the per-bot custom menu/alive VIDEO URL when the owner
+// has set one via the .botvideo command (Redis field "botvideo"). An empty
+// string means "no custom video" — the caller then uses the image path.
+func (s *Session) botVideoURL() string {
+	if s.Manager != nil && s.Manager.Redis != nil {
+		if vid := s.Manager.Redis.GetSetting(s.JID, "botvideo", ""); vid != "" {
+			return vid
+		}
+	}
+	return ""
 }
 
 // init registers the four core status commands into the Commands map so the

@@ -11,7 +11,10 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	goldcmds "gold-md/gold-cmds"
 	"google.golang.org/protobuf/proto"
+	"io"
 	"math/rand"
+	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -1788,6 +1791,90 @@ func (s *Session) ReplyWithNewsletter(info types.MessageInfo, text string) {
 	if _, err := s.Client.SendMessage(context.Background(), info.Chat, msg); err != nil {
 		ErrLog("[%s] newsletter reply failed: %v", s.JID, err)
 	}
+}
+
+// SendAliveVideoWithNewsletter sends the owner-set bot video (.botvideo) for
+// .alive / startup messages, captioned and carrying the forwarded channel
+// button. The video is streamed to WhatsApp from a temp file (no full RAM
+// buffering) and deleted afterwards, so large clips never accumulate on disk.
+// Returns false when the caller should fall back to the image/text path.
+func (s *Session) SendAliveVideoWithNewsletter(info types.MessageInfo, videoURL, caption string) bool {
+	if s.Client == nil || !s.Client.IsConnected() || strings.TrimSpace(videoURL) == "" {
+		return false
+	}
+	s.ensureNewsletterResolved()
+
+	data, err := fetchMediaBytes(videoURL)
+	if err != nil || len(data) == 0 {
+		return false
+	}
+
+	f, err := os.CreateTemp("", "goldmd-botvideo-*.mp4")
+	if err != nil {
+		return false
+	}
+	tmpPath := f.Name()
+	defer os.Remove(tmpPath)
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return false
+	}
+	f.Close()
+
+	seconds, width, height := guardProbeMeta(tmpPath)
+	data = nil // release the buffer before the upload
+
+	f, err = os.Open(tmpPath)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	uploaded, err := s.Client.UploadReader(context.Background(), f, nil, whatsmeow.MediaVideo)
+	if err != nil {
+		ErrLog("[%s] alive video upload failed: %v", s.JID, err)
+		return false
+	}
+
+	videoMsg := &waProto.VideoMessage{
+		Caption:       proto.String(s.withCaptionFooter(caption)),
+		Mimetype:      proto.String("video/mp4"),
+		URL:           proto.String(uploaded.URL),
+		DirectPath:    proto.String(uploaded.DirectPath),
+		MediaKey:      uploaded.MediaKey,
+		FileEncSHA256: uploaded.FileEncSHA256,
+		FileSHA256:    uploaded.FileSHA256,
+		FileLength:    proto.Uint64(uploaded.FileLength),
+		Seconds:       proto.Uint32(seconds),
+		Width:         proto.Uint32(width),
+		Height:        proto.Uint32(height),
+		ContextInfo:   s.newsletterCtxInfo(),
+	}
+	if _, err := s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{
+		VideoMessage: videoMsg,
+	}); err != nil {
+		ErrLog("[%s] alive video send failed: %v", s.JID, err)
+		return false
+	}
+	return true
+}
+
+// fetchMediaBytes downloads any media URL with a status check, a timeout and a
+// hard size cap, so a 404/HTML body can never be uploaded as a video.
+func fetchMediaBytes(rawURL string) ([]byte, error) {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return nil, fmt.Errorf("empty media url")
+	}
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Get(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("media fetch %s: HTTP %d", rawURL, resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 }
 
 // ReplyImageWithNewsletter sends an image message with caption + the forwarded

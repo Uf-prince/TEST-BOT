@@ -74,9 +74,10 @@ func botpicPickKey() string {
 // imageLinkRe matches a bare http(s) image URL that ends in an image extension.
 var imageLinkRe = regexp.MustCompile(`^(https?://\S+\.(jpe?g|png|gif|webp))$`)
 
-// uploadToImageKit uploads raw image bytes to ImageKit using the given private
+// uploadToImageKit uploads raw media bytes to ImageKit using the given private
 // key and returns the hosted URL. Mirrors the Node bot's FormData upload.
-func uploadToImageKit(imgData []byte) (string, error) {
+// fileName is the uploaded file name; folder is the ImageKit folder used.
+func uploadToImageKit(mediaData []byte, fileName, folder string) (string, error) {
 	key := botpicPickKey()
 	if key == "" {
 		return "", fmt.Errorf("no ImageKit key configured")
@@ -85,20 +86,19 @@ func uploadToImageKit(imgData []byte) (string, error) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 
-	// file field (the image)
-	fileName := fmt.Sprintf("botpic-%d.jpg", time.Now().UnixMilli())
+	// file field (the media)
 	part, err := writer.CreateFormFile("file", fileName)
 	if err != nil {
 		return "", err
 	}
-	if _, err := part.Write(imgData); err != nil {
+	if _, err := part.Write(mediaData); err != nil {
 		return "", err
 	}
 	// fileName field (required by ImageKit)
 	_ = writer.WriteField("fileName", fileName)
 	_ = writer.WriteField("useUniqueFileName", "true")
-	// dedicated folder — only botpic uploads live here
-	_ = writer.WriteField("folder", "/umar-botpic")
+	// dedicated folder — only these uploads live here
+	_ = writer.WriteField("folder", folder)
 	if err := writer.Close(); err != nil {
 		return "", err
 	}
@@ -238,7 +238,7 @@ func handleBotPic(s SessionBridge, info types.MessageInfo, args []string, prefix
 	}()
 
 	// ── UPLOAD to ImageKit ──
-	uploadURL, err := uploadToImageKit(imgData)
+	uploadURL, err := uploadToImageKit(imgData, fmt.Sprintf("botpic-%d.jpg", time.Now().UnixMilli()), "/umar-botpic")
 	close(stop)
 	s.DeleteMessage(info, waitID)
 

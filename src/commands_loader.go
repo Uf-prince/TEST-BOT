@@ -1063,6 +1063,24 @@ func (b *bridge) SetBotPicSetting(url string) {
 	b.s.Manager.Redis.SetSetting(b.s.JID, "botpic", url)
 }
 
+// GetBotVideoSetting reads the custom bot menu/alive VIDEO URL from Redis.
+func (b *bridge) GetBotVideoSetting(def string) string {
+	if b.s.Manager.Redis == nil {
+		warnRedisNil()
+		return def
+	}
+	return b.s.Manager.Redis.GetSetting(b.s.JID, "botvideo", def)
+}
+
+// SetBotVideoSetting writes the custom bot menu/alive VIDEO URL to Redis.
+func (b *bridge) SetBotVideoSetting(url string) {
+	if b.s.Manager.Redis == nil {
+		warnRedisNil()
+		return
+	}
+	b.s.Manager.Redis.SetSetting(b.s.JID, "botvideo", url)
+}
+
 // ── OWNER NAME / OWNER NUMBER / BOT NAME / ALIVE MSG bridge impls ──
 
 // GetOwnerNameSetting reads the owner display NAME from Redis settings:<botJID>.
