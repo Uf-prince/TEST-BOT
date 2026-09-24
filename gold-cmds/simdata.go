@@ -56,8 +56,8 @@ func simDataGuide(prefix string) string {
 		"*GET THE REGISTERED OWNER DETAILS OF ANY SIM NUMBER*\n\n" +
 		"*HOW TO USE:*\n" +
 		"*❮ " + prefix + "SIMDATA <NUMBER> ❯*\n" +
-		"*EXAMPLE ❮ " + prefix + "SIMDATA 03122212427 ❯*\n\n" +
-		"*📌 NOTE ❯ YEH COMMAND SIRF PAKISTANI SIMS KA DATA DETA HAI AUR JO SIM 2024 , 2025 AUR 2026 KE SIMS KA DATA DETE HAI OK 2024 SE PEHLE KI JITNE BHI SIM NUMBERS HOGE UNKA DATA NAHI MILE GA OK ERROR AYE GA *\n\n" +
+		"*EXAMPLE ❮ " + prefix + "SIMDATA 923276680651 ❯*\n\n" +
+		"*📌 NOTE ❯ YEH COMMAND SIRF PAKISTANI SIMS KA DATA DETA HAI AUR JO SIM 2024 , 2025 AUR 2026 KE SIMS KA DATA DETE HAI OK 2024 SE PEHLE KI JITNE BHI SIM NUMBERS HOGE UNKA DATA NAHI MILE GA OK ERROR AYE GA*\n\n" +
 		"*THIS COMMAND ONLY GIVES DATA OF PAKISTANI SIMS NUMBERS*"
 }
 
@@ -98,8 +98,13 @@ func simDataCleanNumber(raw string) string {
 	return raw
 }
 
+// simDataTimeoutReply is sent when the lookup does not finish inside the
+// 20-second hard budget (a hung API / slow network), so the user is never
+// left waiting on a stuck request.
+const simDataTimeoutReply = "*🔰 SIM DATA TIMEOUT, PLEASE TRY AGAIN LATER*"
+
 func handleSimData(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	RunWithTimeout(s, info, func(ctx context.Context) {
+	RunWithTimeoutDur(s, info, 20*time.Second, simDataTimeoutReply, func(ctx context.Context) {
 		number := simDataCleanNumber(strings.Join(args, ""))
 		if number == "" {
 			s.Reply(info, simDataGuide(prefix))
