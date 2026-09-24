@@ -8,8 +8,9 @@ import (
 )
 
 // TestGameMenuRenders: buildGameMenu must use the same fancy boxed format as
-// .font / .equalizer and list the 1000 games by their REAL names — no
-// numeric .GAME1 prefix and no ❮ ❯ wrapper (owner order).
+// .font / .equalizer and list every real game by its SHORT command name
+// (converter-menu style: only the exact thing the user types) — no numeric
+// game1..game1000 label and no long "CLASSIC ..." design name (owner order).
 func TestGameMenuRenders(t *testing.T) {
 	m := buildGameMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil)
 	if !strings.Contains(m, "╔════ ≪ •❈• ≫ ════╗") {
@@ -18,38 +19,40 @@ func TestGameMenuRenders(t *testing.T) {
 	if !strings.Contains(m, "🔰 GAME 🔰") {
 		t.Errorf(".game menu header title GAME missing\n%s", m)
 	}
-	// Real design name + dispatch command, without the numeric prefix or the
-	// ❮ ❯ wrapper. Game 1 = "CLASSIC DICE ROLL" / .game1; game 1000 = "ULTRA
-	// NAME PICKER" / .game1000.
-	if !strings.Contains(m, "CLASSIC DICE ROLL") {
-		t.Errorf(".game menu me game 1 ka asli naam missing\n%s", m)
-	}
-	if !strings.Contains(m, "ULTRA NAME PICKER") {
-		t.Errorf(".game menu me game 1000 ka asli naam missing\n%s", m)
-	}
-	if !strings.Contains(m, ".game1") || !strings.Contains(m, ".game1000") {
-		t.Errorf(".game menu me dispatch command (.game1/.game1000) missing\n%s", m)
-	}
-	// ❮ ❯ wrapper allowed in the shared header (all menus use it), but NEVER
-	// next to a game's name.
-	for _, line := range strings.Split(m, "\n") {
-		if strings.Contains(line, "GAME") && strings.Contains(line, "❮") {
-			t.Errorf("game row me ❮ ❯ wrapper nahi hona chahiye (owner order): %s", line)
+	// Short command names, exactly as typed. Classic one-shot + turn-based.
+	for _, slug := range []string{".ROLLDICE", ".SLOT", ".TTT", ".WORDLE", ".PICKNAME"} {
+		if !strings.Contains(m, slug) {
+			t.Errorf(".game menu me short command name %s missing\n%s", slug, m)
 		}
 	}
-	if strings.Contains(m, "GAME1 ") || strings.Contains(m, "GAME1000 ") {
-		t.Errorf(".game menu me GAME<number> label nahi hona chahiye (owner order)\n%s", m)
+	// The numeric label MUST be gone.
+	if strings.Contains(m, "game1") || strings.Contains(m, "GAME1000") {
+		t.Errorf(".game menu me game<number> label nahi hona chahiye (owner order)\n%s", m)
+	}
+	// The long design names MUST be gone.
+	if strings.Contains(m, "CLASSIC") || strings.Contains(m, "ULTRA NAME PICKER") {
+		t.Errorf(".game menu me lamba design name nahi hona chahiye (owner order)\n%s", m)
+	}
+	// Every row is a short command name — exactly one token after the prefix.
+	for _, line := range strings.Split(m, "\n") {
+		if !strings.HasPrefix(line, "*| 🔰 | .") || !strings.HasSuffix(line, "*") {
+			continue
+		}
+		name := strings.TrimSuffix(strings.TrimPrefix(line, "*| 🔰 | ."), "*")
+		if strings.ContainsAny(name, " |") {
+			t.Errorf("game row ek hi command naam hona chahiye: %q", line)
+		}
 	}
 	if strings.Contains(m, "MENUS:") {
 		t.Errorf(".game menu me MENUS line nahi honi chahiye\n%s", m)
 	}
-	if !strings.Contains(m, "❮ 1000 ❯") {
-		t.Errorf(".game menu COMMANDS count 1000 nahi hai\n%s", m)
+	if !strings.Contains(m, "❮ 64 ❯") {
+		t.Errorf(".game menu COMMANDS count 64 nahi hai\n%s", m)
 	}
-	// The 1000 real-name labels must make the list actually useful: every row
-	// renders one game (frame marker count matches the game count).
-	if got := strings.Count(m, "*| 🔰 |"); got != 1000+1 {
-		t.Errorf(".game menu me %d rows, want 1001 (header + 1000 games)", got)
+	// One header row + one row per real game.
+	want := goldcmds.GameMenuCount() + 1
+	if got := strings.Count(m, "*| 🔰 |"); got != want {
+		t.Errorf(".game menu me %d rows, want %d (header + %d games)", got, want, want-1)
 	}
 }
 
@@ -65,7 +68,26 @@ func TestGameMenuNotPlainText(t *testing.T) {
 	}
 }
 
-// TestGameCommandsHidden: game1..game1000 must dispatch but stay hidden.
+// TestGameMenuSlugsAreRealGames: every slug listed in the menu must dispatch.
+func TestGameMenuSlugsAreRealGames(t *testing.T) {
+	slugs := goldcmds.GameMenuSlugs()
+	if len(slugs) != goldcmds.GameMenuCount() || len(slugs) != 64 {
+		t.Fatalf("GameMenuSlugs = %d, want 64", len(slugs))
+	}
+	seen := map[string]bool{}
+	for _, slug := range slugs {
+		if seen[slug] {
+			t.Errorf("slug %q menu me do bar", slug)
+		}
+		seen[slug] = true
+		if _, ok := Commands[slug]; !ok {
+			t.Errorf("menu slug %q dispatch nahi hota (Commands map me nahi)", slug)
+		}
+	}
+}
+
+// TestGameCommandsHidden: game1..game1000 must still dispatch but stay hidden
+// (used by the classic .gameN plays) — they are simply no longer listed.
 func TestGameCommandsHidden(t *testing.T) {
 	for _, n := range []int{1, 2, 500, 999, 1000} {
 		name := "game" + itoaT(n)
@@ -116,8 +138,7 @@ func TestGameBaseSlugDispatch(t *testing.T) {
 	}
 }
 
-// TestGameMenuFitsWhatsApp: 1000 named entries must stay under the WhatsApp
-// message cap (65536 bytes) or the menu would fail to send.
+// TestGameMenuFitsWhatsApp: the menu must stay under the WhatsApp message cap.
 func TestGameMenuFitsWhatsApp(t *testing.T) {
 	m := buildGameMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil)
 	if len(m) > 65536 {

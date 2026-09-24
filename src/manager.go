@@ -2340,11 +2340,11 @@ func buildGameMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 		uptimeHM = formatUptimeHM(uptime())
 	}
 	var b strings.Builder
-	b.WriteString(buildMenuHeader("GAME", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.GameCount, false))
+	b.WriteString(buildMenuHeader("GAME", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.GameMenuCount(), false))
 	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
 	b.WriteString("*| 🔰 | GAME | 🔰 |*\n")
-	for n := 1; n <= goldcmds.GameCount; n++ {
-		b.WriteString(fmt.Sprintf("*| 🔰 | %s | %sgame%d*\n", goldcmds.GameDesignName(n), prefix, n))
+	for _, slug := range goldcmds.GameMenuSlugs() {
+		b.WriteString(fmt.Sprintf("*| 🔰 | %s%s*\n", prefix, strings.ToUpper(slug)))
 	}
 	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
 	return b.String()

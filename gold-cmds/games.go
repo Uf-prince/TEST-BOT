@@ -730,6 +730,25 @@ func GameBaseSlugNumbers() map[string]int {
 	return out
 }
 
+// GameMenuSlugs returns the REAL, playable games shown in the .game menu —
+// the 50 classic one-shot games + the 14 turn-based games. Har entry apna
+// chhota command name hai (converter menu jaisa): menu me sirf wahi likha
+// jata hai jo user type karta hai, is liye spelling bhoolne ka saval nahi.
+// game1..game1000 ka numeric label yahan NAHI aata (owner order).
+func GameMenuSlugs() []string {
+	out := make([]string, 0, len(gameBases)+len(playGameDefs))
+	for _, b := range gameBases {
+		out = append(out, b.Slug)
+	}
+	for _, d := range playGameDefs {
+		out = append(out, d.Slug)
+	}
+	return out
+}
+
+// GameMenuCount is the number of real games listed in the .game menu.
+func GameMenuCount() int { return len(gameBases) + len(playGameDefs) }
+
 // handleGameList implements bare .game — the boxed GAME1..GAME1000 menu.
 func handleGameList(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	s.ShowGameMenu(info, args, prefix)
