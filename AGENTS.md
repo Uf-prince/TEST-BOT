@@ -49,11 +49,20 @@ Don't chase these unless asked.
   Files: `<DataDir>/assets/<jid>/<kind>/<name>.bin` + `.mime` + `.meta`.
   Names are sanitised to `[a-z0-9_-]`; never bypass `assetPath`.
 - Auto-send: bare asset name triggers `applyAssetTrigger` in
-  `src/handler.go` (parallel to `applyVoiceTrigger`). Lookup order is
-  `goldcmds.AssetTriggerOrder` — media before text.
+  `src/handler.go` (parallel to `applyVoiceTrigger`). One name may be saved
+  under several kinds; `goldcmds.SelectNewestAssetKind` picks the most recently
+  saved match (ties fall back to `goldcmds.AssetTriggerOrder` — media before
+  text), so a fresh `.addsticker` is not shadowed by an older photo.
+- Durable backup: every asset and voice is mirrored to Storj
+  (`src/assets_storj.go`, write-through on save, read-through on cache miss).
+  Namespaces `goldmd:assets:<kind>/<jid>/<name>` and `goldmd:voices/<jid>/<name>`;
+  `restoreAssetsFromStorj()` runs at connect to rebuild a wiped disk + index.
+  Keep `assetStorjNS`/`sanitiseAssetName` as the single source of truth for keys.
 - WhatsApp circle videos are `Message.PtvMessage` (field 66) holding a SQUARE
   `VideoMessage`. `.circle` centre-crops + re-encodes with ffmpeg
   (`gold-cmds/circle.go`). Always keep the square crop — a non-square clip is
-  not rendered as a circle.
+  not rendered as a circle. ContextInfo may sit on `PtvMessage` itself, not
+  just `ExtendedTextMessage` — always resolve quotes via
+  `extractContextInfoFromMsg`/`extractMediaMessage` in `src/manager.go`.
 - Before sending video externally, normalise to h264+aac+faststart
   (`whatsappifyVideo`) or WhatsApp errors on playback.
