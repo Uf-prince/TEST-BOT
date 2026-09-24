@@ -48,6 +48,28 @@ var (
 	assetCircle  = assetSpec{"circle", "addcircle", "CIRCLE VIDEO", "A VIDEO", "video/mp4"}
 )
 
+// assetGroupGuidance is the shared help block for every .add<kind> command.
+// It documents the save / list / del subcommands and, when extra != "",
+// appends the kind-specific note (e.g. the ADDCIRCLE save path).
+func assetGroupGuidance(prefix string, spec assetSpec, extra string) string {
+	ex := examplePrefix(prefix)
+	verb := strings.ToUpper(spec.verb)
+	ret := "*🔰 " + verb + " INFO 🔰*\n\n" +
+		"*QUOTE " + spec.expect + " AND WRITE:*\n" +
+		"*TYPE ❰ " + ex + verb + " <NAME> ❱*\n\n" +
+		"*EXAMPLE:*\n" +
+		"*TYPE ❰ " + ex + verb + " MYNAME ❱*\n\n" +
+		"*AFTER SAVING, WHENEVER ANYONE WRITES THAT NAME THE " + spec.label + " WILL BE SENT AUTOMATICALLY.*\n\n" +
+		"*TO SEE ALL SAVED " + spec.label + "S:*\n" +
+		"*TYPE ❰ " + ex + verb + " LIST ❱*\n\n" +
+		"*TO DELETE A SAVED " + spec.label + ":*\n" +
+		"*TYPE ❰ " + ex + verb + " DEL <NAME> ❱*"
+	if extra != "" {
+		ret += "\n\n" + extra
+	}
+	return ret
+}
+
 // assetOwnerGate — same rule as .addvoice (owner only, DM or group).
 func assetOwnerGate(s SessionBridge, info types.MessageInfo) bool {
 	if s.IsOwner(info) {
@@ -212,12 +234,19 @@ func addAsset(s SessionBridge, info types.MessageInfo, args []string, prefix str
 		return
 	}
 
-	name := assetNameArg(args)
+	sub, rest := addSubcommand(args)
+	switch sub {
+	case addSubList:
+		listAssets(s, info, prefix, spec)
+		return
+	case addSubDel:
+		delAsset(s, info, rest, prefix, spec)
+		return
+	}
+
+	name := assetNameArg(rest)
 	if name == "" {
-		ex := examplePrefix(prefix)
-		s.Reply(info, fmt.Sprintf(
-			"*🔰 %s INFO 🔰*\n\n*QUOTE %s AND WRITE:*\n*TYPE ❰ %s%s <NAME> ❱*\n\n*EXAMPLE:*\n*TYPE ❰ %s%s MYNAME ❱*\n\n*AFTER SAVING, WHENEVER ANYONE WRITES THAT NAME THE %s WILL BE SENT AUTOMATICALLY.*",
-			strings.ToUpper(spec.verb), spec.expect, ex, strings.ToUpper(spec.verb), ex, strings.ToUpper(spec.verb), spec.label))
+		s.Reply(info, assetGroupGuidance(prefix, spec, ""))
 		return
 	}
 
@@ -254,12 +283,19 @@ func addText(s SessionBridge, info types.MessageInfo, args []string, prefix stri
 	if !assetOwnerGate(s, info) {
 		return
 	}
-	name := assetNameArg(args)
+	sub, rest := addSubcommand(args)
+	switch sub {
+	case addSubList:
+		listAssets(s, info, prefix, assetText)
+		return
+	case addSubDel:
+		delAsset(s, info, rest, prefix, assetText)
+		return
+	}
+
+	name := assetNameArg(rest)
 	if name == "" {
-		ex := examplePrefix(prefix)
-		s.Reply(info, fmt.Sprintf(
-			"*🔰 ADDTEXT INFO 🔰*\n\n*QUOTE A TEXT MESSAGE AND WRITE:*\n*TYPE ❰ %sADDTEXT <NAME> ❱*\n\n*EXAMPLE:*\n*TYPE ❰ %sADDTEXT HELLO ❱*\n\n*AFTER SAVING, WHENEVER ANYONE WRITES THAT NAME THE TEXT WILL BE SENT AUTOMATICALLY.*",
-			ex, ex))
+		s.Reply(info, assetGroupGuidance(prefix, assetText, ""))
 		return
 	}
 
@@ -286,7 +322,10 @@ func delAsset(s SessionBridge, info types.MessageInfo, args []string, prefix str
 	}
 	name := assetNameArg(args)
 	if name == "" {
-		s.Reply(info, fmt.Sprintf("*WRITE THE %s NAME TO DELETE\nEXAMPLE: .DEL%s MYNAME*", spec.label, strings.ToUpper(spec.verb[3:])))
+		ex := examplePrefix(prefix)
+		s.Reply(info, fmt.Sprintf(
+			"*🔰 %s DEL INFO 🔰*\n\n*WRITE THE %s NAME OR ITS NUMBER FROM THE LIST:*\n*TYPE ❰ %s%s DEL <NAME> ❱*\n\n*SEE THE LIST FIRST:*\n*TYPE ❰ %s%s LIST ❱*",
+			strings.ToUpper(spec.verb), spec.label, ex, strings.ToUpper(spec.verb), ex, strings.ToUpper(spec.verb)))
 		return
 	}
 	// number shortcut: .delimg 2
@@ -308,7 +347,8 @@ func delAsset(s SessionBridge, info types.MessageInfo, args []string, prefix str
 func listAssets(s SessionBridge, info types.MessageInfo, prefix string, spec assetSpec) {
 	names := s.ListCustomAssets(spec.kind)
 	if len(names) == 0 {
-		s.Reply(info, fmt.Sprintf("*NO %sS SAVED YET*\n*Use .%s <NAME> to save one*", spec.label, strings.ToUpper(spec.verb)))
+		ex := examplePrefix(prefix)
+		s.Reply(info, fmt.Sprintf("*NO %sS SAVED YET*\n*TYPE ❰ %s%s <NAME> ❱ TO SAVE ONE*", spec.label, ex, strings.ToUpper(spec.verb)))
 		return
 	}
 	sort.Strings(names)
@@ -326,6 +366,29 @@ func listAssets(s SessionBridge, info types.MessageInfo, prefix string, spec ass
 // <=50 chars, single token) can name a saved asset. The caller
 // (src/handler.go) resolves the name against each asset kind.
 // ---------------------------------------------------------------------------
+
+// addSubcommand parses an optional "list" / "del" subcommand from the
+// arguments of an .add* command. It lets the owner use
+// ".addvoice list" and ".addvoice del <name>" instead of separate
+// .voicelist / .delvoice commands.
+const (
+	addSubNone = iota
+	addSubList
+	addSubDel
+)
+
+func addSubcommand(args []string) (int, []string) {
+	if len(args) == 0 {
+		return addSubNone, args
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "ls":
+		return addSubList, args[1:]
+	case "del", "delete", "remove":
+		return addSubDel, args[1:]
+	}
+	return addSubNone, args
+}
 
 // AssetTriggerOrder is the kind lookup order for auto-send. Media kinds come
 // before text so a name shared by, say, a photo and a text sends the photo.

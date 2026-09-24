@@ -20,6 +20,7 @@ package goldcmds
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"go.mau.fi/whatsmeow/types"
@@ -55,6 +56,23 @@ func examplePrefix(prefix string) string {
 // .addvoice  /  .savevoice
 // ---------------------------------------------------------------------------
 
+// addVoiceGuidance is the .addvoice help block, including the list and del
+// subcommands so the owner sees every option at once.
+func addVoiceGuidance(prefix string) string {
+	ex := examplePrefix(prefix)
+	return "*🔰 ADDVOICE INFO 🔰*\n\n" +
+		"*QUOTE AN AUDIO MESSAGE AND WRITE:*\n" +
+		"*TYPE ❰ " + ex + "ADDVOICE <NAME> ❱*\n\n" +
+		"*EXAMPLE:*\n" +
+		"*TYPE ❰ " + ex + "ADDVOICE UMAR ❱*\n" +
+		"*TYPE ❰ " + ex + "ADDVOICE HELLO ❱*\n\n" +
+		"*AFTER SAVING, WHENEVER ANYONE WRITES THAT NAME THE VOICE WILL BE SENT AUTOMATICALLY.*\n\n" +
+		"*TO SEE ALL SAVED VOICES:*\n" +
+		"*TYPE ❰ " + ex + "ADDVOICE LIST ❱*\n\n" +
+		"*TO DELETE A SAVED VOICE:*\n" +
+		"*TYPE ❰ " + ex + "ADDVOICE DEL <NAME> ❱*"
+}
+
 func handleAddVoice(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	go handleAddVoiceAsync(s, info, args, prefix)
 }
@@ -64,14 +82,21 @@ func handleAddVoiceAsync(s SessionBridge, info types.MessageInfo, args []string,
 		return
 	}
 
-	name := ""
-	if len(args) > 0 {
-		name = strings.TrimSpace(args[0])
+	// .addvoice list / .addvoice del <name> are subcommands of the same
+	// command, so the owner only has to remember one name.
+	sub, rest := addSubcommand(args)
+	switch sub {
+	case addSubList:
+		handleVoiceListAsync(s, info, rest, prefix)
+		return
+	case addSubDel:
+		handleDelVoiceAsync(s, info, rest, prefix)
+		return
 	}
 
+	name := strings.TrimSpace(strings.Join(rest, " "))
 	if name == "" {
-		ex := examplePrefix(prefix)
-		s.Reply(info, "*🔰 ADDVOICE INFO 🔰*\n\n*QUOTE AN AUDIO MESSAGE AND WRITE:*\n*TYPE ❰ "+ex+"ADDVOICE <NAME> ❱*\n\n*EXAMPLE:*\n*TYPE ❰ "+ex+"ADDVOICE UMAR ❱*\n*TYPE ❰ "+ex+"ADDVOICE HELLO ❱*\n\n*AFTER SAVING, WHENEVER ANYONE WRITES THAT NAME THE VOICE WILL BE SENT AUTOMATICALLY.*")
+		s.Reply(info, addVoiceGuidance(prefix))
 		return
 	}
 
@@ -104,18 +129,25 @@ func handleDelVoiceAsync(s SessionBridge, info types.MessageInfo, args []string,
 		return
 	}
 
-	name := ""
-	if len(args) > 0 {
-		name = strings.TrimSpace(args[0])
-	}
-
+	name := strings.TrimSpace(strings.Join(args, " "))
 	if name == "" {
-		s.Reply(info, "*WRITE THE VOICE NAME TO DELETE\nEXAMPLE: .DELVOICE UMAR*")
+		ex := examplePrefix(prefix)
+		s.Reply(info, "*🔰 DELVOICE INFO 🔰*\n\n*WRITE THE VOICE NAME OR ITS NUMBER FROM THE LIST:*\n"+
+			"*TYPE ❰ "+ex+"DELVOICE <NAME> ❱*\n\n*SEE THE LIST FIRST:*\n"+
+			"*TYPE ❰ "+ex+"ADDVOICE LIST ❱*")
 		return
 	}
 
+	// number shortcut: .delvoice 2
+	if n, err := strconv.Atoi(name); err == nil && n >= 1 {
+		names := s.ListCustomVoices()
+		if n <= len(names) {
+			name = names[n-1]
+		}
+	}
+
 	if s.DeleteCustomVoice(name) {
-		s.Reply(info, "*🔰 VOICE DELETED*\n\n*NAME :❰ "+strings.ToUpper(name)+"*")
+		s.Reply(info, "*🔰 VOICE DELETED*\n\n*NAME :❰ "+strings.ToUpper(name)+" ❱*")
 	} else {
 		s.Reply(info, fmt.Sprintf("*🔰 VOICE \"%s\" NOT FOUND*", strings.ToUpper(name)))
 	}
@@ -132,7 +164,8 @@ func handleVoiceList(s SessionBridge, info types.MessageInfo, args []string, pre
 func handleVoiceListAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	voices := s.ListCustomVoices()
 	if len(voices) == 0 {
-		s.Reply(info, "*NO VOICES SAVED YET*\n*Use .ADDVOICE <NAME> to save one*")
+		ex := examplePrefix(prefix)
+		s.Reply(info, "*NO VOICES SAVED YET*\n*TYPE ❰ "+ex+"ADDVOICE <NAME> ❱ TO SAVE ONE*")
 		return
 	}
 

@@ -190,17 +190,13 @@ func circleHelpText(prefix string) string {
 		"*THE BOT CROPS THE VIDEO TO A SQUARE AND SENDS IT AS A WHATSAPP CIRCLE.*"
 }
 
-// addCircleHelpText is the .addcircle guidance block.
+// addCircleHelpText is the .addcircle guidance block. It shares the .add*
+// layout (save / list / del) and appends the circle-specific note.
 func addCircleHelpText(prefix string) string {
 	ex := examplePrefix(prefix)
-	return "*🔰 ADDCIRCLE COMMAND INFO 🔰*\n\n" +
-		"*SAVES A VIDEO AS A REUSABLE CIRCLE VIDEO*\n\n" +
-		"*REPLY TO A VIDEO AND TYPE:*\n" +
-		"*❮ " + ex + "ADDCIRCLE <NAME> ❯*\n\n" +
-		"*EXAMPLE:*\n" +
-		"*❮ " + ex + "ADDCIRCLE MYNAME ❱*\n\n" +
-		"*AFTER SAVING, WRITING THAT NAME SENDS THE CIRCLE AUTOMATICALLY.*\n\n" +
-		"*TYPE ❮ " + ex + "CIRCLE ❯ FOR INFO*"
+	return assetGroupGuidance(prefix, assetCircle,
+		"*A SAMPLE CIRCLE IS SENT RIGHT AFTER SAVING SO YOU CAN VERIFY IT.*\n\n"+
+			"*TYPE ❮ "+ex+"CIRCLE ❯ FOR INFO*")
 }
 
 // circleWaitText renders the live progress notice.
@@ -289,7 +285,17 @@ func handleAddCircleAsync(s SessionBridge, info types.MessageInfo, args []string
 	if !assetOwnerGate(s, info) {
 		return
 	}
-	name := assetNameArg(args)
+	sub, rest := addSubcommand(args)
+	switch sub {
+	case addSubList:
+		listAssets(s, info, prefix, assetCircle)
+		return
+	case addSubDel:
+		delAsset(s, info, rest, prefix, assetCircle)
+		return
+	}
+
+	name := assetNameArg(rest)
 	// No name: show the guidance directly (no progress notice to delete).
 	if name == "" {
 		s.Reply(info, addCircleHelpText(prefix))

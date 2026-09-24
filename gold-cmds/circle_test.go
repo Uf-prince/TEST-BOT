@@ -173,3 +173,58 @@ func TestCircleURLArg(t *testing.T) {
 		t.Errorf("empty args must give empty, got %q", got)
 	}
 }
+
+// addSubcommand parses the list/del subcommands and leaves plain names alone.
+func TestAddSubcommandParsing(t *testing.T) {
+	cases := []struct {
+		args []string
+		sub  int
+		rest []string
+	}{
+		{nil, addSubNone, nil},
+		{[]string{"MYNAME"}, addSubNone, []string{"MYNAME"}},
+		{[]string{"LIST"}, addSubList, []string{}},
+		{[]string{"list", "extra"}, addSubList, []string{"extra"}},
+		{[]string{"DEL", "foo"}, addSubDel, []string{"foo"}},
+		{[]string{"delete", "foo", "bar"}, addSubDel, []string{"foo", "bar"}},
+	}
+	for _, c := range cases {
+		sub, rest := addSubcommand(c.args)
+		if sub != c.sub {
+			t.Errorf("addSubcommand(%v) sub = %d want %d", c.args, sub, c.sub)
+		}
+		if len(rest) != len(c.rest) {
+			t.Errorf("addSubcommand(%v) rest = %v want %v", c.args, rest, c.rest)
+		}
+	}
+}
+
+// Every .add<kind> guidance must document its list and del subcommands, in
+// English, so the owner never needs the separate .<kind>list / .del<kind>
+// commands.
+func TestAddGuidanceCoversListAndDel(t *testing.T) {
+	specs := []assetSpec{assetImg, assetVideo, assetSticker, assetText, assetCircle}
+	texts := []string{
+		assetGroupGuidance(".", assetImg, ""),
+		assetGroupGuidance(".", assetVideo, ""),
+		assetGroupGuidance(".", assetSticker, ""),
+		assetGroupGuidance(".", assetText, ""),
+		addCircleHelpText("."),
+		addVoiceGuidance("."),
+	}
+	for _, txt := range texts {
+		up := strings.ToUpper(txt)
+		if !strings.Contains(up, "LIST ❱") {
+			t.Errorf("guidance missing LIST option: %q", txt)
+		}
+		if !strings.Contains(up, "DEL <NAME> ❱") {
+			t.Errorf("guidance missing DEL option: %q", txt)
+		}
+	}
+	for _, spec := range specs {
+		g := assetGroupGuidance(".", spec, "")
+		if !strings.Contains(g, strings.ToUpper(spec.verb)) {
+			t.Errorf("%s guidance must name its own command: %q", spec.verb, g)
+		}
+	}
+}
