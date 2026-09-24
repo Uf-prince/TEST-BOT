@@ -104,7 +104,8 @@ func botVideoIsValidMedia(data []byte, mime string) bool {
 // than an HTML share/error page. This is the check that guarantees a stored
 // .botvideo URL will actually play inside WhatsApp.
 func botVideoURLIsPlayable(raw string) bool {
-	if strings.TrimSpace(raw) == "" {
+	raw = resolveDirectMediaURL(strings.TrimSpace(raw))
+	if raw == "" {
 		return false
 	}
 	req, err := http.NewRequest(http.MethodGet, raw, nil)
