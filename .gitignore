@@ -52,3 +52,4 @@ gold-md-bot
 # RAM monitor runtime data
 ram_monitor.csv
 gold-md-bot.new
+tools/bin/

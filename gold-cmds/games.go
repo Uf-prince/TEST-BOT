@@ -29,12 +29,52 @@ import (
 const GameCount = 1000
 
 // gameBase is one of the 50 real games. Play returns the game body (no
-// header); ok=false means the game needs an argument and body is the usage
-// hint instead.
+// header); ok=false means the game needs a mandatory argument (like an RPS
+// move) that cannot be auto-played. Interactive games (playgames.go) offer
+// every base as a session command and feed it the player's move, so the
+// argument-taking ones are never left stranded.
 type gameBase struct {
 	Slug string
 	Name string
 	Play func(args []string) (string, bool)
+}
+
+// GameBaseSlugs returns every base game's short slug, in order. Interactive
+// mode (playgames.go) registers one session command per base so "any game ka
+// naam type karo, game khul jaye" — every .game menu entry has a live,
+// turn-based command behind it.
+func GameBaseSlugs() []string {
+	out := make([]string, 0, len(gameBases))
+	for _, b := range gameBases {
+		out = append(out, b.Slug)
+	}
+	return out
+}
+
+// GameBasePlayBySlug runs base game `slug` once. It returns the rendered body
+// (no header), whether it is a completed result, and whether the slug exists.
+// turn is passed through as the argument for the arg-taking games (RPS move,
+// scramble word, question...): empty for a fresh start, the player's move on
+// later turns.
+func GameBasePlayBySlug(slug string, turn []string) (body string, ok bool, found bool) {
+	for _, b := range gameBases {
+		if b.Slug == slug {
+			body, ok = b.Play(turn)
+			return body, ok, true
+		}
+	}
+	return "", false, false
+}
+
+// GameBaseLabel returns the pretty name for a base slug ("DICE ROLL"),
+// falling back to the slug itself when unknown.
+func GameBaseLabel(slug string) string {
+	for _, b := range gameBases {
+		if b.Slug == slug {
+			return b.Name
+		}
+	}
+	return strings.ToUpper(slug)
 }
 
 // gameFlavors are the 20 edition themes multiplied over the 50 families.

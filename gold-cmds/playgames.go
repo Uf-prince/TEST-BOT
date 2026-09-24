@@ -33,12 +33,19 @@ import (
 // playGameIdle is the "user ne kuch nahi bheja" window before auto-close.
 const playGameIdle = 30 * time.Second
 
+// playGameLife is a game's OWN hard time cap: a running game closes itself
+// after this long even if the player is still active. Together with
+// playGameIdle this satisfies the owner order — a game ends on 30s silence OR
+// on its own running time, whichever comes first.
+const playGameLife = 120 * time.Second
+
 // playSession is ONE turn-based game belonging to ONE (chat, user) pair.
 // The whole game lives in a single WhatsApp message that is edited in place.
 type playSession struct {
 	key    string
 	slug   string
 	label  string
+	brand  string
 	prefix string
 	s      SessionBridge
 	info   types.MessageInfo
@@ -49,9 +56,32 @@ type playSession struct {
 	flash string
 	hint  string
 	idle  *time.Timer
+	life  *time.Timer
 
 	render func() string
 	input  func(text string)
+}
+
+// gameBrand returns the name stamped on every game message. Owner order:
+// the game shows the owner's configured display name (`.ownername` /
+// `.ownernumber` setting) — falling back to the bot name, then "GOLD-MD".
+func gameBrand(s SessionBridge) string {
+	if s == nil {
+		return "GOLD-MD"
+	}
+	// Defensive: a partially-implemented bridge (tests, early boot) must never
+	// crash a running game just because the branding setters are missing.
+	defer func() { _ = recover() }()
+	if n := strings.TrimSpace(s.GetOwnerNameSetting("")); n != "" {
+		return strings.ToUpper(n)
+	}
+	// The bot-name setting can hold a "default footer" marker; never let that
+	// leak into the game header as if it were a real display name.
+	if n := strings.TrimSpace(s.GetBotNameSetting("")); n != "" &&
+		!strings.Contains(n, "GOLD_MD_DEFAULT") {
+		return strings.ToUpper(n)
+	}
+	return "GOLD-MD"
 }
 
 var (
@@ -79,6 +109,17 @@ func (p *playSession) stopIdle() {
 	if p.idle != nil {
 		p.idle.Stop()
 	}
+	if p.life != nil {
+		p.life.Stop()
+	}
+}
+
+// armLife starts the game's own hard time cap (once per session).
+func (p *playSession) armLife() {
+	if p.life != nil {
+		return
+	}
+	p.life = time.AfterFunc(playGameLife, func() { playLifeClose(p) })
 }
 
 // push re-renders the game and EDITS the single message in place.
@@ -87,9 +128,7 @@ func (p *playSession) push() {
 		return
 	}
 	var b strings.Builder
-	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
-	b.WriteString("*🔰 " + p.label + " 🔰*\n")
-	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
+	b.WriteString(gameHeader(p.label, p.brand))
 	b.WriteString(p.render())
 	if p.flash != "" {
 		b.WriteString("\n\n⚠️ *" + p.flash + "*")
@@ -104,25 +143,65 @@ func (p *playSession) push() {
 	p.s.EditMessage(p.info, p.msgID, b.String())
 }
 
-// playIdleClose fires 30s after the player's last move: the message is edited
+// gameHeader is the shared boxed header used by every game message.
+func gameHeader(label, brand string) string {
+	var b strings.Builder
+	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
+	b.WriteString("*🔰 " + label + " 🔰*\n")
+	if brand != "" {
+		b.WriteString("*| 🔰 | " + brand + "*\n")
+	}
+	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
+	return b.String()
+}
+
+// closeSession detaches p from the session map (only if it is still the live
+// session) and returns true when this caller won the race.
+func closeSession(p *playSession) bool {
+	playSessMu.Lock()
+	defer playSessMu.Unlock()
+	cur, ok := playSessions[p.key]
+	if !ok || cur != p {
+		return false
+	}
+	delete(playSessions, p.key)
+	return true
+}
+
+// playIdleClose fires 30s after the player last move: the message is edited
 // to a closed state and the session is dropped.
 func playIdleClose(p *playSession) {
 	defer func() { _ = recover() }()
-	playSessMu.Lock()
-	cur, ok := playSessions[p.key]
-	if !ok || cur != p {
-		playSessMu.Unlock()
+	if !closeSession(p) {
 		return
 	}
-	delete(playSessions, p.key)
-	playSessMu.Unlock()
+	p.stopIdle()
 	if p.over {
 		return
 	}
 	p.over = true
 	p.flash = ""
-	txt := "╔════ ≪ •❈• ≫ ════╗\n*🔰 " + p.label + " 🔰*\n╚════ ≪ •❈• ≫ ════╝\n\n" +
-		p.render() + "\n\n⏰ *30 SECOND IDLE — GAME CLOSED*" +
+	txt := gameHeader(p.label, p.brand) + p.render() +
+		"\n\n\u23f0 *30 SECOND IDLE \u2014 GAME CLOSED*" +
+		"\n_NEW GAME: " + p.prefix + p.slug + "_"
+	p.s.EditMessage(p.info, p.msgID, txt)
+}
+
+// playLifeClose fires when the game own time cap (playGameLife) is reached:
+// the game closes itself even though the player may still be active.
+func playLifeClose(p *playSession) {
+	defer func() { _ = recover() }()
+	if !closeSession(p) {
+		return
+	}
+	p.stopIdle()
+	if p.over {
+		return
+	}
+	p.over = true
+	p.flash = ""
+	txt := gameHeader(p.label, p.brand) + p.render() +
+		"\n\n\u231b *TIME UP \u2014 GAME CLOSED*" +
 		"\n_NEW GAME: " + p.prefix + p.slug + "_"
 	p.s.EditMessage(p.info, p.msgID, txt)
 }
@@ -137,23 +216,32 @@ func destroyPlaySession(key string) {
 	}
 }
 
-// startPlayGame is the shared ".ttt / .c4 / ..." entry point.
-func startPlayGame(s SessionBridge, info types.MessageInfo, def playGameDef, prefix string) {
+// startPlaySession attaches a freshly built session to the (chat,user) key,
+// sends the initial board message and arms BOTH clocks: the 30s idle window
+// and the game's own hard time cap. Shared by the turn-based games and the
+// base-family live games, so every game behaves the same way.
+func startPlaySession(s SessionBridge, info types.MessageInfo, slug, label, prefix string, p *playSession) {
 	key := playKey(info)
 	destroyPlaySession(key)
-	p := def.New()
 	p.key = key
-	p.slug = def.Slug
-	p.label = def.Label
+	p.slug = slug
+	p.label = label
 	p.prefix = prefix
 	p.s = s
+	p.brand = gameBrand(s)
 	p.info = info
 	playSessMu.Lock()
 	playSessions[key] = p
 	playSessMu.Unlock()
-	p.msgID = s.ReplyWithID(info, "*🔰 "+def.Label+" START HO RAHA HAI...*")
+	p.msgID = s.ReplyWithID(info, "*\U0001f530 "+label+" START HO RAHA HAI...*")
 	p.push()
 	p.armIdle()
+	p.armLife()
+}
+
+// startPlayGame is the shared ".ttt / .c4 / ..." entry point.
+func startPlayGame(s SessionBridge, info types.MessageInfo, def playGameDef, prefix string) {
+	startPlaySession(s, info, def.Slug, def.Label, prefix, def.New())
 }
 
 // HasPendingPlayGame reports whether this sender has a live game.

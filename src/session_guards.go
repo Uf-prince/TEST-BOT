@@ -1530,19 +1530,22 @@ func registerGameCommands() {
 		RegisterCommand(name, func(s *Session, info types.MessageInfo, args []string, prefix string) {
 			beginCmdBusy()
 			defer endCmdBusy()
-			goldcmds.GameRunN(&bridge{s: s}, info, args, prefix, n)
+			// OWNER ORDER: every game runs as a live session (30s idle / own-time
+			// close) instead of a one-shot reply, so .gameN opens a running game.
+			if !goldcmds.StartGameN(&bridge{s: s}, info, n, prefix) {
+				goldcmds.GameRunN(&bridge{s: s}, info, args, prefix, n)
+			}
 		})
 		hiddenCommands[name] = true
 	}
-	for slug, n := range goldcmds.GameBaseSlugNumbers() {
+	for slug := range goldcmds.GameBaseSlugNumbers() {
 		if _, exists := Commands[slug]; exists {
 			continue // existing command (core or plugin) — do not clobber
 		}
-		n := n
 		RegisterCommand(slug, func(s *Session, info types.MessageInfo, args []string, prefix string) {
 			beginCmdBusy()
 			defer endCmdBusy()
-			goldcmds.GameRunN(&bridge{s: s}, info, args, prefix, n)
+			goldcmds.StartBaseGame(&bridge{s: s}, info, slug, prefix)
 		})
 		hiddenCommands[slug] = true
 	}
@@ -1559,7 +1562,11 @@ func registerGameCommands() {
 		RegisterCommand(slug, func(s *Session, info types.MessageInfo, args []string, prefix string) {
 			beginCmdBusy()
 			defer endCmdBusy()
-			goldcmds.GameRunN(&bridge{s: s}, info, args, prefix, n)
+			// A menu short name opens its live game (e.g. .rolldice02 →
+			// TURBO DICE ROLL running session).
+			if !goldcmds.StartGameByShortSlug(&bridge{s: s}, info, slug, prefix) {
+				goldcmds.GameRunN(&bridge{s: s}, info, args, prefix, n)
+			}
 		})
 		hiddenCommands[slug] = true
 	}
