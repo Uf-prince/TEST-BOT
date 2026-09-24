@@ -536,6 +536,11 @@ func (s *Session) HandleMessage(evt *events.Message) {
 	// silently fails if no voice matches.
 	go s.applyVoiceTrigger(info, body)
 
+	// ── CUSTOM ASSET TRIGGER (.addimg/.addvideo/.addsticker/.addtext) ──
+	// Same contract as the voice trigger: a bare word that names a saved
+	// asset is auto-sent. Runs async and silently no-ops on no match.
+	go s.applyAssetTrigger(info, body)
+
 	// ── GOLD-MD AUTOREPLY TRIGGER ──────────────────────────────────────────────
 	// Ported from UMAR-MD pair.js (lines ~10913-10944). Runs BEFORE the
 	// isCommand check (same as Node.js), so it fires on ALL incoming text

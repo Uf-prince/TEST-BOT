@@ -287,6 +287,29 @@ type SessionBridge interface {
 	// message to the chat identified by info.
 	SendVoiceMessage(info types.MessageInfo, data []byte, mime string) error
 
+	// ── CUSTOM ASSETS (.addimg/.addvideo/.addsticker/.addtext/.addcircle) ──
+	// kind is one of: img, video, sticker, text, circle.
+	// SaveCustomAsset stores bytes for a named asset (sidecar ".mime" + Redis
+	// index), mirroring the .addvoice model. Returns false on error/empty.
+	SaveCustomAsset(kind, name string, data []byte, mime string) bool
+	// GetCustomAsset loads the bytes + mimetype of a named asset.
+	GetCustomAsset(kind, name string) ([]byte, string, bool)
+	// DeleteCustomAsset removes a named asset.
+	DeleteCustomAsset(kind, name string) bool
+	// SaveCustomAssetMeta is SaveCustomAsset + a metadata sidecar (.meta).
+	// .addcircle uses it to remember seconds,width,height for replay.
+	SaveCustomAssetMeta(kind, name string, data []byte, mime, meta string) bool
+	// GetCustomAssetMeta loads bytes + mime + meta ("" when absent).
+	GetCustomAssetMeta(kind, name string) ([]byte, string, string, bool)
+	// ListCustomAssets returns the sorted names of every asset of a kind.
+	ListCustomAssets(kind string) []string
+
+	// SendCircleVideo uploads an ALREADY SQUARE mp4 (raw bytes) and sends it as
+	// a WhatsApp circle video (Message.PtvMessage). thumbnail may be nil.
+	SendCircleVideo(info types.MessageInfo, data []byte, seconds uint32, width uint32, height uint32, thumbnail []byte) error
+	// SendCircleVideoFile is the streaming (path) variant of SendCircleVideo.
+	SendCircleVideoFile(info types.MessageInfo, path string, seconds uint32, width uint32, height uint32, thumbnail []byte) error
+
 	// GetAllConnectedClients returns every currently-connected WhatsApp
 	// session (each = a unique WhatsApp number) the bot knows about. Used
 	// by .chreact to react to a channel post from ALL sessions at once so
