@@ -8,7 +8,8 @@ import (
 )
 
 // TestGameMenuRenders: buildGameMenu must use the same fancy boxed format as
-// .font / .equalizer and list .GAME1 .. .GAME1000 with design names.
+// .font / .equalizer and list the 1000 games by their REAL names — no
+// numeric .GAME1 prefix and no ❮ ❯ wrapper (owner order).
 func TestGameMenuRenders(t *testing.T) {
 	m := buildGameMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil)
 	if !strings.Contains(m, "╔════ ≪ •❈• ≫ ════╗") {
@@ -17,11 +18,27 @@ func TestGameMenuRenders(t *testing.T) {
 	if !strings.Contains(m, "🔰 GAME 🔰") {
 		t.Errorf(".game menu header title GAME missing\n%s", m)
 	}
-	if !strings.Contains(m, ".GAME1 ❮") {
-		t.Errorf(".game menu me .GAME1 entry missing\n%s", m)
+	// Real design name + dispatch command, without the numeric prefix or the
+	// ❮ ❯ wrapper. Game 1 = "CLASSIC DICE ROLL" / .game1; game 1000 = "ULTRA
+	// NAME PICKER" / .game1000.
+	if !strings.Contains(m, "CLASSIC DICE ROLL") {
+		t.Errorf(".game menu me game 1 ka asli naam missing\n%s", m)
 	}
-	if !strings.Contains(m, ".GAME1000 ❮") {
-		t.Errorf(".game menu me .GAME1000 entry missing\n%s", m)
+	if !strings.Contains(m, "ULTRA NAME PICKER") {
+		t.Errorf(".game menu me game 1000 ka asli naam missing\n%s", m)
+	}
+	if !strings.Contains(m, ".game1") || !strings.Contains(m, ".game1000") {
+		t.Errorf(".game menu me dispatch command (.game1/.game1000) missing\n%s", m)
+	}
+	// ❮ ❯ wrapper allowed in the shared header (all menus use it), but NEVER
+	// next to a game's name.
+	for _, line := range strings.Split(m, "\n") {
+		if strings.Contains(line, "GAME") && strings.Contains(line, "❮") {
+			t.Errorf("game row me ❮ ❯ wrapper nahi hona chahiye (owner order): %s", line)
+		}
+	}
+	if strings.Contains(m, "GAME1 ") || strings.Contains(m, "GAME1000 ") {
+		t.Errorf(".game menu me GAME<number> label nahi hona chahiye (owner order)\n%s", m)
 	}
 	if strings.Contains(m, "MENUS:") {
 		t.Errorf(".game menu me MENUS line nahi honi chahiye\n%s", m)
@@ -29,9 +46,10 @@ func TestGameMenuRenders(t *testing.T) {
 	if !strings.Contains(m, "❮ 1000 ❯") {
 		t.Errorf(".game menu COMMANDS count 1000 nahi hai\n%s", m)
 	}
-	// The 1000 design labels must make the list actually useful.
-	if strings.Count(m, "GAME") < 1000 {
-		t.Errorf(".game menu me 1000 se kam GAME entries hain")
+	// The 1000 real-name labels must make the list actually useful: every row
+	// renders one game (frame marker count matches the game count).
+	if got := strings.Count(m, "*| 🔰 |"); got != 1000+1 {
+		t.Errorf(".game menu me %d rows, want 1001 (header + 1000 games)", got)
 	}
 }
 

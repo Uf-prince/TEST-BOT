@@ -2344,7 +2344,7 @@ func buildGameMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
 	b.WriteString("*| 🔰 | GAME | 🔰 |*\n")
 	for n := 1; n <= goldcmds.GameCount; n++ {
-		b.WriteString(fmt.Sprintf("*| 🔰 | %sGAME%d ❮ %s ❯*\n", prefix, n, goldcmds.GameDesignName(n)))
+		b.WriteString(fmt.Sprintf("*| 🔰 | %s | %sgame%d*\n", goldcmds.GameDesignName(n), prefix, n))
 	}
 	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
 	return b.String()
