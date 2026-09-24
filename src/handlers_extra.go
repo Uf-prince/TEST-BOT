@@ -1818,7 +1818,7 @@ func (s *Session) ReplyImageWithNewsletter(info types.MessageInfo, imgData []byt
 
 	imgMsg := &waProto.ImageMessage{
 		Caption:       proto.String(caption),
-		Mimetype:      proto.String("image/png"),
+		Mimetype:      proto.String(imageMimeForBytes(imgData)),
 		URL:           proto.String(uploaded.URL),
 		DirectPath:    proto.String(uploaded.DirectPath),
 		MediaKey:      uploaded.MediaKey,

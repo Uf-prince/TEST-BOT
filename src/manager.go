@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"io"
 	"net/http"
@@ -1539,7 +1540,7 @@ func (s *Session) sendStartupNotification() {
 	totalCmds := coreCount + pluginCount + goldcmds.LogoCount + goldcmds.FontCount + goldcmds.EqCount + goldcmds.GameCount
 	prefix := s.resolvePrefix(s.JID)
 
-	logoURL := "https://cdn.jsdelivr.net/gh/Uf-prince/gold-assets@main/botpic.webp"
+	logoURL := s.botPicURL()
 
 	msgText := fmt.Sprintf(`*GOLD-MD HAS BEEN STARTED*
 	
@@ -1556,16 +1557,10 @@ func (s *Session) sendStartupNotification() {
 	// the consistent bot signature (same as every other bot message).
 	msgText = s.withCaptionFooter(msgText)
 
-	// Fetch logo bytes
-	resp, err := http.Get(logoURL)
-	if err != nil {
+	// Fetch logo bytes (status-checked + timeout, never an error page).
+	imgData, err := fetchMenuImageURL(logoURL)
+	if err != nil || len(imgData) == 0 {
 		// ErrLog("Failed to fetch startup logo: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-	imgData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		// ErrLog("Failed to read startup logo data: %v", err)
 		return
 	}
 
@@ -1580,7 +1575,7 @@ func (s *Session) sendStartupNotification() {
 	msg := &waProto.Message{
 		ImageMessage: &waProto.ImageMessage{
 			Caption:       proto.String(msgText),
-			Mimetype:      proto.String("image/png"),
+			Mimetype:      proto.String(imageMimeForBytes(imgData)),
 			URL:           proto.String(uploaded.URL),
 			DirectPath:    proto.String(uploaded.DirectPath),
 			MediaKey:      uploaded.MediaKey,
@@ -1807,8 +1802,36 @@ func (m *Manager) HealthHandler(w http.ResponseWriter, r *http.Request) {
 //   No other message in the bot attaches that button.
 // ===========================================================================
 
+// defaultBotPicMarker marks "no per-bot .botpic set" so botPicURL falls back
+// to the embedded default image. It must never look like a real URL.
+const defaultBotPicMarker = "embedded://default-botpic"
+
 // menuHeaderImageURL is the image shown at the top of the redesigned .menu.
-const menuHeaderImageURL = "https://cdn.jsdelivr.net/gh/Uf-prince/gold-assets@main/botpic.webp"
+const menuHeaderImageURL = defaultBotPicMarker
+
+//go:embed botpic.jpg
+var defaultBotPicJPEG []byte
+
+//go:embed botpic.webp
+var defaultBotPicWebP []byte
+
+// imageMimeForBytes sniffs the container so WhatsApp gets a truthful Mimetype
+// (the embedded default is JPEG; a PNG/WebP from .botpic keeps its own type).
+func imageMimeForBytes(b []byte) string {
+	if len(b) >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF {
+		return "image/jpeg"
+	}
+	if len(b) >= 8 && b[0] == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G' {
+		return "image/png"
+	}
+	if len(b) >= 12 && string(b[0:4]) == "RIFF" && string(b[8:12]) == "WEBP" {
+		return "image/webp"
+	}
+	if len(b) >= 6 && (string(b[0:6]) == "GIF87a" || string(b[0:6]) == "GIF89a") {
+		return "image/gif"
+	}
+	return "image/jpeg"
+}
 
 // ── ALIVE ─────────────────────────────────────────────────────────────────
 // Classic "is the bot alive?" status message with uptime + session count.
@@ -2585,12 +2608,28 @@ func (s *Session) CmdMenu(info types.MessageInfo, args []string, prefix string) 
 // its bytes. Used by CmdMenu to fetch either the per-bot custom bot
 // pic (set via .botpic) or the default menu header image.
 func fetchMenuImageURL(imgURL string) ([]byte, error) {
-	resp, err := http.Get(imgURL)
+	// A 404/HTML error page must never be uploaded as if it were a picture.
+	imgURL = strings.TrimSpace(imgURL)
+	if imgURL == "" || imgURL == defaultBotPicMarker {
+		return defaultBotPicJPEG, nil
+	}
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Get(imgURL)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("image fetch %s: HTTP %d", imgURL, resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(http.DetectContentType(data), "image/") {
+		return nil, fmt.Errorf("image fetch %s: not an image (%s)", imgURL, http.DetectContentType(data))
+	}
+	return data, nil
 }
 
 // botPicURL returns the per-bot custom menu/alive image URL when the
