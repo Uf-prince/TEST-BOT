@@ -56,6 +56,9 @@ func TestSimDataGuideNote(t *testing.T) {
 	if !strings.Contains(g, "YEH COMMAND SIRF PAKISTANI SIMS KA DATA DETA HAI") {
 		t.Errorf("guide missing Hinglish note: %q", g)
 	}
+	if !strings.Contains(g, "2024 SE PEHLE KI JITNE BHI SIM NUMBERS HOGE UNKA DATA NAHI MILE GA OK ERROR AYE GA") {
+		t.Errorf("guide missing pre-2024 note: %q", g)
+	}
 	if !strings.Contains(g, "THIS COMMAND ONLY GIVES DATA OF PAKISTANI SIMS NUMBERS") {
 		t.Errorf("guide missing English note: %q", g)
 	}

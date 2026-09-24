@@ -57,7 +57,7 @@ func simDataGuide(prefix string) string {
 		"*HOW TO USE:*\n" +
 		"*❮ " + prefix + "SIMDATA <NUMBER> ❯*\n" +
 		"*EXAMPLE ❮ " + prefix + "SIMDATA 03122212427 ❯*\n\n" +
-		"*📌 NOTE ❯ YEH COMMAND SIRF PAKISTANI SIMS KA DATA DETA HAI AUR JO SIM 2024 , 2025 AUR 2026 KE SIMS KA DATA DETE HAI OK*\n\n" +
+		"*📌 NOTE ❯ YEH COMMAND SIRF PAKISTANI SIMS KA DATA DETA HAI AUR JO SIM 2024 , 2025 AUR 2026 KE SIMS KA DATA DETE HAI OK 2024 SE PEHLE KI JITNE BHI SIM NUMBERS HOGE UNKA DATA NAHI MILE GA OK ERROR AYE GA *\n\n" +
 		"*THIS COMMAND ONLY GIVES DATA OF PAKISTANI SIMS NUMBERS*"
 }
 
@@ -134,13 +134,13 @@ func handleSimData(s SessionBridge, info types.MessageInfo, args []string, prefi
 
 		var b strings.Builder
 		b.WriteString("*🔰 SIM DATA 🔰*\n\n")
-		b.WriteString("*👤 NAME ❯ " + name + "*\n")
-		b.WriteString("*📱 MOBILE ❯ " + mobile + "*\n")
-		b.WriteString("*🪪 CNIC ❯ " + cnic + "*\n")
-		b.WriteString("*🏠 ADDRESS ❯ " + address + "*\n")
-		b.WriteString("*📡 NETWORK ❯ " + network + "*")
+		b.WriteString("*🔰 NAME ❯ " + name + "*\n")
+		b.WriteString("*🔰 MOBILE ❯ " + mobile + "*\n")
+		b.WriteString("*🔰 CNIC ❯ " + cnic + "*\n")
+		b.WriteString("*🔰 ADDRESS ❯ " + address + "*\n")
+		b.WriteString("*🔰 NETWORK ❯ " + network + "*")
 		if res.Count > 1 {
-			b.WriteString(fmt.Sprintf("\n\n*📊 TOTAL RECORDS ❯ %d*", res.Count))
+			b.WriteString(fmt.Sprintf("\n\n*🔰 TOTAL RECORDS ❯ %d*", res.Count))
 		}
 		s.Reply(info, b.String())
 	})
