@@ -1399,7 +1399,14 @@ func (b *bridge) SetAntiCallMessage(msg string) {
 // the other category menus) instead of plain text. Delegates to the main
 // package's CmdLogoMenu (manager.go).
 func (b *bridge) ShowLogoMenu(info types.MessageInfo, args []string, prefix string) {
-        b.s.CmdLogoMenu(info, args, prefix)
+	b.s.CmdLogoMenu(info, args, prefix)
+}
+
+// ShowFontMenu renders the .font command's fancy boxed menu (FONT1..FONT1000)
+// in the same format as the other category menus. Delegates to the main
+// package's CmdFontMenu (manager.go).
+func (b *bridge) ShowFontMenu(info types.MessageInfo, args []string, prefix string) {
+	b.s.CmdFontMenu(info, args, prefix)
 }
 
 // GetPrefix reads the bot's command prefix from Redis (key prefix:<botJID>).

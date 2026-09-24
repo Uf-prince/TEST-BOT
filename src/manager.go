@@ -1520,7 +1520,7 @@ func (s *Session) sendStartupNotification() {
 		coreCount++
 	}
 	pluginCount := goldcmds.CommandsCount() // only visible (non-hidden) commands
-	totalCmds := coreCount + pluginCount + goldcmds.LogoCount
+	totalCmds := coreCount + pluginCount + goldcmds.LogoCount + goldcmds.FontCount
 	prefix := s.resolvePrefix(s.JID)
 
 	logoURL := "https://cdn.jsdelivr.net/gh/Uf-prince/gold-assets@main/botpic.webp"
@@ -1910,6 +1910,7 @@ var menuCategorySlugs = map[string]string{
 	"TOOLS":             "tools",
 	"BREACTION":         "breaction",
 	"GREACTION":         "greaction",
+	"FONT":              "font",
 }
 
 // menuCategoryDisplay maps an internal category name to the label shown to
@@ -2050,6 +2051,9 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 		if strings.EqualFold(c.Name, "logo") {
 			dispName = "LOGO"
 		}
+		if strings.EqualFold(c.Name, "font") {
+			dispName = "FONT"
+		}
 		cmds = append(cmds, menuCmd{Name: dispName, Category: c.Category, Desc: c.Desc})
 	}
 	for name := range Commands {
@@ -2076,7 +2080,7 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	// list (they live behind the single .logo command) but MUST still be
 	// counted in the COMMANDS total. So add goldcmds.LogoCount to the
 	// visible count.
-	totalCmds := len(cmds) + goldcmds.LogoCount
+	totalCmds := len(cmds) + goldcmds.LogoCount + goldcmds.FontCount
 
 	// ── Uptime in "XXH XXM" form for the fancy header ──
 	uptimeHM := formatUptimeHM(uptime())
@@ -2151,8 +2155,10 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 			slug := strings.ToUpper(menuCategorySlug(cat))
 			b.WriteString(fmt.Sprintf("*| 🔰 | %s%s*\n", prefix, slug))
 		}
-		// OWNER ORDER: .LOGO ko plain .menu me bhi dikhao (category list ke
-		// saath) taake user ko .LOGO naam nazar aaye.
+		// OWNER ORDER: .LOGO ko plain .menu me alag se dikhao (ye category list
+		// ka hissa nahi, khud ka command hai). .FONT ko yahan NAHI likhna —
+		// FONT ab CategoryOrder me hai, is liye loop se pehle hi aa jata hai
+		// (dobara likhne se .menu me FONT 2 bar dikhta tha).
 		b.WriteString(fmt.Sprintf("*| 🔰 | %sLOGO*\n", prefix))
 		b.WriteString("╚════ ≪ •❈• ≫ ════╝\n")
 		return b.String()
@@ -2266,6 +2272,76 @@ func (s *Session) CmdLogoMenu(info types.MessageInfo, args []string, prefix stri
 
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
 	caption := buildLogoMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
+
+	imgURL := s.botPicURL()
+	imgData, fetchErr := fetchMenuImageURL(imgURL)
+	if fetchErr != nil || len(imgData) == 0 {
+		s.ReplyWithNewsletter(info, caption)
+		return
+	}
+	if ok := s.ReplyImageWithNewsletter(info, imgData, caption); !ok {
+		s.ReplyWithNewsletter(info, caption)
+	}
+}
+
+// buildFontMenu renders the .font menu in the same fancy boxed format as the
+// .logo menu and the other category menus. It lists .FONT1 .. .FONT1000.
+func buildFontMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView) string {
+	_ = pushName
+	_ = botName
+	_ = sessCount
+	_ = menuView
+	uptimeHM := uptimeStr
+	if uptimeHM == "" {
+		uptimeHM = formatUptimeHM(uptime())
+	}
+	var b strings.Builder
+	b.WriteString(buildMenuHeader("FONT", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.FontCount, false))
+	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
+	b.WriteString("*| 🔰 | FONT | 🔰 |*\n")
+	for n := 1; n <= goldcmds.FontCount; n++ {
+		b.WriteString(fmt.Sprintf("*| 🔰 | %sFONT%d ❮ YOUR NAME ❯*\n", prefix, n))
+	}
+	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
+	return b.String()
+}
+
+// CmdFontMenu renders the .font menu in the SAME fancy boxed format as the
+// other category menus (owner order). It reads the same per-bot settings as
+// CmdMenu and sends the boxed .FONT1..1000 list.
+func (s *Session) CmdFontMenu(info types.MessageInfo, args []string, prefix string) {
+	uptimeStr := formatUptime(uptime())
+	sessCount := s.Manager.Count()
+
+	botName := ""
+	if s.Manager != nil && s.Manager.Redis != nil {
+		botName = s.Manager.Redis.GetSetting(s.JID, "botname", "")
+	}
+	if botName == "" || botName == goldcmds.DefaultBotNameMarker ||
+		strings.Contains(botName, "GOLD_MD_DEFAULT_FOOTER") ||
+		strings.Contains(botName, "GOLD_MD_DEFAULT") {
+		botName = "GOLD-MD WHATSAPP BOT"
+	}
+
+	menuUser := "UMAR"
+	if s.Manager != nil && s.Manager.Redis != nil {
+		if on := s.Manager.Redis.GetSetting(s.JID, "ownername", ""); on != "" {
+			menuUser = on
+		}
+	}
+
+	ownerNum := botOwnNumber(s.JID)
+	if s.Manager != nil && s.Manager.Redis != nil {
+		if on := s.Manager.Redis.GetSetting(s.JID, "ownernumber", ""); on != "" {
+			ownerNum = on
+		}
+		if sudoRaw := s.Manager.Redis.GetSetting(s.JID, "sudowners", ""); sudoRaw != "" {
+			ownerNum = ownerNum + "," + sudoRaw
+		}
+	}
+
+	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
+	caption := buildFontMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
 
 	imgURL := s.botPicURL()
 	imgData, fetchErr := fetchMenuImageURL(imgURL)

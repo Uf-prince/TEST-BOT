@@ -509,6 +509,12 @@ type SessionBridge interface {
 	// as the other category menus) instead of plain text. Implemented by the
 	// main package (manager.go CmdLogoMenu).
 	ShowLogoMenu(info types.MessageInfo, args []string, prefix string)
+
+	// ── FONT MENU ──
+	// ShowFontMenu renders the .font command's fancy boxed menu (FONT1..
+	// FONT1000) in the same format as the other category menus. Implemented
+	// by the main package (manager.go CmdFontMenu).
+	ShowFontMenu(info types.MessageInfo, args []string, prefix string)
 }
 
 // BannedUserInfo holds the metadata for a bot-wide banned user.
@@ -582,6 +588,7 @@ var CategoryOrder = []string{
 	"TOOLS",
 	"BREACTION",
 	"GREACTION",
+	"FONT",
 }
 
 // CategoryEmoji maps each category to a decorative emoji used in the menu header.
@@ -597,6 +604,7 @@ var CategoryEmoji = map[string]string{
 	"CONVERTER":         "🔰",
 	"BREACTION":         "🔰",
 	"GREACTION":         "🔰",
+	"FONT":              "🔰",
 }
 
 var registry []Command

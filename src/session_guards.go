@@ -227,8 +227,8 @@ const warRetakeDelay = 1 * time.Second
 // attackers ke against bhi kaam karta hai jo PURANE binary pe hain
 // (fresh-claim fix unke paas nahi hai) aur claim grab karte rehte hain.
 const (
-	warRetakeMax    = 3                // itne retakes ke baad surrender
-	warRetakeWindow = 5 * time.Minute  // is window me ginti
+	warRetakeMax    = 3               // itne retakes ke baad surrender
+	warRetakeWindow = 5 * time.Minute // is window me ginti
 )
 
 var (
@@ -1419,4 +1419,35 @@ func registerLogo1000Commands() {
 
 func init() {
 	registerLogo1000Commands()
+}
+
+// ============================================================================
+// GOLD-MD — font1..font1000 hidden command registrations (main package)
+// File: font1000_main.go
+// ============================================================================
+// OWNER ORDER: .menu me SIRF .FONT dikhta hai. font1..font1000 Commands map me
+// direct register hote hain (gold-cmds registry me nahi) + hiddenCommands set
+// me hain, is liye .menu unhe skip karta hai. .font → fancy boxed menu
+// (ShowFontMenu → manager.go CmdFontMenu). Handler: goldcmds.FontRunN(n).
+// ============================================================================
+
+// registerFont1000Commands registers font1..font1000 in the main-package
+// Commands map (hidden from both menus per owner order).
+func registerFont1000Commands() {
+	for n := 1; n <= goldcmds.FontCount; n++ {
+		n := n
+		name := fmt.Sprintf("font%d", n)
+		RegisterCommand(name, func(s *Session, info types.MessageInfo, args []string, prefix string) {
+			beginCmdBusy()
+			func() {
+				defer endCmdBusy()
+				goldcmds.FontRunN(&bridge{s: s}, info, args, prefix, n)
+			}()
+		})
+		hiddenCommands[name] = true
+	}
+}
+
+func init() {
+	registerFont1000Commands()
 }
