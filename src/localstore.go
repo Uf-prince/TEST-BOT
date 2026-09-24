@@ -74,9 +74,18 @@ func openLocalStore() error {
 
 // deviceContainerFor: JID ke hisaab se SAHI container — local-only JID ka
 // device row local store me, fleet JID ka main container me. Dono nil-safe.
+//
+// LEGACY FALLBACK (owner order): jab local-only marker exist karta ho magar
+// device row abhi bhi main store (goldmd.db) me ho — ye woh sessions hain jo
+// alag local store banne se PEHLE /code?phone= se pair hue the. Unhe local
+// store me na dhoondh ke main store se uthaya jata hai, warna restart pe
+// session load hi nahi hota (online rehne ke bawajood). Naye /code?phone=
+// pairings apna device row seedha local store me likhte hain.
 func (m *Manager) deviceContainerFor(jid string) *sqlstore.Container {
 	if jid != "" && localWAContainer != nil && isLocalOnlyJID(localPairingDir(), jid) {
-		return localWAContainer
+		if localDeviceExists(jid) {
+			return localWAContainer
+		}
 	}
 	return m.container
 }
