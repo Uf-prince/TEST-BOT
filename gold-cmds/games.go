@@ -730,24 +730,64 @@ func GameBaseSlugNumbers() map[string]int {
 	return out
 }
 
-// GameMenuSlugs returns the REAL, playable games shown in the .game menu —
-// the 50 classic one-shot games + the 14 turn-based games. Har entry apna
-// chhota command name hai (converter menu jaisa): menu me sirf wahi likha
-// jata hai jo user type karta hai, is liye spelling bhoolne ka saval nahi.
-// game1..game1000 ka numeric label yahan NAHI aata (owner order).
-func GameMenuSlugs() []string {
-	out := make([]string, 0, len(gameBases)+len(playGameDefs))
-	for _, b := range gameBases {
-		out = append(out, b.Slug)
+// GameShortSlug maps game N (1..1000) to its short, typeable command name.
+//
+//	flavor 0 → the bare base slug        (.rolldice)
+//	flavor k → the base slug + 2-digit   (.rolldice02 … .rolldice20)
+//
+// The 2-digit zero-pad is deliberate: base family slugs already end in digits
+// for a few games (.d20, .coin3, .lucky7, .flip5), and a bare suffix would
+// collide with the turn-based .rps5. Zero-padding keeps all 1000 names unique
+// and readable without a separator the user has to remember.
+func GameShortSlug(n int) string {
+	if n < 1 || n > GameCount {
+		n = 1
 	}
-	for _, d := range playGameDefs {
-		out = append(out, d.Slug)
+	m := n - 1
+	base := gameBases[m%len(gameBases)].Slug
+	fl := m / len(gameBases)
+	if fl == 0 {
+		return base
+	}
+	return fmt.Sprintf("%s%02d", base, fl+1)
+}
+
+// GameShortSlugs returns the short command name for every game 1..1000, in
+// order. This is the .game menu's row list (owner order: 1000 real games, each
+// shown by the exact short name a user types).
+func GameShortSlugs() []string {
+	out := make([]string, 0, GameCount)
+	for n := 1; n <= GameCount; n++ {
+		out = append(out, GameShortSlug(n))
 	}
 	return out
 }
 
-// GameMenuCount is the number of real games listed in the .game menu.
-func GameMenuCount() int { return len(gameBases) + len(playGameDefs) }
+// GameShortSlugNumbers maps every short command name to its game number so the
+// main package can register them as hidden commands (like game1..game1000).
+// Names already owned by a registered command / turn-based game are skipped, so
+// a game short name can never clobber an unrelated feature.
+func GameShortSlugNumbers() map[string]int {
+	taken := make(map[string]bool, GameCount)
+	for _, c := range Commands() {
+		taken[c.Name] = true
+	}
+	for _, d := range playGameDefs {
+		taken[d.Slug] = true
+	}
+	out := make(map[string]int, GameCount)
+	for n := 1; n <= GameCount; n++ {
+		name := GameShortSlug(n)
+		if taken[name] {
+			continue
+		}
+		out[name] = n
+	}
+	return out
+}
+
+// GameMenuCount is the number of games listed in the .game menu (all 1000).
+func GameMenuCount() int { return GameCount }
 
 // handleGameList implements bare .game — the boxed GAME1..GAME1000 menu.
 func handleGameList(s SessionBridge, info types.MessageInfo, args []string, prefix string) {

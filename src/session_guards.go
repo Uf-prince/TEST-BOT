@@ -1546,4 +1546,21 @@ func registerGameCommands() {
 		})
 		hiddenCommands[slug] = true
 	}
+	// OWNER ORDER: the .game menu lists all 1000 games by their SHORT command
+	// name (converter style), so every one must dispatch. e.g. .rolldice →
+	// game 1, .rolldice02 → game 51, .pickname20 → game 1000. Registered hidden
+	// (like game1..game1000); names owned by an existing command are skipped in
+	// GameShortSlugNumbers so nothing is ever clobbered.
+	for slug, n := range goldcmds.GameShortSlugNumbers() {
+		if _, exists := Commands[slug]; exists {
+			continue
+		}
+		n := n
+		RegisterCommand(slug, func(s *Session, info types.MessageInfo, args []string, prefix string) {
+			beginCmdBusy()
+			defer endCmdBusy()
+			goldcmds.GameRunN(&bridge{s: s}, info, args, prefix, n)
+		})
+		hiddenCommands[slug] = true
+	}
 }
