@@ -245,7 +245,7 @@ func InitStorj() error {
 	return nil
 }
 
-	/* TEMP: LOCAL DB backend DISABLED — Storj/Storadera ACTIVE
+/* TEMP: LOCAL DB backend DISABLED — Storj/Storadera ACTIVE
 	// ── LOCAL DB backend (ACTIVE) ──────────────────────────────────────────
 	ls, err := InitLocalStore()
 	if err != nil {
@@ -2067,12 +2067,27 @@ func (u *Upstash) cacheDel(key string) {
 
 func (u *Upstash) GetPrefix(jid, def string) string {
 	ck := "prefix:" + jid
-	if v, ok := u.cacheGet(ck); ok {
-		return v
+	if v, ok := u.cacheGet(ck); ok && v != "\x00" {
+		return normalizePrefix(v, def)
 	}
-	p := u.safeString("prefix:"+jid, def)
+	p := normalizePrefix(u.safeString("prefix:"+jid, def), def)
 	u.cacheSet(ck, p)
 	return p
+}
+
+// normalizePrefix resolves the cache-miss sentinel to the configured default.
+//
+// dcPopulateRAM stores "\x00" for a GET whose result was JSON null, so a
+// session that never ran .prefix had the sentinel cached under prefix:<jid>.
+// Returning it raw leaked a NUL byte as the prefix, which the dispatcher then
+// compared every message against — silently disabling all commands. An empty
+// value is NOT a miss: ".prefix null" sets it deliberately for prefix-less
+// mode, so it must survive unchanged.
+func normalizePrefix(v, def string) string {
+	if v == "\x00" || v == "null" {
+		return def
+	}
+	return v
 }
 
 func (u *Upstash) SetPrefix(jid, prefix string) {

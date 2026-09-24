@@ -601,20 +601,12 @@ func ytLoaderToFallback(ctx context.Context, client *http.Client, videoURL, form
 
 // streamDownloadToFile downloads media with a bounded 64 KiB buffer.
 // The complete media is never accumulated in RAM.
+//
+// googlevideo throttles a single request carrying more than ~8 MiB, so the
+// first attempt is the parallel ranged downloader (fastdl.go); a server that
+// ignores Range, or one that fails before any byte lands, falls through to the
+// sequential loop below.
 func streamDownloadToFile(ctx context.Context, client *http.Client, dlURL string, progressFunc func(int)) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-		return "", fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
 	file, err := os.CreateTemp("", "gold-md-download-*")
 	if err != nil {
 		return "", err
@@ -624,6 +616,40 @@ func streamDownloadToFile(ctx context.Context, client *http.Client, dlURL string
 		_ = file.Close()
 		_ = os.Remove(path)
 		return "", e
+	}
+
+	if supported, got, rerr := rangedDownload(ctx, client, dlURL, file, progressFunc); supported {
+		if rerr == nil {
+			if cerr := file.Close(); cerr != nil {
+				_ = os.Remove(path)
+				return "", cerr
+			}
+			return path, nil
+		}
+		// Only retry sequentially when the ranged attempt wrote nothing;
+		// otherwise it would redo work that already succeeded.
+		if !dlZeroProgress(got) {
+			return removeOnError(rerr)
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
+	if err != nil {
+		return removeOnError(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return removeOnError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		return removeOnError(fmt.Errorf("server returned status %d", resp.StatusCode))
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return removeOnError(err)
+	}
+	if err := file.Truncate(0); err != nil {
+		return removeOnError(err)
 	}
 
 	contentLength, _ := strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
