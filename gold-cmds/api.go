@@ -596,6 +596,7 @@ var CategoryOrder = []string{
 	"GREACTION",
 	"EQUALIZER",
 	"FONT",
+	"GAME",
 }
 
 // CategoryEmoji maps each category to a decorative emoji used in the menu header.
@@ -613,6 +614,7 @@ var CategoryEmoji = map[string]string{
 	"GREACTION":         "🔰",
 	"EQUALIZER":         "🔰",
 	"FONT":              "🔰",
+	"GAME":              "🎮",
 }
 
 var registry []Command

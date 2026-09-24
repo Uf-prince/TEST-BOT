@@ -1912,6 +1912,7 @@ var menuCategorySlugs = map[string]string{
 	"GREACTION":         "greaction",
 	"EQUALIZER":         "equalizer",
 	"FONT":              "font",
+	"GAME":              "game",
 }
 
 // menuCategoryDisplay maps an internal category name to the label shown to
