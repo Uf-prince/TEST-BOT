@@ -132,6 +132,12 @@ func (sb *sendingBridge) Reply(info types.MessageInfo, text string) {
 	sb.order = append(sb.order, "reply")
 }
 
+// DownloadQuotedMedia reports "no media" so handlers that start by looking for
+// a quoted audio/video take their help-text branch.
+func (sb *sendingBridge) DownloadQuotedMedia(info types.MessageInfo) ([]byte, string, bool) {
+	return nil, "", false
+}
+
 // The font reply must be sent once and then edited once, editing the very
 // message that was just sent, with the same styled text.
 func TestFontRunNSendsThenEditsSameMessage(t *testing.T) {

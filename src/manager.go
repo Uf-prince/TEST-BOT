@@ -1910,6 +1910,7 @@ var menuCategorySlugs = map[string]string{
 	"TOOLS":             "tools",
 	"BREACTION":         "breaction",
 	"GREACTION":         "greaction",
+	"EQUALIZER":         "equalizer",
 	"FONT":              "font",
 }
 

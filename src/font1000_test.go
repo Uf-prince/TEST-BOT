@@ -76,6 +76,41 @@ func TestFontCategoryInMenu(t *testing.T) {
 	}
 }
 
+// TestEqualizerCategoryInMenu: .menu me .EQUALIZER line dikhni chahiye, aur us
+// category ke 5 effect commands registry me hone chahiye.
+func TestEqualizerCategoryInMenu(t *testing.T) {
+	m := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, "")
+	if !strings.Contains(m, ".EQUALIZER") {
+		t.Errorf("plain .menu me .EQUALIZER nazar nahi aata\n%s", m)
+	}
+	if got := strings.Count(m, ".EQUALIZER"); got != 1 {
+		t.Errorf("plain .menu me .EQUALIZER %d bar hai, 1 hona chahiye\n%s", got, m)
+	}
+	for _, name := range []string{"slowed", "revert", "robot", "bass", "dj"} {
+		if _, ok := Commands[name]; !ok {
+			t.Errorf("%s Commands map me registered nahi hai", name)
+		}
+	}
+}
+
+// TestEqualizerCategoryMenu: .equalizer category shortcut usi 5 commands ko
+// dikhana chahiye.
+func TestEqualizerCategoryMenu(t *testing.T) {
+	cat, ok := menuCategoryFromCommand("equalizer")
+	if !ok {
+		t.Fatal("equalizer slug resolve nahi hua")
+	}
+	if cat != "EQUALIZER" {
+		t.Fatalf("slug equalizer -> %q, want EQUALIZER", cat)
+	}
+	m := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, "EQUALIZER")
+	for _, name := range []string{"SLOWED", "REVERT", "ROBOT", "BASS", "DJ"} {
+		if !strings.Contains(m, name) {
+			t.Errorf("EQUALIZER menu me %s missing\n%s", name, m)
+		}
+	}
+}
+
 // TestFontCategoryShortcut: .font slug se FONT category menu khulna chahiye.
 func TestFontCategoryShortcut(t *testing.T) {
 	cat, ok := menuCategoryFromCommand("font")

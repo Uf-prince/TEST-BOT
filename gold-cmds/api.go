@@ -588,6 +588,7 @@ var CategoryOrder = []string{
 	"TOOLS",
 	"BREACTION",
 	"GREACTION",
+	"EQUALIZER",
 	"FONT",
 }
 
@@ -604,6 +605,7 @@ var CategoryEmoji = map[string]string{
 	"CONVERTER":         "🔰",
 	"BREACTION":         "🔰",
 	"GREACTION":         "🔰",
+	"EQUALIZER":         "🔰",
 	"FONT":              "🔰",
 }
 
