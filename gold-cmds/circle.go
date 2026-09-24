@@ -171,14 +171,57 @@ func circleFromQuoted(s SessionBridge, info types.MessageInfo, urlArg string) (s
 	return makeCircleMP4(ctx, srcPath)
 }
 
-// handleCircleAsync is the .circle body: convert then send.
-func handleCircleAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-	urlArg := strings.TrimSpace(strings.Join(args, " "))
-	if urlArg != "" && !strings.HasPrefix(strings.ToLower(urlArg), "http") {
-		urlArg = ""
-	}
+// circleTempTTL is how long a transient circle notice (progress, error,
+// add-saved) stays before the bot deletes it, keeping the chat clean.
+const circleTempTTL = 10 * time.Second
 
-	waitID := s.ReplyWithID(info, "*🔰 CIRCLE VIDEO BAN RAHI HAI...*\n*PROCESSING: 00%*")
+// circleHelpText is the .circle guidance block (shown when no video/URL is
+// given, and as the error notice). Deliberately English.
+func circleHelpText(prefix string) string {
+	ex := examplePrefix(prefix)
+	return "*🔰 CIRCLE COMMAND INFO 🔰*\n\n" +
+		"*CONVERTS ANY VIDEO INTO A WHATSAPP CIRCLE VIDEO*\n\n" +
+		"*OPTION 1:*\n" +
+		"*REPLY TO A VIDEO AND TYPE:*\n" +
+		"*❮ " + ex + "CIRCLE ❯*\n\n" +
+		"*OPTION 2:*\n" +
+		"*GIVE A DIRECT VIDEO LINK:*\n" +
+		"*❮ " + ex + "CIRCLE <URL> ❯*\n\n" +
+		"*THE BOT CROPS THE VIDEO TO A SQUARE AND SENDS IT AS A WHATSAPP CIRCLE.*"
+}
+
+// addCircleHelpText is the .addcircle guidance block.
+func addCircleHelpText(prefix string) string {
+	ex := examplePrefix(prefix)
+	return "*🔰 ADDCIRCLE COMMAND INFO 🔰*\n\n" +
+		"*SAVES A VIDEO AS A REUSABLE CIRCLE VIDEO*\n\n" +
+		"*REPLY TO A VIDEO AND TYPE:*\n" +
+		"*❮ " + ex + "ADDCIRCLE <NAME> ❯*\n\n" +
+		"*EXAMPLE:*\n" +
+		"*❮ " + ex + "ADDCIRCLE MYNAME ❱*\n\n" +
+		"*AFTER SAVING, WRITING THAT NAME SENDS THE CIRCLE AUTOMATICALLY.*\n\n" +
+		"*TYPE ❮ " + ex + "CIRCLE ❯ FOR INFO*"
+}
+
+// circleWaitText renders the live progress notice.
+func circleWaitText(verb, percent string) string {
+	return "*🔰 " + verb + "...*\n*PROCESSING: " + percent + "%*"
+}
+
+// replyTemporary sends a notice and auto-deletes it after ttl. Used for
+// progress / error / save notices so they never clutter the chat.
+func replyTemporary(s SessionBridge, info types.MessageInfo, text string, ttl time.Duration) {
+	id := s.ReplyWithID(info, text)
+	if id == "" {
+		return
+	}
+	time.AfterFunc(ttl, func() { _ = s.DeleteMessage(info, id) })
+}
+
+// startCircleProgress sends the progress notice and returns a stop func that
+// deletes it. The notice updates every 700ms up to 90%.
+func startCircleProgress(s SessionBridge, info types.MessageInfo, verb string) func() {
+	id := s.ReplyWithID(info, circleWaitText(verb, "00"))
 	stop := make(chan struct{})
 	go func() {
 		percent := 0
@@ -196,20 +239,41 @@ func handleCircleAsync(s SessionBridge, info types.MessageInfo, args []string, p
 				if percent > 90 {
 					percent = 90
 				}
-				s.EditMessage(info, waitID, fmt.Sprintf("*CIRCLE VIDEO BAN RAHI HAI...*\n*PROCESSING: %02d%%*", percent))
+				s.EditMessage(info, id, circleWaitText(verb, fmt.Sprintf("%02d", percent)))
 			}
 		}
 	}()
+	return func() {
+		close(stop)
+		_ = s.DeleteMessage(info, id)
+	}
+}
 
+// circleURLArg returns the direct video URL given as an argument, or "".
+func circleURLArg(args []string) string {
+	u := strings.TrimSpace(strings.Join(args, " "))
+	if u == "" || !strings.HasPrefix(strings.ToLower(u), "http") {
+		return ""
+	}
+	return u
+}
+
+// handleCircleAsync is the .circle body: convert then send.
+func handleCircleAsync(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+	urlArg := circleURLArg(args)
+	// Nothing to convert: a bare .circle only ever shows the guidance, no
+	// progress notice is created (so nothing flickers/deletes).
+	if urlArg == "" && !VVHasQuotedMedia(s, info) {
+		s.Reply(info, circleHelpText(prefix))
+		return
+	}
+
+	stopProgress := startCircleProgress(s, info, "MAKING YOUR CIRCLE VIDEO")
 	outPath, err := circleFromQuoted(s, info, urlArg)
-	close(stop)
-	s.DeleteMessage(info, waitID)
+	stopProgress()
 
 	if err != nil || outPath == "" {
-		ex := examplePrefix(prefix)
-		s.Reply(info, fmt.Sprintf(
-			"*🔰 CIRCLE INFO 🔰*\n\n*QUOTE A VIDEO AND WRITE:*\n*TYPE ❰ %sCIRCLE ❱*\n\n*YA DIRECT VIDEO LINK DO:*\n*TYPE ❰ %sCIRCLE <URL> ❱*\n\n*BOT US VIDEO KO WHATSAPP CIRCLE SHAKAL ME BANA KAR BHEJ DE GA.*",
-			ex, ex))
+		replyTemporary(s, info, circleHelpText(prefix), circleTempTTL)
 		return
 	}
 	defer os.Remove(outPath)
@@ -226,62 +290,42 @@ func handleAddCircleAsync(s SessionBridge, info types.MessageInfo, args []string
 		return
 	}
 	name := assetNameArg(args)
-	ex := examplePrefix(prefix)
+	// No name: show the guidance directly (no progress notice to delete).
 	if name == "" {
-		s.Reply(info, fmt.Sprintf(
-			"*🔰 ADDCIRCLE INFO 🔰*\n\n*QUOTE A VIDEO AND WRITE:*\n*TYPE ❰ %sADDCIRCLE <NAME> ❱*\n\n*EXAMPLE:*\n*TYPE ❰ %sADDCIRCLE MYNAME ❱*\n\n*AFTER SAVING, WHENEVER ANYONE WRITES THAT NAME THE CIRCLE VIDEO WILL BE SENT AUTOMATICALLY.*\n\n*TYPE ❮ %sCIRCLE ❯ FOR INFO*",
-			ex, ex, ex))
+		s.Reply(info, addCircleHelpText(prefix))
+		return
+	}
+	// Name given but no video attached: concise guidance, auto-deleted.
+	if !VVHasQuotedMedia(s, info) {
+		replyTemporary(s, info, addCircleHelpText(prefix), circleTempTTL)
 		return
 	}
 
-	waitID := s.ReplyWithID(info, "*🔰 CIRCLE VIDEO SAVE HO RAHI HAI...*\n*PROCESSING: 00%*")
-	stop := make(chan struct{})
-	go func() {
-		percent := 0
-		ticker := time.NewTicker(700 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-ticker.C:
-				if percent >= 90 {
-					continue
-				}
-				percent += 9
-				if percent > 90 {
-					percent = 90
-				}
-				s.EditMessage(info, waitID, fmt.Sprintf("*CIRCLE VIDEO SAVE HO RAHI HAI...*\n*PROCESSING: %02d%%*", percent))
-			}
-		}
-	}()
-
+	stopProgress := startCircleProgress(s, info, "SAVING YOUR CIRCLE VIDEO")
 	outPath, err := circleFromQuoted(s, info, "")
-	close(stop)
-	s.DeleteMessage(info, waitID)
+	stopProgress()
 
 	if err != nil || outPath == "" {
-		s.Reply(info, "*🔰 QUOTE A VIDEO FIRST THEN WRITE .ADDCIRCLE <NAME>*\n\n*YA SIRF VIDEO BHEJO AUR US PAR REPLY KARO.*")
+		replyTemporary(s, info, addCircleHelpText(prefix), circleTempTTL)
 		return
 	}
 	defer os.Remove(outPath)
 
 	data, rerr := os.ReadFile(outPath)
 	if rerr != nil || len(data) == 0 {
-		s.Reply(info, "*🔰 FAILED TO SAVE — TRY AGAIN*")
+		replyTemporary(s, info, "*🔰 FAILED TO SAVE THIS CIRCLE — TRY AGAIN*", circleTempTTL)
 		return
 	}
 	seconds, w, h := circleProbe(outPath)
 	meta := fmt.Sprintf("%d,%d,%d", seconds, w, h)
 	if !s.SaveCustomAssetMeta("circle", name, data, "video/mp4", meta) {
-		s.Reply(info, "*🔰 FAILED TO SAVE — TRY AGAIN*")
+		replyTemporary(s, info, "*🔰 FAILED TO SAVE THIS CIRCLE — TRY AGAIN*", circleTempTTL)
 		return
 	}
 
-	s.Reply(info, fmt.Sprintf(
-		"*🔰 ADDCIRCLE SAVED SUCCESSFULLY*\n\n*NAME :❰ %s ❱*\n\n*NOW WHENEVER ANYONE WRITES* *%s* *THIS CIRCLE VIDEO WILL BE SENT AUTOMATICALLY 🔰*\n\n*SENDING SAMPLE CIRCLE...*\n\n*TYPE ❮ %sCIRCLE ❯ FOR INFO*",
-		assetDisplayName(name), assetDisplayName(name), ex))
+	replyTemporary(s, info, fmt.Sprintf(
+		"*🔰 ADDCIRCLE SAVED*\n\n*NAME : ❮ %s ❱*\n\n*WRITE THAT NAME ANYTIME TO SEND THIS CIRCLE.*\n\n*SENDING SAMPLE CIRCLE...*",
+		assetDisplayName(name)), circleTempTTL)
 
 	thumb := BotVideoThumbnail(outPath)
 	_ = s.SendCircleVideoFile(info, outPath, seconds, w, h, thumb)

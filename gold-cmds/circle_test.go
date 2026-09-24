@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -132,5 +133,43 @@ func TestNormaliseVideoBytesTranscodes(t *testing.T) {
 	defer os.Remove(p)
 	if !isWhatsAppVideoReady(p) {
 		t.Error("normalised output is not WhatsApp-ready (h264+faststart)")
+	}
+}
+
+// The .circle guidance and progress strings must be English (owner order —
+// the earlier draft was Roman Urdu). Guards against a regression.
+func TestCircleTextIsEnglish(t *testing.T) {
+	blocked := []string{"BAN RAHI", "BAN RAHE", "SHAKAL", "YA ", "DO:", "HO RAHI", "US VIDEO"}
+	for _, txt := range []string{
+		circleHelpText("."),
+		addCircleHelpText("."),
+		circleWaitText("MAKING YOUR CIRCLE VIDEO", "00"),
+	} {
+		up := strings.ToUpper(txt)
+		for _, bad := range blocked {
+			if strings.Contains(up, bad) {
+				t.Errorf("circle text %q contains non-English %q", txt, bad)
+			}
+		}
+	}
+	// sanity: the guidance must advertise both input paths
+	if h := circleHelpText("."); !strings.Contains(h, "CIRCLE ❯") || !strings.Contains(h, "URL") {
+		t.Errorf("circle help must show both reply and URL options: %q", h)
+	}
+	if h := addCircleHelpText("."); !strings.Contains(h, "CIRCLE ❯ FOR INFO") {
+		t.Errorf("addcircle help must end with the CIRCLE info line: %q", h)
+	}
+}
+
+// A bare prefix handling of the URL argument: only http(s) links count.
+func TestCircleURLArg(t *testing.T) {
+	if got := circleURLArg([]string{"not", "a", "url"}); got != "" {
+		t.Errorf("non-URL must be ignored, got %q", got)
+	}
+	if got := circleURLArg([]string{"HTTPS://x/y.mp4"}); got == "" {
+		t.Error("http(s) URL must be accepted")
+	}
+	if got := circleURLArg(nil); got != "" {
+		t.Errorf("empty args must give empty, got %q", got)
 	}
 }
