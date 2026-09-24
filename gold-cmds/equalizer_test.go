@@ -1,63 +1,111 @@
 package goldcmds
 
 import (
-	"strings"
+	"context"
 	"testing"
 
 	"go.mau.fi/whatsmeow/types"
 )
 
-// All 5 effects must exist exactly once, with a non-empty description and a
-// real ffmpeg filter chain.
-func TestEqualizerFiveEffectsRegistered(t *testing.T) {
-	want := []string{"slowed", "revert", "robot", "bass", "dj"}
-	if len(eqEffects) != len(want) {
-		t.Fatalf("eqEffects = %d, want %d", len(eqEffects), len(want))
+// BeginGuard keeps the watchdog usable in tests: it hands back a live context
+// with a no-op release, so runEqualizerEffect reaches its media-guard branch.
+func (sb *sendingBridge) BeginGuard(user string) (context.Context, func()) {
+	return context.Background(), func() {}
+}
+
+// The 1000-design engine must expose distinct combos, and every design must
+// resolve to a non-empty ffmpeg filter chain.
+func TestEqualizer1000DesignsUniqueAndNonEmpty(t *testing.T) {
+	if EqCount != 1000 {
+		t.Fatalf("EqCount = %d, want 1000", EqCount)
 	}
-	got := map[string]eqEffect{}
-	for _, e := range eqEffects {
-		if e.Desc == "" {
-			t.Errorf("effect %q has empty Desc", e.Name)
+	seen := map[string]int{}
+	for n := 1; n <= EqCount; n++ {
+		f := EqAudioFilter(n)
+		if f == "" {
+			t.Fatalf("design %d has empty filter", n)
 		}
-		if strings.TrimSpace(e.Audio) == "" {
-			t.Errorf("effect %q has empty Audio filter", e.Name)
+		if prev, dup := seen[f]; dup {
+			t.Fatalf("design %d filter duplicates design %d: %q", n, prev, f)
 		}
-		got[e.Name] = e
+		seen[f] = n
+		if EqDesignName(n) == "" {
+			t.Fatalf("design %d has empty name", n)
+		}
 	}
-	for _, w := range want {
-		if _, ok := got[w]; !ok {
-			t.Errorf("effect %q missing", w)
+	if len(seen) != EqCount {
+		t.Fatalf("unique filters = %d, want %d", len(seen), EqCount)
+	}
+}
+
+// eqCombo and eqComboIndex must be exact inverses, otherwise named aliases
+// would point at the wrong design.
+func TestEqualizerComboRoundTrip(t *testing.T) {
+	for n := 1; n <= EqCount; n++ {
+		s, tn, e := eqCombo(n)
+		if got := eqComboIndex(s, tn, e); got != n {
+			t.Fatalf("round trip %d -> (%d,%d,%d) -> %d", n, s, tn, e, got)
 		}
 	}
 }
 
-// Every effect must be a visible EQUALIZER command in the registry (so it
-// shows up in .menu and resolves when typed).
-func TestEqualizerCommandsInRegistry(t *testing.T) {
+// Only designs whose speed family changes the audio duration may retime the
+// picture; unknown/neutral designs must leave the video stream copyable.
+func TestEqualizerVideoPTSMatchesSpeed(t *testing.T) {
+	for n := 1; n <= EqCount; n++ {
+		s, _, _ := eqCombo(n)
+		want := eqSpeeds[s].PTS
+		if got := EqVideoPTS(n); got != want {
+			t.Fatalf("design %d VideoPTS = %q, want %q", n, got, want)
+		}
+	}
+}
+
+// The 5 original named effects stay visible EQUALIZER commands, and each maps
+// onto a real design whose filter matches the table lookup.
+func TestEqualizerNamedAliasesRegistered(t *testing.T) {
 	byName := map[string]Command{}
 	for _, c := range Commands() {
 		byName[c.Name] = c
 	}
-	for _, e := range eqEffects {
-		c, ok := byName[e.Name]
+	for _, name := range eqNamedAliasNames {
+		c, ok := byName[name]
 		if !ok {
-			t.Errorf("command %q not registered", e.Name)
+			t.Errorf("alias %q not registered", name)
 			continue
 		}
-		if c.Hidden {
-			t.Errorf("command %q is hidden, must be visible", e.Name)
+		if c.Hidden || c.Category != "EQUALIZER" || c.Run == nil {
+			t.Errorf("alias %q meta wrong: hidden=%v cat=%q run=%v", name, c.Hidden, c.Category, c.Run != nil)
 		}
-		if c.Category != "EQUALIZER" {
-			t.Errorf("command %q category = %q, want EQUALIZER", e.Name, c.Category)
+		eff, ok := eqDesignFromNamed(name)
+		if !ok {
+			t.Errorf("alias %q has no design", name)
+			continue
 		}
-		if c.Run == nil {
-			t.Errorf("command %q has nil Run", e.Name)
+		if eff.Audio == "" {
+			t.Errorf("alias %q resolved to empty filter", name)
 		}
 	}
 }
 
-// The category must be part of the menu ordering + emoji maps, otherwise .menu
-// would append it unordered / without an emoji.
+// The bare .equalizer command must be visible in the EQUALIZER category so the
+// menu shows exactly one entry point for the 1000 designs.
+func TestEqualizerListCommandRegistered(t *testing.T) {
+	found := false
+	for _, c := range Commands() {
+		if c.Name == "equalizer" {
+			found = true
+			if c.Hidden || c.Category != "EQUALIZER" || c.Run == nil {
+				t.Fatalf("equalizer meta wrong: hidden=%v cat=%q", c.Hidden, c.Category)
+			}
+		}
+	}
+	if !found {
+		t.Fatal(".equalizer command not registered")
+	}
+}
+
+// The category must stay wired into the menu ordering + emoji maps.
 func TestEqualizerCategoryInMenuOrder(t *testing.T) {
 	found := false
 	for _, c := range CategoryOrder {
@@ -73,37 +121,38 @@ func TestEqualizerCategoryInMenuOrder(t *testing.T) {
 	}
 }
 
-// Without media the handler must guide the user with its own help text.
+// Without media the handler must guide the user instead of erroring.
 func TestEqualizerWithoutMediaGuides(t *testing.T) {
 	sb := &sendingBridge{}
 	var info types.MessageInfo
-	handleEqualizerEffectiveAsync(nil, sb, info, ".", eqEffectsBySlug["bass"])
+	eff, _ := eqDesignFromNamed("bass")
+	runEqualizerEffect(sb, info, ".", eff)
 
 	if len(sb.order) != 1 || sb.order[0] != "reply" {
 		t.Fatalf("call order = %v, want [reply]", sb.order)
 	}
 }
 
-// Asking for an unknown effect name must be a no-op (never panics).
-func TestEqualizerUnknownEffectNoop(t *testing.T) {
-	if _, ok := eqEffectsBySlug["nope"]; ok {
-		t.Error("unknown effect unexpectedly found")
-	}
-	if eff := handleEqualizerEffect("nope"); eff == nil {
-		t.Error("handleEqualizerEffect returned nil for unknown name")
+// An out-of-range design number must be clamped to a valid combo rather than
+// panicking.
+func TestEqualizerComboClampsOutOfRange(t *testing.T) {
+	for _, n := range []int{-5, 0, EqCount + 1, 99999} {
+		if EqAudioFilter(n) == "" {
+			t.Errorf("EqAudioFilter(%d) empty", n)
+		}
+		if EqDesignName(n) == "" {
+			t.Errorf("EqDesignName(%d) empty", n)
+		}
 	}
 }
 
-// slowed must retime the video (pitch/duration change) while the others leave
-// the picture untouched — otherwise A/V sync breaks on slowed videos.
-func TestEqualizerVideoStretchOnlyForSlowed(t *testing.T) {
-	for _, e := range eqEffects {
-		wantStretch := e.Name == "slowed"
-		if e.StretchVideo != wantStretch {
-			t.Errorf("%s StretchVideo = %v, want %v", e.Name, e.StretchVideo, wantStretch)
-		}
-		if e.StretchVideo && strings.TrimSpace(e.VideoPTS) == "" {
-			t.Errorf("%s stretch enabled but VideoPTS empty", e.Name)
-		}
+// EqRunN must not panic for out-of-range numbers and must reply with the range
+// hint instead of applying an effect.
+func TestEqualizerRunNOutOfRangeReplies(t *testing.T) {
+	sb := &sendingBridge{}
+	var info types.MessageInfo
+	EqRunN(sb, info, nil, ".", EqCount+50)
+	if len(sb.order) != 1 || sb.order[0] != "reply" {
+		t.Fatalf("call order = %v, want [reply]", sb.order)
 	}
 }

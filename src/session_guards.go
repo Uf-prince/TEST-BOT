@@ -1451,3 +1451,35 @@ func registerFont1000Commands() {
 func init() {
 	registerFont1000Commands()
 }
+
+// ============================================================================
+// GOLD-MD — eq1..eq1000 hidden command registrations (main package)
+// File: equalizer1000_main.go
+// ============================================================================
+// OWNER ORDER: .menu me SIRF .EQUALIZER (aur 5 alias commands) dikhte hain.
+// eq1..eq1000 Commands map me direct register hote hain (gold-cmds registry me
+// nahi) + hiddenCommands set me hain, is liye .menu unhe skip karta hai.
+// .equalizer → fancy boxed menu (ShowEqualizerMenu → manager.go
+// CmdEqualizerMenu). Handler: goldcmds.EqRunN(n).
+// ============================================================================
+
+// registerEq1000Commands registers eq1..eq1000 in the main-package Commands
+// map (hidden from both menus per owner order).
+func registerEq1000Commands() {
+	for n := 1; n <= goldcmds.EqCount; n++ {
+		n := n
+		name := fmt.Sprintf("eq%d", n)
+		RegisterCommand(name, func(s *Session, info types.MessageInfo, args []string, prefix string) {
+			beginCmdBusy()
+			func() {
+				defer endCmdBusy()
+				goldcmds.EqRunN(&bridge{s: s}, info, args, prefix, n)
+			}()
+		})
+		hiddenCommands[name] = true
+	}
+}
+
+func init() {
+	registerEq1000Commands()
+}

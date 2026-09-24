@@ -1409,6 +1409,13 @@ func (b *bridge) ShowFontMenu(info types.MessageInfo, args []string, prefix stri
 	b.s.CmdFontMenu(info, args, prefix)
 }
 
+// ShowEqualizerMenu renders the .equalizer command's fancy boxed menu
+// (EQ1..EQ1000) in the same format as the other category menus. Delegates to
+// the main package's CmdEqualizerMenu (manager.go).
+func (b *bridge) ShowEqualizerMenu(info types.MessageInfo, args []string, prefix string) {
+	b.s.CmdEqualizerMenu(info, args, prefix)
+}
+
 // GetPrefix reads the bot's command prefix from Redis (key prefix:<botJID>).
 func (b *bridge) GetPrefix(def string) string {
 	if b.s.Manager.Redis == nil {
