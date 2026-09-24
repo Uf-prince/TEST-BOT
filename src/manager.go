@@ -326,8 +326,8 @@ func (m *Manager) cleanupPending(jid string) {
 	// (creds/device row kabhi bani hi nahi — WhatsApp ne link reject/expire
 	// kiya). Linked session ka folder cleanupSession ke LocalOnly-guard se
 	// SAFE rehta hai.
-	if isLocalOnlyJID(m.cfg.PairingDir, jid) {
-		_ = os.RemoveAll(filepath.Join(m.cfg.PairingDir, jid))
+	if isLocalOnlyJID(localPairingDir(), jid) {
+		_ = os.RemoveAll(localMarkerDirFor(jid))
 	}
 	m.cleanupSession(sess, "pairing code never linked in WhatsApp")
 }
@@ -387,6 +387,10 @@ func (m *Manager) AutoLoad() {
 			users = append(users, e.Name())
 		}
 	}
+
+	// LOCAL-ONLY store scan (owner order): direct /code?phone= sessions ALAG
+	// folder (nexstore/local/pairing) me hain — reconnector inhe bhi uthaye.
+	users = appendLocalOnlyJIDs(users)
 
 	// Also pull JIDs from Redis registry in case the pairing folder was wiped
 	// but Redis still remembers them (this is the Render-restart scenario).
@@ -612,9 +616,14 @@ func (m *Manager) StartSession(jid string) error {
 		}
 	}()
 
-	// ensure pairing dir exists for this jid (marks it as paired)
-	pairDir := filepath.Join(m.cfg.PairingDir, jid)
-	_ = os.MkdirAll(pairDir, 0o755)
+	// local-only JID → marker ALAG folder me; fleet JID → global pairing dir.
+	if isLocalOnlyJID(localPairingDir(), jid) {
+		_ = os.MkdirAll(localMarkerDirFor(jid), 0o755)
+	} else {
+		// ensure pairing dir exists for this jid (marks it as paired)
+		pairDir := filepath.Join(m.cfg.PairingDir, jid)
+		_ = os.MkdirAll(pairDir, 0o755)
+	}
 
 	//	JSONDebug("RECONNECT_START", map[string]any{
 	//		"jid":      jid,
@@ -635,7 +644,11 @@ func (m *Manager) StartSession(jid string) error {
 	// GetDevice(baseJID) returns nil because device 0 != stored device number.
 	// Fix: try exact first, then fall back to GetAllDevices and pick the
 	// device whose user matches (ignore the device suffix).
-	dev, err := m.container.GetDevice(context.Background(), parsedJID)
+	devCon := m.deviceContainerFor(jid)
+	if devCon == nil {
+		devCon = m.container
+	}
+	dev, err := devCon.GetDevice(context.Background(), parsedJID)
 	if err != nil {
 		return fmt.Errorf("get device: %w", err)
 	}
@@ -646,7 +659,7 @@ func (m *Manager) StartSession(jid string) error {
 		//			"jid":    jid,
 		//			"reason": "exact GetDevice nil, trying user match across all devices",
 		//		})
-		allDevs, aerr := m.container.GetAllDevices(context.Background())
+		allDevs, aerr := devCon.GetAllDevices(context.Background())
 		if aerr != nil {
 			return fmt.Errorf("get all devices: %w", aerr)
 		}
@@ -717,7 +730,7 @@ func (m *Manager) StartSession(jid string) error {
 			// KABHI delete nahi hota. Ye sirf non-local-only sessions ke
 			// liye valid cleanup hai. Local-only JID ka folder + DB row
 			// disk pe SAFE — reconnector AutoLoad me ise uthata rahega.
-			if !isLocalOnlyJID(m.cfg.PairingDir, jid) {
+			if !isLocalOnlyJID(localPairingDir(), jid) {
 				_ = m.Redis.RemoveJID(jid)
 				// Also remove the pairing folder so AutoLoad skips it next time.
 				// NOTE (owner rule): fleet blob (goldmd:fleet:sess:<jid>) SAFE
@@ -974,10 +987,22 @@ func (m *Manager) pairWithCodeMode(phone string, localOnly bool) (string, error)
 		}
 	}()
 
-	_ = os.MkdirAll(filepath.Join(m.cfg.PairingDir, jid), 0o755)
+	if localOnly {
+		// DIRECT /code?phone= (owner order): marker ALAG local folder me,
+		// device row ALAG local.db me. Fleet /pair path yahan se untouched.
+		writeLocalOnlyMarker(localPairingDir(), jid)
+		localOnlyCleanFleetKeys(jid)
+	} else {
+		_ = os.MkdirAll(filepath.Join(m.cfg.PairingDir, jid), 0o755)
+	}
+
+	devCon := m.deviceContainerFor(jid)
+	if devCon == nil {
+		devCon = m.container
+	}
 
 	// brand-new pairing → brand-new device, never reuse another session's
-	dev := m.container.NewDevice()
+	dev := devCon.NewDevice()
 
 	cli := whatsmeow.NewClient(dev, waLog.Noop)
 	cli.EnableAutoReconnect = true
@@ -1000,15 +1025,6 @@ func (m *Manager) pairWithCodeMode(phone string, localOnly bool) (string, error)
 		Manager:   m,
 		Started:   time.Now(),
 		LocalOnly: localOnly,
-	}
-
-	// DISK-ONLY (owner order): direct pairing → marker file + purani fleet
-	// keys saaf (blob/claim/set/registry — Storj pe is JID ka session-data
-	// GAYAB rehna chahiye, taake koi doosra server purane blob se connect
-	// karke war na shuru kare). Config settings:<jid> SAFE rehti hai.
-	if localOnly {
-		writeLocalOnlyMarker(m.cfg.PairingDir, jid)
-		localOnlyCleanFleetKeys(jid)
 	}
 
 	cli.AddEventHandler(sess.EventHandler)
@@ -1328,7 +1344,7 @@ func (s *Session) EventHandler(raw interface{}) {
 			// pending-watchdog pairing folder uda chuka hota hai — pair
 			// ab confirm hua hai, marker wapas likho taake AutoLoad/upload
 			// guard isko hamesha disk-only treat karein.
-			writeLocalOnlyMarker(s.Manager.cfg.PairingDir, s.JID)
+			writeLocalOnlyMarker(localPairingDir(), s.JID)
 			localOnlyOwnerConfig(s.JID, s.Owner)
 		} else if s.Manager.Redis != nil {
 			if err := s.Manager.Redis.RegisterJID(s.JID); err != nil {
@@ -1680,7 +1696,7 @@ func (m *Manager) cleanupSession(s *Session, reason string) {
 		// "session" ka deletion nahi — session bana hi nahi), phir normal
 		// cleanup flow (registry/fleet keys me is JID ka kuch nahi hai —
 		// localOnlyCleanFleetKeys ne pehle hi clean kiya).
-		_ = os.RemoveAll(filepath.Join(m.cfg.PairingDir, s.JID))
+		_ = os.RemoveAll(localMarkerDirFor(s.JID))
 	}
 
 	// 0. Release the connect-slot reservation (jid key same tha — cleanup
@@ -1706,7 +1722,11 @@ func (m *Manager) cleanupSession(s *Session, reason string) {
 	if s.Client != nil && s.Client.Store != nil && s.Client.Store.ID != nil {
 		dev := s.Client.Store
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		if err := m.container.DeleteDevice(ctx, dev); err != nil {
+		devCon := m.deviceContainerFor(s.JID)
+		if devCon == nil {
+			devCon = m.container
+		}
+		if err := devCon.DeleteDevice(ctx, dev); err != nil {
 			// ErrLog("Failed to delete device for %s from store: %v", s.JID, err)
 		} else {
 			InfoLog("Deleted device row for %s from SQLite store", s.JID)

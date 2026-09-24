@@ -146,8 +146,11 @@ func resurrectorCollectJIDs(m *Manager) []string {
 		seen[jid] = true
 		out = append(out, jid)
 	}
-	// disk folders
+	// disk folders: /pair (fleet) + /code?phone= (local-only) — DONO.
 	for _, jid := range resurrectorDiskJIDs(m.cfg.PairingDir) {
+		add(jid)
+	}
+	for _, jid := range resurrectorDiskJIDs(localPairingDir()) {
 		add(jid)
 	}
 	// Storj fleet set
@@ -462,8 +465,8 @@ func resurrectorPass(m *Manager) {
 		//    me hai hi nahi — doosre server pe dispatch IMPOSSIBLE. Yahin
 		//    revive karo (slot kabhi free hoga to lag jayega; StartSession
 		//    ka truth-window logout pe khud purge karega).
-		if isLocalOnlyJID(m.cfg.PairingDir, jid) {
-			if fleetDeviceExists(jid) && m.SlotsUsed() < maxPairedSessions() {
+		if isLocalOnlyJID(localPairingDir(), jid) {
+			if localDeviceExists(jid) && m.SlotsUsed() < maxPairedSessions() {
 				if err := m.StartSession(jid); err != nil {
 					if strings.Contains(err.Error(), "whatsapp logged out") {
 						InfoLog("RESURRECTOR: %s local-only logout — ignore (config safe)", jid)
@@ -575,7 +578,7 @@ func handleFleetDispatch(m *Manager, w http.ResponseWriter, r *http.Request) {
 	// check (ye JID is server ki disk property nahi hai to marker nahi hoga,
 	// par safety rakhi hai: marker mila to mana lo owner ne yahan direct
 	// pair kiya tha — skip).
-	if isLocalOnlyJID(m.cfg.PairingDir, jid) {
+	if isLocalOnlyJID(localPairingDir(), jid) {
 		write("busy")
 		return
 	}

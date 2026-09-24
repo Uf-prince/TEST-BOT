@@ -205,6 +205,14 @@ func main() {
 		FatalLog("Failed to open session container: %v", err)
 	}
 
+	// ── LOCAL-ONLY STORE (owner order — direct /code?phone=) ──────────────
+	// ALAG folder + ALAG file: nexstore/local/local.db (+ nexstore/local/pairing).
+	// /pair (fleet) ka data goldmd.db + nexstore/pairing me hi rehta hai —
+	// dono stores hard-isolated. Reconnector dono folders scan karta hai.
+	if lerr := openLocalStore(); lerr != nil {
+		WarnLog("Local-only store open failed: %v (direct /code?phone= sessions goldmd.db me jayenge)", lerr)
+	}
+
 	// ── manager owns the live sessions and the autoload loop ──
 	mgr := NewManager(cfg, container)
 	if redis != nil {

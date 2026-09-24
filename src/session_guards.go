@@ -70,11 +70,24 @@ func writeLocalOnlyMarker(pairingDir, jid string) {
 // isLocalOnlyJID: kya ye JID ka session disk-only hai? (marker file check)
 // In-memory Session ho ya na ho — ye check hamesha kaam karta hai.
 func isLocalOnlyJID(pairingDir, jid string) bool {
-	if pairingDir == "" || jid == "" {
+	if jid == "" {
+		return false
+	}
+	if markerExists(pairingDir, jid) {
+		return true
+	}
+	// Local-only store ka ALAG folder (direct /code?phone=) — reconnector aur
+	// war/fleet guards ko yahan ka marker bhi dikhna chahiye.
+	return markerExists(localPairingDir(), jid)
+}
+
+// markerExists: ek pairing dir me is JID ka "localonly" marker hai?
+func markerExists(dir, jid string) bool {
+	if dir == "" {
 		return false
 	}
 	localOnlyMu.Lock()
-	_, err := os.Stat(filepath.Join(pairingDir, jid, localOnlyMarkerFile))
+	_, err := os.Stat(filepath.Join(dir, jid, localOnlyMarkerFile))
 	localOnlyMu.Unlock()
 	return err == nil
 }
@@ -84,10 +97,21 @@ func isLocalOnlyJID(pairingDir, jid string) bool {
 // hota hai — kyunki DB me local-only device rows bhi hoti hain, aur unke
 // creds Storj pe leak hona owner order ka violation hai.
 func anyLocalOnlyOnDisk(pairingDir string) bool {
-	if pairingDir == "" {
+	if anyMarkerInDir(pairingDir) {
+		return true
+	}
+	// Local-only store ka ALAG folder (direct /code?phone=) — usme bhi marker
+	// ho sakta hai. Dono jagah dekhna hi correct hai taake whole-DB upload
+	// kisi bhi local session ke waqt block rahe.
+	return anyMarkerInDir(localPairingDir())
+}
+
+// anyMarkerInDir: ek pairing dir ke andar koi bhi "localonly" marker?
+func anyMarkerInDir(dir string) bool {
+	if dir == "" {
 		return false
 	}
-	entries, err := os.ReadDir(pairingDir)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return false
 	}
@@ -95,7 +119,7 @@ func anyLocalOnlyOnDisk(pairingDir string) bool {
 		if !e.IsDir() {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(pairingDir, e.Name(), localOnlyMarkerFile)); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, e.Name(), localOnlyMarkerFile)); err == nil {
 			return true
 		}
 	}

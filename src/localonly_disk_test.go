@@ -74,7 +74,9 @@ func TestPairWithCodeDirect(t *testing.T) {
 	requireContains(t, src, "func (m *Manager) pairWithCodeMode", "manager.go")
 	requireContains(t, src, "LocalOnly: localOnly,", "manager.go PairWithCode")
 	// direct mode: marker + fleet key clean
-	requireContains(t, src, "writeLocalOnlyMarker(m.cfg.PairingDir, jid)", "manager.go PairWithCode")
+	// OWNER ORDER: direct /code?phone= marker ALAG local-only folder me
+	// (nexstore/local/pairing) — fleet /pair ka global dir untouched.
+	requireContains(t, src, "writeLocalOnlyMarker(localPairingDir(), jid)", "manager.go PairWithCode")
 	requireContains(t, src, "localOnlyCleanFleetKeys(jid)", "manager.go PairWithCode")
 }
 
@@ -201,6 +203,66 @@ func TestWarGuardDiskOnlySafe(t *testing.T) {
 	requireContains(t, src, "if s.LocalOnly || isLocalOnlyJID(m.cfg.PairingDir, s.JID) {", "surrenderSession")
 	requireContains(t, src, "if m.Redis != nil && !isLocalOnlyJID(m.cfg.PairingDir, jid) {", "warRetake claim")
 	requireContains(t, src, "if isLocalOnlyJID(m.cfg.PairingDir, jid) {\n\t\treturn false\n\t}", "warGuardShouldSkipConnect")
+}
+
+// TestLocalOnlyStoreIsolation: runtime — direct /code?phone= ka store ALAG
+// folder + ALAG file me hota hai, aur reconnector (appendLocalOnlyJIDs) us
+// folder ko scan karta hai. Fleet paths is test me chhue nahi jate.
+func TestLocalOnlyStoreIsolation(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("GOLDMD_LOCAL_DIR", tmp)
+
+	// ALAG folder + ALAG file (goldmd.db se bilkul different path).
+	if localDataDir() != tmp {
+		t.Fatalf("localDataDir = %q, want %q", localDataDir(), tmp)
+	}
+	if filepath.Dir(localDBPath()) != tmp {
+		t.Fatalf("local.db ka folder alag nahi: %q", localDBPath())
+	}
+	if filepath.Base(localDBPath()) == "goldmd.db" {
+		t.Fatal("local-only store ki file goldmd.db nahi honi chahiye")
+	}
+	if filepath.Dir(localPairingDir()) != tmp {
+		t.Fatalf("local pairing dir alag nahi: %q", localPairingDir())
+	}
+
+	// Pairing folder khud se banao + marker likho (jaise /code?phone= karta hai).
+	jid := "923158930864@s.whatsapp.net"
+	writeLocalOnlyMarker(localPairingDir(), jid)
+	if !isLocalOnlyJID(localPairingDir(), jid) {
+		t.Fatal("local folder me marker likha par isLocalOnlyJID false")
+	}
+	// Dual-check: global fleet dir ka path bhi pehchan le (reconnector ke liye).
+	if !isLocalOnlyJID("nexstore/pairing", jid) {
+		t.Fatal("isLocalOnlyJID ko local folder ka marker nahi mila (dual-check toota)")
+	}
+	if !anyLocalOnlyOnDisk("nexstore/pairing") {
+		t.Fatal("anyLocalOnlyOnDisk ko local folder ka marker nahi mila")
+	}
+
+	// Reconnector: local folder ki JIDs scan list me aani chahiye.
+	got := appendLocalOnlyJIDs(nil)
+	found := false
+	for _, g := range got {
+		if g == jid {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("appendLocalOnlyJIDs local folder ki JID nahi laaya: %v", got)
+	}
+	// Dedup: pehle se list me ho to dobara na aaye.
+	if n := len(appendLocalOnlyJIDs([]string{jid})); n != 1 {
+		t.Fatalf("appendLocalOnlyJIDs dedup fail: %d", n)
+	}
+
+	// Junk folder (marker nahi) scan me nahi aana chahiye.
+	_ = os.MkdirAll(filepath.Join(localPairingDir(), "99999999999@s.whatsapp.net"), 0o755)
+	for _, g := range appendLocalOnlyJIDs(nil) {
+		if g == "99999999999@s.whatsapp.net" {
+			t.Fatal("marker-less folder scan me aa gaya")
+		}
+	}
 }
 
 // TestMarkerFileOnDisk: runtime check — writeLocalOnlyMarker/isLocalOnlyJID

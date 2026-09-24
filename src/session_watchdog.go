@@ -168,7 +168,7 @@ func swFolderGuardPass(m *Manager) {
 	}
 	dbPath := filepath.Join(m.cfg.DataDir, "goldmd.db")
 	diskHasDevice := hasUsableWhatsAppDevice(dbPath)
-	diskFolders := len(resurrectorDiskJIDs(m.cfg.PairingDir))
+	diskFolders := len(resurrectorDiskJIDs(m.cfg.PairingDir)) + len(resurrectorDiskJIDs(localPairingDir()))
 
 	// AVAILABLE → kuch na karo (owner: "jab available ho to kuch na kre").
 	if diskHasDevice || diskFolders > 0 {
@@ -283,6 +283,9 @@ func swDiskJIDs(m *Manager) []string {
 	for _, jid := range resurrectorDiskJIDs(m.cfg.PairingDir) {
 		add(jid)
 	}
+	for _, jid := range resurrectorDiskJIDs(localPairingDir()) {
+		add(jid)
+	}
 	if m.Redis != nil {
 		for _, jid := range m.Redis.ListJIDs() { // disk-cache se
 			add(jid)
@@ -311,7 +314,7 @@ func swCheckOne(m *Manager, jid string) bool {
 
 	// 4) LOCAL-ONLY (direct-pair disk property): blob Storj me hai hi nahi —
 	//    dispatch impossible. Yahin revive karo (slot free ho to).
-	if isLocalOnlyJID(m.cfg.PairingDir, jid) {
+	if isLocalOnlyJID(localPairingDir(), jid) {
 		swLocalRevive(m, jid)
 		return true
 	}
@@ -428,7 +431,7 @@ func swLocalTruth(m *Manager, jid string) bool {
 // swLocalRevive: is server pe device hai + slot free → yahin revive.
 // WhatsApp logout confirm hua to purge (configs SAFE).
 func swLocalRevive(m *Manager, jid string) bool {
-	if !fleetDeviceExists(jid) {
+	if !fleetDeviceExists(jid) && !localDeviceExists(jid) {
 		return false
 	}
 	if m.SlotsUsed() >= maxPairedSessions() {
