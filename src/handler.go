@@ -716,6 +716,17 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		return
 	}
 
+	// ── INTERACTIVE PLAY GAMES (owner order 2026) ───────────────────────────────
+	// Ek baar .ttt / .c4 / .wordle ... chalao; uske baad user seedha apne MOVE
+	// bhejta hai (bina koi command). Bot WAHI message edit karta rahega aur 30
+	// second chup rehne pe game khud band ho jayega. Real commands (prefix) yahan
+	// se guzarte hain, sirf quit words (end/stop/...) intercept hote hain.
+	if goldcmds.HasPendingPlayGame(sender) {
+		if goldcmds.DispatchPlayGameIncoming(brAR, info, body, prefix) {
+			return
+		}
+	}
+
 	if !strings.HasPrefix(body, prefix) {
 		return
 	}
