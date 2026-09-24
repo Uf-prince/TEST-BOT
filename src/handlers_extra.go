@@ -1804,8 +1804,14 @@ func (s *Session) SendAliveVideoWithNewsletter(info types.MessageInfo, videoURL,
 	}
 	s.ensureNewsletterResolved()
 
+	// A stored value may be a host SHARE page (qu.ax/O7xfZ) instead of a file;
+	// resolve it to the real media URL first — uploading the page HTML is what
+	// makes WhatsApp answer "this video is not available".
+	videoURL = goldcmds.ResolveDirectMediaURL(videoURL)
+
 	data, err := fetchMediaBytes(videoURL)
-	if err != nil || len(data) == 0 {
+	if err != nil || len(data) == 0 || !goldcmds.IsPlayableMedia(data, "") {
+		ErrLog("[%s] alive video download rejected (not playable media)", s.JID)
 		return false
 	}
 
@@ -1823,6 +1829,11 @@ func (s *Session) SendAliveVideoWithNewsletter(info types.MessageInfo, videoURL,
 
 	seconds, width, height := guardProbeMeta(tmpPath)
 	data = nil // release the buffer before the upload
+
+	// ffmpeg static build may not be on PATH yet on a fresh boot; probing is
+	// best-effort but WhatsApp plays sideways/black videos without it.
+	goldcmds.EnsureFfmpegPublic()
+	thumb := goldcmds.BotVideoThumbnail(tmpPath)
 
 	f, err = os.Open(tmpPath)
 	if err != nil {
@@ -1847,6 +1858,7 @@ func (s *Session) SendAliveVideoWithNewsletter(info types.MessageInfo, videoURL,
 		Seconds:       proto.Uint32(seconds),
 		Width:         proto.Uint32(width),
 		Height:        proto.Uint32(height),
+		JPEGThumbnail: thumb,
 		ContextInfo:   s.newsletterCtxInfo(),
 	}
 	if _, err := s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{
@@ -1866,7 +1878,20 @@ func fetchMediaBytes(rawURL string) ([]byte, error) {
 		return nil, fmt.Errorf("empty media url")
 	}
 	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Get(rawURL)
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	// qu.ax/catbox 302 the default Go agent to an HTML page; a browser UA is
+	// required to receive the actual file bytes.
+	// qu.ax/catbox 302 a UA-less request to an HTML page and their file
+	// endpoints are hotlink-protected, so BOTH a browser User-Agent and the
+	// host Referer are required to receive the actual file bytes.
+	req.Header.Set("User-Agent", goldcmds.BrowserUA)
+	if ref := goldcmds.MediaReferer(rawURL); ref != "" {
+		req.Header.Set("Referer", ref)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

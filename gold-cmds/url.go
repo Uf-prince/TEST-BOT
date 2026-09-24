@@ -27,6 +27,8 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -319,6 +321,86 @@ func extForMimeURL(mime string) string {
 		return ".bin"
 	}
 }
+
+// directFileRe matches a URL that already points straight at a file.
+var directFileRe = regexp.MustCompile(`(?i)\.(jpe?g|png|gif|webp|mp4|3gp|webm|mov|mkv|mp3|ogg|opus|wav|m4a|aac|pdf|zip|rar|7z|apk|txt)(\?|$)`)
+
+// ogMediaRe pulls the direct media URL out of a host's share page — qu.ax and
+// gofile return a PAGE link (e.g. https://qu.ax/O7xfZ) whose og:video / og:image
+// meta tag holds the real file URL. Without this the page HTML itself gets
+// uploaded as if it were the video and WhatsApp refuses to play it.
+var ogMediaRe = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:(?:video|image|audio)["'][^>]+content=["']([^"']+)["']`)
+
+// resolveDirectMediaURL turns a host PAGE url into the direct file URL.
+// Returns raw unchanged when it already looks like a file, or when the page
+// cannot be parsed (best-effort — callers fall back to the original value).
+func resolveDirectMediaURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || directFileRe.MatchString(raw) {
+		return raw
+	}
+	req, err := http.NewRequest(http.MethodGet, raw, nil)
+	if err != nil {
+		return raw
+	}
+	req.Header.Set("User-Agent", browserUA)
+	req.Header.Set("Referer", originOfURL(raw)+"/")
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
+	if err != nil {
+		return raw
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return raw
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 512<<10))
+	if err != nil {
+		return raw
+	}
+	if m := ogMediaRe.FindSubmatch(body); len(m) == 2 {
+		cand := strings.TrimSpace(string(m[1]))
+		if strings.HasPrefix(cand, "//") {
+			cand = "https:" + cand
+		} else if strings.HasPrefix(cand, "/") {
+			cand = originOfURL(raw) + cand
+		}
+		if strings.HasPrefix(cand, "http") {
+			return cand
+		}
+	}
+	return raw
+}
+
+// BrowserUA is the User-Agent required by qu.ax/catbox media endpoints.
+const BrowserUA = browserUA
+
+// MediaReferer returns the Referer a host requires on its file URL: qu.ax
+// answers a 302 → HTML page when the Referer is missing (hotlink protection),
+// which is exactly how a share page ends up being sent as a "video".
+func MediaReferer(raw string) string {
+	if o := originOfURL(raw); o != "" {
+		return o + "/"
+	}
+	return ""
+}
+
+// ResolveDirectMediaURL is the exported wrapper of resolveDirectMediaURL for
+// the session layer (src/handlers_extra.go), which must store/stream the real
+// file URL and never a host share page.
+func ResolveDirectMediaURL(raw string) string { return resolveDirectMediaURL(raw) }
+
+// originOfURL returns scheme://host for an absolute URL ("" when unparsable).
+func originOfURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// browserUA is sent on every media download: qu.ax/catbox refuse the default
+// Go user agent and answer with a 302 HTML page instead of the file bytes.
+const browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 
 // humanSizeURL formats a byte count as a human-readable size string.
 func humanSizeURL(n int) string {

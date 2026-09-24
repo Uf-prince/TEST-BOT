@@ -21,7 +21,12 @@ package goldcmds
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +48,114 @@ func botVideoGuide(prefix string) string {
 		"*❰ " + prefix + "BOTVIDEO <VIDEO-URL> ❱*\n\n" +
 		"*TO REMOVE THE CUSTOM VIDEO TYPE*\n" +
 		"*❰ " + prefix + "BOTVIDEO RESET ❱*"
+}
+
+// botVideoProbe reads duration + dimensions from a local media file using the
+// same static ffprobe the compress/guard code uses (nexstore/ffmpeg, resolved
+// through PATH by the boot self-install). Returns 0s when probing fails — a
+// missing probe is not fatal, but WhatsApp plays a video far more reliably
+// when Seconds/Width/Height are present.
+func botVideoProbe(path string) (secs, w, h uint32) {
+	out, err := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0",
+		"-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", path).Output()
+	if err == nil {
+		parts := strings.Split(strings.TrimSpace(string(out)), "x")
+		if len(parts) == 2 {
+			ww, _ := strconv.ParseUint(parts[0], 10, 32)
+			hh, _ := strconv.ParseUint(parts[1], 10, 32)
+			w, h = uint32(ww), uint32(hh)
+		}
+	}
+	dout, derr := exec.Command("ffprobe", "-v", "error", "-show_entries",
+		"format=duration", "-of", "csv=p=0", path).Output()
+	if derr == nil {
+		if f, perr := strconv.ParseFloat(strings.TrimSpace(string(dout)), 64); perr == nil && f > 0 {
+			secs = uint32(f)
+		}
+	}
+	return secs, w, h
+}
+
+// botVideoIsValidMedia reports whether data looks like real playable media
+// rather than an HTML error/share page. This is what stops "this video is not
+// available" — a host page or a 404 body must never reach WhatsApp as a video.
+func botVideoIsValidMedia(data []byte, mime string) bool {
+	if len(data) < 1024 {
+		return false
+	}
+	head := data
+	if len(head) > 512 {
+		head = head[:512]
+	}
+	trimmed := strings.TrimSpace(string(head))
+	if strings.HasPrefix(trimmed, "<") || strings.Contains(strings.ToLower(trimmed), "<!doctype html") || strings.Contains(strings.ToLower(trimmed), "<html") {
+		return false
+	}
+	ct := strings.ToLower(http.DetectContentType(data))
+	if strings.HasPrefix(ct, "text/") || strings.Contains(ct, "html") {
+		return false
+	}
+	_ = mime
+	return true
+}
+
+// botVideoURLIsPlayable does a ranged GET (with the browser UA + Referer the
+// host expects) and confirms the server answers with real media bytes rather
+// than an HTML share/error page. This is the check that guarantees a stored
+// .botvideo URL will actually play inside WhatsApp.
+func botVideoURLIsPlayable(raw string) bool {
+	if strings.TrimSpace(raw) == "" {
+		return false
+	}
+	req, err := http.NewRequest(http.MethodGet, raw, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("User-Agent", browserUA)
+	if ref := MediaReferer(raw); ref != "" {
+		req.Header.Set("Referer", ref)
+	}
+	req.Header.Set("Range", "bytes=0-4095")
+	resp, err := (&http.Client{Timeout: 25 * time.Second}).Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		return false
+	}
+	buf := make([]byte, 2048)
+	n, _ := io.ReadFull(resp.Body, buf)
+	if n <= 0 {
+		return false
+	}
+	return botVideoIsValidMedia(buf[:n], "video/mp4")
+}
+
+// IsPlayableMedia is the exported wrapper of botVideoIsValidMedia for the
+// session layer, so a HTML/404 body can never be uploaded as a bot video.
+func IsPlayableMedia(data []byte, mime string) bool { return botVideoIsValidMedia(data, mime) }
+
+// BotVideoThumbnail extracts a single JPEG frame (max 320px wide) from a video
+// file with ffmpeg. WhatsApp shows this frame (progressive JPEG) while the clip
+// is still downloading and refuses to render a video without a thumbnail on
+// some clients, so the menu/alive video must always carry one.
+func BotVideoThumbnail(path string) []byte {
+	if path == "" {
+		return nil
+	}
+	out := path + ".thumb.jpg"
+	defer os.Remove(out)
+	cmd := exec.Command("ffmpeg", "-y", "-v", "error", "-i", path,
+		"-frames:v", "1", "-vf", "scale=320:-2", "-q:v", "5", out)
+	if err := cmd.Run(); err != nil {
+		return nil
+	}
+	b, err := os.ReadFile(out)
+	if err != nil || len(b) == 0 {
+		return nil
+	}
+	return b
 }
 
 // botVideoExtForMime returns the file extension for a video mimetype.
@@ -97,10 +210,16 @@ func handleBotVideo(s SessionBridge, info types.MessageInfo, args []string, pref
 		}
 	}
 
-	// ── VIDEO DETECTION + DOWNLOAD (direct or quoted) ──
+	// ── VIDEO DETECTION (direct or quoted) ──
 	data, mime, ok := s.DownloadQuotedMedia(info)
-	if (!ok || len(data) == 0) || !strings.Contains(strings.ToLower(mime), "video") {
+	if !ok || len(data) == 0 || !strings.Contains(strings.ToLower(mime), "video") {
 		s.Reply(info, botVideoGuide(prefix))
+		return
+	}
+	// A real video must actually BE a video: reject HTML/host pages and tiny
+	// bodies so a broken file can never be set (and later fail to play).
+	if !botVideoIsValidMedia(data, mime) {
+		s.Reply(info, "*🔰 INVALID VIDEO 🔰*\n\n*YE FILE ASAL VIDEO NAHI HAI (BROKEN YA HTML PAGE)*\n*DOBARA PROPER VIDEO BHEJ KAR ❰ "+prefix+"BOTVIDEO ❱ TRY KARO*")
 		return
 	}
 
@@ -139,6 +258,17 @@ func handleBotVideo(s SessionBridge, info types.MessageInfo, args []string, pref
 
 	if err != nil || uploadURL == "" {
 		s.Reply(info, fmt.Sprintf("🔰 *Upload fail:* %v", err))
+		return
+	}
+
+	// Hosts answer with a share PAGE (qu.ax/O7xfZ) whose og:video tag holds the
+	// file URL. Storing the page link is what made WhatsApp say "this video is
+	// not available" — resolve to the file, then prove it is real playable mp4.
+	if direct := resolveDirectMediaURL(uploadURL); direct != "" {
+		uploadURL = direct
+	}
+	if !botVideoURLIsPlayable(uploadURL) {
+		s.Reply(info, "*🔰 VIDEO SETUP FAIL 🔰*\n\n*UPLOADED FILE PLAYABLE VIDEO NAHI NIKLI*\n*DOBARA PROPER MP4 BHEJ KAR ❰ "+prefix+"BOTVIDEO ❱ TRY KARO*")
 		return
 	}
 
