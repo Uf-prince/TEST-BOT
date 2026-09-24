@@ -16,10 +16,12 @@ type gameBridge struct {
 	sentID   string
 	editID   string
 	editText []string
+	reply    []string
 }
 
 func (g *gameBridge) Reply(info types.MessageInfo, text string) {
 	g.order = append(g.order, "reply")
+	g.reply = append(g.reply, text)
 }
 
 func (g *gameBridge) ReplyWithID(info types.MessageInfo, text string) string {

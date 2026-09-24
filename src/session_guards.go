@@ -1482,4 +1482,44 @@ func registerEq1000Commands() {
 
 func init() {
 	registerEq1000Commands()
+	registerGameCommands()
+}
+
+// ============================================================================
+// GOLD-MD — game1..game1000 hidden command registrations (main package)
+// File: game1000_main.go
+// ============================================================================
+// OWNER ORDER: .menu / .GAME menu me SIRF .GAME dikhta hai; game1..game1000
+// main-package Commands map me direct register hote hain (gold-cmds registry me
+// nahi) + hiddenCommands set me hain, is liye kisi menu me nahi dikhte.
+// .game → fancy boxed menu (ShowGameMenu → manager.go CmdGameMenu). Handler:
+// goldcmds.GameRunN(n). The 50 base slugs (.rolldice, .slot, ...) bhi yahin
+// hidden register hote hain, lekin sirf tab jab naam pehle se kisi command ka
+// na ho (kisi existing feature ko overwrite na karein).
+// ============================================================================
+
+// registerGameCommands registers game1..game1000 plus the free base aliases.
+func registerGameCommands() {
+	for n := 1; n <= goldcmds.GameCount; n++ {
+		n := n
+		name := fmt.Sprintf("game%d", n)
+		RegisterCommand(name, func(s *Session, info types.MessageInfo, args []string, prefix string) {
+			beginCmdBusy()
+			defer endCmdBusy()
+			goldcmds.GameRunN(&bridge{s: s}, info, args, prefix, n)
+		})
+		hiddenCommands[name] = true
+	}
+	for slug, n := range goldcmds.GameBaseSlugNumbers() {
+		if _, exists := Commands[slug]; exists {
+			continue // existing command (core or plugin) — do not clobber
+		}
+		n := n
+		RegisterCommand(slug, func(s *Session, info types.MessageInfo, args []string, prefix string) {
+			beginCmdBusy()
+			defer endCmdBusy()
+			goldcmds.GameRunN(&bridge{s: s}, info, args, prefix, n)
+		})
+		hiddenCommands[slug] = true
+	}
 }

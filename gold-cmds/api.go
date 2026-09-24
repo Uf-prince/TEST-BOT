@@ -521,6 +521,11 @@ type SessionBridge interface {
 	// (EQ1..EQ1000) in the same format as the other category menus.
 	// Implemented by the main package (manager.go CmdEqualizerMenu).
 	ShowEqualizerMenu(info types.MessageInfo, args []string, prefix string)
+
+	// ShowGameMenu renders the .game command's fancy boxed menu
+	// (GAME1..GAME1000) in the same format as the other category menus.
+	// Implemented by the main package (manager.go CmdGameMenu).
+	ShowGameMenu(info types.MessageInfo, args []string, prefix string)
 }
 
 // BannedUserInfo holds the metadata for a bot-wide banned user.

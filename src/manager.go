@@ -1520,7 +1520,7 @@ func (s *Session) sendStartupNotification() {
 		coreCount++
 	}
 	pluginCount := goldcmds.CommandsCount() // only visible (non-hidden) commands
-	totalCmds := coreCount + pluginCount + goldcmds.LogoCount + goldcmds.FontCount + goldcmds.EqCount
+	totalCmds := coreCount + pluginCount + goldcmds.LogoCount + goldcmds.FontCount + goldcmds.EqCount + goldcmds.GameCount
 	prefix := s.resolvePrefix(s.JID)
 
 	logoURL := "https://cdn.jsdelivr.net/gh/Uf-prince/gold-assets@main/botpic.webp"
@@ -2082,7 +2082,7 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	// list (they live behind the single .logo command) but MUST still be
 	// counted in the COMMANDS total. So add goldcmds.LogoCount to the
 	// visible count.
-	totalCmds := len(cmds) + goldcmds.LogoCount + goldcmds.FontCount + goldcmds.EqCount
+	totalCmds := len(cmds) + goldcmds.LogoCount + goldcmds.FontCount + goldcmds.EqCount + goldcmds.GameCount
 
 	// ── Uptime in "XXH XXM" form for the fancy header ──
 	uptimeHM := formatUptimeHM(uptime())
@@ -2308,6 +2308,28 @@ func buildFontMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 	return b.String()
 }
 
+// buildGameMenu renders the .game menu in the same fancy boxed format as the
+// .font / .equalizer menus. It lists .GAME1 .. .GAME1000.
+func buildGameMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView) string {
+	_ = pushName
+	_ = botName
+	_ = sessCount
+	_ = menuView
+	uptimeHM := uptimeStr
+	if uptimeHM == "" {
+		uptimeHM = formatUptimeHM(uptime())
+	}
+	var b strings.Builder
+	b.WriteString(buildMenuHeader("GAME", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.GameCount, false))
+	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
+	b.WriteString("*| 🔰 | GAME | 🔰 |*\n")
+	for n := 1; n <= goldcmds.GameCount; n++ {
+		b.WriteString(fmt.Sprintf("*| 🔰 | %sGAME%d ❮ %s ❯*\n", prefix, n, goldcmds.GameDesignName(n)))
+	}
+	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
+	return b.String()
+}
+
 func buildEqualizerMenu(botNum, ownerNum, uptimeStr, prefix string, sessCount int) string {
 	_ = sessCount
 	uptimeHM := uptimeStr
@@ -2361,6 +2383,54 @@ func (s *Session) CmdFontMenu(info types.MessageInfo, args []string, prefix stri
 
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
 	caption := buildFontMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
+
+	imgURL := s.botPicURL()
+	imgData, fetchErr := fetchMenuImageURL(imgURL)
+	if fetchErr != nil || len(imgData) == 0 {
+		s.ReplyWithNewsletter(info, caption)
+		return
+	}
+	if ok := s.ReplyImageWithNewsletter(info, imgData, caption); !ok {
+		s.ReplyWithNewsletter(info, caption)
+	}
+}
+
+// CmdGameMenu renders the .game menu in the SAME fancy boxed format as the
+// other category menus (owner order). It reads the same per-bot settings as
+// CmdMenu and sends the boxed .GAME1..1000 list.
+func (s *Session) CmdGameMenu(info types.MessageInfo, args []string, prefix string) {
+	uptimeStr := formatUptime(uptime())
+	sessCount := s.Manager.Count()
+
+	botName := ""
+	if s.Manager != nil && s.Manager.Redis != nil {
+		botName = s.Manager.Redis.GetSetting(s.JID, "botname", "")
+	}
+	if botName == "" || botName == goldcmds.DefaultBotNameMarker ||
+		strings.Contains(botName, "GOLD_MD_DEFAULT_FOOTER") ||
+		strings.Contains(botName, "GOLD_MD_DEFAULT") {
+		botName = "GOLD-MD WHATSAPP BOT"
+	}
+
+	menuUser := "UMAR"
+	if s.Manager != nil && s.Manager.Redis != nil {
+		if on := s.Manager.Redis.GetSetting(s.JID, "ownername", ""); on != "" {
+			menuUser = on
+		}
+	}
+
+	ownerNum := botOwnNumber(s.JID)
+	if s.Manager != nil && s.Manager.Redis != nil {
+		if on := s.Manager.Redis.GetSetting(s.JID, "ownernumber", ""); on != "" {
+			ownerNum = on
+		}
+		if sudoRaw := s.Manager.Redis.GetSetting(s.JID, "sudowners", ""); sudoRaw != "" {
+			ownerNum = ownerNum + "," + sudoRaw
+		}
+	}
+
+	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
+	caption := buildGameMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
 
 	imgURL := s.botPicURL()
 	imgData, fetchErr := fetchMenuImageURL(imgURL)

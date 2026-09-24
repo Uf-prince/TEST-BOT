@@ -1416,6 +1416,13 @@ func (b *bridge) ShowEqualizerMenu(info types.MessageInfo, args []string, prefix
 	b.s.CmdEqualizerMenu(info, args, prefix)
 }
 
+// ShowGameMenu renders the .game command's fancy boxed menu (GAME1..GAME1000)
+// in the same format as the other category menus. Delegates to the main
+// package's CmdGameMenu (manager.go).
+func (b *bridge) ShowGameMenu(info types.MessageInfo, args []string, prefix string) {
+	b.s.CmdGameMenu(info, args, prefix)
+}
+
 // GetPrefix reads the bot's command prefix from Redis (key prefix:<botJID>).
 func (b *bridge) GetPrefix(def string) string {
 	if b.s.Manager.Redis == nil {

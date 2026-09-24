@@ -1225,14 +1225,8 @@ func playGameBySlug(slug string) (playGameDef, bool) {
 }
 
 func init() {
-	Register(Command{
-		Name:     "game",
-		Category: "GAME",
-		Desc:     "SHOW ALL INTERACTIVE GAMES. TYPE .GAME — ONE COMMAND, THEN KEEP SENDING YOUR MOVES.",
-		Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-			s.Reply(info, playGameListText(prefix))
-		},
-	})
+	// NOTE: the ".game" command itself is registered in games.go (the 1000-game
+	// boxed menu). These turn-based commands use their own slugs.
 	for _, def := range playGameDefs {
 		d := def
 		Register(Command{
