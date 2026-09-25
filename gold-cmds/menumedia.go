@@ -80,6 +80,13 @@ func menuMediaLabel(key string) string {
 	return strings.ToUpper(key) + " MENU"
 }
 
+// menuMediaFullLabel returns the uppercased guide label for a storage key
+// ("logo" -> "LOGO MENU"). The setter/confirmation cards use this instead of
+// the short spec Label so the words "MENU PIC" stay contiguous.
+func menuMediaFullLabel(key string) string {
+	return strings.ToUpper(menuMediaLabel(key))
+}
+
 // menuMediaSettingKey is the single source of truth for the Redis field suffix
 // of one menu's media. Pictures use the bare key, videos the "<key>:video"
 // variant, so a menu can hold both at once.
@@ -245,13 +252,21 @@ func menuIsVideoMime(mime string) bool {
 // mediaURLRe matches a bare http(s) URL ending in an image or video extension.
 var mediaURLRe = regexp.MustCompile(`^(https?://\S+\.(jpe?g|png|gif|webp|mp4|3gp|webm|mov|mkv|avi))$`)
 
+// menuMediaTestHint names the EXACT command the owner just used so the
+// success card never sends them to an unrelated menu. The old card told
+// everyone to type ".alive" or ".menu" even when they had just changed
+// the logo or converter picture.
+func menuMediaTestHint(prefix, cmdName string) string {
+	return "*FOR TEST TYPE ❰ " + prefix + cmdName + " ❱"
+}
+
 // handleMenuPic sets the header picture for ONE menu.
 func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefix, key, cmdName string) {
 	if !s.IsOwner(info) {
 		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
 		return
 	}
-	label := menuMediaLabel(key)
+	label := menuMediaFullLabel(key)
 	argRaw := strings.TrimSpace(strings.Join(args, " "))
 
 	if strings.ToLower(argRaw) == "reset" {
@@ -263,7 +278,7 @@ func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefi
 		firstTok := strings.Fields(argRaw)[0]
 		if m := mediaURLRe.FindString(firstTok); m != "" && !isVideoExt(m) {
 			s.SetMenuMediaSetting(menuMediaSettingKey(key, "pic"), m)
-			s.Reply(info, fmt.Sprintf("*🔰 %s PIC UPDATED 🔰*\n\n*NEW PIC:*\n%s", label, m))
+			s.Reply(info, fmt.Sprintf("*🔰 %s PIC UPDATED 🔰*\n\n*NEW PIC:*\n%s\n\n%s", label, m, menuMediaTestHint(prefix, cmdName)))
 			return
 		}
 		if strings.HasPrefix(strings.ToLower(firstTok), "http") {
@@ -315,7 +330,7 @@ func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefi
 		return
 	}
 	s.SetMenuMediaSetting(menuMediaSettingKey(key, "pic"), url)
-	s.Reply(info, fmt.Sprintf("*🔰 %s PIC UPDATED 🔰*\n\n*NEW PICTURE APPLIED TO THIS MENU*\n*FOR TEST TYPE ❰ ALIVE ❱ YA ❰ MENU ❱*", label))
+	s.Reply(info, fmt.Sprintf("*🔰 %s PIC UPDATED 🔰*\n\n*NEW PICTURE SAVED FOR THIS MENU ONLY*\n%s", label, menuMediaTestHint(prefix, cmdName)))
 }
 
 // handleMenuVideo sets the header video for ONE menu, normalising it to a
@@ -325,7 +340,7 @@ func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, pre
 		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
 		return
 	}
-	label := menuMediaLabel(key)
+	label := menuMediaFullLabel(key)
 	argRaw := strings.TrimSpace(strings.Join(args, " "))
 
 	if strings.ToLower(argRaw) == "reset" {
@@ -337,7 +352,7 @@ func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, pre
 		firstTok := strings.Fields(argRaw)[0]
 		if m := mediaURLRe.FindString(firstTok); m != "" && isVideoExt(m) {
 			s.SetMenuMediaSetting(menuMediaSettingKey(key, "video"), m)
-			s.Reply(info, fmt.Sprintf("*🔰 %s VIDEO UPDATED 🔰*\n\n*NEW VIDEO:*\n%s", label, m))
+			s.Reply(info, fmt.Sprintf("*🔰 %s VIDEO UPDATED 🔰*\n\n*NEW VIDEO:*\n%s\n\n%s", label, m, menuMediaTestHint(prefix, cmdName)))
 			return
 		}
 		if strings.HasPrefix(strings.ToLower(firstTok), "http") {
@@ -429,7 +444,7 @@ func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, pre
 		return
 	}
 	s.SetMenuMediaSetting(menuMediaSettingKey(key, "video"), url)
-	s.Reply(info, fmt.Sprintf("*🔰 %s VIDEO UPDATED 🔰*\n\n*NEW VIDEO APPLIED TO THIS MENU*\n*FOR TEST TYPE ❰ ALIVE ❱ YA ❰ MENU ❱*", label))
+	s.Reply(info, fmt.Sprintf("*🔰 %s VIDEO UPDATED 🔰*\n\n*NEW VIDEO SAVED FOR THIS MENU ONLY*\n%s", label, menuMediaTestHint(prefix, cmdName)))
 }
 
 // isVideoExt reports whether a URL ends in a video extension.

@@ -45,6 +45,44 @@ func TestMenuMediaGuideShowsRealCommandName(t *testing.T) {
 	}
 }
 
+// The success card must name the menu the owner actually changed and the exact
+// command they used — never a generic "ALIVE / MENU" reminder.
+func TestMenuMediaConfirmationIsPerMenu(t *testing.T) {
+	b := newMMBridge()
+	commandByName(t, "logopic").Run(b, types.MessageInfo{}, []string{"https://x/p.jpg"}, ".")
+	got := b.last()
+	if !strings.Contains(got, "LOGO MENU PIC UPDATED") {
+		t.Errorf("confirmation missing menu label: %q", got)
+	}
+	if !strings.Contains(got, "❰ .logopic ❱") {
+		t.Errorf("confirmation missing its own command: %q", got)
+	}
+	if strings.Contains(got, "ALIVE") || strings.Contains(got, "❰ .menu ❱") {
+		t.Errorf("confirmation leaked the generic ALIVE/MENU hint: %q", got)
+	}
+
+	// Same for a video setter.
+	b = newMMBridge()
+	commandByName(t, "gamevideo").Run(b, types.MessageInfo{}, []string{"https://x/g.mp4"}, ".")
+	got = b.last()
+	if !strings.Contains(got, "GAME MENU VIDEO UPDATED") {
+		t.Errorf("video confirmation missing menu label: %q", got)
+	}
+	if !strings.Contains(got, "❰ .gamevideo ❱") {
+		t.Errorf("video confirmation missing its own command: %q", got)
+	}
+	if strings.Contains(got, "ALIVE") || strings.Contains(got, "❰ .menu ❱") {
+		t.Errorf("video confirmation leaked the generic hint: %q", got)
+	}
+
+	// Resets are per-menu too.
+	b = newMMBridge()
+	commandByName(t, "converterpic").Run(b, types.MessageInfo{}, []string{"reset"}, ".")
+	if got = b.last(); !strings.Contains(got, "CONVERTER MENU PIC RESET") {
+		t.Errorf("reset card missing menu label: %q", got)
+	}
+}
+
 // The list card shown by .menupic / .menuvideo must name each command too.
 func TestMenuMediaFullListNamesEveryCommand(t *testing.T) {
 	b := newMMBridge()

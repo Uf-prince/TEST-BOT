@@ -2573,14 +2573,25 @@ func (s *Session) CmdMenu(info types.MessageInfo, args []string, prefix string) 
 }
 
 // menuVideoURL returns the header VIDEO for one menu (key: "menu", "logo",
-// "alive", category slug, ...). Order: per-menu override → bot-wide .botvideo
-// → "" (caller falls back to the image path). Empty key means "no per-menu
-// override", so callers without a specific menu keep the old behaviour.
+// "alive", category slug, ...). Order: per-menu video override → bot-wide
+// .botvideo → "" (caller falls back to the image path). Empty key means "no
+// per-menu override", so callers without a specific menu keep the old
+// behaviour.
+//
+// A menu that has its OWN picture set must NOT be overridden by the bot-wide
+// video: otherwise setting .logopic appears to do nothing because every list
+// still shows the global .botvideo. The per-menu picture therefore suppresses
+// the bot-wide video (the owner asked for the list to carry his picture). An
+// explicit per-menu VIDEO still wins over that picture.
 func (s *Session) menuVideoURL(key string) string {
-	if key != "" && s.Manager != nil && s.Manager.Redis != nil {
-		if v := s.Manager.Redis.GetSetting(s.JID, "menumedia:"+goldcmds.MenuMediaSettingKey(key, "video"), ""); v != "" {
-			return v
-		}
+	if key == "" || s.Manager == nil || s.Manager.Redis == nil {
+		return s.botVideoURL()
+	}
+	if v := s.Manager.Redis.GetSetting(s.JID, "menumedia:"+goldcmds.MenuMediaSettingKey(key, "video"), ""); v != "" {
+		return v
+	}
+	if s.Manager.Redis.GetSetting(s.JID, "menumedia:"+goldcmds.MenuMediaSettingKey(key, "pic"), "") != "" {
+		return ""
 	}
 	return s.botVideoURL()
 }

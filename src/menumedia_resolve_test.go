@@ -86,5 +86,41 @@ func TestMenuMediaSettingRoundTrip(t *testing.T) {
 	}
 }
 
+// A menu with its own picture must NOT be hijacked by the bot-wide video:
+// setting .logopic used to appear to do nothing because menuVideoURL still
+// returned the global .botvideo, so every list kept showing the video.
+func TestPerMenuPicSuppressesBotWideVideo(t *testing.T) {
+	s, u := newMenuSession("bot@s.whatsapp.net")
+	u.cacheSet("settings:bot@s.whatsapp.net:botvideo", "https://x/botvideo.mp4")
+
+	// Without a per-menu picture the bot video is used (unchanged behaviour).
+	if got := s.menuVideoURL("logo"); got != "https://x/botvideo.mp4" {
+		t.Errorf("bot video before pic = %q", got)
+	}
+	// Once the logo menu has its own picture, the video must step aside.
+	u.cacheSet("settings:bot@s.whatsapp.net:menumedia:logo", "https://x/logo.jpg")
+	if got := s.menuVideoURL("logo"); got != "" {
+		t.Errorf("bot video must be suppressed for logo, got %q", got)
+	}
+	if got := s.menuPicURL("logo"); got != "https://x/logo.jpg" {
+		t.Errorf("logo pic = %q", got)
+	}
+	// Other menus are untouched.
+	if got := s.menuVideoURL("game"); got != "https://x/botvideo.mp4" {
+		t.Errorf("game must keep the bot video, got %q", got)
+	}
+
+	// An explicit per-menu video still wins after the picture is reset.
+	u.cacheSet("settings:bot@s.whatsapp.net:menumedia:logo:video", "https://x/logo.mp4")
+	if got := s.menuVideoURL("logo"); got != "https://x/logo.mp4" {
+		t.Errorf("explicit logo video = %q", got)
+	}
+	u.DelSetting("bot@s.whatsapp.net", "menumedia:logo")
+	u.DelSetting("bot@s.whatsapp.net", "menumedia:logo:video")
+	if got := s.menuVideoURL("logo"); got != "https://x/botvideo.mp4" {
+		t.Errorf("after reset logo falls back to bot video, got %q", got)
+	}
+}
+
 var _ = time.Second
 var _ = types.MessageInfo{}

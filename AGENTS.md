@@ -90,7 +90,12 @@ Don't chase these unless asked.
   `goldcmds.MenuMediaSettingKey` is the exported form. Keys are menu slugs from
   `menuCategorySlugs` (`menu`, `logo`, `alive`, `ai`, `converter`, `tools`, ...).
 - Resolution order (in `src/manager.go`): per-menu override → bot-wide
-  `.botpic`/`.botvideo` → default image / text-only fallback.
+  `.botpic`/`.botvideo` → default image / text-only fallback. A per-menu PIC
+  also suppresses the bot-wide VIDEO for that same menu — otherwise `.logopic`
+  looks like a no-op while `.botvideo` keeps hijacking the list. An explicit
+  per-menu VIDEO outranks the per-menu pic.
   `sendMenuHeader(info, key, caption)` renders it, with `menuPicURL(key)` /
   `menuVideoURL(key)` resolving it. An empty key means "no per-menu override".
   Wire every menu through `sendMenuHeader` — never call `botPicURL` directly.
+- Confirmation cards name the exact menu and command (`*LOGO MENU PIC UPDATED*`
+  + `*FOR TEST TYPE ❰ .logopic ❱*`); never a generic `.alive` / `.menu` hint.
