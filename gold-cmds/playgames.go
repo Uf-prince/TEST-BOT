@@ -146,12 +146,12 @@ func (p *playSession) push() {
 // gameHeader is the shared boxed header used by every game message.
 func gameHeader(label, brand string) string {
 	var b strings.Builder
-	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
+	b.WriteString(MenuBorderTop + "\n")
 	b.WriteString("*🔰 " + label + " 🔰*\n")
 	if brand != "" {
 		b.WriteString("*| 🔰 | " + brand + "*\n")
 	}
-	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
+	b.WriteString(MenuBorderBottom + "\n\n")
 	return b.String()
 }
 
@@ -1291,9 +1291,9 @@ var playGameDefs = []playGameDef{
 
 func playGameListText(prefix string) string {
 	var b strings.Builder
-	b.WriteString("╔════ ≪ •❈• ≫ ════╗\n")
+	b.WriteString(MenuBorderTop + "\n")
 	b.WriteString("*🔰 GAME MENU 🔰*\n")
-	b.WriteString("╚════ ≪ •❈• ≫ ════╝\n\n")
+	b.WriteString(MenuBorderBottom + "\n\n")
 	b.WriteString("*Ek baar command bhejo, phir seedha apne move bhejte raho —\nsame message edit hota rahega, 30s chup rahe to game band.*\n")
 	for i, g := range playGameDefs {
 		b.WriteString(fmt.Sprintf("\n*%d) %s%s* — %s", i+1, prefix, g.Slug, g.Label))

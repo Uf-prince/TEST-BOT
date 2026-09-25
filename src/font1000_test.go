@@ -11,7 +11,7 @@ import (
 // the .logo menu and list .FONT1 .. .FONT1000.
 func TestFontMenuRenders(t *testing.T) {
 	m := buildFontMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil)
-	if !strings.Contains(m, "╔════ ≪ •❈• ≫ ════╗") {
+	if !strings.Contains(m, "╔════ ≪ • 🔰 • ≫ ════╗") {
 		t.Errorf(".font menu me fancy box header nahi hai\n%s", m)
 	}
 	if !strings.Contains(m, "🔰 FONT 🔰") {

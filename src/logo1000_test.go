@@ -88,7 +88,7 @@ func TestLogo1000MenusAndRegistry(t *testing.T) {
 
 	// 4) .logo menu: fancy boxed format (same as other category menus)
 	logoMenu := buildLogoMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView)
-	if !strings.Contains(logoMenu, "╔════ ≪ •❈• ≫ ════╗") {
+	if !strings.Contains(logoMenu, "╔════ ≪ • 🔰 • ≫ ════╗") {
 		t.Errorf(".logo menu missing fancy box header\n%s", logoMenu)
 	}
 	if !strings.Contains(logoMenu, "🔰 LOGO 🔰") {

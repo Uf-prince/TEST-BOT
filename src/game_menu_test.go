@@ -13,7 +13,7 @@ import (
 // game1..game1000 label and no long "CLASSIC ..." design name (owner order).
 func TestGameMenuRenders(t *testing.T) {
 	m := buildGameMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil)
-	if !strings.Contains(m, "╔════ ≪ •❈• ≫ ════╗") {
+	if !strings.Contains(m, "╔════ ≪ • 🔰 • ≫ ════╗") {
 		t.Errorf(".game menu me fancy box header nahi hai\n%s", m)
 	}
 	if !strings.Contains(m, "🔰 GAME 🔰") {

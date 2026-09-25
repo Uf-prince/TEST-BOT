@@ -34,7 +34,7 @@ func TestAISingleCategoryMenu(t *testing.T) {
 		t.Fatalf("AI menu missing .GPT (CAPS)\n%s", out)
 	}
 	// Must be the fancy boxed menu (same as other categories), not plain text.
-	if !strings.Contains(out, "╔════ ≪ •❈• ≫ ════╗") {
+	if !strings.Contains(out, "╔════ ≪ • 🔰 • ≫ ════╗") {
 		t.Fatalf("AI menu missing fancy box header\n%s", out)
 	}
 	// OWNER ORDER: category menu header shows the CATEGORY name, not "MENU".
