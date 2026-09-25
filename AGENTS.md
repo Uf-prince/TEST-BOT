@@ -120,6 +120,11 @@ Don't chase these unless asked.
   treat an empty wake-word as "read every plain message": that let bare command
   names dispatch without the bot prefix. The resolver only fires on messages
   that start with the wake-word (`AIModeTryHandle`, `gold-cmds/aimode.go`).
+- The stored wake-word is resolved through `normalizeAimWakeWord` before the
+  gate regex is built: `""`, whitespace-only, `"null"` and the missing sentinel
+  `"\x00"` (the same value the prefix key once leaked from `dcPopulateRAM`) all
+  mean "not set" → default. Reading the raw value built a gate that could never
+  match and silently disabled AI Mode.
 - `.aimode` texts live in `aimode.go` (`aimToggleText`, `aimStatusText`,
   `aimPrefixInfoText`, `aimPrefixSetText`, `aimGuideText`, `aimUsageText`).
   Follow the GOLD-MD design: bold, emoji marks, value/command brackets, and

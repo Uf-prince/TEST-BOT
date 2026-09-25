@@ -326,6 +326,31 @@ func TestAIModeEscapeRegexLiteral(t *testing.T) {
 	}
 }
 
+// A stored wake-word that is really a "not set" marker must fall back to the
+// default. Regression: the missing sentinel "\x00" (the same value the prefix
+// key once leaked) built a gate regex that never matched, so AI Mode silently
+// stopped reacting to "AI ..." messages.
+func TestAIModeWakeWordSentinelFallsBack(t *testing.T) {
+	for _, stored := range []string{"", "  ", "\x00", "null", "NULL"} {
+		if got := normalizeAimWakeWord(stored); got != aimDefaultPrefixWord {
+			t.Fatalf("normalizeAimWakeWord(%q) = %q, want %q", stored, got, aimDefaultPrefixWord)
+		}
+	}
+	if got := normalizeAimWakeWord("KING"); got != "KING" {
+		t.Fatalf("normalizeAimWakeWord(KING) = %q, want KING", got)
+	}
+
+	// End-to-end: a session whose stored wake-word is the sentinel must still
+	// resolve "AI ping" through the wake-word gate.
+	b := newAimBridge()
+	b.settings[aimModeField] = "on"
+	b.settings[aimPrefixField] = "\x00"
+	h, rewrite := AIModeTryHandle(b, aimInfo(false), "AI ping", ".")
+	if !h || rewrite != ".ping" {
+		t.Fatalf("sentinel wake-word: handled=%v rewrite=%q", h, rewrite)
+	}
+}
+
 func TestAIModeCleanResolvedStripsNoise(t *testing.T) {
 	cases := map[string]string{
 		"anticall off**":       "anticall off",

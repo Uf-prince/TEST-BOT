@@ -232,10 +232,21 @@ func aimSetEnabled(s SessionBridge, on bool) {
 // never set one, the pair.js default ("AI") applies — so AI Mode only reacts to
 // messages that start with that word instead of swallowing every plain message.
 func aimPrefixWord(s SessionBridge) string {
-	if w := strings.TrimSpace(s.GetPresenceSetting(aimPrefixField, "")); w != "" {
-		return w
+	return normalizeAimWakeWord(s.GetPresenceSetting(aimPrefixField, ""))
+}
+
+// normalizeAimWakeWord resolves the stored wake-word to its effective value.
+// A missing field (""), a leaked missing-sentinel ("\x00" — same bug class the
+// prefix key had) or a literal "null" all mean "not set", so they fall back to
+// the default. Without this the gate regex is built from the sentinel and never
+// matches a real message, silently disabling AI Mode. Whitespace-only values are
+// treated as unset too, so `\b` cannot be satisfied by an empty pattern.
+func normalizeAimWakeWord(stored string) string {
+	w := strings.TrimSpace(stored)
+	if w == "" || w == "\x00" || strings.EqualFold(w, "null") {
+		return aimDefaultPrefixWord
 	}
-	return aimDefaultPrefixWord
+	return w
 }
 
 // ----------------------------------------------------------------------------
@@ -933,10 +944,7 @@ func AIModeWakeWordFor(botJID string) string {
 	if aimSettingReader == nil {
 		return aimDefaultPrefixWord
 	}
-	if w := strings.TrimSpace(aimSettingReader(botJID, aimPrefixField, "")); w != "" {
-		return w
-	}
-	return aimDefaultPrefixWord
+	return normalizeAimWakeWord(aimSettingReader(botJID, aimPrefixField, ""))
 }
 
 // aimSettingReader reads one per-bot presence setting (Redis). Attached by the
