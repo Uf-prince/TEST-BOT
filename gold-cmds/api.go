@@ -163,6 +163,12 @@ type SessionBridge interface {
 	GetBotVideoSetting(def string) string
 	// SetBotVideoSetting writes the custom bot menu/alive VIDEO URL to Redis.
 	SetBotVideoSetting(url string)
+	// GetMenuMediaSetting reads the custom media URL for ONE menu/category or
+	// the alive card (Redis field "menumedia:<key>", e.g. menumedia:logo).
+	// Returns def ("") when nothing is set for that key.
+	GetMenuMediaSetting(key, def string) string
+	// SetMenuMediaSetting stores the custom media URL for one menu key.
+	SetMenuMediaSetting(key, url string)
 
 	// ── PREFIX per-bot Redis config ──
 	// GetPrefix reads the bot's command prefix from Redis (key prefix:<botJID>).

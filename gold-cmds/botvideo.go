@@ -198,11 +198,57 @@ func handleBotVideo(s SessionBridge, info types.MessageInfo, args []string, pref
 	if argRaw != "" {
 		firstTok := strings.Fields(argRaw)[0]
 		if m := videoLinkRe.FindString(firstTok); m != "" {
+			// Download, normalise to a WhatsApp-safe MP4 (H.264+AAC, faststart)
+			// and re-host, then prove it plays. Storing the raw link is what let
+			// an HEVC/non-faststart clip reach WhatsApp and fail with
+			// "can't play this video".
+			waitID := s.ReplyWithID(info, "*🔰 BOT VIDEO LINK SE SET HO RAHI HAI...*\n*PROCESSING: 00%*")
+			stop := make(chan struct{})
+			go func() {
+				pp := 0
+				tk := time.NewTicker(500 * time.Millisecond)
+				defer tk.Stop()
+				for {
+					select {
+					case <-stop:
+						return
+					case <-tk.C:
+						if pp >= 90 {
+							continue
+						}
+						pp += 7
+						if pp > 90 {
+							pp = 90
+						}
+						s.EditMessage(info, waitID, fmt.Sprintf("*CHANGING BOT VIDEO*\n*PROCESSING: %02d%%*", pp))
+					}
+				}
+			}()
+			raw, derr := fetchBotVideoURLBytes(m)
+			if derr == nil && botVideoIsValidMedia(raw, "video/mp4") {
+				if norm, nerr := BotVideoNormalizeBytes(raw); nerr == nil {
+					if up, _, uerr := uploadAnyHost(norm, "goldmd-botvideo.mp4", "video/mp4"); uerr == nil && up != "" {
+						if direct := resolveDirectMediaURL(up); direct != "" {
+							up = direct
+						}
+						if botVideoURLIsPlayable(up) {
+							close(stop)
+							s.DeleteMessage(info, waitID)
+							s.SetBotVideoSetting(up)
+							s.Reply(info, fmt.Sprintf("*🔰 BOT VIDEO UPDATED 🔰*\n\n*MENU + ALIVE DONO KA VIDEO CHANGE HO GYA*\n\n*NEW VIDEO:*\n%s", up))
+							return
+						}
+					}
+				}
+			}
+			close(stop)
+			s.DeleteMessage(info, waitID)
+			// Normalisation/host path failed (e.g. the link is not reachable
+			// from here). Keep the raw link, exactly as before — the codec fix
+			// is best-effort and must never turn a working .botvideo setup into
+			// a hard failure.
 			s.SetBotVideoSetting(m)
-			s.Reply(info, fmt.Sprintf(
-				"*🔰 BOT VIDEO UPDATED 🔰*\n\n"+
-					"*MENU + ALIVE DONO KA VIDEO CHANGE HO GYA*\n\n"+
-					"*NEW VIDEO:*\n%s", m))
+			s.Reply(info, fmt.Sprintf("*🔰 BOT VIDEO UPDATED 🔰*\n\n*MENU + ALIVE DONO KA VIDEO CHANGE HO GYA*\n\n*NEW VIDEO:*\n%s", m))
 			return
 		}
 		if strings.HasPrefix(strings.ToLower(firstTok), "http") {
@@ -251,9 +297,13 @@ func handleBotVideo(s SessionBridge, info types.MessageInfo, args []string, pref
 
 	// ── UPLOAD through the .url host chain (catbox → qu.ax → uguu → gofile,
 	//    first success wins) so a .botvideo clip is stored exactly where .url
-	//    stores videos. ──
-	fileName := "goldmd-botvideo" + botVideoExtForMime(mime)
-	uploadURL, _, err := uploadAnyHost(data, fileName, mime)
+	//    stores videos. Normalise to a WhatsApp-safe MP4 first so HEVC/VP9/AV1
+	//    or a non-faststart clip can never produce "can't play this video". ──
+	normData, nerr := BotVideoNormalizeBytes(data)
+	if nerr != nil || len(normData) == 0 {
+		normData = data
+	}
+	uploadURL, _, err := uploadAnyHost(normData, "goldmd-botvideo.mp4", "video/mp4")
 	close(stop)
 	s.DeleteMessage(info, waitID)
 

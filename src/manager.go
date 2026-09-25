@@ -1876,21 +1876,7 @@ func (s *Session) CmdAlive(info types.MessageInfo, args []string, prefix string)
 	// ── Send alive with the owner-set bot VIDEO when one exists (.botvideo),
 	//    otherwise the bot pic image (same as Node.js where BOT_PIC_URL is
 	//    used for both .menu and .alive). Fall back to text if both fail. ──
-	if vid := s.botVideoURL(); vid != "" {
-		if ok := s.SendAliveVideoWithNewsletter(info, vid, msg); ok {
-			return
-		}
-		// video send failed — fall through to the image path
-	}
-	imgURL := s.botPicURL()
-	imgData, fetchErr := fetchMenuImageURL(imgURL)
-	if fetchErr != nil || len(imgData) == 0 {
-		s.ReplyWithNewsletter(info, msg)
-		return
-	}
-	if ok := s.ReplyImageWithNewsletter(info, imgData, msg); !ok {
-		s.ReplyWithNewsletter(info, msg)
-	}
+	s.sendMenuHeader(info, "alive", msg)
 }
 
 // ── PING ──────────────────────────────────────────────────────────────────
@@ -2340,20 +2326,7 @@ func (s *Session) CmdLogoMenu(info types.MessageInfo, args []string, prefix stri
 
 	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
 	// bot pic image (.botpic / default) is used, then a text-only menu.
-	if vid := s.botVideoURL(); vid != "" {
-		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
-			return
-		}
-	}
-	imgURL := s.botPicURL()
-	imgData, fetchErr := fetchMenuImageURL(imgURL)
-	if fetchErr != nil || len(imgData) == 0 {
-		s.ReplyWithNewsletter(info, caption)
-		return
-	}
-	if ok := s.ReplyImageWithNewsletter(info, imgData, caption); !ok {
-		s.ReplyWithNewsletter(info, caption)
-	}
+	s.sendMenuHeader(info, "logo", caption)
 }
 
 // buildFontMenu renders the .font menu in the same fancy boxed format as the
@@ -2454,22 +2427,7 @@ func (s *Session) CmdFontMenu(info types.MessageInfo, args []string, prefix stri
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
 	caption := buildFontMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
 
-	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
-	// bot pic image (.botpic / default) is used, then a text-only menu.
-	if vid := s.botVideoURL(); vid != "" {
-		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
-			return
-		}
-	}
-	imgURL := s.botPicURL()
-	imgData, fetchErr := fetchMenuImageURL(imgURL)
-	if fetchErr != nil || len(imgData) == 0 {
-		s.ReplyWithNewsletter(info, caption)
-		return
-	}
-	if ok := s.ReplyImageWithNewsletter(info, imgData, caption); !ok {
-		s.ReplyWithNewsletter(info, caption)
-	}
+	s.sendMenuHeader(info, "font", caption)
 }
 
 // CmdGameMenu renders the .game menu in the SAME fancy boxed format as the
@@ -2509,22 +2467,7 @@ func (s *Session) CmdGameMenu(info types.MessageInfo, args []string, prefix stri
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
 	caption := buildGameMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
 
-	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
-	// bot pic image (.botpic / default) is used, then a text-only menu.
-	if vid := s.botVideoURL(); vid != "" {
-		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
-			return
-		}
-	}
-	imgURL := s.botPicURL()
-	imgData, fetchErr := fetchMenuImageURL(imgURL)
-	if fetchErr != nil || len(imgData) == 0 {
-		s.ReplyWithNewsletter(info, caption)
-		return
-	}
-	if ok := s.ReplyImageWithNewsletter(info, imgData, caption); !ok {
-		s.ReplyWithNewsletter(info, caption)
-	}
+	s.sendMenuHeader(info, "game", caption)
 }
 
 // CmdEqualizerMenu renders the .equalizer menu in the SAME fancy boxed format
@@ -2563,22 +2506,7 @@ func (s *Session) CmdEqualizerMenu(info types.MessageInfo, args []string, prefix
 
 	caption := buildEqualizerMenu(menuUser, ownerNum, uptimeStr, prefix, sessCount)
 
-	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
-	// bot pic image (.botpic / default) is used, then a text-only menu.
-	if vid := s.botVideoURL(); vid != "" {
-		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
-			return
-		}
-	}
-	imgURL := s.botPicURL()
-	imgData, fetchErr := fetchMenuImageURL(imgURL)
-	if fetchErr != nil || len(imgData) == 0 {
-		s.ReplyWithNewsletter(info, caption)
-		return
-	}
-	if ok := s.ReplyImageWithNewsletter(info, imgData, caption); !ok {
-		s.ReplyWithNewsletter(info, caption)
-	}
+	s.sendMenuHeader(info, "equalizer", caption)
 }
 
 func (s *Session) CmdMenu(info types.MessageInfo, args []string, prefix string) {
@@ -2635,26 +2563,55 @@ func (s *Session) CmdMenu(info types.MessageInfo, args []string, prefix string) 
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
 	caption := buildCategoryMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView, onlyCat)
 
-	// ── Pick the header image: per-bot custom bot pic (.botpic)
-	//    if set, otherwise the default menu header image. ──
-	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
-	// bot pic image (.botpic / default) is used, then a text-only menu.
-	if vid := s.botVideoURL(); vid != "" {
+	// Per-menu media: the plain menu uses key "menu"; a category menu uses
+	// its slug (e.g. "converter"), falling back to the bot-wide pic/video.
+	menuKey := "menu"
+	if onlyCat != "" {
+		menuKey = menuCategorySlug(onlyCat)
+	}
+	s.sendMenuHeader(info, menuKey, caption)
+}
+
+// menuVideoURL returns the header VIDEO for one menu (key: "menu", "logo",
+// "alive", category slug, ...). Order: per-menu override → bot-wide .botvideo
+// → "" (caller falls back to the image path). Empty key means "no per-menu
+// override", so callers without a specific menu keep the old behaviour.
+func (s *Session) menuVideoURL(key string) string {
+	if key != "" && s.Manager != nil && s.Manager.Redis != nil {
+		if v := s.Manager.Redis.GetSetting(s.JID, "menumedia:"+goldcmds.MenuMediaSettingKey(key, "video"), ""); v != "" {
+			return v
+		}
+	}
+	return s.botVideoURL()
+}
+
+// menuPicURL returns the header IMAGE for one menu. Order: per-menu override →
+// bot-wide .botpic → default marker.
+func (s *Session) menuPicURL(key string) string {
+	if key != "" && s.Manager != nil && s.Manager.Redis != nil {
+		if p := s.Manager.Redis.GetSetting(s.JID, "menumedia:"+goldcmds.MenuMediaSettingKey(key, "pic"), ""); p != "" {
+			return p
+		}
+	}
+	return s.botPicURL()
+}
+
+// sendMenuHeader delivers one menu's caption with the best available header:
+// per-menu (then bot-wide) video first, otherwise per-menu (then bot-wide)
+// picture, otherwise a text-only menu. Shared by every menu renderer so all
+// menus behave identically.
+func (s *Session) sendMenuHeader(info types.MessageInfo, key, caption string) {
+	if vid := s.menuVideoURL(key); vid != "" {
 		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
 			return
 		}
 	}
-	imgURL := s.botPicURL()
-	imgData, fetchErr := fetchMenuImageURL(imgURL)
+	imgData, fetchErr := fetchMenuImageURL(s.menuPicURL(key))
 	if fetchErr != nil || len(imgData) == 0 {
-		// ErrLog("[%s] menu header image fetch failed (%v) — falling back to text menu", s.JID, fetchErr)
-		// Fallback: send text-only menu (still with newsletter button)
 		s.ReplyWithNewsletter(info, caption)
 		return
 	}
-
 	if ok := s.ReplyImageWithNewsletter(info, imgData, caption); !ok {
-		// Image send failed — fall back to text menu with newsletter button
 		s.ReplyWithNewsletter(info, caption)
 	}
 }

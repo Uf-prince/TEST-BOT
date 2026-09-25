@@ -1079,6 +1079,32 @@ func (b *bridge) SetBotVideoSetting(url string) {
 	b.s.Manager.Redis.SetSetting(b.s.JID, "botvideo", url)
 }
 
+// GetMenuMediaSetting reads the per-menu custom media URL (Redis field
+// "menumedia:<key>"). key is a menu slug such as "menu", "logo", "ai",
+// "converter" or "alive". Empty when nothing is set for that menu.
+func (b *bridge) GetMenuMediaSetting(key, def string) string {
+	if b.s.Manager.Redis == nil {
+		warnRedisNil()
+		return def
+	}
+	return b.s.Manager.Redis.GetSetting(b.s.JID, "menumedia:"+strings.ToLower(strings.TrimSpace(key)), def)
+}
+
+// SetMenuMediaSetting writes the per-menu custom media URL. An empty url
+// clears the override for that menu.
+func (b *bridge) SetMenuMediaSetting(key, url string) {
+	if b.s.Manager.Redis == nil {
+		warnRedisNil()
+		return
+	}
+	field := "menumedia:" + strings.ToLower(strings.TrimSpace(key))
+	if strings.TrimSpace(url) == "" {
+		b.s.Manager.Redis.DelSetting(b.s.JID, field)
+		return
+	}
+	b.s.Manager.Redis.SetSetting(b.s.JID, field, url)
+}
+
 // ── OWNER NAME / OWNER NUMBER / BOT NAME / ALIVE MSG bridge impls ──
 
 // GetOwnerNameSetting reads the owner display NAME from Redis settings:<botJID>.

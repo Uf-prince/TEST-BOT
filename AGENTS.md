@@ -72,4 +72,25 @@ Don't chase these unless asked.
   just `ExtendedTextMessage` — always resolve quotes via
   `extractContextInfoFromMsg`/`extractMediaMessage` in `src/manager.go`.
 - Before sending video externally, normalise to h264+aac+faststart
-  (`whatsappifyVideo`) or WhatsApp errors on playback.
+  (`whatsappifyVideo`) or WhatsApp errors on playback. This applies to MENU
+  headers too: `.botvideo` file/URL uploads and per-menu videos all pass through
+  `goldcmds.BotVideoNormalizeBytes` (ffmpeg h264, even dims, faststart) before
+  being stored — the fix for "can't play this video" on menu clips.
+
+## Per-menu media (`.menupic` / `.menuvideo` + per-menu variants)
+
+- Every menu can carry its OWN header picture and video, set by 34 generated
+  commands in `gold-cmds/menumedia.go` (`menuMediaSpecs`): `menupic`/`menuvideo`
+  (main menu, visible for discovery) plus hidden per-menu pairs such as
+  `logopic`/`logovideo`, `fontpic`, `gamevideo`, `converterpic`, `toolspic`,
+  `aimenupic`/`aimenuvideo`, `corepic`, `groupmenupic`, `greactionvideo`, etc.
+  All are `OwnerOnly`. Their no-arg guides list every command.
+- Storage: Redis settings `menumedia:<key>` (picture) and `menumedia:<key>:video`
+  (video). `menuMediaSettingKey` is the single source of truth;
+  `goldcmds.MenuMediaSettingKey` is the exported form. Keys are menu slugs from
+  `menuCategorySlugs` (`menu`, `logo`, `alive`, `ai`, `converter`, `tools`, ...).
+- Resolution order (in `src/manager.go`): per-menu override → bot-wide
+  `.botpic`/`.botvideo` → default image / text-only fallback.
+  `sendMenuHeader(info, key, caption)` renders it, with `menuPicURL(key)` /
+  `menuVideoURL(key)` resolving it. An empty key means "no per-menu override".
+  Wire every menu through `sendMenuHeader` — never call `botPicURL` directly.
