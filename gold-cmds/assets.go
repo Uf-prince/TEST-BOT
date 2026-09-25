@@ -390,30 +390,24 @@ func addSubcommand(args []string) (int, []string) {
 	return addSubNone, args
 }
 
-// AssetTriggerOrder is the kind lookup order for auto-send. Media kinds come
-// before text so a name shared by, say, a photo and a text sends the photo.
+// AssetTriggerOrder is the delivery order for a bare asset name. Every kind
+// saved under the name is sent (see AssetKindsToSend); this order only decides
+// the sequence, keeping media ahead of the text reply.
 // Exported so src.applyAssetTrigger and the tests share one source of truth.
 var AssetTriggerOrder = []string{"img", "video", "sticker", "circle", "text"}
 
-// SelectNewestAssetKind picks which kind should serve a bare asset name. A name
-// can be saved under several kinds at once (a photo AND a sticker, say), so the
-// caller supplies modtime per kind and the most recently saved kind wins — a
-// fresh .addsticker must not be shadowed by an older .addimg of the same word.
-// Ties (or all-zero modtimes) fall back to AssetTriggerOrder (media before
-// text). Returns "" when no kind matched.
-func SelectNewestAssetKind(name string, modTime func(kind string) (time.Time, bool)) string {
-	best := ""
-	var bestMod time.Time
+// AssetKindsToSend returns EVERY kind saved under name, in AssetTriggerOrder.
+// One name may legitimately hold several kinds at once (the owner can save an
+// image, a video, a sticker, a circle and a text all as "umar"); all of them
+// must be delivered, so nothing ever shadows anything else.
+func AssetKindsToSend(name string, exists func(kind string) bool) []string {
+	var kinds []string
 	for _, kind := range AssetTriggerOrder {
-		mod, ok := modTime(kind)
-		if !ok {
-			continue
-		}
-		if best == "" || mod.After(bestMod) {
-			best, bestMod = kind, mod
+		if exists(kind) {
+			kinds = append(kinds, kind)
 		}
 	}
-	return best
+	return kinds
 }
 
 func AssetTriggerMatch(body string) (string, bool) {

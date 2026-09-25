@@ -283,63 +283,48 @@ func (s *Session) applyAssetTrigger(info types.MessageInfo, body string) {
 		return
 	}
 	br := &bridge{s: s}
-	// A bare name can be saved under several kinds at once (e.g. the same word
-	// used for a photo AND a sticker). Send the most recently saved match so a
-	// freshly-.addsticker'd name does not keep resolving to an older photo.
-	best := goldcmds.SelectNewestAssetKind(name, func(kind string) (time.Time, bool) {
-		if _, _, _, found := br.GetCustomAssetMeta(kind, name); !found {
-			return time.Time{}, false
-		}
-		return br.assetModTime(kind, name), true
+	// One name can hold several kinds at once (a photo AND a video AND a
+	// sticker AND a text AND a circle AND a voice). Send EVERY kind the owner
+	// saved under this name, each as its own message, so nothing shadows
+	// anything else and deleting one kind never lets another take its place.
+	kinds := goldcmds.AssetKindsToSend(name, func(kind string) bool {
+		data, _, _, found := br.GetCustomAssetMeta(kind, name)
+		return found && len(data) > 0
 	})
-	if best == "" {
-		return
-	}
-	kind := best
-	data, mime, meta, found := br.GetCustomAssetMeta(kind, name)
-	if !found || len(data) == 0 {
-		return
-	}
-	switch kind {
-	case "img":
-		_ = br.SendImage(info, data, "")
-	case "video":
-		_ = br.SendVideo(info, data, "", nil, 0, 0, 0)
-	case "sticker":
-		_ = br.SendSticker(info, data)
-	case "circle":
-		f, err := os.CreateTemp("", "goldmd-circle-*"+extFromAssetMime(mime))
-		if err != nil {
-			return
+	for _, kind := range kinds {
+		data, mime, meta, found := br.GetCustomAssetMeta(kind, name)
+		if !found || len(data) == 0 {
+			continue
 		}
-		path := f.Name()
-		if _, werr := f.Write(data); werr != nil {
-			f.Close()
-			os.Remove(path)
-			return
-		}
-		f.Close()
-		secs, w, h := parseAssetMeta(meta)
-		_ = br.SendCircleVideoFile(info, path, secs, w, h, nil)
-		os.Remove(path)
-	case "text":
-		br.Reply(info, string(data))
-	}
-}
-
-// assetModTime returns the newest modtime among an asset's payload and sidecar
-// files, used to pick which kind wins when one name is saved under several
-// kinds. Zero time when nothing is on disk (missing asset).
-func (b *bridge) assetModTime(kind, name string) time.Time {
-	var newest time.Time
-	for _, suffix := range []string{"", ".mime", ".meta"} {
-		if st, err := os.Stat(b.assetPath(kind, name) + suffix); err == nil {
-			if st.ModTime().After(newest) {
-				newest = st.ModTime()
+		switch kind {
+		case "img":
+			_ = br.SendImage(info, data, "")
+		case "video":
+			_ = br.SendVideo(info, data, "", nil, 0, 0, 0)
+		case "sticker":
+			_ = br.SendSticker(info, data)
+		case "circle":
+			f, err := os.CreateTemp("", "goldmd-circle-*"+extFromAssetMime(mime))
+			if err != nil {
+				continue
 			}
+			path := f.Name()
+			if _, werr := f.Write(data); werr != nil {
+				f.Close()
+				os.Remove(path)
+				continue
+			}
+			f.Close()
+			secs, w, h := parseAssetMeta(meta)
+			_ = br.SendCircleVideoFile(info, path, secs, w, h, nil)
+			os.Remove(path)
+		case "text":
+			br.Reply(info, string(data))
 		}
+		// Keep the send order deterministic: WhatsApp can reorder messages that
+		// are uploaded in parallel, and the owner wants img→video→…→text.
+		time.Sleep(400 * time.Millisecond)
 	}
-	return newest
 }
 
 // extFromAssetMime maps the common asset mimetypes to a file extension.

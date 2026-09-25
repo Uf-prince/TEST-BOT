@@ -73,9 +73,9 @@ func TestCircleRejectsNonVideo(t *testing.T) {
 	}
 }
 
-// TestAssetTriggerOrderPrefersMedia pins the lookup order used by
-// src.applyAssetTrigger: media kinds resolve before text so a name shared by a
-// photo and a text sends the photo. Both copies must agree.
+// TestAssetTriggerOrderPrefersMedia pins the delivery order used by
+// src.applyAssetTrigger: every kind saved under a name is sent, media before
+// the text reply, voice last. Both copies must agree.
 func TestAssetTriggerOrderPrefersMedia(t *testing.T) {
 	want := []string{"img", "video", "sticker", "circle", "text"}
 	if len(AssetTriggerOrder) != len(want) {

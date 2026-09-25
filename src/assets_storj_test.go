@@ -38,21 +38,6 @@ func TestSaveAssetLocalStillWorksWithoutStorj(t *testing.T) {
 	}
 }
 
-// assetModTime is used to decide which kind serves a shared name; a saved
-// asset must report a non-zero modtime so a newer save can win.
-func TestAssetModTimeNonZeroAfterSave(t *testing.T) {
-	b := newAssetTestBridge(t)
-	if !b.SaveCustomAsset("img", "umar", []byte("jpeg"), "image/jpeg") {
-		t.Fatal("save failed")
-	}
-	if b.assetModTime("img", "umar").IsZero() {
-		t.Error("assetModTime is zero after a save")
-	}
-	if !b.assetModTime("video", "not-there").IsZero() {
-		t.Error("assetModTime non-zero for a missing asset")
-	}
-}
-
 // A stale .meta from a previous save must not leak into a later plain save.
 func TestWriteAssetLocalClearsNothingUnexpected(t *testing.T) {
 	b := newAssetTestBridge(t)

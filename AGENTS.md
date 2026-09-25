@@ -48,11 +48,14 @@ Don't chase these unless asked.
   `.addimg/.addvideo/.addsticker/.addtext/.addcircle` (`gold-cmds/assets.go`).
   Files: `<DataDir>/assets/<jid>/<kind>/<name>.bin` + `.mime` + `.meta`.
   Names are sanitised to `[a-z0-9_-]`; never bypass `assetPath`.
-- Auto-send: bare asset name triggers `applyAssetTrigger` in
-  `src/handler.go` (parallel to `applyVoiceTrigger`). One name may be saved
-  under several kinds; `goldcmds.SelectNewestAssetKind` picks the most recently
-  saved match (ties fall back to `goldcmds.AssetTriggerOrder` — media before
-  text), so a fresh `.addsticker` is not shadowed by an older photo.
+- Auto-send: a bare asset name triggers `applyAssetTrigger` in
+  `src/handler.go`. One name may hold several kinds at once (the owner can save
+  an image, video, sticker, circle AND text all as `umar`); `AssetKindsToSend`
+  returns EVERY saved kind and the trigger sends each as its own message in
+  `goldcmds.AssetTriggerOrder` (media before text). Never collapse this to a
+  single "best" kind — that is the bug where a sticker got shadowed by an image
+  or an image by a video. Voices are delivered separately by
+  `applyVoiceTrigger`, so `voice` is not part of `AssetTriggerOrder`.
 - Durable backup: every asset and voice is mirrored to Storj
   (`src/assets_storj.go`, write-through on save, read-through on cache miss).
   Namespaces `goldmd:assets:<kind>/<jid>/<name>` and `goldmd:voices/<jid>/<name>`;
