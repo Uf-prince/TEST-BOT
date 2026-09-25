@@ -107,16 +107,19 @@ func menuMediaFullList(prefix string) string {
 	return b.String()
 }
 
-// menuMediaGuide is the no-argument help card for a menu.
-func menuMediaGuide(prefix, label, suffix string) string {
+// menuMediaGuide is the no-argument help card for a menu. cmdName is the real
+// registered command (e.g. "logopic"), so the guide always shows the exact
+// command the owner just typed — never a generic ".pic"/".video".
+func menuMediaGuide(prefix, label, suffix, cmdName string) string {
+	cmd := prefix + cmdName
 	return "*🔰 " + label + " " + strings.ToUpper(suffix) + " GUIDE 🔰*\n\n" +
 		"*DO YOU WANT TO CHANGE YOUR " + label + " " + strings.ToUpper(suffix) + "*\n\n" +
 		"*1❯ SIMPLY SEND YOUR " + strings.ToUpper(suffix) + " HERE*\n" +
-		"*2❯ REPLY TO THE " + strings.ToUpper(suffix) + " AND TYPE ❰ " + prefix + strings.ToLower(suffix) + " ❱*\n" +
+		"*2❯ REPLY TO THE " + strings.ToUpper(suffix) + " AND TYPE ❰ " + cmd + " ❱*\n" +
 		"*3❯ OR SEND A LINK:*\n" +
-		"*❰ " + prefix + strings.ToLower(suffix) + " <URL> ❱*\n\n" +
+		"*❰ " + cmd + " <URL> ❱*\n\n" +
 		"*TO REMOVE THE CUSTOM " + strings.ToUpper(suffix) + " TYPE*\n" +
-		"*❰ " + prefix + strings.ToLower(suffix) + " RESET ❱*"
+		"*❰ " + cmd + " RESET ❱*"
 }
 
 // ── VIDEO NORMALISATION (WhatsApp-safe mp4) ─────────────────────────────────
@@ -243,7 +246,7 @@ func menuIsVideoMime(mime string) bool {
 var mediaURLRe = regexp.MustCompile(`^(https?://\S+\.(jpe?g|png|gif|webp|mp4|3gp|webm|mov|mkv|avi))$`)
 
 // handleMenuPic sets the header picture for ONE menu.
-func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefix, key string) {
+func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefix, key, cmdName string) {
 	if !s.IsOwner(info) {
 		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
 		return
@@ -274,7 +277,7 @@ func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefi
 		imgData, _, ok = s.DownloadQuotedMedia(info)
 	}
 	if !ok || len(imgData) == 0 {
-		guide := menuMediaGuide(prefix, label, "PIC")
+		guide := menuMediaGuide(prefix, label, "PIC", cmdName)
 		if key == "menu" {
 			guide += menuMediaFullList(prefix)
 		}
@@ -317,7 +320,7 @@ func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefi
 
 // handleMenuVideo sets the header video for ONE menu, normalising it to a
 // WhatsApp-safe MP4 first so it can never fail to play.
-func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, prefix, key string) {
+func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, prefix, key, cmdName string) {
 	if !s.IsOwner(info) {
 		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
 		return
@@ -345,7 +348,7 @@ func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, pre
 
 	data, mime, ok := s.DownloadQuotedMedia(info)
 	if !ok || len(data) == 0 || !menuIsVideoMime(mime) {
-		guide := menuMediaGuide(prefix, label, "VIDEO")
+		guide := menuMediaGuide(prefix, label, "VIDEO", cmdName)
 		if key == "menu" {
 			guide += menuMediaFullList(prefix)
 		}
@@ -487,7 +490,7 @@ func init() {
 				OwnerOnly: true,
 				Hidden:    hidden,
 				Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-					handleMenuVideo(s, info, args, prefix, mc.Key)
+					handleMenuVideo(s, info, args, prefix, mc.Key, mc.Name)
 				},
 			})
 			continue
@@ -499,7 +502,7 @@ func init() {
 			OwnerOnly: true,
 			Hidden:    hidden,
 			Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-				handleMenuPic(s, info, args, prefix, mc.Key)
+				handleMenuPic(s, info, args, prefix, mc.Key, mc.Name)
 			},
 		})
 	}
