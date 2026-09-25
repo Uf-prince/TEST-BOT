@@ -2523,7 +2523,7 @@ func buildBotStyleMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	b.WriteString(st.BorderTop() + "\n")
 	b.WriteString(st.ListRow("", st.Styled("BOT STYLE")) + "\n")
 	for n := 1; n <= goldcmds.MenuStyleCount; n++ {
-		b.WriteString(st.ListRow(prefix, fmt.Sprintf("BOTSTYLE%d \u276e %s \u276f", n, goldcmds.MenuStyleAt(n).Name)) + "\n")
+		b.WriteString(st.ListRow(prefix, fmt.Sprintf("BOTSTYLE%d", n)) + "\n")
 	}
 	b.WriteString(st.BorderBottom() + "\n\n")
 	return b.String()
