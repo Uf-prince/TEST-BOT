@@ -1472,7 +1472,32 @@ func registerFont1000Commands() {
 	}
 }
 
+// ============================================================================
+// GOLD-MD - botstyle1..botstyle50 hidden command registrations (main package)
+// ============================================================================
+// OWNER ORDER: .menu me SIRF .BOTSTYLE dikhta hai. botstyle1..botstyle50
+// Commands map me direct register hote hain (gold-cmds registry me nahi) +
+// hiddenCommands set me hain, is liye menus unhe skip karte hain. Bare
+// .botstyle boxed list kholta hai (ShowBotStyleMenu -> manager.go
+// CmdBotStyleMenu). Handler: goldcmds.BotStyleRunN(n).
+// ============================================================================
+func registerBotStyleCommands() {
+	for n := 1; n <= goldcmds.MenuStyleCount; n++ {
+		n := n
+		name := fmt.Sprintf("botstyle%d", n)
+		RegisterCommand(name, func(s *Session, info types.MessageInfo, args []string, prefix string) {
+			beginCmdBusy()
+			func() {
+				defer endCmdBusy()
+				goldcmds.BotStyleRunN(&bridge{s: s}, info, args, prefix, n)
+			}()
+		})
+		hiddenCommands[name] = true
+	}
+}
+
 func init() {
+	registerBotStyleCommands()
 	registerFont1000Commands()
 }
 

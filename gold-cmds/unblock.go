@@ -103,7 +103,7 @@ func handleUnblockAsync(s SessionBridge, info types.MessageInfo, args []string, 
 		return
 	}
 
-		s.Reply(info,
+	s.Reply(info,
 		"*🔰 USER UNBLOCKED 🔰*\n\n"+
 			"*NUMBER:* +"+targetNumber+"\n"+
 			"*METHOD:* "+strings.ToUpper(methodUsed)+"\n\n"+

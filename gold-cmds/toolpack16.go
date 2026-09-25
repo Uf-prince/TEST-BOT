@@ -190,7 +190,7 @@ func handleDomaininfo(s SessionBridge, info types.MessageInfo, args []string, pr
 		waitID := s.ReplyWithID(info, "*LOOKING UP DOMAIN....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 		var res struct {
-			LDHName string `json:"ldhName"`
+			LDHName string   `json:"ldhName"`
 			Status  []string `json:"status"`
 			Events  []struct {
 				EventAction string `json:"eventAction"`

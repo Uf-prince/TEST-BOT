@@ -8,7 +8,7 @@ func TestDedupeServerEntries(t *testing.T) {
 	in := []serverEntry{
 		{Name: "SERVER 1", URL: "https://a.onrender.com"},
 		{Name: "SERVER 2", URL: "https://b.onrender.com"},
-		{Name: "SERVER 3", URL: "https://a.onrender.com"}, // dup of 1
+		{Name: "SERVER 3", URL: "https://a.onrender.com"},  // dup of 1
 		{Name: "SERVER 4", URL: "https://A.onrender.com/"}, // dup (case + slash)
 		{Name: "SERVER 5", URL: "https://c.onrender.com"},
 	}

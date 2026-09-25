@@ -1,9 +1,9 @@
 // WHATSAPP-TRUTH SESSION LIFECYCLE TEST (owner order):
 // Session JID chahe jis URL se aaye — pehle WhatsApp se CHECK:
-//   • login  → kisi bhi server pe reconnect (registration + save)
-//   • logout → SILENT purge (fleet blob/meta/set/claim + own jids/blob),
-//              CONFIGURATION (settings:<jid>) HAMESHA SAFE
-//   • transient → purge NAHI (retry via fleet cooldown / runtime linter)
+//   - login  → kisi bhi server pe reconnect (registration + save)
+//   - logout → SILENT purge (fleet blob/meta/set/claim + own jids/blob),
+//     CONFIGURATION (settings:<jid>) HAMESHA SAFE
+//   - transient → purge NAHI (retry via fleet cooldown / runtime linter)
 package main
 
 import (

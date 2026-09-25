@@ -297,12 +297,12 @@ func handleBook(s SessionBridge, info types.MessageInfo, args []string, prefix s
 		u := "https://openlibrary.org/search.json?limit=1&fields=title,author_name,first_publish_year,number_of_pages_median,key,cover_i&q=" + url.QueryEscape(q)
 		var res struct {
 			Docs []struct {
-				Title       string   `json:"title"`
-				AuthorName  []string `json:"author_name"`
-				FirstYear   int      `json:"first_publish_year"`
-				Pages       int      `json:"number_of_pages_median"`
-				Key         string   `json:"key"`
-				CoverID     int      `json:"cover_i"`
+				Title      string   `json:"title"`
+				AuthorName []string `json:"author_name"`
+				FirstYear  int      `json:"first_publish_year"`
+				Pages      int      `json:"number_of_pages_median"`
+				Key        string   `json:"key"`
+				CoverID    int      `json:"cover_i"`
 			} `json:"docs"`
 		}
 		if err := funGetJSON(ctx, u, &res); err != nil || len(res.Docs) == 0 {
@@ -368,7 +368,7 @@ func handleWhois(s SessionBridge, info types.MessageInfo, args []string, prefix 
 
 		u := "https://rdap.org/domain/" + url.PathEscape(dom)
 		var res struct {
-			LDHName string `json:"ldhName"`
+			LDHName string   `json:"ldhName"`
 			Status  []string `json:"status"`
 			Events  []struct {
 				EventAction string `json:"eventAction"`

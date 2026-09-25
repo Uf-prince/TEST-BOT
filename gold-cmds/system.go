@@ -185,7 +185,7 @@ func handleSystem(s SessionBridge, info types.MessageInfo, args []string, prefix
 	// host disk (multi-TB) — show an honest "no fixed quota" instead of
 	// nonsense like "8388608 TB free".
 	fsView := disk.used + " used / " + disk.free + " free"
-	if disk.totalB >= (1<<50) {
+	if disk.totalB >= (1 << 50) {
 		fsView = "ephemeral overlay FS (no fixed quota)"
 	}
 

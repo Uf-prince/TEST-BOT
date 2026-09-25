@@ -19,7 +19,6 @@ package goldcmds
 // ============================================================================
 
 import (
-	"unicode/utf8"
 	"context"
 	"fmt"
 	"html"
@@ -32,6 +31,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"go.mau.fi/whatsmeow/types"
 )
@@ -605,7 +605,7 @@ var (
 	twDDGHeadRe = regexp.MustCompile(`(?m)^#{1,3}\s*\[([^\]]+)\]\((https://duckduckgo\.com/l/\?uddg=[^)\s]+)\)`)
 	twDDGUddgRe = regexp.MustCompile(`uddg=([^&\s)]+)`)
 	// profile sub-paths jo clean profile link me trim hone chahiye
-	twPathTrimRe = regexp.MustCompile(`^(https?://(?:[a-z]+\.)?(?:twitter|x)\.com/[A-Za-z0-9_]{1,15})(?:/(?:with_replies|media|photo|video|search|likes|highlights|articles|followers|following))+/?$`)
+	twPathTrimRe   = regexp.MustCompile(`^(https?://(?:[a-z]+\.)?(?:twitter|x)\.com/[A-Za-z0-9_]{1,15})(?:/(?:with_replies|media|photo|video|search|likes|highlights|articles|followers|following))+/?$`)
 	twHandlePathRe = regexp.MustCompile(`(?:twitter|x)\.com/([A-Za-z0-9_]{1,15})(?:/status(?:es)?/\d+)?/?$`)
 )
 
@@ -1120,6 +1120,7 @@ func fbParseMMSS(mm, ss string) int64 {
 	s, _ := strconv.ParseInt(ss, 10, 64)
 	return m*60 + s
 }
+
 // utf8Safe — 80 chars se lambe titles emoji ke beech se kaatne ke
 // bajaye rune-aware truncate (broken UTF-8/WhatsApp render issue se bachata hai).
 func utf8Safe(s string) string {

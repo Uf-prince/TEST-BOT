@@ -77,7 +77,6 @@ func ensureFfmpeg() bool {
 			return
 		}
 
-
 		// 2) Download static build (try primary, then mirror).
 		dir := ffmpegBinDir()
 		ffPath := filepath.Join(dir, "ffmpeg")

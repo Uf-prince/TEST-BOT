@@ -337,7 +337,6 @@ var purrSet = map[string]bool{
 	"pat": true, "poke": true, "slap": true, "smile": true, "tail": true, "tickle": true,
 }
 
-
 // reactionEmoji returns the emoji for a reaction name (default sparkle).
 func reactionEmoji(name string) string {
 	if e, ok := reactionEmojiMap[name]; ok {

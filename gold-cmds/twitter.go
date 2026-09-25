@@ -133,7 +133,7 @@ func handleTwitter(s SessionBridge, info types.MessageInfo, args []string, prefi
 	})
 }
 
-func handleTwitterAsync(	ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+func handleTwitterAsync(ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	rawURL := strings.TrimSpace(strings.Join(args, " "))
 	if rawURL == "" {
 		s.Reply(info, twHelpText)
@@ -287,7 +287,6 @@ func twPreviewCard(tweet *twTweet) string {
 	cap += "\n*TWITTER VIDEO DOWNLOADING*\n*PLEASE WAIT....*"
 	return cap
 }
-
 
 // ── X / Twitter link classifier + profile resolver (owner fix) ────────────
 // Bing/DDG search results ACCOUNT links dete hain (x.com/NASA), aur user

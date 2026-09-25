@@ -59,7 +59,7 @@ var goldSettingsList = []settingsEntry{
 	{t: "ANTICALL ON", c: "anticall on"},
 	{t: "ANTICALL OFF", c: "anticall off"},
 	{t: "ANTICALL REJECT MSG CHANGE", c: "anticall msg", ask: "SEND THE NEW ANTICALL REJECT MESSAGE",
-		ex: "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ PLEASE DO NOT CALL ME, SEND A MESSAGE 🔰 ❯*",
+		ex:  "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ PLEASE DO NOT CALL ME, SEND A MESSAGE 🔰 ❯*",
 		why: "WHEN ANTICALL REJECTS A CALL, THIS MESSAGE WILL BE SENT TO THAT CALLER."},
 	{t: "ANTICALL PREMIUM ADD", c: "anticallprem add", num: true, ask: "SEND THE NUMBER OR MENTION TO ADD IN ANTICALL PREMIUM",
 		why: "CALLS FROM THAT NUMBER WILL NEVER BE REJECTED."},
@@ -68,11 +68,11 @@ var goldSettingsList = []settingsEntry{
 	{t: "ANTICALL PREMIUM LIST", c: "anticallprem list"},
 	{t: "ANTIDELETE MODE CHANGE", c: "antidelete", ask: "SEND THE ANTIDELETE MODE NAME",
 		choices: [][2]string{{"on", "WORKS IN EVERY CHAT (INBOX + GROUPS)"}, {"inbox", "ONLY PRIVATE CHATS"}, {"groups", "ONLY GROUPS"}, {"off", "COMPLETELY DISABLE"}},
-		why: "DELETED MESSAGES WILL BE RESTORED ACCORDING TO THE SELECTED SCOPE."},
+		why:     "DELETED MESSAGES WILL BE RESTORED ACCORDING TO THE SELECTED SCOPE."},
 	{t: "ANTIDELETE STATUS SHOW", c: "antidelete"},
 	{t: "ANTIEDIT MODE CHANGE", c: "antiedit", ask: "SEND THE ANTIEDIT MODE NAME",
 		choices: [][2]string{{"on", "WORKS IN EVERY CHAT (INBOX + GROUPS)"}, {"inbox", "ONLY PRIVATE CHATS"}, {"groups", "ONLY GROUPS"}, {"off", "COMPLETELY DISABLE"}},
-		why: "THE ORIGINAL TEXT OF EDITED MESSAGES WILL BE SHOWN ACCORDING TO THE SELECTED SCOPE."},
+		why:     "THE ORIGINAL TEXT OF EDITED MESSAGES WILL BE SHOWN ACCORDING TO THE SELECTED SCOPE."},
 	{t: "ANTIEDIT STATUS SHOW", c: "antiedit"},
 	{t: "ANTIBAD ON", c: "antibad on"},
 	{t: "ANTIBAD OFF", c: "antibad off"},
@@ -87,10 +87,10 @@ var goldSettingsList = []settingsEntry{
 		why: "THAT USER WILL BE ABLE TO USE BOT COMMANDS AGAIN."},
 	{t: "BOT BLOCK LIST", c: "botblocklist"},
 	{t: "STOP A COMMAND", c: "cmdstop", ask: "SEND THE COMMAND NAME YOU WANT TO STOP",
-		ex: "SEND ONLY THE COMMAND NAME WITHOUT A PREFIX.\n*EXAMPLE ❮ VIDEO ❯*",
+		ex:  "SEND ONLY THE COMMAND NAME WITHOUT A PREFIX.\n*EXAMPLE ❮ VIDEO ❯*",
 		why: "THAT COMMAND WILL BE DISABLED FOR ALL USERS."},
 	{t: "START A COMMAND", c: "cmdstart", ask: "SEND THE COMMAND NAME YOU WANT TO START AGAIN",
-		ex: "SEND ONLY THE COMMAND NAME WITHOUT A PREFIX.\n*EXAMPLE ❮ VIDEO ❯*",
+		ex:  "SEND ONLY THE COMMAND NAME WITHOUT A PREFIX.\n*EXAMPLE ❮ VIDEO ❯*",
 		why: "THAT COMMAND WILL WORK FOR EVERYONE AGAIN."},
 	{t: "STOPPED COMMANDS LIST", c: "cmdstoplist"},
 
@@ -103,25 +103,25 @@ var goldSettingsList = []settingsEntry{
 	{t: "AUTO RECORDING OFF", c: "autorecording off"},
 	{t: "AUTO READ MODE CHANGE", c: "autoread", ask: "SEND THE AUTO READ MODE NAME",
 		choices: [][2]string{{"all", "MESSAGES IN BOTH INBOX AND GROUPS WILL BE READ"}, {"inbox", "PRIVATE CHATS ONLY"}, {"groups", "GROUPS ONLY"}, {"off", "DISABLE AUTO READ"}},
-		why: "THIS COMMAND REQUIRES A MODE NAME; SIMPLY SENDING ❮ ON ❯ DOES NOT WORK."},
+		why:     "THIS COMMAND REQUIRES A MODE NAME; SIMPLY SENDING ❮ ON ❯ DOES NOT WORK."},
 	{t: "AUTO READ STATUS SHOW", c: "autoread"},
 	{t: "STATUS SEEN ON", c: "statusseen on"},
 	{t: "STATUS SEEN OFF", c: "statusseen off"},
 	{t: "STATUS REACT ON", c: "statusreact on"},
 	{t: "STATUS REACT OFF", c: "statusreact off"},
 	{t: "STATUS REACT EMOJI SET", c: "statusreact emoji", ask: "SEND YOUR EMOJIS IN ONE MESSAGE",
-		ex: "SEPARATE EMOJIS WITH COMMAS.\n*EXAMPLE ❮ 🔰,🔰,🔰 ❯*",
+		ex:  "SEPARATE EMOJIS WITH COMMAS.\n*EXAMPLE ❮ 🔰,🔰,🔰 ❯*",
 		why: "THE BOT WILL USE THESE EMOJIS TO REACT TO PEOPLE’S STATUSES."},
 	{t: "STATUS REACT RESET", c: "statusreact reset"},
 	{t: "STATUS REPLY ON", c: "statusreply on"},
 	{t: "STATUS REPLY OFF", c: "statusreply off"},
 	{t: "STATUS REPLY MSG SET", c: "statusreply message", ask: "SEND YOUR NEW STATUS REPLY MESSAGE",
-		ex: "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ NICE STATUS 🔰 ❯*",
+		ex:  "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ NICE STATUS 🔰 ❯*",
 		why: "THE BOT WILL REPLY TO EVERY STATUS WITH THIS TEXT."},
 	{t: "STATUS REPLY RESET", c: "statusreply reset"},
 	{t: "VOICE LIST", c: "voicelist"},
 	{t: "DELETE A VOICE", c: "delvoice", ask: "SEND THE SAVED VOICE NAME YOU WANT TO DELETE",
-		ex: "SEND ONLY THE NAME USED WHEN THE VOICE WAS SAVED.\n*EXAMPLE ❮ HELLO ❯*",
+		ex:  "SEND ONLY THE NAME USED WHEN THE VOICE WAS SAVED.\n*EXAMPLE ❮ HELLO ❯*",
 		why: "THE SAVED VOICE CLIP WITH THAT NAME WILL BE DELETED."},
 
 	{s: "GROUP SETTINGS"},
@@ -129,16 +129,16 @@ var goldSettingsList = []settingsEntry{
 	{t: "ANTILINK OFF", c: "antilink off"},
 	{t: "ANTILINK ACTION CHANGE", c: "antilink action", ask: "SEND THE ANTILINK ACTION NAME",
 		choices: [][2]string{{"delete", "ONLY THE MESSAGE CONTAINING THE LINK WILL BE DELETED"}, {"kick", "THE MEMBER WHO SENT THE LINK WILL BE REMOVED FROM THE GROUP"}, {"warn", "A WARNING WILL BE GIVEN FIRST; ACTION WILL FOLLOW WHEN THE LIMIT IS REACHED"}},
-		why: "THE BOT WILL TAKE THIS ACTION WHEN A LINK IS SENT IN THE GROUP."},
+		why:     "THE BOT WILL TAKE THIS ACTION WHEN A LINK IS SENT IN THE GROUP."},
 	{t: "ANTILINK WARN LIMIT SET", c: "antilink action warn", ask: "SEND THE WARN LIMIT NUMBER",
-		ex: "SEND A NUMBER BETWEEN 1 AND 50 ONLY.\n*EXAMPLE ❮ 5 ❯*",
+		ex:  "SEND A NUMBER BETWEEN 1 AND 50 ONLY.\n*EXAMPLE ❮ 5 ❯*",
 		why: "ACTION WILL BE TAKEN AGAINST THE MEMBER AFTER THIS MANY WARNINGS.", limit: 50},
 	{t: "ANTILINK WARN RESET", c: "antilink action warn reset"},
 	{t: "ANTILINK ALLOW A DOMAIN", c: "antilink allow", ask: "SEND THE DOMAIN YOU WANT TO ALLOW",
-		ex: "SEND ONLY THE DOMAIN; DO NOT INCLUDE https://.\n*EXAMPLE ❮ youtube.com ❯*",
+		ex:  "SEND ONLY THE DOMAIN; DO NOT INCLUDE https://.\n*EXAMPLE ❮ youtube.com ❯*",
 		why: "ANTILINK WILL NOT TAKE ACTION ON LINKS FROM THIS DOMAIN."},
 	{t: "ANTILINK REMOVE A DOMAIN", c: "antilink delete", ask: "SEND THE DOMAIN YOU WANT TO REMOVE FROM THE ALLOWED LIST",
-		ex: "EXAMPLE ❮ youtube.com ❯*",
+		ex:  "EXAMPLE ❮ youtube.com ❯*",
 		why: "ANTILINK WILL TAKE ACTION ON LINKS FROM THIS DOMAIN AGAIN."},
 	{t: "ANTILINK ALLOWED LIST", c: "antilink allowedlist"},
 	{t: "ANTILINK FULL RESET", c: "antilink reset"},
@@ -151,9 +151,9 @@ var goldSettingsList = []settingsEntry{
 	{t: "ANTIBOT OFF", c: "antibot off"},
 	{t: "ANTIBOT ACTION CHANGE", c: "antibot action", ask: "SEND THE ANTIBOT ACTION NAME",
 		choices: [][2]string{{"delete", "THE OTHER BOT’S MESSAGE WILL BE DELETED"}, {"kick", "THE OTHER BOT WILL BE REMOVED FROM THE GROUP"}, {"warn", "A WARNING WILL BE GIVEN FIRST; ACTION WILL FOLLOW WHEN THE LIMIT IS REACHED"}},
-		why: "THE BOT WILL TAKE THIS ACTION WHEN ANOTHER BOT SENDS A GROUP MESSAGE."},
+		why:     "THE BOT WILL TAKE THIS ACTION WHEN ANOTHER BOT SENDS A GROUP MESSAGE."},
 	{t: "ANTIBOT WARN LIMIT SET", c: "antibot action warn", ask: "SEND THE WARN LIMIT NUMBER",
-		ex: "SEND A NUMBER BETWEEN 1 AND 50 ONLY.\n*EXAMPLE ❮ 5 ❯*",
+		ex:  "SEND A NUMBER BETWEEN 1 AND 50 ONLY.\n*EXAMPLE ❮ 5 ❯*",
 		why: "ACTION WILL BE TAKEN AFTER THIS MANY WARNINGS.", limit: 50},
 	{t: "ANTIBOT WARN RESET", c: "antibot action warn reset"},
 	{t: "ANTIBOT FULL RESET", c: "antibot reset"},
@@ -176,13 +176,13 @@ var goldSettingsList = []settingsEntry{
 	{t: "WELCOME ON", c: "welcome on"},
 	{t: "WELCOME OFF", c: "welcome off"},
 	{t: "WELCOME MSG CHANGE", c: "welcome msg", wrap: true, ask: "SEND YOUR NEW WELCOME MESSAGE",
-		ex: "SEND ONLY YOUR TEXT; BRACKETS WILL BE ADDED AUTOMATICALLY.\n*EXAMPLE ❮ HEY @user, WELCOME TO @gname 🔰 ❯*",
+		ex:  "SEND ONLY YOUR TEXT; BRACKETS WILL BE ADDED AUTOMATICALLY.\n*EXAMPLE ❮ HEY @user, WELCOME TO @gname 🔰 ❯*",
 		why: "❮ @user ❯ WILL MENTION THE NEW MEMBER AND ❮ @gname ❯ WILL SHOW THE GROUP NAME."},
 	{t: "WELCOME RESET", c: "welcome reset"},
 	{t: "GOODBYE ON", c: "goodbye on"},
 	{t: "GOODBYE OFF", c: "goodbye off"},
 	{t: "GOODBYE MSG CHANGE", c: "goodbye msg", wrap: true, ask: "SEND YOUR NEW GOODBYE MESSAGE",
-		ex: "SEND ONLY YOUR TEXT; BRACKETS WILL BE ADDED AUTOMATICALLY.\n*EXAMPLE ❮ GOODBYE @user FROM @gname 🔰 ❯*",
+		ex:  "SEND ONLY YOUR TEXT; BRACKETS WILL BE ADDED AUTOMATICALLY.\n*EXAMPLE ❮ GOODBYE @user FROM @gname 🔰 ❯*",
 		why: "❮ @user ❯ WILL MENTION THE LEAVING MEMBER AND ❮ @gname ❯ WILL SHOW THE GROUP NAME."},
 	{t: "GOODBYE RESET", c: "goodbye reset"},
 	{t: "LOCK GROUP (ADMINS ONLY)", c: "gcbotoff"},
@@ -196,37 +196,37 @@ var goldSettingsList = []settingsEntry{
 	{s: "BOT SETTINGS"},
 	{t: "BOT MODE CHANGE", c: "mode", ask: "SEND THE MODE NAME YOU WANT",
 		choices: [][2]string{{"public", "ANYONE CAN USE THE BOT COMMANDS"}, {"private", "ONLY THE OWNER CAN USE THE BOT"}, {"groups", "THE BOT WILL WORK ONLY IN GROUPS, NOT IN PRIVATE CHATS"}, {"inbox", "THE BOT WILL WORK ONLY IN PRIVATE CHATS, NOT IN GROUPS"}},
-		why: "THE BOT’S ENTIRE OPERATING SCOPE WILL FOLLOW THIS MODE."},
+		why:     "THE BOT’S ENTIRE OPERATING SCOPE WILL FOLLOW THIS MODE."},
 	{t: "CURRENT MODE SHOW", c: "mode"},
 	{t: "CHANGE PREFIX", c: "prefix", ask: "SEND YOUR NEW PREFIX SYMBOL",
-		ex: "SEND ONLY ONE SYMBOL.\n*EXAMPLE ❮ ! ❯*",
+		ex:  "SEND ONLY ONE SYMBOL.\n*EXAMPLE ❮ ! ❯*",
 		why: "ALL COMMANDS WILL USE THE NEW SYMBOL AFTER THIS CHANGE."},
 	{t: "AUTO REACT ON", c: "autoreact on"},
 	{t: "AUTO REACT OFF", c: "autoreact off"},
 	{t: "AUTO REACT EMOJI SET", c: "autoreact emoji", ask: "SEND YOUR EMOJIS IN ONE MESSAGE",
-		ex: "MAXIMUM 20 EMOJIS, SEPARATED BY COMMAS.\n*EXAMPLE ❮ 🔰,🔰,🔰 ❯*",
+		ex:  "MAXIMUM 20 EMOJIS, SEPARATED BY COMMAS.\n*EXAMPLE ❮ 🔰,🔰,🔰 ❯*",
 		why: "THE BOT WILL USE THESE EMOJIS TO REACT TO INCOMING MESSAGES."},
 	{t: "AUTO REACT RESET", c: "autoreact reset"},
 	{t: "OWNER REACT ON", c: "ownerreact on"},
 	{t: "OWNER REACT OFF", c: "ownerreact off"},
 	{t: "OWNER REACT EMOJI SET", c: "ownerreact emoji", ask: "SEND YOUR EMOJIS IN ONE MESSAGE",
-		ex: "MAXIMUM 20 EMOJIS, SEPARATED BY COMMAS.\n*EXAMPLE ❮ 🔰,🔰,😎 ❯*",
+		ex:  "MAXIMUM 20 EMOJIS, SEPARATED BY COMMAS.\n*EXAMPLE ❮ 🔰,🔰,😎 ❯*",
 		why: "THE BOT WILL USE THESE EMOJIS ONLY ON THE OWNER’S MESSAGES."},
 	{t: "OWNER REACT RESET", c: "ownerreact reset"},
 	{t: "CHANGE BOT PIC (MENU + ALIVE)", c: "botpic", url: true, ask: "SEND THE NEW BOT PIC LINK",
-		ex: "SEND A DIRECT IMAGE LINK ENDING IN .jpg, .jpeg, .png, .gif, OR .webp.\n*EXAMPLE ❮ https://example.com/photo.jpg ❯*",
+		ex:  "SEND A DIRECT IMAGE LINK ENDING IN .jpg, .jpeg, .png, .gif, OR .webp.\n*EXAMPLE ❮ https://example.com/photo.jpg ❯*",
 		why: "YEH IMAGE MENU AUR ALIVE DONO MEIN DIKHEGI."},
 	{t: "BOT PIC RESET", c: "botpic reset"},
 	{t: "CHANGE ALIVE MSG", c: "alivemsg", ask: "SEND YOUR NEW ALIVE MESSAGE",
-		ex: "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ BOT IS ONLINE AND WORKING 🔰 ❯*",
+		ex:  "SEND THE COMPLETE TEXT IN ONE MESSAGE.\n*EXAMPLE ❮ BOT IS ONLINE AND WORKING 🔰 ❯*",
 		why: "THIS TEXT WILL APPEAR WITH THE ALIVE COMMAND."},
 	{t: "ALIVE MSG RESET", c: "alivemsg reset"},
 	{t: "CHANGE BOT NAME", c: "botname", ask: "SEND YOUR NEW BOT NAME",
-		ex: "SEND ONLY THE NAME.\n*EXAMPLE ❮ UMAR MD ❯*",
+		ex:  "SEND ONLY THE NAME.\n*EXAMPLE ❮ UMAR MD ❯*",
 		why: "THIS BOT NAME WILL APPEAR EVERYWHERE."},
 	{t: "BOT NAME RESET", c: "botname reset"},
 	{t: "CHANGE OWNER NAME", c: "ownername", ask: "SEND YOUR NEW OWNER NAME",
-		ex: "SEND ONLY THE NAME, NOT A NUMBER.\n*EXAMPLE ❮ UMAR KING ❯*",
+		ex:  "SEND ONLY THE NAME, NOT A NUMBER.\n*EXAMPLE ❮ UMAR KING ❯*",
 		why: "THIS OWNER NAME WILL APPEAR EVERYWHERE."},
 	{t: "OWNER NAME RESET", c: "ownername reset"},
 	{t: "CHANGE OWNER NUMBER", c: "ownernumber", num: true, ask: "SEND YOUR NEW OWNER WHATSAPP NUMBER",
@@ -237,14 +237,16 @@ var goldSettingsList = []settingsEntry{
 
 // settingsSession mirrors the Node.js session object (pending + expiry).
 type settingsSession struct {
-	pending  *settingsEntry
-	expires  time.Time
+	pending *settingsEntry
+	expires time.Time
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Session store — mirrors _UmarSettingsSessions + _UmarClaimSettingsMessage.
-//  A single global mutex keeps both maps consistent (Go port detail; the
-//  behaviour is 0% farak with the Node.js single-threaded equivalent).
+//
+//	Session store — mirrors _UmarSettingsSessions + _UmarClaimSettingsMessage.
+//	A single global mutex keeps both maps consistent (Go port detail; the
+//	behaviour is 0% farak with the Node.js single-threaded equivalent).
+//
 // ─────────────────────────────────────────────────────────────────────────────
 var (
 	settingsMu       sync.Mutex
@@ -339,9 +341,11 @@ func hadSettingsSession(key string) (had, pending bool) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  goldSettingsMap — number → entry (UMAR_SETTINGS_MAP). The menu number is
-//  always generated from this list, so numbering and action can never
-//  mismatch.
+//
+//	goldSettingsMap — number → entry (UMAR_SETTINGS_MAP). The menu number is
+//	always generated from this list, so numbering and action can never
+//	mismatch.
+//
 // ─────────────────────────────────────────────────────────────────────────────
 var goldSettingsMap = func() map[string]*settingsEntry {
 	m := map[string]*settingsEntry{}
@@ -687,15 +691,17 @@ func isBareNumber(body string) bool {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  SettingsTryHandle — the panel hook. Runs on EVERY incoming message,
-//  BEFORE command dispatch (same position as the Node.js block in pair.js).
 //
-//  Returns:
-//    handled=true, rewrite="" → message fully consumed (reply sent); return.
-//    handled=true, rewrite!="" → the owner's number/value was converted into
-//        the real prefixed command (e.g. ".anticall on"); caller must
-//        re-dispatch that NEW text through the normal command pipeline.
-//    handled=false → panel didn't consume the message; continue as normal.
+//	SettingsTryHandle — the panel hook. Runs on EVERY incoming message,
+//	BEFORE command dispatch (same position as the Node.js block in pair.js).
+//
+//	Returns:
+//	  handled=true, rewrite="" → message fully consumed (reply sent); return.
+//	  handled=true, rewrite!="" → the owner's number/value was converted into
+//	      the real prefixed command (e.g. ".anticall on"); caller must
+//	      re-dispatch that NEW text through the normal command pipeline.
+//	  handled=false → panel didn't consume the message; continue as normal.
+//
 // ─────────────────────────────────────────────────────────────────────────────
 func SettingsTryHandle(s SessionBridge, info types.MessageInfo, body string, prefix string) (handled bool, rewrite string) {
 	// NOTE: NO IsFromMe guard here (FIX for owner-number-paired bots).

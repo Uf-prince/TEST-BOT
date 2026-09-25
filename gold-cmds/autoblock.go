@@ -436,7 +436,7 @@ func handleAutoBlockAsync(s SessionBridge, info types.MessageInfo, args []string
 		return
 
 	default:
-		s.Reply(info, "\u274C *UNKNOWN SUB-COMMAND :* " + sub + "\n\n*USE " + prefix + "autoblock TO SEE THE FULL GUIDE*")
+		s.Reply(info, "\u274C *UNKNOWN SUB-COMMAND :* "+sub+"\n\n*USE "+prefix+"autoblock TO SEE THE FULL GUIDE*")
 		return
 	}
 }

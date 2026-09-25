@@ -20,8 +20,8 @@ func TestTGV2Live(t *testing.T) {
 
 	// 1) specific post link → media (V2 ?before targeting)
 	cases := []struct {
-		link   string
-		kind   string // "" → text-only allowed
+		link string
+		kind string // "" → text-only allowed
 	}{
 		{"https://t.me/telegram/459", "video"},
 		{"https://t.me/telegram/452", "photo"},

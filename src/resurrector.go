@@ -548,7 +548,12 @@ func handleFleetDispatch(m *Manager, w http.ResponseWriter, r *http.Request) {
 
 	JSONDebug("FLEETDISPATCH_RECV", map[string]any{
 		"jid": jid, "dispatch_id": body.DispatchID, "self": fleetSelfID,
-		"slots_used": func() int { if m != nil { return m.SlotsUsed() }; return -1 }(),
+		"slots_used": func() int {
+			if m != nil {
+				return m.SlotsUsed()
+			}
+			return -1
+		}(),
 	})
 
 	write := func(st string) {

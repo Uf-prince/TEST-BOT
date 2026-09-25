@@ -262,8 +262,8 @@ func handleRandomuser(s SessionBridge, info types.MessageInfo, args []string, pr
 					First string `json:"first"`
 					Last  string `json:"last"`
 				} `json:"name"`
-				Email string `json:"email"`
-				Phone string `json:"phone"`
+				Email    string `json:"email"`
+				Phone    string `json:"phone"`
 				Location struct {
 					City    string `json:"city"`
 					State   string `json:"state"`

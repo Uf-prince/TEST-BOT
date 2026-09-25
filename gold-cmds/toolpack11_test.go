@@ -12,16 +12,16 @@ import (
 // newlines (no literal backslash-n) and carries the 🔰 marker.
 func TestToolpack11GuidesRenderRealNewlines(t *testing.T) {
 	guides := map[string]string{
-		"tvmaze":      tvmazeGuide("."),
-		"openlibrary": openlibraryGuide("."),
-		"jikan":       jikanGuide("."),
-		"githubuser":  githubuserGuide("."),
+		"tvmaze":       tvmazeGuide("."),
+		"openlibrary":  openlibraryGuide("."),
+		"jikan":        jikanGuide("."),
+		"githubuser":   githubuserGuide("."),
 		"officialjoke": officialjokeGuide("."),
-		"pypiinfo":    pypiinfoGuide("."),
-		"ayah":        ayahGuide("."),
-		"wikisearch":  wikisearchGuide("."),
-		"linkpreview": linkpreviewGuide("."),
-		"kanyerest":   kanyerestGuide("."),
+		"pypiinfo":     pypiinfoGuide("."),
+		"ayah":         ayahGuide("."),
+		"wikisearch":   wikisearchGuide("."),
+		"linkpreview":  linkpreviewGuide("."),
+		"kanyerest":    kanyerestGuide("."),
 	}
 	for name, g := range guides {
 		if strings.Contains(g, `\n`) {

@@ -89,7 +89,7 @@ func handleAPK(s SessionBridge, info types.MessageInfo, args []string, prefix st
 	})
 }
 
-func handleAPKAsync(	ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+func handleAPKAsync(ctx context.Context, s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	query := strings.TrimSpace(strings.Join(args, " "))
 	if query == "" {
 		s.Reply(info, apkHelpText)

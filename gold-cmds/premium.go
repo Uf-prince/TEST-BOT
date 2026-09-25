@@ -211,7 +211,7 @@ func handleAntiCallPrem(s SessionBridge, info types.MessageInfo, args []string, 
 }
 
 func handleAntiGcCallPrem(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-        handlePremium(s, info, args, prefix, "ANTIGCCALL", "ANTIGCCALLPREM", "GROUP CALLS", "ANTIGCCALL", "START GROUP CALLS")
+	handlePremium(s, info, args, prefix, "ANTIGCCALL", "ANTIGCCALLPREM", "GROUP CALLS", "ANTIGCCALL", "START GROUP CALLS")
 }
 
 // ── exported helper for handler.go ─────────────────────────────────────────

@@ -234,13 +234,13 @@ func handlePyPI(s SessionBridge, info types.MessageInfo, args []string, prefix s
 		u := "https://pypi.org/pypi/" + url.PathEscape(pkg) + "/json"
 		var res struct {
 			Info struct {
-				Name        string `json:"name"`
-				Version     string `json:"version"`
-				Summary     string `json:"summary"`
-				Author      string `json:"author"`
-				License     string `json:"license"`
-				HomePage    string `json:"home_page"`
-				ProjectURL  string `json:"project_url"`
+				Name       string `json:"name"`
+				Version    string `json:"version"`
+				Summary    string `json:"summary"`
+				Author     string `json:"author"`
+				License    string `json:"license"`
+				HomePage   string `json:"home_page"`
+				ProjectURL string `json:"project_url"`
 			} `json:"info"`
 		}
 		if err := funGetJSON(ctx, u, &res); err != nil || res.Info.Name == "" {

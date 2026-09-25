@@ -277,11 +277,11 @@ func handleWeather(s SessionBridge, info types.MessageInfo, args []string, prefi
 		u := "https://wttr.in/" + url.PathEscape(city) + "?format=j1"
 		var res struct {
 			Current []struct {
-				TempC      string `json:"temp_C"`
-				TempF      string `json:"temp_F"`
-				FeelsC     string `json:"FeelsLikeC"`
-				FeelsF     string `json:"FeelsLikeF"`
-				Desc       []struct {
+				TempC  string `json:"temp_C"`
+				TempF  string `json:"temp_F"`
+				FeelsC string `json:"FeelsLikeC"`
+				FeelsF string `json:"FeelsLikeF"`
+				Desc   []struct {
 					Value string `json:"value"`
 				} `json:"weatherDesc"`
 				WindKmph   string `json:"windspeedKmph"`
@@ -427,10 +427,10 @@ func handleWiki(s SessionBridge, info types.MessageInfo, args []string, prefix s
 func handleJoke(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	RunWithTimeout(s, info, func(ctx context.Context) {
 		var res struct {
-			Setup      string `json:"setup"`
-			Punchline  string `json:"punchline"`
-			Joke       string `json:"joke"`
-			Type       string `json:"type"`
+			Setup     string `json:"setup"`
+			Punchline string `json:"punchline"`
+			Joke      string `json:"joke"`
+			Type      string `json:"type"`
 		}
 		if err := funGetJSON(ctx, "https://official-joke-api.appspot.com/random_joke", &res); err != nil {
 			if !ctxTimedOut(ctx) {

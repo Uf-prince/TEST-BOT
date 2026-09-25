@@ -107,9 +107,9 @@ func handleHijridate(s SessionBridge, info types.MessageInfo, args []string, pre
 		var res struct {
 			Data struct {
 				Hijri struct {
-					Date    string `json:"date"`
-					Day     string `json:"day"`
-					Month   struct {
+					Date  string `json:"date"`
+					Day   string `json:"day"`
+					Month struct {
 						En string `json:"en"`
 					} `json:"month"`
 					Year string `json:"year"`
@@ -479,8 +479,8 @@ func handleSslcheck(s SessionBridge, info types.MessageInfo, args []string, pref
 			Host      string `json:"host"`
 			Status    string `json:"status"`
 			Endpoints []struct {
-				IPAddress    string `json:"ipAddress"`
-				Grade        string `json:"grade"`
+				IPAddress     string `json:"ipAddress"`
+				Grade         string `json:"grade"`
 				StatusMessage string `json:"statusMessage"`
 			} `json:"endpoints"`
 		}

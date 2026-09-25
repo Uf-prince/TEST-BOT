@@ -95,32 +95,32 @@ func probeVideoMeta(path string) (seconds uint32, width uint32, height uint32) {
 // MP4 (stream copy — no re-encode, fast). Returns the new file path; the
 // caller owns cleanup of BOTH source files and the merged output.
 func muxVideoAudio(ctx context.Context, videoPath, audioPath string) (string, error) {
-        if !isFfmpegAvailable() {
-                return "", fmt.Errorf("ffmpeg not available")
-        }
-        out, err := os.CreateTemp("", "goldmux-*.mp4")
-        if err != nil {
-                return "", err
-        }
-        outPath := out.Name()
-        out.Close()
+	if !isFfmpegAvailable() {
+		return "", fmt.Errorf("ffmpeg not available")
+	}
+	out, err := os.CreateTemp("", "goldmux-*.mp4")
+	if err != nil {
+		return "", err
+	}
+	outPath := out.Name()
+	out.Close()
 
-        cmd := exec.CommandContext(ctx, "ffmpeg", "-y",
-                "-i", videoPath, "-i", audioPath,
-                "-c", "copy", "-shortest",
-                outPath)
-        cmd.Stdout = nil
-        cmd.Stderr = nil
-        if err := cmd.Run(); err != nil {
-                os.Remove(outPath)
-                return "", err
-        }
-        st, serr := os.Stat(outPath)
-        if serr != nil || st.Size() == 0 {
-                os.Remove(outPath)
-                return "", fmt.Errorf("empty mux output")
-        }
-        return outPath, nil
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-y",
+		"-i", videoPath, "-i", audioPath,
+		"-c", "copy", "-shortest",
+		outPath)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Run(); err != nil {
+		os.Remove(outPath)
+		return "", err
+	}
+	st, serr := os.Stat(outPath)
+	if serr != nil || st.Size() == 0 {
+		os.Remove(outPath)
+		return "", fmt.Errorf("empty mux output")
+	}
+	return outPath, nil
 }
 
 // probeAudioDuration returns the duration of an audio file in seconds via
@@ -174,6 +174,7 @@ func isWhatsAppVideoReady(path string) bool {
 //   - h264 + aac + faststart MP4
 //   - already-ready file seedha wapas (no re-encode)
 //   - non-h264 (HEVC/mjpeg) -> full transcode
+//
 // Path wapas deta hai (naya temp file jab transcode hua ho). Caller cleanup kare.
 func whatsappifyVideo(ctx context.Context, path string) (string, error) {
 	if isWhatsAppVideoReady(path) {

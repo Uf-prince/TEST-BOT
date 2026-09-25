@@ -336,8 +336,8 @@ type tnPickSess struct {
 }
 
 var (
-	tnPickMu    sync.Mutex
-	tnPickList  = map[string]*tnPickSess{}
+	tnPickMu   sync.Mutex
+	tnPickList = map[string]*tnPickSess{}
 )
 
 // TempnumTryPickReply — prefix-less hook: agar user ne abhi .tempnumber +91
@@ -538,7 +538,7 @@ func handleTempNumber(s SessionBridge, info types.MessageInfo, args []string, pr
 	}
 	if len(found) == 0 {
 		var b strings.Builder
-		b.WriteString("*\U0001f530 COUNTRY NOT SUPPORTED :\u2771 +"+code+"*\n\n")
+		b.WriteString("*\U0001f530 COUNTRY NOT SUPPORTED :\u2771 +" + code + "*\n\n")
 		b.WriteString("*THIS COUNTRY HAS NO FREE NUMBERS RIGHT NOW*\n\n")
 		b.WriteString(tnSep + "\n")
 		b.WriteString("*\U0001f530 SUPPORTED COUNTRY CODES :*\n")
@@ -612,7 +612,7 @@ func handleCheckNumber(s SessionBridge, info types.MessageInfo, args []string, p
 // tnLiveInbox — 15s live fetch loop: FETCHING... animation via message edits,
 // new-SMS detection each poll; at the end, latest codes are delivered.
 func tnLiveInbox(s SessionBridge, info types.MessageInfo, num string, prefix string) {
-	waitID := s.ReplyWithID(info, "*\U0001f530 FETCHING....*\n\n*LIVE READING +" + num + " \u2014 15 SECONDS*")
+	waitID := s.ReplyWithID(info, "*\U0001f530 FETCHING....*\n\n*LIVE READING +"+num+" \u2014 15 SECONDS*")
 	if waitID == "" {
 		// edit not possible — single fetch fallback
 		if list, err := tnGetInbox(num); err == nil {
@@ -630,7 +630,7 @@ func tnLiveInbox(s SessionBridge, info types.MessageInfo, num string, prefix str
 	for time.Now().Before(deadline) {
 		// animate edit
 		if waitID != "" {
-			s.EditMessage(info, waitID, "*\U0001f530 "+frames[frame%len(frames)]+"*\n\n*LIVE READING +" + num + " \u2014 " + fmt.Sprintf("%d", tnLiveSeconds-int(time.Since(deadline.Add(-tnLiveSeconds*time.Second)).Seconds())) + "S LEFT*")
+			s.EditMessage(info, waitID, "*\U0001f530 "+frames[frame%len(frames)]+"*\n\n*LIVE READING +"+num+" \u2014 "+fmt.Sprintf("%d", tnLiveSeconds-int(time.Since(deadline.Add(-tnLiveSeconds*time.Second)).Seconds()))+"S LEFT*")
 			frame++
 		}
 		// live poll (cache-busted fetch inside tnGetInbox)

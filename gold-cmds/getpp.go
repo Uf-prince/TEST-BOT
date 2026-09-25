@@ -171,9 +171,9 @@ func handleGetpp(s SessionBridge, info types.MessageInfo, args []string, prefix 
 }
 
 // getppPushName returns the best-known WhatsApp display name for jid:
-//   1. contact store cache (Store.Contacts.GetContact — sqlite, menu cmd pattern:
-//      PushName -> FullName -> FirstName)
-//   2. "" — caller shows NULL
+//  1. contact store cache (Store.Contacts.GetContact — sqlite, menu cmd pattern:
+//     PushName -> FullName -> FirstName)
+//  2. "" — caller shows NULL
 func getppPushName(s SessionBridge, info types.MessageInfo, jid types.JID) string {
 	// contact store (sqlite cache — jis ne kabhi msg kiya hoga wo cached hai)
 	if client := s.GetClient(); client != nil && client.Store != nil && client.Store.Contacts != nil {

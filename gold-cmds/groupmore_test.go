@@ -138,10 +138,10 @@ func TestTargetJIDsQuotedLIDConversion(t *testing.T) {
 // TestExtractInviteCode covers the invite-link parser used by ginfo/gjoin.
 func TestExtractInviteCode(t *testing.T) {
 	cases := map[string]string{
-		"https://chat.whatsapp.com/AbCdEf123":       "AbCdEf123",
+		"https://chat.whatsapp.com/AbCdEf123":        "AbCdEf123",
 		"https://chat.whatsapp.com/AbCdEf123?mode=x": "AbCdEf123",
-		"AbCdEf123":                                  "AbCdEf123",
-		"":                                           "",
+		"AbCdEf123": "AbCdEf123",
+		"":          "",
 	}
 	for in, want := range cases {
 		if got := extractInviteCode(in); got != want {

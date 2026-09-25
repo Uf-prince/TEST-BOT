@@ -386,12 +386,12 @@ func handlePypiinfo(s SessionBridge, info types.MessageInfo, args []string, pref
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 		var res struct {
 			Info struct {
-				Name        string `json:"name"`
-				Version     string `json:"version"`
-				Author      string `json:"author"`
-				Summary     string `json:"summary"`
-				HomePage    string `json:"home_page"`
-				License     string `json:"license"`
+				Name     string `json:"name"`
+				Version  string `json:"version"`
+				Author   string `json:"author"`
+				Summary  string `json:"summary"`
+				HomePage string `json:"home_page"`
+				License  string `json:"license"`
 			} `json:"info"`
 		}
 		u := "https://pypi.org/pypi/" + url.QueryEscape(pkg) + "/json"
@@ -441,7 +441,7 @@ func handleAyah(s SessionBridge, info types.MessageInfo, args []string, prefix s
 
 		// Fetch BOTH the Arabic (Uthmani) text and the English translation.
 		var res struct {
-			Code int    `json:"code"`
+			Code int `json:"code"`
 			Data []struct {
 				NumberInSurah int    `json:"numberInSurah"`
 				Text          string `json:"text"`

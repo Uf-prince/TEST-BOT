@@ -38,8 +38,8 @@ import (
 	"time"
 
 	"go.mau.fi/whatsmeow"
-	"go.mau.fi/whatsmeow/types"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/types"
 )
 
 // ── per-group auto-mute setting (Node: GroupAutoMute schema) ──
@@ -53,7 +53,7 @@ type amuteSetting struct {
 	MuteMinute      *int   `json:"muteMinute"` // 0-59
 	UnmuteHour      *int   `json:"unmuteHour"`
 	UnmuteMinute    *int   `json:"unmuteMinute"`
-	LastMutedDate   string `json:"lastMutedDate"`   // "YYYY-MM-DD" once-per-day guard
+	LastMutedDate   string `json:"lastMutedDate"` // "YYYY-MM-DD" once-per-day guard
 	LastUnmutedDate string `json:"lastUnmutedDate"`
 }
 
@@ -311,8 +311,8 @@ func amuteTimePartsInTZ(tzName string) (int, int, int, string) {
 // "72 8 Pm" jaisa galat input bhi wrap/clamp ho jata hai; AM/PM zaroori.
 
 var (
-	amuteNumRe       = regexp.MustCompile(`\d+`)
-	amuteMeridiemRe  = regexp.MustCompile(`(?i)\b(am|pm)\b`)
+	amuteNumRe      = regexp.MustCompile(`\d+`)
+	amuteMeridiemRe = regexp.MustCompile(`(?i)\b(am|pm)\b`)
 )
 
 // amuteParseLenientTime returns (hour24, minute, ok).

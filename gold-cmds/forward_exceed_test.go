@@ -16,10 +16,10 @@ func TestForwardExceedExampleNumbers(t *testing.T) {
 		groups, chats int
 		wantExample   string
 	}{
-		{groups: 3, chats: 176, wantExample: "*.FORWARD 6,3*"},  // owner's real totals
-		{groups: 10, chats: 20, wantExample: "*.FORWARD 6,8*"},  // both fit
-		{groups: 1, chats: 1, wantExample: "*.FORWARD 1,1*"},    // minimum clamp
-		{groups: 5, chats: 4, wantExample: "*.FORWARD 4,5*"},    // both clamped
+		{groups: 3, chats: 176, wantExample: "*.FORWARD 6,3*"}, // owner's real totals
+		{groups: 10, chats: 20, wantExample: "*.FORWARD 6,8*"}, // both fit
+		{groups: 1, chats: 1, wantExample: "*.FORWARD 1,1*"},   // minimum clamp
+		{groups: 5, chats: 4, wantExample: "*.FORWARD 4,5*"},   // both clamped
 	}
 
 	for _, c := range cases {

@@ -457,8 +457,8 @@ func handleCVE(s SessionBridge, info types.MessageInfo, args []string, prefix st
 		var res struct {
 			Vulnerabilities []struct {
 				CVE struct {
-					ID          string `json:"id"`
-					Published   string `json:"published"`
+					ID           string `json:"id"`
+					Published    string `json:"published"`
 					Descriptions []struct {
 						Lang  string `json:"lang"`
 						Value string `json:"value"`

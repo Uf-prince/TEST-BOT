@@ -46,7 +46,10 @@ const glSample = `{
 }`
 
 func TestSvrServerNumber(t *testing.T) {
-	cases := []struct{ in string; want int }{
+	cases := []struct {
+		in   string
+		want int
+	}{
 		{"SERVER 9", 9}, {"SERVER 200", 200}, {"SERVER 1", 1},
 		{"SERVER 14", 14}, {"garbage", 0}, {"", 0}, {"SERVER", 0},
 	}

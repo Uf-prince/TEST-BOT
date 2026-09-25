@@ -233,10 +233,10 @@ type yt2Stream struct {
 // any failure or non-PLAYABLE status (e.g. LOGIN_REQUIRED blocks).
 func yt2PlayerCall(ctx context.Context, c yt2Client, videoID string) *yt2Stream {
 	body := map[string]any{
-		"context":          map[string]any{"client": c.client},
-		"videoId":          videoID,
-		"contentCheckOk":   true,
-		"racyCheckOk":      true,
+		"context":        map[string]any{"client": c.client},
+		"videoId":        videoID,
+		"contentCheckOk": true,
+		"racyCheckOk":    true,
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {

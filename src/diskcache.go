@@ -36,9 +36,10 @@ var diskCacheRoot = envOr("GOLDMD_DISK_CACHE_DIR", "nexstore/kvcache")
 var diskCacheRefreshMin = envInt("GOLDMD_DISK_CACHE_REFRESH_MIN", 30)
 
 // keyState — ek logical Redis key ka poora state (mini-Redis on disk).
-//   Type "string" → Str
-//   Type "set"    → Set (members)
-//   Type "hash"   → Hash (field→value)
+//
+//	Type "string" → Str
+//	Type "set"    → Set (members)
+//	Type "hash"   → Hash (field→value)
 type keyState struct {
 	// Key = the logical Redis key this file represents. Stored INSIDE the
 	// file (the filename is only a sha256 hash, so the key is otherwise
@@ -128,31 +129,31 @@ func dcDelete(key string) {
 
 // dcIsReadOp — ops jo disk se serve ho sakte hain (0 Storj bandwidth).
 func dcIsReadOp(op string) bool {
-        switch op {
-        case "GET", "SMEMBERS", "SISMEMBER", "HGETALL", "HGET", "HEXISTS":
-                return true
-        }
-        return false
+	switch op {
+	case "GET", "SMEMBERS", "SISMEMBER", "HGETALL", "HGET", "HEXISTS":
+		return true
+	}
+	return false
 }
 
 // dcIsWriteOp — ops jo disk state mutate karte hain.
 func dcIsWriteOp(op string) bool {
-        switch op {
-        case "SET", "DEL", "SADD", "SREM", "HSET", "HDEL":
-                return true
-        }
-        return false
+	switch op {
+	case "SET", "DEL", "SADD", "SREM", "HSET", "HDEL":
+		return true
+	}
+	return false
 }
 
 // dcSkipKey — special keys jo disk-cache se bahar rakhe jate hain.
-//   * sessiondb blob/jids — bade (MBs) + special persistence path (write-through
+//   - sessiondb blob/jids — bade (MBs) + special persistence path (write-through
 //     se disk bloat + restore semantics kharab ho sakte hain).
 func dcSkipKey(args []string) bool {
-        if len(args) < 2 {
-                return false
-        }
-        k := args[1]
-        return strings.Contains(k, "sessiondb")
+	if len(args) < 2 {
+		return false
+	}
+	k := args[1]
+	return strings.Contains(k, "sessiondb")
 }
 
 // ── read path ───────────────────────────────────────────────────────────────

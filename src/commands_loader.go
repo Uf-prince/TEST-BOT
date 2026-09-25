@@ -1542,6 +1542,13 @@ func (b *bridge) ShowGameMenu(info types.MessageInfo, args []string, prefix stri
 	b.s.CmdGameMenu(info, args, prefix)
 }
 
+// ShowBotStyleMenu renders the .botstyle command's fancy boxed menu
+// (BOTSTYLE1..BOTSTYLE50), same format as the other category menus.
+// Implemented by the main package's CmdBotStyleMenu (manager.go).
+func (b *bridge) ShowBotStyleMenu(info types.MessageInfo, args []string, prefix string) {
+	b.s.CmdBotStyleMenu(info, args, prefix)
+}
+
 // GetPrefix reads the bot's command prefix from Redis (key prefix:<botJID>).
 func (b *bridge) GetPrefix(def string) string {
 	if b.s.Manager.Redis == nil {

@@ -109,8 +109,8 @@ var (
 
 // gmPreWarmTTL / gmHealthTTL — cache windows.
 const (
-	gmPreWarmTTL = 90 * time.Second
-	gmHealthTTL  = 75 * time.Second
+	gmPreWarmTTL      = 90 * time.Second
+	gmHealthTTL       = 75 * time.Second
 	gmPairCooldownTTL = 90 * time.Second
 )
 

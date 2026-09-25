@@ -40,7 +40,7 @@ func TestPrefixCmdMatch(t *testing.T) {
 		{".pre", ".", "", false},
 		{"hello", ".", "", false},
 		{".ping", ".", "", false},
-		{"prefix", ".", "", false}, // no prefix at all → not matched here
+		{"prefix", ".", "", false},  // no prefix at all → not matched here
 		{";prefix", ".", "", false}, // wrong prefix for this bot
 	}
 	for _, c := range cases {

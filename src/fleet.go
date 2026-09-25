@@ -76,14 +76,14 @@ const (
 
 // ── timing / limits ──
 const (
-	fleetTickInterval = 30 * time.Second // watchdog tick
-	fleetClaimEvery   = 2                // claim check har 2nd tick (60s)
-	fleetOrphanAfter  = 5 * time.Minute  // heartbeat itna purani = dead
-	fleetStaleServer  = 24 * time.Hour   // heartbeat itni purani = purge
-	fleetRaceWait     = 3 * time.Second  // claim race re-verify window
-	fleetFailCooldown = 10 * time.Minute // failed restore retry cooldown
-	fleetHTTPTimeout  = 4 * time.Second  // remote /health timeout (quick public .server)
-	fleetProbeAfter   = 3 * time.Minute  // heartbeat stale = ACTIVE /health probe start (heartbeat 60s cadence se 3x margin — DEAD server ka failover ~3-4 min me, aur Render cold-start pe false DEAD nahi. OWNER ORDER 2026-09-21: failover tez chahiye)
+	fleetTickInterval    = 30 * time.Second // watchdog tick
+	fleetClaimEvery      = 2                // claim check har 2nd tick (60s)
+	fleetOrphanAfter     = 5 * time.Minute  // heartbeat itna purani = dead
+	fleetStaleServer     = 24 * time.Hour   // heartbeat itni purani = purge
+	fleetRaceWait        = 3 * time.Second  // claim race re-verify window
+	fleetFailCooldown    = 10 * time.Minute // failed restore retry cooldown
+	fleetHTTPTimeout     = 4 * time.Second  // remote /health timeout (quick public .server)
+	fleetProbeAfter      = 3 * time.Minute  // heartbeat stale = ACTIVE /health probe start (heartbeat 60s cadence se 3x margin — DEAD server ka failover ~3-4 min me, aur Render cold-start pe false DEAD nahi. OWNER ORDER 2026-09-21: failover tez chahiye)
 	fleetClaimFreshTrust = 10 * time.Minute // fresh claim = trust, probe nahi (race window)
 )
 
@@ -334,7 +334,7 @@ func fleetSelfURL() string {
 
 // fleetURLFromHeartbeat: ek sid ka public URL heartbeat hash se (4th segment).
 // fleetServerURL ka fallback — hostname-style sid (dot nahi) pe pehle ""
-//// tha, ab heartbeat URL milta hai (cmd cache 3min TTL — sasta).
+// // tha, ab heartbeat URL milta hai (cmd cache 3min TTL — sasta).
 func fleetURLFromHeartbeat(sid string) string {
 	if sid == "" || fleetMgr == nil || fleetMgr.Redis == nil {
 		return ""
@@ -581,12 +581,13 @@ func fleetHeldByLiveServer(jid string) bool {
 // nahi — takeover hamesha ke liye block tha).
 //
 // RULES (bandwidth-safe, war-safe):
-//   claim FRESH (<10min) → holder ne abhi connect/boot kiya hai — race
-//     window me hai, probe ki zaroorat nahi — RESPECT (steal karne pe
-//     double-connect war = stream-replace = logout).
-//   claim STALE (10min+) → holder ke /sessions me JID dhoondo:
-//     mojood (online ya offline) → holder device rakh raha hai → RESPECT.
-//     NAHI mila → ZOMBIE → takeover allowed (ye function false deta hai).
+//
+//	claim FRESH (<10min) → holder ne abhi connect/boot kiya hai — race
+//	  window me hai, probe ki zaroorat nahi — RESPECT (steal karne pe
+//	  double-connect war = stream-replace = logout).
+//	claim STALE (10min+) → holder ke /sessions me JID dhoondo:
+//	  mojood (online ya offline) → holder device rakh raha hai → RESPECT.
+//	  NAHI mila → ZOMBIE → takeover allowed (ye function false deta hai).
 func fleetHolderRunsSession(sid string, claimTS int64, jid string) bool {
 	if sid == "" {
 		return false
@@ -1094,9 +1095,10 @@ func fleetReleaseRemote(serverURL, jid string) bool {
 
 // fleetForceAdopt: MANUAL force-adopt — session ko zabardasti is server pe
 // le aao (war-safe). Steps:
-//   1. remote live holders ko /release bhejo (socket band, data safe)
-//   2. claim stamp + race wait + tie-break (wahi fleetRestoreAndConnect flow)
-//   3. blob restore + StartSession (WhatsApp-truth verify window)
+//  1. remote live holders ko /release bhejo (socket band, data safe)
+//  2. claim stamp + race wait + tie-break (wahi fleetRestoreAndConnect flow)
+//  3. blob restore + StartSession (WhatsApp-truth verify window)
+//
 // Returns (ok, message).
 func fleetForceAdopt(jid string) (bool, string) {
 	m := fleetMgr

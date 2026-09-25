@@ -553,50 +553,51 @@ func flRemoveClaim(jid string) {
 //    karta rahe live har waqt; jese hi offline ho fleet ko info kr de") ───────
 
 // flStartOnlineGuard: har 15s local folder ke sessions ka live status check.
-//   • live    → local online=true (transition pe log).
-//   • offline → agar pehle online tha (transition) → flNotifyOffline(jid):
-//               local online=false + apna claim release + fail marker →
-//               watchdog/resurrector us JID ko FREE server pe dispatch karega
-//               aur wo EK BAAR claim karega.
+//   - live    → local online=true (transition pe log).
+//   - offline → agar pehle online tha (transition) → flNotifyOffline(jid):
+//     local online=false + apna claim release + fail marker →
+//     watchdog/resurrector us JID ko FREE server pe dispatch karega
+//     aur wo EK BAAR claim karega.
+//
 // Sirf TRANSITION pe notify (har 15s spam nahi). 0 network (local check).
 func flStartOnlineGuard(m *Manager) {
-        if !flEnabled || m == nil {
-                return
-        }
-        go func() {
-                defer func() { _ = recover() }()
-                t := time.NewTicker(15 * time.Second)
-                defer t.Stop()
-                for range t.C {
-                        if m.IsShuttingDown() {
-                                return
-                        }
-                        flOnlineGuardPass(m)
-                }
-        }()
+	if !flEnabled || m == nil {
+		return
+	}
+	go func() {
+		defer func() { _ = recover() }()
+		t := time.NewTicker(15 * time.Second)
+		defer t.Stop()
+		for range t.C {
+			if m.IsShuttingDown() {
+				return
+			}
+			flOnlineGuardPass(m)
+		}
+	}()
 }
 
 // flOnlineGuardPass: ek pass — local folder ke har session ka status.
 func flOnlineGuardPass(m *Manager) {
-        jids := resurrectorDiskJIDs(m.cfg.PairingDir)
-        for _, jid := range jids {
-                if strings.HasPrefix(fleetUserPart(jid), "pending") || strings.HasPrefix(jid, "pending") {
-                        continue
-                }
-                live := resurrectorLiveHere(m, jid)
-                prev, had := flSessionInfo(jid)
-                if live {
-                        flSetOnline(jid, true)
-                        continue
-                }
-                // offline: sirf transition pe notify (pehle online tha).
-                if had && prev.Online {
-                        flNotifyOffline(jid)
-                } else if !had {
-                        // pehli baar dekha + offline → entry banao (online=false).
-                        flSetOnline(jid, false)
-                }
-        }
+	jids := resurrectorDiskJIDs(m.cfg.PairingDir)
+	for _, jid := range jids {
+		if strings.HasPrefix(fleetUserPart(jid), "pending") || strings.HasPrefix(jid, "pending") {
+			continue
+		}
+		live := resurrectorLiveHere(m, jid)
+		prev, had := flSessionInfo(jid)
+		if live {
+			flSetOnline(jid, true)
+			continue
+		}
+		// offline: sirf transition pe notify (pehle online tha).
+		if had && prev.Online {
+			flNotifyOffline(jid)
+		} else if !had {
+			// pehli baar dekha + offline → entry banao (online=false).
+			flSetOnline(jid, false)
+		}
+	}
 }
 
 // ── KV MIRROR (central write-through hook) ──────────────────────────────────
@@ -606,50 +607,50 @@ func flOnlineGuardPass(m *Manager) {
 // write sites (fleet.go me 10+ jagah) automatically local file me reflect ho
 // jate hain — koi call-site change nahi chahiye.
 func flMirrorKV(args []string) {
-        if !flEnabled || !flReady || len(args) < 2 {
-                return
-        }
-        op := strings.ToUpper(args[0])
-        key := args[1]
+	if !flEnabled || !flReady || len(args) < 2 {
+		return
+	}
+	op := strings.ToUpper(args[0])
+	key := args[1]
 
-        switch {
-        case strings.HasPrefix(key, fleetClaimPrefix):
-                jid := strings.TrimPrefix(key, fleetClaimPrefix)
-                if jid == "" {
-                        return
-                }
-                switch op {
-                case "HSET":
-                        if len(args) >= 4 {
-                                ts, _ := strconv.ParseInt(strings.TrimSpace(args[3]), 10, 64)
-                                flSetClaim(jid, args[2], flServerURL(args[2]), ts)
-                        }
-                case "HDEL":
-                        if len(args) >= 3 && args[2] == fleetSelfID {
-                                flRemoveClaim(jid)
-                        }
-                case "DEL":
-                        flRemove(jid)
-                }
-        case key == fleetServersHash:
-                if op == "HSET" && len(args) >= 4 {
-                        ts, url, sess, mx := flParseHeartbeat(args[3])
-                        if ts > 0 {
-                                flSetServer(args[2], url, ts, sess, mx)
-                        }
-                }
-        case key == fleetSessionsSet:
-                switch op {
-                case "SADD":
-                        for _, jid := range args[2:] {
-                                flSetOnline(jid, false) // entry banao (status baad me update)
-                        }
-                case "SREM":
-                        for _, jid := range args[2:] {
-                                flRemove(jid)
-                        }
-                }
-        }
+	switch {
+	case strings.HasPrefix(key, fleetClaimPrefix):
+		jid := strings.TrimPrefix(key, fleetClaimPrefix)
+		if jid == "" {
+			return
+		}
+		switch op {
+		case "HSET":
+			if len(args) >= 4 {
+				ts, _ := strconv.ParseInt(strings.TrimSpace(args[3]), 10, 64)
+				flSetClaim(jid, args[2], flServerURL(args[2]), ts)
+			}
+		case "HDEL":
+			if len(args) >= 3 && args[2] == fleetSelfID {
+				flRemoveClaim(jid)
+			}
+		case "DEL":
+			flRemove(jid)
+		}
+	case key == fleetServersHash:
+		if op == "HSET" && len(args) >= 4 {
+			ts, url, sess, mx := flParseHeartbeat(args[3])
+			if ts > 0 {
+				flSetServer(args[2], url, ts, sess, mx)
+			}
+		}
+	case key == fleetSessionsSet:
+		switch op {
+		case "SADD":
+			for _, jid := range args[2:] {
+				flSetOnline(jid, false) // entry banao (status baad me update)
+			}
+		case "SREM":
+			for _, jid := range args[2:] {
+				flRemove(jid)
+			}
+		}
+	}
 }
 
 // flNotifyOffline: session offline ho gaya → local online=false + apna claim

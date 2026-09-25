@@ -587,6 +587,10 @@ type SessionBridge interface {
 	// (GAME1..GAME1000) in the same format as the other category menus.
 	// Implemented by the main package (manager.go CmdGameMenu).
 	ShowGameMenu(info types.MessageInfo, args []string, prefix string)
+	// ShowBotStyleMenu renders the .botstyle command's fancy boxed menu
+	// (BOTSTYLE1..BOTSTYLE50) in the same format as the other category
+	// menus. Implemented by the main package (manager.go CmdBotStyleMenu).
+	ShowBotStyleMenu(info types.MessageInfo, args []string, prefix string)
 }
 
 // BannedUserInfo holds the metadata for a bot-wide banned user.
@@ -663,6 +667,7 @@ var CategoryOrder = []string{
 	"EQUALIZER",
 	"FONT",
 	"GAME",
+	"BOT STYLE",
 }
 
 // CategoryEmoji maps each category to a decorative emoji used in the menu header.

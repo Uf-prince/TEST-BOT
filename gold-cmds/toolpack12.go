@@ -70,8 +70,8 @@ func handleDadjoke(s SessionBridge, info types.MessageInfo, args []string, prefi
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 		var res struct {
 			Joke struct {
-				Opener     string `json:"Opener"`
-				Punchline  string `json:"Punchline"`
+				Opener    string `json:"Opener"`
+				Punchline string `json:"Punchline"`
 			} `json:"Joke"`
 		}
 		if err := funGetJSON(ctx, "https://dadjokes.online/api/random", &res); err != nil || res.Joke.Opener == "" {
@@ -111,11 +111,11 @@ func handleDisney(s SessionBridge, info types.MessageInfo, args []string, prefix
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 		var res struct {
 			Data []struct {
-				Name         string   `json:"name"`
-				Films        []string `json:"films"`
-				TVShows      []string `json:"tvShows"`
-				VideoGames   []string `json:"videoGames"`
-				ImageURL     string   `json:"imageUrl"`
+				Name       string   `json:"name"`
+				Films      []string `json:"films"`
+				TVShows    []string `json:"tvShows"`
+				VideoGames []string `json:"videoGames"`
+				ImageURL   string   `json:"imageUrl"`
 			} `json:"data"`
 		}
 		u := "https://api.disneyapi.dev/character?name=" + url.QueryEscape(q)
@@ -214,8 +214,8 @@ func handleAnimequote(s SessionBridge, info types.MessageInfo, args []string, pr
 		var res struct {
 			Status string `json:"status"`
 			Data   struct {
-				Content   string `json:"content"`
-				Anime     struct {
+				Content string `json:"content"`
+				Anime   struct {
 					Name string `json:"name"`
 				} `json:"anime"`
 				Character struct {
@@ -404,15 +404,15 @@ func handleIpgeo(s SessionBridge, info types.MessageInfo, args []string, prefix 
 		waitID := s.ReplyWithID(info, "*LOCATING IP....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 		var res struct {
-			IP      string  `json:"ip"`
-			City    string  `json:"city"`
-			Region  string  `json:"region"`
-			Country string  `json:"country"`
-			Company string  `json:"company"`
-			ASN     string  `json:"asn"`
-			Timezone string `json:"timezone"`
-			Lat     float64 `json:"lat"`
-			Lon     float64 `json:"lon"`
+			IP       string  `json:"ip"`
+			City     string  `json:"city"`
+			Region   string  `json:"region"`
+			Country  string  `json:"country"`
+			Company  string  `json:"company"`
+			ASN      string  `json:"asn"`
+			Timezone string  `json:"timezone"`
+			Lat      float64 `json:"lat"`
+			Lon      float64 `json:"lon"`
 		}
 		if err := funGetJSON(ctx, "https://api.ipapi.is", &res); err != nil || res.IP == "" {
 			if !ctxTimedOut(ctx) {

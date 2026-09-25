@@ -1992,6 +1992,7 @@ var menuCategorySlugs = map[string]string{
 	"EQUALIZER":         "equalizer",
 	"FONT":              "font",
 	"GAME":              "game",
+	"BOT STYLE":         "botstyle",
 }
 
 // menuCategoryDisplay maps an internal category name to the label shown to
@@ -2252,7 +2253,7 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	// list (they live behind the single .logo command) but MUST still be
 	// counted in the COMMANDS total. So add goldcmds.LogoCount to the
 	// visible count.
-	totalCmds := len(cmds) + goldcmds.LogoCount + goldcmds.FontCount + goldcmds.EqCount + goldcmds.GameCount
+	totalCmds := len(cmds) + goldcmds.LogoCount + goldcmds.FontCount + goldcmds.EqCount + goldcmds.GameCount + goldcmds.MenuStyleCount
 
 	// ── Uptime in "XXH XXM" form for the fancy header ──
 	uptimeHM := formatUptimeHM(uptime())
@@ -2505,6 +2506,64 @@ func buildEqualizerMenu(botNum, ownerNum, uptimeStr, prefix string, sessCount in
 	}
 	b.WriteString(st.BorderBottom() + "\n\n")
 	return b.String()
+}
+
+// buildBotStyleMenu renders the .botstyle menu in the same fancy boxed format
+// as the other category menus. It lists .BOTSTYLE1 .. .BOTSTYLE50, each row
+// carrying that style's name (CROWN ROYALE, ROYAL DIAMOND, ...).
+func buildBotStyleMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView, st goldcmds.MenuStyle) string {
+	_ = pushName
+	_ = botName
+	_ = sessCount
+	_ = menuView
+	uptimeHM := uptimeStr
+	if uptimeHM == "" {
+		uptimeHM = formatUptimeHM(uptime())
+	}
+	var b strings.Builder
+	b.WriteString(buildMenuHeader("BOT STYLE", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.MenuStyleCount, false, "botstyle", st))
+	b.WriteString(st.BorderTop() + "\n")
+	b.WriteString(st.ListRow("", st.Styled("BOT STYLE")) + "\n")
+	for n := 1; n <= goldcmds.MenuStyleCount; n++ {
+		b.WriteString(st.ListRow(prefix, fmt.Sprintf("BOTSTYLE%d \u276e %s \u276f", n, goldcmds.MenuStyleAt(n).Name)) + "\n")
+	}
+	b.WriteString(st.BorderBottom() + "\n\n")
+	return b.String()
+}
+
+// CmdBotStyleMenu renders the .botstyle menu in the SAME fancy boxed format as
+// the other category menus (owner order). Bare .botstyle opens it; each row
+// .BOTSTYLE1..50 applies that style to the whole bot.
+func (s *Session) CmdBotStyleMenu(info types.MessageInfo, args []string, prefix string) {
+	uptimeStr := formatUptime(uptime())
+	sessCount := s.Manager.Count()
+	botName := ""
+	if s.Manager != nil && s.Manager.Redis != nil {
+		botName = s.Manager.Redis.GetSetting(s.JID, "botname", "")
+	}
+	if botName == "" || botName == goldcmds.DefaultBotNameMarker ||
+		strings.Contains(botName, "GOLD_MD_DEFAULT_FOOTER") ||
+		strings.Contains(botName, "GOLD_MD_DEFAULT") {
+		botName = "GOLD-MD WHATSAPP BOT"
+	}
+	menuUser := "UMAR"
+	if s.Manager != nil && s.Manager.Redis != nil {
+		if on := s.Manager.Redis.GetSetting(s.JID, "ownername", ""); on != "" {
+			menuUser = on
+		}
+	}
+	ownerNum := botOwnNumber(s.JID)
+	if s.Manager != nil && s.Manager.Redis != nil {
+		if on := s.Manager.Redis.GetSetting(s.JID, "ownernumber", ""); on != "" {
+			ownerNum = on
+		}
+		if sudoRaw := s.Manager.Redis.GetSetting(s.JID, "sudowners", ""); sudoRaw != "" {
+			ownerNum = ownerNum + "," + sudoRaw
+		}
+	}
+	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
+	caption := buildBotStyleMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView, menuStyleFor(s, "botstyle"))
+	s.sendMenuHeader(info, "botstyle", caption)
 }
 
 // CmdFontMenu renders the .font menu in the SAME fancy boxed format as the

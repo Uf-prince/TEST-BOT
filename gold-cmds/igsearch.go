@@ -44,7 +44,8 @@ func igSlugFromQuery(query string) string {
 
 // igHashtagSearch — instagram.com/explore/tags/<slug>/ via jina.
 // Pattern (jina markdown):
-//   [![Image N: CAPTION](scontent...jpg) LIKES CAPTION](https://www.instagram.com/reel/SHORTCODE/)
+//
+//	[![Image N: CAPTION](scontent...jpg) LIKES CAPTION](https://www.instagram.com/reel/SHORTCODE/)
 var igTagEntryRe = regexp.MustCompile(
 	`\[!\[Image \d+:[^\]]*\]\((https://scontent[^)]+)\)\s*([\d.,]+[KM]?)\s+([^\]]*)\]\((https://www\.instagram\.com/(?:reel|p)/([A-Za-z0-9_-]+)/)`)
 
@@ -248,9 +249,9 @@ func igBingRSSSearch(ctx context.Context, query string) ([]searchResult, error) 
 }
 
 // igEngineSearch — merged multi-source IG search (FB V9 pattern).
-//   1) hashtag reels (direct video permalinks)
-//   2) bing HTML decoded profiles+reels
-//   3) bing RSS profiles
+//  1. hashtag reels (direct video permalinks)
+//  2. bing HTML decoded profiles+reels
+//  3. bing RSS profiles
 func igEngineSearch(ctx context.Context, query string) ([]searchResult, error) {
 	var merged []searchResult
 	seen := map[string]bool{}

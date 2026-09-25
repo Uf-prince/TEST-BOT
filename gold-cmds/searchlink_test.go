@@ -166,10 +166,10 @@ func TestHostMatchingNetflixIsNotX(t *testing.T) {
 
 func TestSearchLinkHost(t *testing.T) {
 	cases := map[string]string{
-		"https://VM.TikTok.com/x/abc":  "vm.tiktok.com",
+		"https://VM.TikTok.com/x/abc":       "vm.tiktok.com",
 		"https://www.youtube.com/watch?v=x": "www.youtube.com",
-		"http://t.me/somechannel/12":   "t.me",
-		"https://x.com/user/status/1":  "x.com",
+		"http://t.me/somechannel/12":        "t.me",
+		"https://x.com/user/status/1":       "x.com",
 	}
 	for in, want := range cases {
 		if got := searchLinkHost(in); got != want {

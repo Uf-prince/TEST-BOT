@@ -46,9 +46,9 @@ import (
 )
 
 // dcSkipRAMKey — bade / special keys jo RAM me NAHI rakhte (memory-safe).
-//   * sessiondb  — MBs bade auth blobs (disk + Storj pe rehte hain).
-//   * msgs:/msg: — antidelete/antiedit TTL data (owner: "waise hi karne do").
-//   * goldmd:fleet: — fleet liveness keys (alag 60s refresher sambhalta hai).
+//   - sessiondb  — MBs bade auth blobs (disk + Storj pe rehte hain).
+//   - msgs:/msg: — antidelete/antiedit TTL data (owner: "waise hi karne do").
+//   - goldmd:fleet: — fleet liveness keys (alag 60s refresher sambhalta hai).
 func dcSkipRAMKey(key string) bool {
 	if strings.Contains(key, "sessiondb") {
 		return true
@@ -127,56 +127,56 @@ func dcPreloadRAM(u *Upstash) int {
 // asar (yeh sirf ek map write hai jo pehle se hi ho rahi read ke saath chalta
 // hai). Antidelete/antiedit (msgs:/msg:) aur sessiondb deliberately skip.
 func (u *Upstash) dcPopulateRAM(args []string, res json.RawMessage) {
-        if u == nil || len(args) < 2 {
-                return
-        }
-        op := strings.ToUpper(args[0])
-        key := args[1]
-        if dcSkipRAMKey(key) {
-                return
-        }
-        switch op {
-        case "GET":
-                var s string
-                if json.Unmarshal(res, &s) == nil {
-                        u.cacheSet(key, s)
-                } else {
-                        u.cacheSet(key, "\x00")
-                }
-        case "SMEMBERS":
-                var arr []string
-                if json.Unmarshal(res, &arr) == nil {
-                        if len(arr) == 0 {
-                                u.cacheSet("setmembers:"+key, "\x00")
-                        } else if b, err := json.Marshal(arr); err == nil {
-                                u.cacheSet("setmembers:"+key, string(b))
-                        }
-                }
-        case "HGET":
-                if len(args) >= 3 {
-                        var s string
-                        if json.Unmarshal(res, &s) == nil {
-                                u.cacheSet(key+":"+args[2], s)
-                        } else {
-                                u.cacheSet(key+":"+args[2], "\x00")
-                        }
-                }
-        case "HGETALL":
-                var pairs []string
-                if json.Unmarshal(res, &pairs) == nil {
-                        for i := 0; i+1 < len(pairs); i += 2 {
-                                u.cacheSet(key+":"+pairs[i], pairs[i+1])
-                        }
-                }
-        }
+	if u == nil || len(args) < 2 {
+		return
+	}
+	op := strings.ToUpper(args[0])
+	key := args[1]
+	if dcSkipRAMKey(key) {
+		return
+	}
+	switch op {
+	case "GET":
+		var s string
+		if json.Unmarshal(res, &s) == nil {
+			u.cacheSet(key, s)
+		} else {
+			u.cacheSet(key, "\x00")
+		}
+	case "SMEMBERS":
+		var arr []string
+		if json.Unmarshal(res, &arr) == nil {
+			if len(arr) == 0 {
+				u.cacheSet("setmembers:"+key, "\x00")
+			} else if b, err := json.Marshal(arr); err == nil {
+				u.cacheSet("setmembers:"+key, string(b))
+			}
+		}
+	case "HGET":
+		if len(args) >= 3 {
+			var s string
+			if json.Unmarshal(res, &s) == nil {
+				u.cacheSet(key+":"+args[2], s)
+			} else {
+				u.cacheSet(key+":"+args[2], "\x00")
+			}
+		}
+	case "HGETALL":
+		var pairs []string
+		if json.Unmarshal(res, &pairs) == nil {
+			for i := 0; i+1 < len(pairs); i += 2 {
+				u.cacheSet(key+":"+pairs[i], pairs[i+1])
+			}
+		}
+	}
 }
 
 // dcStartRAMGuard — boot RAM preload + continuous RAM guard.
 //
-//	1. Boot settle (3s) — dcGuardLoad ko disk bharne do (agar disk khali thi).
-//	2. dcPreloadRAM — disk → RAM (pehla command bhi 0ms).
-//	3. Continuous (60s): agar RAM khali ho jaye (ClearCache / memory pressure /
-//	   kisi wajah se entries gayab) to foran DISK se reload — 0 network.
+//  1. Boot settle (3s) — dcGuardLoad ko disk bharne do (agar disk khali thi).
+//  2. dcPreloadRAM — disk → RAM (pehla command bhi 0ms).
+//  3. Continuous (60s): agar RAM khali ho jaye (ClearCache / memory pressure /
+//     kisi wajah se entries gayab) to foran DISK se reload — 0 network.
 //
 // Poora background goroutine — hot path pe 0% asar.
 func dcStartRAMGuard(u *Upstash) {

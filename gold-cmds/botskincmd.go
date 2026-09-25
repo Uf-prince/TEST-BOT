@@ -24,14 +24,41 @@ import (
 // ============================================================================
 
 func init() {
+	// OWNER ORDER: .botstyle ek category menu hai (FONT/GAME/EQUALIZER ki
+	// tarah). Bare .botstyle ek boxed list kholta hai - .BOTSTYLE1 ..
+	// .BOTSTYLE50 - aur har number apne aap poore bot ka look set karta hai.
 	Register(Command{
 		Name:      "botstyle",
-		Category:  "OWNER & SYSTEM",
-		Desc:      "THIS COMMAND IS USED TO CHANGE THE WHOLE BOT TEXT LOOK - FONTS, MARKS AND EMOJIS. PICK ONE OF 50 STYLES.",
+		Category:  "BOT STYLE",
+		Desc:      "THIS COMMAND IS USED TO SHOW THE LIST OF 50 BOT TEXT STYLES. TYPE .BOTSTYLE1 TO .BOTSTYLE50 TO CHANGE THE WHOLE BOT INTO THAT STYLE.",
 		OwnerOnly: true,
-		Hidden:    true,
-		Run:       handleBotStyle,
+		Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+			if !s.IsOwner(info) {
+				s.Reply(info, "*THIS COMMAND IS ONLY FOR ME \U0001F60E*")
+				return
+			}
+			if strings.TrimSpace(strings.Join(args, " ")) == "" {
+				s.ShowBotStyleMenu(info, args, prefix)
+				return
+			}
+			handleBotStyle(s, info, args, prefix)
+		},
 	})
+}
+
+// BotStyleRunN is the entry point for the .botstyle1..botstyle50 commands.
+// Each number applies its style to the WHOLE bot (text skin + menu chrome),
+// exactly like ".botstyle set N" - the menu is just a friendlier front door.
+func BotStyleRunN(s SessionBridge, info types.MessageInfo, args []string, prefix string, n int) {
+	if !s.IsOwner(info) {
+		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME \U0001F60E*")
+		return
+	}
+	if n < 1 || n > MenuStyleCount {
+		s.Reply(info, fmt.Sprintf("*STYLE NUMBER 1 SE %d TAK HI HAI*", MenuStyleCount))
+		return
+	}
+	applyBotStyle(s, info, prefix, n)
 }
 
 func handleBotStyle(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
@@ -58,14 +85,18 @@ func handleBotStyle(s SessionBridge, info types.MessageInfo, args []string, pref
 		s.Reply(info, "*🔰 STYLE NUMBER GALAT 🔰*\n\n*1 SE "+fmt.Sprint(MenuStyleCount)+" KE DARMIYAN KOI NUMBER DO*\n*JAISE:* *❰ "+prefix+"BOTSTYLE SET 7 ❱*"+menuStyleInfoLine(prefix))
 		return
 	}
-	// ONE command = whole-bot look: the text skin AND the menu chrome both
-	// follow .botstyle, so a single SET restyles everything (per-menu
-	// .<x>style can still override its own chrome afterwards).
+	applyBotStyle(s, info, prefix, n)
+}
+
+// applyBotStyle sets BOTH the text skin and the menu chrome to style n and
+// confirms with a live preview. Shared by ".botstyle set N" and the
+// .botstyleN menu commands so both behave identically.
+func applyBotStyle(s SessionBridge, info types.MessageInfo, prefix string, n int) {
 	s.SetBotSkinSetting(fmt.Sprint(n))
 	s.SetBotMenuStyleSetting(fmt.Sprint(n))
 	st := MenuStyleAt(n)
-	s.Reply(info, fmt.Sprintf("*%s BOT STYLE SET %d %s*\n\n*POORE BOT KA TEXT STYLE CHANGE HO GYA*\n\n%s",
-		st.Sym, n, st.Sym, botStylePreview(st, prefix))+menuStyleInfoLine(prefix))
+	s.Reply(info, fmt.Sprintf("*%s BOT STYLE SET %d %s*\n\n*BOT STYLE HAS BEEN CHANGED*\n\n*TYPE %sPING , %sMENU , %sALIVE TO TEST*\n\n*THE GOLD-MD NEW STYLE*",
+		st.Sym, n, st.Sym, prefix, prefix, prefix))
 }
 
 // botStylePreview renders a small live sample of the skin so the owner sees the

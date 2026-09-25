@@ -68,6 +68,7 @@ var menuMediaSpecs = []menuMediaSpec{
 	{"core", "OWNER & SYSTEM MENU"},
 	{"breaction", "BRACTION MENU"},
 	{"greaction", "GREACTION MENU"},
+	{"botstyle", "BOT STYLE MENU"},
 }
 
 // menuMediaLabel returns the guide/confirmation label for a storage key.
@@ -767,6 +768,7 @@ var menuMediaCommands = []menuMediaCommand{
 	{"corepic", "core", "pic", "core", "corevoice"}, {"corevideo", "core", "video", "core", "corevoice"},
 	{"breactionpic", "breaction", "pic", "breaction", "breactionvoice"}, {"breactionvideo", "breaction", "video", "breaction", "breactionvoice"},
 	{"greactionpic", "greaction", "pic", "greaction", "greactionvoice"}, {"greactionvideo", "greaction", "video", "greaction", "greactionvoice"},
+	{"botstylepic", "botstyle", "pic", "botstyle", "botstylevoice"}, {"botstylevideo", "botstyle", "video", "botstyle", "botstylevoice"},
 }
 
 // menuVoiceCommands is the per-menu voice set, derived from menuMediaCommands

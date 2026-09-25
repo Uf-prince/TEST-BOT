@@ -239,14 +239,14 @@ func handleZipcode(s SessionBridge, info types.MessageInfo, args []string, prefi
 		waitID := s.ReplyWithID(info, "*FETCHING ZIP INFO....*")
 		defer func() { _ = s.DeleteMessage(info, waitID) }()
 		var res struct {
-			Country        string `json:"country"`
-			PostCode       string `json:"post code"`
-			Places         []struct {
-				PlaceName  string `json:"place name"`
-				State      string `json:"state"`
-				StateAbbr  string `json:"state abbreviation"`
-				Latitude   string `json:"latitude"`
-				Longitude  string `json:"longitude"`
+			Country  string `json:"country"`
+			PostCode string `json:"post code"`
+			Places   []struct {
+				PlaceName string `json:"place name"`
+				State     string `json:"state"`
+				StateAbbr string `json:"state abbreviation"`
+				Latitude  string `json:"latitude"`
+				Longitude string `json:"longitude"`
 			} `json:"places"`
 		}
 		u := "https://api.zippopotam.us/" + url.QueryEscape(country) + "/" + url.QueryEscape(zip)

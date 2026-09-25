@@ -152,7 +152,6 @@ func (c *Config) String() string {
 		c.PanelEnabled, c.PanelPort, len(c.OwnerNumbers), true)
 }
 
-
 // ══════════════════ (merged from logger.go) ══════════════════
 const (
 	cReset   = "\x1b[0m"

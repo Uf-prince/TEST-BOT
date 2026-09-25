@@ -78,8 +78,8 @@ func TestParseMenuStyleArg(t *testing.T) {
 // Every menu must get exactly one style command, named "<x>style".
 func TestMenuStyleCommandsCoverAllMenus(t *testing.T) {
 	cmds := menuStyleCommands()
-	if len(cmds) != 17 {
-		t.Fatalf("expected 17 per-menu style commands, got %d", len(cmds))
+	if len(cmds) != 18 {
+		t.Fatalf("expected 18 per-menu style commands, got %d", len(cmds))
 	}
 	names := map[string]bool{}
 	for _, mc := range cmds {
@@ -92,7 +92,7 @@ func TestMenuStyleCommandsCoverAllMenus(t *testing.T) {
 		}
 		names[name] = true
 	}
-	for _, want := range []string{"menustyle", "logostyle", "fontstyle", "gamestyle", "equalizerstyle", "aimenustyle"} {
+	for _, want := range []string{"menustyle", "logostyle", "fontstyle", "gamestyle", "equalizerstyle", "aimenustyle", "botstylestyle"} {
 		if !names[want] {
 			t.Errorf("missing style command .%s", want)
 		}
