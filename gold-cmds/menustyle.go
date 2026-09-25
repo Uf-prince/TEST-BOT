@@ -347,7 +347,10 @@ func MenuStyleAt(n int) MenuStyle {
 	}
 	border := styleBorders[(n-2)%len(styleBorders)]
 	row := styleRows[((n-2)/len(styleBorders))%len(styleRows)]
-	font := (n - 2) % 10
+	// Every styled style MUST change the font too (owner report: "sirf symbol
+	// badla, font wahi hai"). The old (n-2)%10 gave font 0 to styles
+	// 2, 12, 22, 32, 42 - which left the letters untouched. Rotate 1..9 instead.
+	font := 1 + (n-2)%9
 
 	fill := func(tpl, title string) string {
 		out := strings.ReplaceAll(tpl, "{S}", sym)

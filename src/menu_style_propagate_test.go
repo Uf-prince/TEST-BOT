@@ -28,9 +28,11 @@ func TestMenuStylePropagatesToWholeMenu(t *testing.T) {
 	if !strings.Contains(out, styled.ImpTitle("IMPORTANT CMNDS")) {
 		t.Errorf("styled IMPORTANT CMNDS title missing\n%s", out)
 	}
-	// Command names must stay plain ASCII so they remain copyable.
-	if !strings.Contains(out, ".AIMENUPIC") {
-		t.Errorf("command name was mangled by the decorative font\n%s", out)
+	// Rows are rendered in the style's decorative font (owner order: fancy
+	// everywhere), but the token must still normalise back to a plain,
+	// dispatcheable ASCII command.
+	if norm := goldcmds.SkinNormalizeInput(out); !strings.Contains(norm, ".AIMENUPIC") {
+		t.Errorf("command name no longer normalises back to ASCII\n%s", out)
 	}
 }
 

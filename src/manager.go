@@ -1579,9 +1579,13 @@ func (s *Session) sendStartupNotification() {
 	msgText = s.withCaptionFooter(msgText)
 
 	// Fetch logo bytes (status-checked + timeout, never an error page).
+	// If ANY step of the image path fails, fall back to a plain-text card so
+	// the owner ALWAYS gets the connected/start message (owner report: "pair
+	// code connect krte waqt start msg hi nahi aata").
 	imgData, err := fetchMenuImageURL(logoURL)
 	if err != nil || len(imgData) == 0 {
 		// ErrLog("Failed to fetch startup logo: %v", err)
+		s.sendStartupTextFallback(target, msgText)
 		return
 	}
 
@@ -1589,6 +1593,7 @@ func (s *Session) sendStartupNotification() {
 	uploaded, err := s.Client.Upload(context.Background(), imgData, whatsmeow.MediaImage)
 	if err != nil {
 		// ErrLog("Failed to upload startup logo to WhatsApp: %v", err)
+		s.sendStartupTextFallback(target, msgText)
 		return
 	}
 
@@ -1610,10 +1615,28 @@ func (s *Session) sendStartupNotification() {
 	if err != nil {
 		// ErrLog("Failed to send startup notification: %v", err)
 		JSONDebugErr("STARTUP_NOTIFY_SEND_FAIL", err, map[string]any{"jid": s.JID, "owner": s.Owner})
+		s.sendStartupTextFallback(target, msgText)
 	} else {
 		OkLog("Startup notification sent to %s", s.Owner)
 		JSONDebug("STARTUP_NOTIFY_SENT", map[string]any{"jid": s.JID, "owner": s.Owner, "self": fleetSelfID})
 	}
+}
+
+// sendStartupTextFallback sends the startup card as a plain text message when
+// the image path is unavailable, so pairing still ends with a visible
+// connected/start card in the active skin.
+func (s *Session) sendStartupTextFallback(target types.JID, text string) {
+	if s.Client == nil || !s.Client.IsConnected() || strings.TrimSpace(text) == "" {
+		return
+	}
+	_, err := s.Client.SendMessage(context.Background(), target, &waProto.Message{
+		Conversation: proto.String(text),
+	})
+	if err != nil {
+		JSONDebugErr("STARTUP_NOTIFY_TEXT_FALLBACK_FAIL", err, map[string]any{"jid": s.JID, "owner": s.Owner})
+		return
+	}
+	OkLog("Startup notification sent as text fallback to %s", s.Owner)
 }
 
 // whatsappTruthVerified: StartSession ke Connect() ke baad WhatsApp ka

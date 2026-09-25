@@ -107,3 +107,44 @@ func TestSkinAllStyles(t *testing.T) {
 		}
 	}
 }
+
+// Every non-classic style MUST change the font, not just the symbol (owner
+// report: "ek symbol badala hai bas font wahi same hai"). A style whose font is
+// 0 would leave every letter untouched, which is exactly the bug.
+func TestSkinEveryStyleChangesFont(t *testing.T) {
+	colors := applyMenuFont(0, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	for n := 2; n <= MenuStyleCount; n++ {
+		st := MenuStyleAt(n)
+		if st.font <= 0 {
+			t.Fatalf("style %d (%s) has font 0 - letters would not change", n, st.Name)
+		}
+		// Some fonts (e.g. small-caps) only map one case, so check both cases
+		// before declaring the font a no-op.
+		upper := applyMenuFont(st.font, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+		lower := applyMenuFont(st.font, "abcdefghijklmnopqrstuvwxyz")
+		if upper == colors && lower == colors {
+			t.Fatalf("style %d (%s) font renders like the plain font", n, st.Name)
+		}
+	}
+}
+
+// A skinned bot must not keep announcing the stock brand: the identity is
+// rewritten to the style's own name so users cannot recognise it at a glance.
+func TestSkinRewritesBrandIdentity(t *testing.T) {
+	st := MenuStyleAt(7)
+	out := st.SkinText("*GOLD-MD WHATSAPP BOT*")
+	if strings.Contains(out, "GOLD") {
+		t.Fatalf("stock brand survived the skin: %q", out)
+	}
+	if !strings.Contains(SkinNormalizeInput(out), "CROWN ROYALE") {
+		t.Fatalf("style name missing from the rebranded line: %q", out)
+	}
+}
+
+// The classic style must keep the stock brand untouched.
+func TestSkinClassicKeepsBrand(t *testing.T) {
+	in := "*GOLD-MD WHATSAPP BOT*"
+	if got := MenuStyleAt(1).SkinText(in); got != in {
+		t.Fatalf("classic skin touched the brand: %q", got)
+	}
+}

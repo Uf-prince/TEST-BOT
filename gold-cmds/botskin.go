@@ -32,10 +32,40 @@ func (st MenuStyle) SkinText(s string) string {
 	}
 	sym := st.skinSym()
 	s = skinMarks(s, sym)
+	// Identity rewrite runs BEFORE the font transform: the brand words are
+	// still plain ASCII here, so they can actually be matched and renamed.
+	s = st.skinIdentity(s, sym)
 	if st.font > 0 {
 		s = applyMenuFont(st.font, s)
 	}
 	s = skinAccents(s, sym)
+	return s
+}
+
+// skinIdentity rewrites the bot's own brand words so a skinned bot does not
+// announce itself with the stock name. The whole bot renames itself after the
+// style (e.g. style 7 "CROWN ROYALE"), and "WHATSAPP BOT" follows suit. Applied
+// only when a skin is active, so unskinned output is byte-identical.
+func (st MenuStyle) skinIdentity(s, sym string) string {
+	if s == "" || st.N <= 1 {
+		return s
+	}
+	alias := st.Styled(st.Name)
+	if strings.TrimSpace(alias) == "" {
+		alias = sym + " BOT"
+	}
+	// Longest phrases first so "GOLD-MD WHATSAPP BOT" wins over "GOLD-MD".
+	repl := [][2]string{
+		{"GOLD-MD WHATSAPP BOT", alias + " BOT"},
+		{"GOLD MD WHATSAPP BOT", alias + " BOT"},
+		{"WHATSAPP BOT", alias + " BOT"},
+		{"GOLD-MD", alias},
+		{"GOLD MD", alias},
+		{"GOLD_MD", alias},
+	}
+	for _, r := range repl {
+		s = strings.ReplaceAll(s, r[0], r[1])
+	}
 	return s
 }
 
