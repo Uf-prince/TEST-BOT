@@ -2119,7 +2119,7 @@ func buildImportantCmds(prefix, importantKey string, st goldcmds.MenuStyle) stri
 	b.WriteString(st.ImpBorderTop() + "\n")
 	b.WriteString(st.ImpTitle("IMPORTANT CMNDS") + "\n")
 	for _, line := range []string{
-		"BOTPIC", "BOTSTYLE", "BOTVIDEO", "BOTVOICE",
+		"BOTPIC", "BOTVIDEO", "BOTVOICE",
 		pic, video, voice,
 	} {
 		b.WriteString(st.ImpRow(prefix, line) + "\n")
