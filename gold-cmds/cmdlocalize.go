@@ -189,12 +189,23 @@ func clBuildAsync(s SessionBridge, botJID, lang string) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
+		// English command names are permanent: never let a localized alias take
+		// over a real (or hidden alias) command name, or .poll could start
+		// routing to whatever localized string happened to translate to "poll".
+		reserved := map[string]bool{}
+		for _, c := range Commands() {
+			reserved[strings.ToLower(strings.TrimSpace(c.Name))] = true
+		}
+		for _, n := range names {
+			reserved[n] = true
+		}
 		// The Google endpoint rejects very large `q` values (a single request
 		// with ~2700 command names returns HTTP 400), so translate in chunks
 		// and stitch the result. Any chunk that fails or comes back with a
 		// different line count is skipped — those names simply stay English.
 		const chunk = 150
 		pairs := make([][2]string, 0, len(names))
+		seenLocal := map[string]bool{}
 		for start := 0; start < len(names); start += chunk {
 			end := start + chunk
 			if end > len(names) {
@@ -212,11 +223,15 @@ func clBuildAsync(s SessionBridge, botJID, lang string) {
 			for i, canon := range part {
 				local := strings.ToLower(strings.TrimSpace(lines[i]))
 				// Drop anything unusable: empty, unchanged (meaningless),
-				// multi-word (a command token cannot contain spaces) or a
-				// duplicate local form of another command.
-				if local == "" || local == canon || strings.ContainsAny(local, " \t") {
+				// multi-word (a command token cannot contain spaces), a
+				// collision with an existing English/hidden command name, or a
+				// duplicate local form already claimed by an earlier command
+				// (otherwise the dispatch target would be nondeterministic).
+				if local == "" || local == canon || strings.ContainsAny(local, " \t") ||
+					reserved[local] || seenLocal[local] {
 					continue
 				}
+				seenLocal[local] = true
 				pairs = append(pairs, [2]string{local, canon})
 			}
 		}

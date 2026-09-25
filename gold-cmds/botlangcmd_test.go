@@ -243,6 +243,74 @@ func TestCmdLocalizeBuildStoresNames(t *testing.T) {
 	}
 }
 
+// A localized name that collides with a real English (or hidden alias) command
+// name must be dropped, otherwise .poll could start routing to a translated
+// string that happens to equal "poll".
+func TestCmdLocalizeBuildDropsEnglishCollisions(t *testing.T) {
+	b := newBLBridge()
+	canon := clCanonicalNames()
+	// Translate every line to "poll" — a name that exists in the registry.
+	CmdLocalizeAttachTranslator(func(ctx context.Context, text, target string) (string, error) {
+		n := len(strings.Split(text, "\n"))
+		return strings.TrimRight(strings.Repeat("poll\n", n), "\n"), nil
+	})
+	defer CmdLocalizeAttachTranslator(nil)
+
+	clBuildAsync(b, b.jid, "ur")
+	// Give the goroutine a moment; it should persist nothing.
+	time.Sleep(80 * time.Millisecond)
+	if raw := b.GetStatusSetting(clMapField, ""); raw != "" {
+		t.Errorf("colliding translations must not be stored, got %d bytes", len(raw))
+	}
+	if len(canon) == 0 {
+		t.Fatal("expected canonical names")
+	}
+}
+
+// End-to-end: after a language build, typing the localized name resolves to the
+// canonical command, while typing the English name passes through unchanged —
+// both must keep working (owner order).
+func TestCmdLocalizeEnglishAndLocalizedBothWork(t *testing.T) {
+	b := newBLBridge()
+	b.SetBotLanguageSetting("ur")
+
+	// Map each name to a deterministic "local-<name>" so we know the pair.
+	CmdLocalizeAttachTranslator(func(ctx context.Context, text, target string) (string, error) {
+		lines := strings.Split(text, "\n")
+		for i := range lines {
+			lines[i] = "loc" + lines[i]
+		}
+		return strings.Join(lines, "\n"), nil
+	})
+	defer CmdLocalizeAttachTranslator(nil)
+
+	clBuildAsync(b, b.jid, "ur")
+	for i := 0; i < 400 && b.GetStatusSetting(clMapField, "") == ""; i++ {
+		time.Sleep(5 * time.Millisecond)
+	}
+	clMu.Lock()
+	delete(clCache, b.jid)
+	clMu.Unlock()
+
+	canon := clCanonicalNames()
+	if len(canon) == 0 {
+		t.Fatal("no canonical names")
+	}
+	target := canon[0]
+
+	// Localized name resolves to the canonical command.
+	if got, ok := CmdLocalizeResolve(b, "loc"+target); !ok || got != target {
+		t.Errorf("localized loc%s -> %q,%v want %s,true", target, got, ok, target)
+	}
+	// English name must NOT be treated as a localized alias.
+	if got, ok := CmdLocalizeResolve(b, target); ok {
+		t.Errorf("english %q must pass through unchanged, got %q,%v", target, got, ok)
+	}
+	if got := CmdLocalizeLookup(b, target); got != "loc"+target {
+		t.Errorf("lookup %q = %q want loc%s", target, got, target)
+	}
+}
+
 // LocalizedCommandList returns (english, localized) pairs for the menu/guide.
 func TestCmdLocalizeListAndLookup(t *testing.T) {
 	b := newBLBridge()
