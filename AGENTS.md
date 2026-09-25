@@ -136,22 +136,39 @@ Don't chase these unless asked.
 - `.aimode on/off/prefix` re-sends the card through the unthrottled
   `NotifyConnectedCard` bridge hook (pair.js `BilalSendConnectedNotice` parity).
 
-## Bot language (`.botlanguage`) — replies only, never command names
+## Bot language (`.botlanguage`) — replies + localized command aliases
 - One command sets the language the bot REPLIES in: `gold-cmds/botlangcmd.go`.
   Guide is ENGLISH on purpose (default user is English); the language list is
   `trtLangs` in `gold-cmds/trt.go` (130+ Google NMT languages), each shown with
-  its English name.
+  its English name. `.botlanguage commands` lists the localized command names
+  that currently work.
 - Storage: Redis `settings:<botJID>.botlanguage` = a language code ("ur","hi",
   ...). Empty/`en` = no translation. Use `Get/SetBotLanguageSetting` on the
   SessionBridge (`src/commands_loader.go`).
+- REGIONS & DIALECTS: `trtRegionAliases` (`gold-cmds/trt.go`) maps a country,
+  city, town or dialect name (Lahore, Karachi, Saraiki, Hindko, Nairobi, Cairo,
+  ...) to the nearest language Google actually supports. Entering a place name
+  is how "har sheher / har gaon" is covered. Every alias value MUST be a code
+  present in `trtLangs` (enforced by a test).
 - The translation layer lives on `*Session` in `src/handler.go`: `botLanguage()`
   (cached), `translateOut()` (8s timeout, falls back to English on error) and
   `replyText()` = translate → skin → footer. `Reply`, `SendTextWithID`,
   `sendSimple` and the group notices use `replyText`; media captions translate
   in `withCaptionFooter`.
-- OWNER ORDER: COMMAND NAMES ARE NEVER TRANSLATED. `.ping`, `.menu` stay English
-  for every user; only the bot's own words change language. Command dispatch is
-  untouched by the language layer.
+- LOCALIZED COMMAND ALIASES (`gold-cmds/cmdlocalize.go`): when a language is
+  set, the bot prepares a localized name for every visible command by
+  translating all names in ONE call (chunked at 150 names — the endpoint
+  returns HTTP 400 for the full ~2700-name payload) and caching the map in
+  Redis `settings:<botJID>.cmdlocalize`. `CmdLocalizeResolve` maps a typed
+  localized token back to its English command during dispatch
+  (`src/handler.go`, right after `CmdNameResolve`). English names ALWAYS keep
+  working; the localized name is only an alias, so owner-only / bancmd /
+  cmdowner / mode checks run on the canonical command unchanged.
+- Unicode tokens: `cmdRegexAny` (`src/handler.go`) parses a non-ASCII command
+  token (`.مینو`, `.मेनू`) after the ASCII and skin parses fail. Unknown
+  non-ASCII tokens match no command and stay silent, as before.
+- OWNER ORDER: command NAMES are never translated in dispatch terms — the
+  registry stays ASCII English. Localized names are aliases in Redis only.
 
 ## Style commands — only `.botstyle`
 - OWNER ORDER: the per-menu style commands (`menustyle`, `logostyle`,

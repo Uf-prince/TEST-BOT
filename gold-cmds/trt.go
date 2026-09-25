@@ -41,25 +41,25 @@ type trtLang struct {
 // trtLangs is the full Google Translate NMT language list (code -> name).
 // Order is alphabetical by name for a clean guidance message.
 var trtLangs = []trtLang{
-	{"af", "AFRIKAANS"}, {"sq", "ALBANIAN"}, {"am", "AMHARIC"}, {"ar", "ARABIC"},
+	{"af", "AFRIKAANS"}, {"ak", "AKAN"}, {"sq", "ALBANIAN"}, {"am", "AMHARIC"}, {"ar", "ARABIC"},
 	{"hy", "ARMENIAN"}, {"as", "ASSAMESE"}, {"ay", "AYMARA"}, {"az", "AZERBAIJANI"},
-	{"bm", "BAMBARA"}, {"eu", "BASQUE"}, {"be", "BELARUSIAN"}, {"bn", "BENGALI"},
+	{"bal", "BALOCHI"}, {"bm", "BAMBARA"}, {"eu", "BASQUE"}, {"be", "BELARUSIAN"}, {"bn", "BENGALI"},
 	{"bho", "BHOJPURI"}, {"bs", "BOSNIAN"}, {"bg", "BULGARIAN"}, {"ca", "CATALAN"},
 	{"ceb", "CEBUANO"}, {"ny", "CHICHEWA"}, {"zh-CN", "CHINESE (SIMPLIFIED)"},
 	{"zh-TW", "CHINESE (TRADITIONAL)"}, {"co", "CORSICAN"}, {"hr", "CROATIAN"},
-	{"cs", "CZECH"}, {"da", "DANISH"}, {"dv", "DIVEHI"}, {"nl", "DUTCH"},
-	{"en", "ENGLISH"}, {"eo", "ESPERANTO"}, {"et", "ESTONIAN"}, {"ee", "EWE"},
-	{"fil", "FILIPINO"}, {"fi", "FINNISH"}, {"fr", "FRENCH"}, {"fy", "FRISIAN"},
-	{"gl", "GALICIAN"}, {"ka", "GEORGIAN"}, {"de", "GERMAN"}, {"el", "GREEK"},
-	{"gn", "GUARANI"}, {"gu", "GUJARATI"}, {"ht", "HAITIAN CREOLE"}, {"ha", "HAUSA"},
-	{"haw", "HAWAIIAN"}, {"he", "HEBREW"}, {"hi", "HINDI"}, {"hmn", "HMONG"},
-	{"hu", "HUNGARIAN"}, {"is", "ICELANDIC"}, {"ig", "IGBO"}, {"ilo", "ILOKO"},
-	{"id", "INDONESIAN"}, {"ga", "IRISH"}, {"it", "ITALIAN"}, {"ja", "JAPANESE"},
-	{"jv", "JAVANESE"}, {"kn", "KANNADA"}, {"kk", "KAZAKH"}, {"km", "KHMER"},
-	{"rw", "KINYARWANDA"}, {"gom", "KONKANI"}, {"ko", "KOREAN"}, {"kri", "KRIO"},
-	{"ku", "KURDISH (KURMANJI)"}, {"ckb", "KURDISH (SORANI)"}, {"ky", "KYRGYZ"},
-	{"lo", "LAO"}, {"la", "LATIN"}, {"lv", "LATVIAN"}, {"ln", "LINGALA"},
-	{"lt", "LITHUANIAN"}, {"lg", "LUGANDA"}, {"lb", "LUXEMBOURGISH"},
+	{"cs", "CZECH"}, {"da", "DANISH"}, {"dv", "DIVEHI"}, {"doi", "DOGRI"}, {"dz", "DZONGKHA"},
+	{"nl", "DUTCH"}, {"en", "ENGLISH"}, {"eo", "ESPERANTO"}, {"et", "ESTONIAN"},
+	{"ee", "EWE"}, {"fil", "FILIPINO"}, {"fi", "FINNISH"}, {"fr", "FRENCH"},
+	{"fy", "FRISIAN"}, {"gl", "GALICIAN"}, {"ka", "GEORGIAN"}, {"de", "GERMAN"},
+	{"el", "GREEK"}, {"gn", "GUARANI"}, {"gu", "GUJARATI"}, {"ht", "HAITIAN CREOLE"},
+	{"ha", "HAUSA"}, {"haw", "HAWAIIAN"}, {"he", "HEBREW"}, {"hi", "HINDI"},
+	{"hmn", "HMONG"}, {"hu", "HUNGARIAN"}, {"is", "ICELANDIC"}, {"ig", "IGBO"},
+	{"ilo", "ILOKO"}, {"id", "INDONESIAN"}, {"ga", "IRISH"}, {"it", "ITALIAN"},
+	{"ja", "JAPANESE"}, {"jv", "JAVANESE"}, {"kn", "KANNADA"}, {"kk", "KAZAKH"},
+	{"km", "KHMER"}, {"rw", "KINYARWANDA"}, {"gom", "KONKANI"}, {"ko", "KOREAN"},
+	{"kri", "KRIO"}, {"ku", "KURDISH (KURMANJI)"}, {"ckb", "KURDISH (SORANI)"},
+	{"ky", "KYRGYZ"}, {"lo", "LAO"}, {"la", "LATIN"}, {"lv", "LATVIAN"},
+	{"ln", "LINGALA"}, {"lt", "LITHUANIAN"}, {"lg", "LUGANDA"}, {"lb", "LUXEMBOURGISH"},
 	{"mk", "MACEDONIAN"}, {"mai", "MAITHILI"}, {"mg", "MALAGASY"}, {"ms", "MALAY"},
 	{"ml", "MALAYALAM"}, {"mt", "MALTESE"}, {"mi", "MAORI"}, {"mr", "MARATHI"},
 	{"mni-Mtei", "MEITEILON (MANIPURI)"}, {"lus", "MIZO"}, {"mn", "MONGOLIAN"},
@@ -67,22 +67,173 @@ var trtLangs = []trtLang{
 	{"or", "ODIA (ORIYA)"}, {"om", "OROMO"}, {"ps", "PASHTO"}, {"fa", "PERSIAN"},
 	{"pl", "POLISH"}, {"pt", "PORTUGUESE"}, {"pa", "PUNJABI"}, {"qu", "QUECHUA"},
 	{"ro", "ROMANIAN"}, {"ru", "RUSSIAN"}, {"sm", "SAMOAN"}, {"sa", "SANSKRIT"},
-	{"gd", "SCOTS GAELIC"}, {"sr", "SERBIAN"}, {"st", "SESOTHO"}, {"sn", "SHONA"},
-	{"sd", "SINDHI"}, {"si", "SINHALA"}, {"sk", "SLOVAK"}, {"sl", "SLOVENIAN"},
-	{"so", "SOMALI"}, {"es", "SPANISH"}, {"su", "SUNDANESE"}, {"sw", "SWAHILI"},
-	{"sv", "SWEDISH"}, {"tg", "TAJIK"}, {"ta", "TAMIL"}, {"tt", "TATAR"},
-	{"te", "TELUGU"}, {"th", "THAI"}, {"ti", "TIGRINYA"}, {"ts", "TSONGA"},
-	{"tr", "TURKISH"}, {"tk", "TURKMEN"}, {"uk", "UKRAINIAN"}, {"ur", "URDU"},
-	{"ug", "UYGHUR"}, {"uz", "UZBEK"}, {"vi", "VIETNAMESE"}, {"cy", "WELSH"},
-	{"xh", "XHOSA"}, {"yi", "YIDDISH"}, {"yo", "YORUBA"}, {"zu", "ZULU"},
+	{"sat", "SANTALI"}, {"gd", "SCOTS GAELIC"}, {"nso", "SEPEDI"}, {"sr", "SERBIAN"},
+	{"st", "SESOTHO"}, {"sn", "SHONA"}, {"sd", "SINDHI"}, {"si", "SINHALA"},
+	{"sk", "SLOVAK"}, {"sl", "SLOVENIAN"}, {"so", "SOMALI"}, {"es", "SPANISH"},
+	{"su", "SUNDANESE"}, {"sw", "SWAHILI"}, {"sv", "SWEDISH"}, {"tg", "TAJIK"},
+	{"ta", "TAMIL"}, {"tt", "TATAR"}, {"te", "TELUGU"}, {"th", "THAI"},
+	{"ti", "TIGRINYA"}, {"ts", "TSONGA"}, {"tr", "TURKISH"}, {"tk", "TURKMEN"},
+	{"uk", "UKRAINIAN"}, {"ur", "URDU"}, {"ug", "UYGHUR"}, {"uz", "UZBEK"},
+	{"vi", "VIETNAMESE"}, {"cy", "WELSH"}, {"xh", "XHOSA"}, {"yi", "YIDDISH"},
+	{"yo", "YORUBA"}, {"zu", "ZULU"},
+}
+
+// trtRegionAliases maps a COUNTRY / CITY / TOWN / VILLAGE / DIALECT name to the
+// closest language Google actually supports. This is how "har city, har gaon"
+// is covered: Google has ~130 language codes, so a region that speaks a dialect
+// (Saraiki, Hindko, Marwari, ...) resolves to its nearest supported language,
+// and a city resolves to the dominant language of that place. Owner order:
+// a user types the place or dialect they speak and the bot replies in it.
+//
+// Keys are lower-case; values are trtLangs codes.
+var trtRegionAliases = map[string]string{
+	// ── Pakistan — provinces, cities, dialects ──
+	"pakistan": "ur", "pakistani": "ur", "pak": "ur",
+	"punjabi (pakistan)": "pa", "lahnda": "pa", "western punjabi": "pa",
+	"lahore": "pa", "lahori": "pa", "faisalabad": "pa", "gujranwala": "pa",
+	"sialkot": "pa", "multan": "pa", "multani": "pa", "rawalpindi": "pa",
+	"islamabad": "ur", "karachi": "ur", "karachite": "ur", "hyderabad (pakistan)": "ur",
+	"peshawar": "ps", "peshawari": "ps", "khyber": "ps", "kpk": "ps",
+	"quetta": "bal", "balochistan": "bal", "balochi": "bal", "brahui": "bal",
+	"gilgit": "ur", "gilgiti": "ur", "skardu": "ur", "baltistan": "ur",
+	"kashmir (pakistan)": "ur", "azad kashmir": "ur", "mirpur": "pa", "muzaffarabad": "ur",
+	"saraiki": "pa", "seraiki": "pa", "siraiki": "pa", "riyasati": "pa",
+	"hindko": "pa", "hindku": "pa", "pothwari": "pa", "potohari": "pa", "pahari": "pa",
+	"chitrali": "ps", "khowar": "ps", "shina": "ur", "burushaski": "ur", "wakhi": "ps",
+	"mewati": "hi", "haryanvi": "hi", "rangri": "hi",
+	// ── India — states, cities, dialects ──
+	"india": "hi", "indian": "hi", "hindustani": "hi",
+	"delhi": "hi", "new delhi": "hi", "mumbai": "mr", "bombay": "mr",
+	"pune": "mr", "nagpur": "mr", "maharashtra": "mr", "marathi": "mr",
+	"bengaluru": "kn", "bangalore": "kn", "mysore": "kn", "karnataka": "kn", "kannada": "kn",
+	"chennai": "ta", "madras": "ta", "tamil nadu": "ta", "tamil": "ta",
+	"hyderabad (india)": "te", "telangana": "te", "telugu": "te", "andhra": "te",
+	"kolkata": "bn", "calcutta": "bn", "west bengal": "bn", "bengali": "bn", "bangla": "bn",
+	"ahmedabad": "gu", "gujarat": "gu", "gujarati": "gu", "surat": "gu",
+	"kochi": "ml", "kerala": "ml", "malayalam": "ml", "trivandrum": "ml",
+	"lucknow": "hi", "kanpur": "hi", "varanasi": "hi", "banaras": "hi", "agra": "hi",
+	"jaipur": "hi", "rajasthan": "hi", "marwari": "hi", "marwadi": "hi", "mewari": "hi",
+	"bhopal": "hi", "madhya pradesh": "hi", "indore": "hi", "chhattisgarhi": "hi",
+	"awadhi": "hi", "brij": "hi", "braj": "hi", "magahi": "hi", "magadhi": "hi",
+	"bhojpuri": "bho", "bihar": "bho", "patna": "bho", "maithili": "mai", "maithil": "mai",
+	"dogri": "doi", "jammu": "doi", "konkani": "gom", "goa": "gom",
+	"santali": "sat", "santhali": "sat", "manipuri": "mni-Mtei", "meitei": "mni-Mtei",
+	"mizo": "lus", "assamese": "as", "assam": "as", "guwahati": "as",
+	"odia": "or", "oriya": "or", "odisha": "or", "bhubaneswar": "or",
+	"kashmiri": "ur", "koshur": "ur", "srinagar": "ur", "punjabi (india)": "pa",
+	"amritsar": "pa", "chandigarh": "pa", "sindhi (india)": "sd",
+	// ── South Asia neighbours ──
+	"bangladesh": "bn", "dhaka": "bn", "chittagong": "bn",
+	"nepal": "ne", "nepali": "ne", "kathmandu": "ne",
+	"bhutan": "dz", "dzongkha": "dz",
+	"sri lanka": "si", "sinhala": "si", "colombo": "si", "tamil (sri lanka)": "ta",
+	"maldives": "dv", "dhivehi": "dv", "male": "dv",
+	"afghanistan": "ps", "afghan": "ps", "kabul": "ps",
+	"dari": "fa", "kandahar": "ps", "herat": "fa",
+	// ── Middle East / Central Asia / Iranic ──
+	"iran": "fa", "persian": "fa", "farsi": "fa", "tehran": "fa",
+	"tajikistan": "tg", "tajiki": "tg", "dushanbe": "tg",
+	"uzbekistan": "uz", "uzbek": "uz", "tashkent": "uz",
+	"turkmenistan": "tk", "turkmen": "tk", "ashgabat": "tk",
+	"kazakhstan": "kk", "kazakh": "kk", "almaty": "kk",
+	"kyrgyzstan": "ky", "kyrgyz": "ky", "bishkek": "ky",
+	"azerbaijan": "az", "azeri": "az", "baku": "az",
+	"armenia": "hy", "armenian": "hy", "yerevan": "hy",
+	"georgia": "ka", "georgian": "ka", "tbilisi": "ka",
+	"turkey": "tr", "turkish": "tr", "istanbul": "tr", "ankara": "tr",
+	"kurdistan": "ku", "kurmanji": "ku", "sorani": "ckb", "erbil": "ckb",
+	"arabic": "ar", "saudi": "ar", "riyadh": "ar", "jeddah": "ar", "mecca": "ar",
+	"uae": "ar", "dubai": "ar", "abu dhabi": "ar", "qatar": "ar", "doha": "ar",
+	"kuwait": "ar", "bahrain": "ar", "oman": "ar", "muscat": "ar",
+	"jordan": "ar", "amman": "ar", "lebanon": "ar", "beirut": "ar",
+	"syria": "ar", "damascus": "ar", "iraq": "ar", "baghdad": "ar",
+	"egypt": "ar", "cairo": "ar", "yemen": "ar", "sanaa": "ar",
+	"morocco": "ar", "rabat": "ar", "casablanca": "ar", "algeria": "ar", "algiers": "ar",
+	"tunisia": "ar", "tunis": "ar", "libya": "ar", "tripoli": "ar", "sudan": "ar", "khartoum": "ar",
+	"israel": "he", "hebrew": "he", "tel aviv": "he", "jerusalem": "he",
+	// ── Africa ──
+	"nigeria": "yo", "lagos": "yo", "yoruba": "yo", "abuja": "ha", "hausa": "ha",
+	"kano": "ha", "igbo": "ig", "enugu": "ig",
+	"ethiopia": "am", "amharic": "am", "addis ababa": "am", "tigrinya": "ti",
+	"kenya": "sw", "nairobi": "sw", "swahili": "sw", "kiswahili": "sw",
+	"tanzania": "sw", "dar es salaam": "sw", "mombasa": "sw",
+	"ghana": "ak", "accra": "ak", "akan": "ak", "twi": "ak",
+	"uganda": "lg", "kampala": "lg", "luganda": "lg",
+	"rwanda": "rw", "kigali": "rw", "kinyarwanda": "rw",
+	"zimbabwe": "sn", "harare": "sn", "shona": "sn", "ndebele": "sn",
+	"malawi": "ny", "lilongwe": "ny", "chichewa": "ny",
+	"south africa": "zu", "zulu": "zu", "johannesburg": "zu", "durban": "zu",
+	"cape town": "af", "afrikaans": "af", "pretoria": "nso", "sesotho": "st",
+	"tsonga": "ts", "somalia": "so", "somali": "so", "mogadishu": "so",
+	"senegal": "fr", "dakar": "fr", "mali": "bm", "bambara": "bm", "bamako": "bm",
+	"congo": "ln", "kinshasa": "ln", "lingala": "ln", "madagascar": "mg", "malagasy": "mg",
+	// ── Europe ──
+	"uk": "en", "britain": "en", "england": "en", "london": "en", "usa": "en",
+	"america": "en", "new york": "en", "ireland": "ga", "irish": "ga", "dublin": "ga",
+	"wales": "cy", "welsh": "cy", "cardiff": "cy", "scotland": "gd", "scots gaelic": "gd",
+	"france": "fr", "french": "fr", "paris": "fr", "belgium": "fr", "brussels": "fr",
+	"spain": "es", "spanish": "es", "madrid": "es", "mexico": "es", "mexican": "es",
+	"argentina": "es", "buenos aires": "es", "colombia": "es", "bogota": "es",
+	"portugal": "pt", "portuguese": "pt", "lisbon": "pt", "brazil": "pt", "brasil": "pt",
+	"italy": "it", "italian": "it", "rome": "it", "germany": "de", "german": "de",
+	"berlin": "de", "austria": "de", "vienna": "de", "switzerland": "de", "zurich": "de",
+	"netherlands": "nl", "dutch": "nl", "amsterdam": "nl", "holland": "nl",
+	"russia": "ru", "russian": "ru", "moscow": "ru", "ukraine": "uk", "ukrainian": "uk",
+	"kyiv": "uk", "poland": "pl", "polish": "pl", "warsaw": "pl",
+	"greece": "el", "greek": "el", "athens": "el", "sweden": "sv", "swedish": "sv",
+	"stockholm": "sv", "norway": "no", "norwegian": "no", "oslo": "no",
+	"denmark": "da", "danish": "da", "copenhagen": "da", "finland": "fi", "finnish": "fi",
+	"helsinki": "fi", "hungary": "hu", "hungarian": "hu", "budapest": "hu",
+	"romania": "ro", "romanian": "ro", "bucharest": "ro", "bulgaria": "bg", "sofia": "bg",
+	"serbia": "sr", "serbian": "sr", "belgrade": "sr", "croatia": "hr", "zagreb": "hr",
+	"bosnia": "bs", "sarajevo": "bs", "slovakia": "sk", "slovenia": "sl",
+	"czech": "cs", "czechia": "cs", "prague": "cs", "lithuania": "lt", "latvia": "lv",
+	"estonia": "et", "iceland": "is", "icelandic": "is", "malta": "mt", "maltese": "mt",
+	"albania": "sq", "albanian": "sq", "macedonia": "mk", "belarus": "be", "belarusian": "be",
+	// ── East / Southeast / Central Asia ──
+	"china": "zh-CN", "chinese": "zh-CN", "mandarin": "zh-CN", "beijing": "zh-CN",
+	"shanghai": "zh-CN", "taiwan": "zh-TW", "hong kong": "zh-TW",
+	"japan": "ja", "japanese": "ja", "tokyo": "ja", "osaka": "ja",
+	"korea": "ko", "korean": "ko", "seoul": "ko", "north korea": "ko",
+	"mongolia": "mn", "mongolian": "mn", "ul": "mn",
+	"thailand": "th", "thai": "th", "bangkok": "th",
+	"vietnam": "vi", "vietnamese": "vi", "hanoi": "vi", "saigon": "vi",
+	"cambodia": "km", "khmer": "km", "phnom penh": "km",
+	"laos": "lo", "lao": "lo", "vientiane": "lo",
+	"myanmar": "my", "burmese": "my", "yangon": "my",
+	"malaysia": "ms", "malay": "ms", "kuala lumpur": "ms",
+	"indonesia": "id", "indonesian": "id", "jakarta": "id", "javanese": "jv",
+	"sundanese": "su", "philippines": "fil", "filipino": "fil", "tagalog": "fil",
+	"manila": "fil", "cebuano": "ceb", "iloko": "ilo", "singapore": "zh-CN",
+	// ── Americas / Oceania ──
+	"canada": "en", "toronto": "en", "australia": "en", "sydney": "en",
+	"new zealand": "en", "hawaii": "haw", "hawaiian": "haw",
+	"peru": "es", "lima": "es", "chile": "es", "santiago": "es", "ecuador": "es",
+	"guatemala": "es", "cuba": "es", "havana": "es", "bolivia": "es", "paraguay": "gn",
+	"guyana": "en", "suriname": "nl", "haiti": "ht", "haitian creole": "ht",
+	"jamaica": "en", "trinidad": "en", "quebec": "fr", "montreal": "fr",
+	// ── Native-script language names (users type their language in its own script) ──
+	"اردو": "ur", "हिन्दी": "hi", "हिंदी": "hi", "پنجابی": "pa", "ਪੰਜਾਬੀ": "pa",
+	"سنڌي": "sd", "سندھی": "sd", "پشتو": "ps", "بلوچی": "bal",
+	"العربية": "ar", "فارسی": "fa", "دری": "fa", "کوردی": "ku",
+	"中文": "zh-CN", "中国": "zh-CN", "日本語": "ja", "한국어": "ko",
+	"Русский": "ru", "Українська": "uk", "Español": "es", "Français": "fr",
+	"Deutsch": "de", "Português": "pt", "Italiano": "it", "Türkçe": "tr",
+	"বাংলা": "bn", "ગુજરાતી": "gu", "தமிழ்": "ta", "తెలుగు": "te",
+	"ಕನ್ನಡ": "kn", "മലയാളം": "ml", "मराठी": "mr", "ଓଡ଼ିଆ": "or",
+	"অসমীয়া": "as", "සිංහල": "si", "नेपाली": "ne", "امہارک": "am",
+	"አማርኛ": "am", "Kiswahili": "sw", "ةيبرعلا": "ar",
 }
 
 // trtLangIndex maps a lower-cased code OR name to the canonical code.
 var trtLangIndex = func() map[string]string {
-	m := make(map[string]string, len(trtLangs)*2)
+	m := make(map[string]string, len(trtLangs)*2+len(trtRegionAliases))
 	for _, l := range trtLangs {
 		m[strings.ToLower(l.Code)] = l.Code
 		m[strings.ToLower(l.Name)] = l.Code
+	}
+	for name, code := range trtRegionAliases {
+		m[strings.ToLower(name)] = code
 	}
 	// common aliases
 	m["chinese"] = "zh-CN"
@@ -91,6 +242,10 @@ var trtLangIndex = func() map[string]string {
 	m["farsi"] = "fa"
 	m["punjabi (pakistan)"] = "pa"
 	m["roman urdu"] = "ur"
+	m["roman hindi"] = "hi"
+	m["roman punjabi"] = "pa"
+	m["urdu roman"] = "ur"
+	m["hindi roman"] = "hi"
 	return m
 }()
 

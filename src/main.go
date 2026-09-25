@@ -264,6 +264,12 @@ func main() {
 		return names
 	})
 
+	// ── localized command names: share the translator with gold-cmds ──
+	// .botlanguage ke saath us language ke command names bhi chalein
+	// (.مینو / .मेनू). Translation transport gold-cmds me duplicate nahi hota
+	// — wahi Google helper attach hota hai jo .trt / .botlanguage use karte hain.
+	goldcmds.CmdLocalizeAttachTranslator(goldcmds.TranslateText)
+
 	// self-restart (reconnect_watchdog.go) ke liye DB path expose
 	selfRestartDBPath = dbPath
 

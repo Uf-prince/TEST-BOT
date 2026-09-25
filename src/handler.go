@@ -18,6 +18,13 @@ import (
 var startTime = time.Now()
 var cmdRegex = regexp.MustCompile(`(?s)^([A-Za-z0-9_]+)(.*)$`)
 
+// cmdRegexAny is the Unicode-aware variant used when the plain ASCII parse
+// fails: it lets a LOCALIZED command token (.مینو, .मेनू) be parsed so the
+// dispatch can resolve it back to its English command. The token is only the
+// leading run of letters/digits/underscore; everything after (space + args)
+// stays untouched.
+var cmdRegexAny = regexp.MustCompile(`(?s)^([\p{L}\p{N}_]+)(.*)$`)
+
 // Plugin function type for commands
 type CommandFunc func(s *Session, info types.MessageInfo, args []string, prefix string)
 
@@ -759,6 +766,12 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		match = cmdRegex.FindStringSubmatch(goldcmds.SkinNormalizeInput(after))
 	}
 	if match == nil {
+		// LOCALIZED command name (e.g. .مینو / .मेनू) — Unicode token parse.
+		// Dispatch resolves it back to the English command below; unknown
+		// non-ASCII tokens simply do not match any command and stay silent.
+		match = cmdRegexAny.FindStringSubmatch(after)
+	}
+	if match == nil {
 		return
 	}
 
@@ -868,6 +881,16 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		return
 	}
 	if orig, ok := goldcmds.CmdNameResolve(br, command); ok {
+		command = orig
+	}
+
+	// ── LOCALIZED COMMAND NAMES (.botlanguage) ────────────────────────────
+	// OWNER ORDER: jab bot ki language set ho to us language ka command name
+	// bhi chalta hai (.مینو / .मेनू). English naam KABHI band nahi hota.
+	// Resolve chain: custom cmdname pehle (owner ka rename), phir localized
+	// alias -> canonical English. Original handler hi chalta hai, to
+	// owner-only / bancmd / mode sab checks waise hi lagte hain.
+	if orig, ok := goldcmds.CmdLocalizeResolve(br, command); ok {
 		command = orig
 	}
 
