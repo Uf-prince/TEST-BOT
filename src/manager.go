@@ -1561,18 +1561,34 @@ func (s *Session) sendStartupNotification() {
 	totalCmds := coreCount + pluginCount + goldcmds.LogoCount + goldcmds.FontCount + goldcmds.EqCount + goldcmds.GameCount
 	prefix := s.resolvePrefix(s.JID)
 
+	// ── AI MODE — LIVE STATUS (pair.js _aiModeLines) ──
+	// Har connect/reconnect/.aimode-change pe FRESH DB se padha jata hai, taake
+	// card hamesha AI MODE ki ASAL current state dikhaye — stale value kabhi
+	// nahi. Wake-word ki example lines SIRF ON hone par dikhti hain.
+	aiModeOn := goldcmds.AIModeEnabledFor(s.JID)
+	aiModeWord := goldcmds.AIModeWakeWordFor(s.JID)
+	aiModeLines := fmt.Sprintf("*🔰 AI MODE :❯ ❮ %s ❯*\n*TYPE ❮ %sAIMODE ❯ FOR INFO*",
+		goldcmds.AIModeStateLabel(aiModeOn), prefix)
+	if aiModeOn {
+		up := strings.ToUpper(aiModeWord)
+		aiModeLines += fmt.Sprintf("\n*🔰 AI MODE WAKE-WORD :❯ ❮ %s ❯*\n\n*NOW THE AI WORKS THE SAME WAY, JUST TYPE:*\n*%s CHECK BOT SPEED*\n*%s CHECK BOT UPTIME*\n*%s SHOW BOT COMMANDS*\n*%s STATUS SEEN ON*",
+			up, up, up, up, up)
+	}
+
 	logoURL := s.botPicURL()
 
 	msgText := fmt.Sprintf(`*GOLD-MD HAS BEEN STARTED*
-	
+
 *🔰 USER :❯ %s*
 *🔰 NUMBER :❯ %s*
 *🔰 PREFIX :❯ %s*
-*🔰 COMMANDS :❯ ❮ %d ❯*
+*🔰 COMMANDS :❯ ❮ %d ❮*
+
+%s
 
 *🔰 IMPORTANT NOTE 🔰*
 *IF YOUR BOT NOT REPLYING MEANS YOUR BOT STOPPED SO PLEASE DON'T WORRY ABOUT THIS THINK THIS REAL ISSUE THE GOLD-MD SERVER HAS BEEN RESTARTING AND WHEN THE RESTART COMPLETE THE BOT COME BACK ONLINE YOU CANE WAIT ONLY 2 /3  MINUTES AND YOUR BOT WILL COME BACK ONLINE NO NEED TO PAIR ✅*`,
-		ownerName, ownerNumberDisplay, prefix, totalCmds)
+		ownerName, ownerNumberDisplay, prefix, totalCmds, aiModeLines)
 
 	// Append the botname footer so the startup notification also carries
 	// the consistent bot signature (same as every other bot message).

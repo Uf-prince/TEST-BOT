@@ -45,6 +45,12 @@ const (
 	aimMaxKeys        = 30
 )
 
+// aimDefaultPrefixWord is the wake-word a fresh bot uses when the owner never
+// ran ".aimode prefix <word>" (pair.js AIMODE_DEFAULT_PREFIX_WORD). It keeps
+// plain chatter out of the resolver and stops bare command names from working
+// without the bot prefix — the owner must type "AI check bot speed".
+const aimDefaultPrefixWord = "AI"
+
 // aimModels — same working model as .autoreply (owner order).
 var aimModels = []string{arModel, arModelFallbacks}
 
@@ -205,6 +211,15 @@ func aimEnabled(s SessionBridge) bool {
 	return strings.EqualFold(strings.TrimSpace(s.GetPresenceSetting(aimModeField, "off")), "on")
 }
 
+// AIModeStateLabel renders the ON/OFF label used across the .aimode texts and
+// the connected card.
+func AIModeStateLabel(on bool) string {
+	if on {
+		return "ON"
+	}
+	return "OFF"
+}
+
 func aimSetEnabled(s SessionBridge, on bool) {
 	v := "off"
 	if on {
@@ -213,8 +228,14 @@ func aimSetEnabled(s SessionBridge, on bool) {
 	s.SetPresenceSetting(aimModeField, v)
 }
 
+// aimPrefixWord returns the wake-word the resolver requires. When the owner
+// never set one, the pair.js default ("AI") applies — so AI Mode only reacts to
+// messages that start with that word instead of swallowing every plain message.
 func aimPrefixWord(s SessionBridge) string {
-	return strings.TrimSpace(s.GetPresenceSetting(aimPrefixField, ""))
+	if w := strings.TrimSpace(s.GetPresenceSetting(aimPrefixField, "")); w != "" {
+		return w
+	}
+	return aimDefaultPrefixWord
 }
 
 // ----------------------------------------------------------------------------
@@ -628,23 +649,48 @@ func aimCacheSet(key, value string, ok bool) {
 }
 
 // ----------------------------------------------------------------------------
-// texts (verbatim from Node.js pair.js; 👑 → 🔰)
+// texts — GOLD-MD design: *BOLD*, 🔰 marks, ❮ ❯ value brackets, ❲ ❳ command
+// brackets, "LABEL :❵ description" rows.
 // ----------------------------------------------------------------------------
 
+// aimOwnerOnlyText matches every other owner-only command in the bot.
 func aimOwnerOnlyText() string {
-	return `*❌ THIS IS AN OWNER COMMAND*
+	return "*THIS COMMAND IS ONLY FOR ME 😎*"
+}
 
-*SIRF BOT KE OWNER KO YEH COMMAND USE KARNE KI IJAZAT HAI 😎*`
+func aimToggleText(on bool) string {
+	if on {
+		return `*🔰 AI MODE TURNED ON 🔰*
+
+*AI MODE :❯ ❮ ON ❯*
+*WORKING :❯ EVERY CHAT + GROUP*
+
+*DESCRIPTION :❵ NOW TYPE A NORMAL SENTENCE IN ANY CHAT OR GROUP AND THE AI WILL FIND AND RUN THE RIGHT COMMAND FOR YOU.*`
+	}
+	return `*🔰 AI MODE TURNED OFF 🔰*
+
+*AI MODE :❯ ❮ OFF ❯*
+*WORKING :❯ EVERY CHAT + GROUP*
+
+*DESCRIPTION :❵ PLAIN SENTENCES ARE IGNORED NOW. ONLY NORMAL PREFIX COMMANDS WILL WORK UNTIL YOU TURN AI MODE BACK ON.*`
+}
+
+func aimStatusText(on bool, word string) string {
+	return `*🔰 AI MODE STATUS 🔰*
+
+*AI MODE :❯ ❮ ` + AIModeStateLabel(on) + ` ❯*
+*WAKE-WORD :❯ ❮ ` + word + ` ❯*
+
+*DESCRIPTION :❵ YEH SETTING HAR CHAT AUR GROUP PAR APPLY HOTI HAI.*
+*HOW TO USE :❵ TYPE ❲ ` + strings.ToUpper(word) + ` CHECK BOT SPEED ❳*`
 }
 
 func aimPrefixSetText(pw string) string {
 	return `*🔰 AI MODE PREFIX SET 🔰*
 
-*YOU AI MODE PREFIX ❮ ` + pw + ` ❯*
+*WAKE-WORD :❯ ❮ ` + pw + ` ❯*
 
-*HOW TO USE*
-DON'T TYPE YOUR PREFIX EG . , ? @ DON'T TYPE YOUR MAIN PREFIX OK TYPE SIMPLE TEXT WITH *AIMODE PREFIX* SAME LIKE THAT
-*FOR EXAMPLES SEEE*
+*HOW TO USE :❵ DON'T TYPE YOUR MAIN PREFIX (. , ? @) — TYPE SIMPLE TEXT WITH THE AI MODE WAKE-WORD, SAME LIKE THAT*
 *` + pw + ` CHECK BOT SPEED*
 *` + pw + ` SHOW BOT COMMANDS*
 *` + pw + ` CHECK BOT UPTIME*
@@ -652,44 +698,41 @@ DON'T TYPE YOUR PREFIX EG . , ? @ DON'T TYPE YOUR MAIN PREFIX OK TYPE SIMPLE TEX
 *` + pw + ` ACTIVATE THE STATUS*
 *` + pw + ` (ASK TO RUN COMMAND)*
 
-STILL CONFUSED ? SEE THE COMPLETE AIMODE FULL GUIDANCE VIDEO
+*STILL CONFUSED ? SEE THE COMPLETE AIMODE FULL GUIDANCE VIDEO*
 https://youtu.be/grZBRtnebgs?is=jYy2wtT5Voxn3XYu`
 }
 
-func aimGuideText(prefix, curEnabled, curPrefixWord string) string {
-	pw := curPrefixWord
-	if pw == "" {
-		pw = "AI"
-	}
-	state := "OFF"
-	if strings.EqualFold(curEnabled, "on") {
-		state = "ON"
-	}
-	shown := curPrefixWord
-	if shown == "" {
-		shown = "NOT SET"
-	}
+func aimPrefixInfoText(prefix, word string) string {
+	return `*🔰 AI MODE PREFIX INFO 🔰*
+
+*CURRENT WAKE-WORD :❯ ❮ ` + strings.ToUpper(word) + ` ❯*
+
+*DESCRIPTION :❵ AI MODE ONLY REACTS TO MESSAGES THAT START WITH THIS WAKE-WORD. CHANGE IT ANY TIME.*
+
+*TYPE ❲ ` + prefix + `AIMODE PREFIX NEWWORD ❳* — set your own wake-word
+*EXAMPLE :❵ ` + prefix + `aimode prefix KING*
+
+*HOW TO USE :❵ TYPE ❲ ` + strings.ToUpper(word) + ` CHECK BOT SPEED ❳*`
+}
+
+func aimGuideText(prefix string, on bool, word string) string {
+	pw := strings.ToUpper(word)
 	return `*🔰 AI MODE COMMAND GUIDE 🔰*
 
-*TYPE ❮` + prefix + `AIMODE ON❯ TO ACTIVATE*
-*TYPE ❮` + prefix + `AIMODE OFF❯ TO DE-ACTIVATE*
+*AI MODE :❯ ❮ ` + AIModeStateLabel(on) + ` ❯*
+*WAKE-WORD :❯ ❮ ` + pw + ` ❯*
 
-*TYPE ❮` + prefix + `AIMODE PREFIX (NEW PREFIX)❯*
-*SET YOUR OWN PREFIX *
-*SAME LIKE THAT EXAMPLES*
-*TYPE ❮ ` + prefix + `AIMODE PREFIX KING ❯*
-*TYPE ❮ ` + prefix + `AIMODE PREFIX BOSS ❯*
-*TYPE ❮ ` + prefix + `AIMODE PREFIX BILAL ❯*
-*TYPE ❮ ` + prefix + `AIMODE PREFIX YOUR NAME ❯*
-TO SET AI MODE PREFIX
+*TYPE ❲ ` + prefix + `AIMODE ON ❳* — ACTIVATE
+*TYPE ❲ ` + prefix + `AIMODE OFF ❳* — DE-ACTIVATE
+*TYPE ❲ ` + prefix + `AIMODE STATUS ❳* — SHOW CURRENT STATE
+*TYPE ❲ ` + prefix + `AIMODE PREFIX ❳* — SHOW THE WAKE-WORD
 
-*NOW AI MODE IS ❮ ` + state + ` ❯*
+*SET YOUR OWN WAKE-WORD*
+*TYPE ❲ ` + prefix + `AIMODE PREFIX KING ❳*
+*TYPE ❲ ` + prefix + `AIMODE PREFIX BOSS ❳*
+*TYPE ❲ ` + prefix + `AIMODE PREFIX YOUR NAME ❳*
 
-*YOU AI MODE PREFIX ❮ ` + shown + ` ❯*
-
-*HOW TO USE*
-DON'T TYPE YOUR PREFIX EG . , ? @ DON'T TYPE YOUR MAIN PREFIX OK TYPE SIMPLE TEXT WITH *AIMODE PREFIX* SAME LIKE THAT
-*FOR EXAMPLES SEEE*
+*HOW TO USE :❵ DON'T TYPE YOUR MAIN PREFIX (. , ? @) — TYPE SIMPLE TEXT WITH THE AI MODE WAKE-WORD, SAME LIKE THAT*
 *` + pw + ` CHECK BOT SPEED*
 *` + pw + ` SHOW BOT COMMANDS*
 *` + pw + ` CHECK BOT UPTIME*
@@ -697,8 +740,17 @@ DON'T TYPE YOUR PREFIX EG . , ? @ DON'T TYPE YOUR MAIN PREFIX OK TYPE SIMPLE TEX
 *` + pw + ` ACTIVATE THE STATUS*
 *` + pw + ` (ASK TO RUN COMMAND)*
 
-*STILL CONFUSED ? SEE THE COMPLETE AIMODE FULL GUIDANCE VIDEO ON YOUTUBE*
+*STILL CONFUSED ? SEE THE COMPLETE AIMODE FULL GUIDANCE VIDEO*
 https://youtu.be/grZBRtnebgs?is=jYy2wtT5Voxn3XYu`
+}
+
+func aimUsageText(prefix string) string {
+	return `*🔰 AI MODE WRONG FORMAT 🔰*
+
+*TYPE ❲ ` + prefix + `AIMODE ON ❳* / ❲ ` + prefix + `AIMODE OFF ❳*
+*TYPE ❲ ` + prefix + `AIMODE STATUS ❳* — SHOW CURRENT STATE
+*TYPE ❲ ` + prefix + `AIMODE PREFIX NEWWORD ❳* — SET WAKE-WORD
+*TYPE ❲ ` + prefix + `AIMODE ❳* — FULL GUIDE`
 }
 
 // ----------------------------------------------------------------------------
@@ -752,36 +804,25 @@ func AIModeTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 		switch action {
 		case "on", "off":
 			aimSetEnabled(s, action == "on")
-			msg := "🤖 *AI MODE TURNED " + strings.ToUpper(action) + " FOR ALL CHATS/GROUPS (GLOBAL).*"
-			if action == "on" {
-				msg += "\n\n*YOU CAN NOW TYPE NORMAL SENTENCES IN ANY CHAT/GROUP AND THE AI WILL FIND AND RUN THE RIGHT COMMAND FOR YOU.*"
-			}
-			s.Reply(info, msg)
+			s.Reply(info, aimToggleText(action == "on"))
+			// Owner ke inbox mein foran updated connected card (naya AI MODE
+			// state) — pair.js BilalSendConnectedNotice jaisa hi.
+			s.NotifyConnectedCard()
 		case "status":
-			cur, curPfx := aimEnabled(s), aimPrefixWord(s)
-			state := "OFF"
-			if cur {
-				state = "ON"
-			}
-			line := "No custom wake-word set — AI Mode reads every plain message."
-			if curPfx != "" {
-				line = "Custom wake-word: *" + curPfx + "*"
-			}
-			s.Reply(info, "🤖 AI Mode is currently *"+state+"* (yeh har chat/group mein apply hota hai).\n"+line)
+			s.Reply(info, aimStatusText(aimEnabled(s), aimPrefixWord(s)))
 		case "prefix":
 			if len(tokens) < 2 {
-				if curPfx := aimPrefixWord(s); curPfx != "" {
-					s.Reply(info, "Current AI Mode wake-word is *"+curPfx+"*.\n\nTo change it: *"+prefix+"aimode prefix <newword>*\nExample: "+prefix+"aimode prefix BILAL")
-				} else {
-					s.Reply(info, "No wake-word is set right now — AI Mode reacts to every plain message.\n\nTo set one: *"+prefix+"aimode prefix <yourword>*\nExample: "+prefix+"aimode prefix BILAL")
-				}
+				s.Reply(info, aimPrefixInfoText(prefix, aimPrefixWord(s)))
 			} else {
 				newWord := tokens[1]
 				s.SetPresenceSetting(aimPrefixField, newWord)
 				s.Reply(info, aimPrefixSetText(strings.ToUpper(newWord)))
+				s.NotifyConnectedCard()
 			}
+		case "":
+			s.Reply(info, aimGuideText(prefix, aimEnabled(s), aimPrefixWord(s)))
 		default:
-			s.Reply(info, aimGuideText(prefix, s.GetPresenceSetting(aimModeField, "off"), aimPrefixWord(s)))
+			s.Reply(info, aimUsageText(prefix))
 		}
 		return true, ""
 	}
@@ -853,7 +894,7 @@ func AIModeTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 	// Owner-only gate: the AI is a translator, never a permission bypass.
 	for _, c := range Commands() {
 		if strings.EqualFold(c.Name, base) && c.OwnerOnly && !s.IsOwner(info) {
-			s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
+			s.Reply(info, aimOwnerOnlyText())
 			return true, ""
 		}
 	}
@@ -874,4 +915,38 @@ func init() {
 // this is the registry path so .aimode appears in the AI menu and still works).
 func handleAIModeCmd(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 	AIModeTryHandle(s, info, prefix+"aimode "+strings.Join(args, " "), prefix)
+}
+
+// AIModeEnabledFor reports whether AI Mode is ON for the bot behind botJID
+// ("" = the only/current bot). Used by the connected card to show the live
+// state — pair.js BilalGetAIModeSetting equivalent.
+func AIModeEnabledFor(botJID string) bool {
+	if aimSettingReader == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(aimSettingReader(botJID, aimModeField, "off")), "on")
+}
+
+// AIModeWakeWordFor returns the effective wake-word for the bot behind botJID
+// (the configured one, or the pair.js default "AI"). Used by the connected card.
+func AIModeWakeWordFor(botJID string) string {
+	if aimSettingReader == nil {
+		return aimDefaultPrefixWord
+	}
+	if w := strings.TrimSpace(aimSettingReader(botJID, aimPrefixField, "")); w != "" {
+		return w
+	}
+	return aimDefaultPrefixWord
+}
+
+// aimSettingReader reads one per-bot presence setting (Redis). Attached by the
+// main package at startup — amute hook pattern — so the connected card can show
+// the live AI MODE state without a full SessionBridge.
+var aimSettingReader func(botJID, field, def string) string
+
+// AIModeAttachSettingReader — main package startup par call karta hai.
+func AIModeAttachSettingReader(fn func(botJID, field, def string) string) {
+	if fn != nil {
+		aimSettingReader = fn
+	}
 }

@@ -45,6 +45,8 @@ func (f *aimBridge) SetPresenceSetting(field, val string) { f.settings[field] = 
 
 func (f *aimBridge) Reply(info types.MessageInfo, text string) { f.replies = append(f.replies, text) }
 
+func (f *aimBridge) NotifyConnectedCard() {}
+
 func (f *aimBridge) IsOwner(info types.MessageInfo) bool { return f.owner }
 
 func aimInfo(group bool) types.MessageInfo {
@@ -78,7 +80,7 @@ func TestAIModeToggleAndStatus(t *testing.T) {
 	if h, _ := AIModeTryHandle(b, info, ".aimode status", "."); !h {
 		t.Fatal("aimode status must be handled")
 	}
-	if !strings.Contains(b.replies[len(b.replies)-1], "*OFF*") {
+	if !strings.Contains(b.replies[len(b.replies)-1], "*AI MODE :❯ ❮ OFF ❯*") {
 		t.Fatalf("initial status should be OFF, got: %s", b.replies[len(b.replies)-1])
 	}
 
@@ -88,8 +90,11 @@ func TestAIModeToggleAndStatus(t *testing.T) {
 	if b.settings[aimModeField] != "on" {
 		t.Fatalf("mode field = %q, want on", b.settings[aimModeField])
 	}
-	if !strings.Contains(b.replies[len(b.replies)-1], "AI MODE TURNED ON") {
+	if !strings.Contains(b.replies[len(b.replies)-1], "*🔰 AI MODE TURNED ON 🔰*") {
 		t.Fatalf("unexpected on text: %s", b.replies[len(b.replies)-1])
+	}
+	if !strings.Contains(b.replies[len(b.replies)-1], "*DESCRIPTION :❵") {
+		t.Fatalf("on text missing description row: %s", b.replies[len(b.replies)-1])
 	}
 
 	if h, _ := AIModeTryHandle(b, info, ".aimode off", "."); !h {
@@ -140,8 +145,8 @@ func TestAIModeOwnerOnly(t *testing.T) {
 	if b.settings[aimModeField] == "on" {
 		t.Fatal("non-owner must not enable AI mode")
 	}
-	if !strings.Contains(b.replies[0], "OWNER COMMAND") {
-		t.Fatalf("expected owner-only reply, got: %s", b.replies[0])
+	if b.replies[0] != "*THIS COMMAND IS ONLY FOR ME 😎*" {
+		t.Fatalf("owner-only reply must match the bot standard, got: %s", b.replies[0])
 	}
 }
 
@@ -152,10 +157,15 @@ func TestAIModeQuickMatchExactCommand(t *testing.T) {
 	info := aimInfo(true) // group, so any group-only gate does not interfere
 	b.settings[aimModeField] = "on"
 
-	// "ping" is exactly a known command name → quick-match, 0 AI calls.
-	h, rewrite := AIModeTryHandle(b, info, "ping", ".")
+	// "AI ping" = default wake-word + exact command name → quick-match, 0 AI calls.
+	h, rewrite := AIModeTryHandle(b, info, "AI ping", ".")
 	if !h || rewrite != ".ping" {
 		t.Fatalf("quick-match ping: handled=%v rewrite=%q", h, rewrite)
+	}
+	// Bare "ping" must NOT resolve — the default wake-word gates it, so a plain
+	// command name never works without the bot prefix.
+	if h, _ := AIModeTryHandle(b, info, "ping", "."); h {
+		t.Fatal("bare command name must not resolve when the wake-word is set")
 	}
 }
 
@@ -164,7 +174,7 @@ func TestAIModeQuickMatchToggle(t *testing.T) {
 	info := aimInfo(false)
 	b.settings[aimModeField] = "on"
 
-	h, rewrite := AIModeTryHandle(b, info, "anticall off", ".")
+	h, rewrite := AIModeTryHandle(b, info, "AI anticall off", ".")
 	if !h || rewrite != ".anticall off" {
 		t.Fatalf("quick-match toggle: handled=%v rewrite=%q", h, rewrite)
 	}
@@ -198,6 +208,17 @@ func TestAIModeWakeWordGate(t *testing.T) {
 	h, rewrite := AIModeTryHandle(b, info, "BILAL ping", ".")
 	if !h || rewrite != ".ping" {
 		t.Fatalf("wake-word message: handled=%v rewrite=%q", h, rewrite)
+	}
+
+	// Fresh bot (no wake-word configured) falls back to the pair.js default
+	// "AI" — so bare chatter and bare commands are ignored.
+	c := newAimBridge()
+	c.settings[aimModeField] = "on"
+	if h, _ := AIModeTryHandle(c, info, "menu dikhao", "."); h {
+		t.Fatal("default wake-word must gate plain chatter")
+	}
+	if h, rewrite := AIModeTryHandle(c, info, "AI ping", "."); !h || rewrite != ".ping" {
+		t.Fatalf("default AI wake-word: handled=%v rewrite=%q", h, rewrite)
 	}
 }
 
@@ -237,6 +258,33 @@ func TestAIModeCorpusIncludesCoreCommands(t *testing.T) {
 		if !has[want] {
 			t.Fatalf("corpus missing core command %q", want)
 		}
+	}
+}
+
+func TestAIModeTextsMatchBotDesign(t *testing.T) {
+	b := newAimBridge()
+	b.settings[aimModeField] = "on"
+	b.settings[aimPrefixField] = "KING"
+	info := aimInfo(false)
+
+	AIModeTryHandle(b, info, ".aimode status", ".")
+	st := b.replies[len(b.replies)-1]
+	for _, want := range []string{"*🔰 AI MODE STATUS 🔰*", "*AI MODE :❯ ❮ ON ❯*", "*WAKE-WORD :❯ ❮ KING ❯*", "*DESCRIPTION :❵"} {
+		if !strings.Contains(st, want) {
+			t.Fatalf("status text missing %q: %s", want, st)
+		}
+	}
+
+	AIModeTryHandle(b, info, ".aimode prefix", ".")
+	pfx := b.replies[len(b.replies)-1]
+	if !strings.Contains(pfx, "*CURRENT WAKE-WORD :❯ ❮ KING ❯*") || !strings.Contains(pfx, "*TYPE ❲ .AIMODE PREFIX NEWWORD ❳*") {
+		t.Fatalf("prefix info text wrong: %s", pfx)
+	}
+
+	AIModeTryHandle(b, info, ".aimode nonsense", ".")
+	bad := b.replies[len(b.replies)-1]
+	if !strings.Contains(bad, "*🔰 AI MODE WRONG FORMAT 🔰*") {
+		t.Fatalf("wrong-format text wrong: %s", bad)
 	}
 }
 

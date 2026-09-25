@@ -242,6 +242,16 @@ func main() {
 		return nil
 	})
 
+	// ── .aimode live state reader (connected card ke liye) ──
+	// Connected card har connect/aimode-change pe FRESH AI MODE state dikhata
+	// hai — per-bot presence setting seedha Redis se padhi jati hai.
+	goldcmds.AIModeAttachSettingReader(func(botJID, field, def string) string {
+		if mgr.Redis == nil || botJID == "" {
+			return def
+		}
+		return mgr.Redis.GetSetting(botJID, field, def)
+	})
+
 	// ── cmdname: full dispatchable command-name set for rename validation ──
 	// .cmdname ping to umar karne se pehle bot check karta hai ki "ping"
 	// waqai ek command hai — gold-cmds registry + main-package core

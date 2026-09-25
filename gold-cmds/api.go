@@ -208,6 +208,11 @@ type SessionBridge interface {
 	// after a prefix change so the owner INSTANTLY sees the fresh prefix
 	// (owner order: prefix change → connected msg foran fresh prefix ke sath).
 	NotifyPrefixChanged()
+	// NotifyConnectedCard re-sends the same connected/startup card on demand —
+	// used by .aimode on/off/prefix so the owner immediately sees the fresh
+	// AI MODE state in the card (pair.js BilalSendConnectedNotice equivalent).
+	// Unlike NotifyPrefixChanged it is NOT throttled: the owner asked for it.
+	NotifyConnectedCard()
 
 	// MarkStatusRead marks a status (story) message as seen/read.
 	// chat = status@broadcast JID, sender = the status owner, msgID = status

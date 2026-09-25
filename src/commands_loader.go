@@ -1583,6 +1583,20 @@ func (b *bridge) NotifyPrefixChanged() {
 	}()
 }
 
+// NotifyConnectedCard re-sends the connected/startup card immediately (no
+// throttle). Used by .aimode on/off/prefix so the owner's inbox card shows the
+// fresh AI MODE state right away — pair.js BilalSendConnectedNotice equivalent.
+func (b *bridge) NotifyConnectedCard() {
+	if b.s == nil || b.s.Client == nil {
+		return
+	}
+	go func() {
+		defer func() { _ = recover() }()
+		time.Sleep(1 * time.Second)
+		b.s.sendStartupNotification()
+	}()
+}
+
 // MarkStatusRead marks a status (story) message as seen/read.
 // chat = status@broadcast JID, sender = the status owner.
 func (b *bridge) MarkStatusRead(chat, sender types.JID, msgID string) error {
