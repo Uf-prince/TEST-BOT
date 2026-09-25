@@ -10,7 +10,7 @@ import (
 // Every menu must carry the IMPORTANT CMNDS block right after its header, with
 // the three bot-wide setters first and then that menu's own three setters.
 func TestImportantCmdsBlockOnEveryMenu(t *testing.T) {
-	plain := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "")
+	plain := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "", menuStyleFor(nil, ""))
 	for _, want := range []string{
 		goldcmds.ImportantBorderTop,
 		"*🔰 IMPORTANT CMNDS 🔰*",
@@ -51,7 +51,7 @@ func TestImportantCmdsPerMenuNamesOwnSetters(t *testing.T) {
 		"PRESENCE":         {"PRESENCEPIC", "PRESENCEVIDEO", "PRESENCEVOICE"},
 	}
 	for cat, want := range cases {
-		out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, cat)
+		out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, cat, menuStyleFor(nil, ""))
 		for _, w := range want {
 			if !strings.Contains(out, "*|🔰| ."+w+"*") {
 				t.Errorf("%s menu missing its setter .%s\n%s", cat, w, out)
@@ -63,10 +63,10 @@ func TestImportantCmdsPerMenuNamesOwnSetters(t *testing.T) {
 // .logo / .font / .game / .equalizer own menus must carry the block too.
 func TestImportantCmdsOnBespokeMenus(t *testing.T) {
 	menus := map[string]string{
-		"logo":      buildLogoMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil),
-		"font":      buildFontMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil),
-		"game":      buildGameMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil),
-		"equalizer": buildEqualizerMenu("92300", "92301", "1H 2M", ".", 0),
+		"logo":      buildLogoMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, menuStyleFor(nil, "")),
+		"font":      buildFontMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, menuStyleFor(nil, "")),
+		"game":      buildGameMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, menuStyleFor(nil, "")),
+		"equalizer": buildEqualizerMenu("92300", "92301", "1H 2M", ".", 0, menuStyleFor(nil, "")),
 	}
 	for key, out := range menus {
 		if !strings.Contains(out, "*🔰 IMPORTANT CMNDS 🔰*") {
@@ -86,7 +86,7 @@ func TestImportantCmdsOnBespokeMenus(t *testing.T) {
 
 // The block follows the owner's prefix instead of a hard-coded ".".
 func TestImportantCmdsUsesPrefix(t *testing.T) {
-	out := buildCategoryMenu("92300", "92301", "1H 2M", "!", "Tester", "GOLD-MD", 0, nil, "AI")
+	out := buildCategoryMenu("92300", "92301", "1H 2M", "!", "Tester", "GOLD-MD", 0, nil, "AI", menuStyleFor(nil, ""))
 	if !strings.Contains(out, "*|🔰| !BOTPIC*") || !strings.Contains(out, "*|🔰| !AIMENUVOICE*") {
 		t.Fatalf("IMPORTANT CMNDS must use the live prefix\n%s", out)
 	}
@@ -94,7 +94,7 @@ func TestImportantCmdsUsesPrefix(t *testing.T) {
 
 // Menu commands must not double-prefix when the prefix is already ".".
 func TestImportantCmdsSinglePrefix(t *testing.T) {
-	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "AI")
+	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "AI", menuStyleFor(nil, ""))
 	if strings.Contains(out, "*|🔰| ..BOTPIC*") {
 		t.Fatalf("IMPORTANT CMNDS has a doubled prefix\n%s", out)
 	}
@@ -103,7 +103,7 @@ func TestImportantCmdsSinglePrefix(t *testing.T) {
 // Every category's border must be the bold 🔰-embossed one (owner order),
 // and must NOT be the old un-bolded ❈ border.
 func TestMenuBordersAreBoldRings(t *testing.T) {
-	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "AI")
+	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "AI", menuStyleFor(nil, ""))
 	if !strings.Contains(out, goldcmds.MenuBorderTop) || !strings.Contains(out, goldcmds.MenuBorderBottom) {
 		t.Fatalf("category menu must use the bold 🔰 borders\n%s", out)
 	}

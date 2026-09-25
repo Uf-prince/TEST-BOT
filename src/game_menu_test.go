@@ -12,7 +12,7 @@ import (
 // (converter-menu style: only the exact thing the user types) — no numeric
 // game1..game1000 label and no long "CLASSIC ..." design name (owner order).
 func TestGameMenuRenders(t *testing.T) {
-	m := buildGameMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil)
+	m := buildGameMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, menuStyleFor(nil, ""))
 	if !strings.Contains(m, "╔════ ≪ • 🔰 • ≫ ════╗") {
 		t.Errorf(".game menu me fancy box header nahi hai\n%s", m)
 	}
@@ -60,7 +60,7 @@ func TestGameMenuRenders(t *testing.T) {
 // TestGameMenuNotPlainText: the .game reply must be the boxed menu, NOT a
 // plain "GAME MENU" text blob (the earlier regression).
 func TestGameMenuNotPlainText(t *testing.T) {
-	m := buildGameMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil)
+	m := buildGameMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, menuStyleFor(nil, ""))
 	if strings.HasPrefix(strings.TrimSpace(m), "*GAME MENU*") {
 		t.Error(".game abhi bhi plain text list de raha hai")
 	}
@@ -114,7 +114,7 @@ func TestGameCommandsHidden(t *testing.T) {
 
 // TestGameCategoryInMenu: plain .menu me .GAME line exactly ek baar.
 func TestGameCategoryInMenu(t *testing.T) {
-	m := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, "")
+	m := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, "", menuStyleFor(nil, ""))
 	if !strings.Contains(m, ".GAME") {
 		t.Errorf("plain .menu me .GAME nazar nahi aata\n%s", m)
 	}
@@ -153,7 +153,7 @@ func TestGameBaseSlugDispatch(t *testing.T) {
 // TestGameMenuFitsWhatsApp: all 1000 named entries must stay under the
 // WhatsApp message cap (65536 bytes) or the menu would fail to send.
 func TestGameMenuFitsWhatsApp(t *testing.T) {
-	m := buildGameMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil)
+	m := buildGameMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, menuStyleFor(nil, ""))
 	if len(m) > 65536 {
 		t.Errorf(".game menu %d bytes — WhatsApp cap 65536 se bada", len(m))
 	}

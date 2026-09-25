@@ -2044,21 +2044,21 @@ func categoryMenuShortcut(command string) (string, bool) {
 // showMenus controls the MENUS count line (owner order: ONLY in plain .menu).
 // importantKey selects the IMPORTANT CMNDS block's per-menu setter commands
 // ("" for the plain .menu → its own "menu" setters).
-func buildMenuHeader(title, botNum, ownerNum, uptimeHM, prefix string, menuCount, cmdCount int, showMenus bool, importantKey string) string {
+func buildMenuHeader(title, botNum, ownerNum, uptimeHM, prefix string, menuCount, cmdCount int, showMenus bool, importantKey string, st goldcmds.MenuStyle) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("┏─━─━─🔰 %s 🔰─━─━─┓\n", title))
-	b.WriteString(fmt.Sprintf("*│🔰 USER:❯ %s*\n", botNum))
+	b.WriteString(st.RenderHeaderTop(title) + "\n")
+	b.WriteString(fmt.Sprintf("*%s USER:❯ %s*\n", st.HeaderRowL, botNum))
 	if ownerNum != "" {
-		b.WriteString(fmt.Sprintf("*│🔰 OWNER :❯ %s*\n", ownerNum))
+		b.WriteString(fmt.Sprintf("*%s OWNER :❯ %s*\n", st.HeaderRowL, ownerNum))
 	}
 	if showMenus {
-		b.WriteString(fmt.Sprintf("*│🔰 MENUS:❯ ❮ %d ❯*\n", menuCount))
+		b.WriteString(fmt.Sprintf("*%s MENUS:❯ ❮ %d ❯*\n", st.HeaderRowL, menuCount))
 	}
-	b.WriteString(fmt.Sprintf("*│🔰 COMMANDS :❯ ❮ %d ❯*\n", cmdCount))
-	b.WriteString(fmt.Sprintf("*│🔰 UPTIME :❯ %s*\n", uptimeHM))
-	b.WriteString(fmt.Sprintf("*│🔰 PREFIX :❯ ❮ %s ❯*\n", prefix))
-	b.WriteString("┗─━─━─━─━─━─━─━─━─┛\n\n")
-	b.WriteString(buildImportantCmds(prefix, importantKey))
+	b.WriteString(fmt.Sprintf("*%s COMMANDS :❯ ❮ %d ❯*\n", st.HeaderRowL, cmdCount))
+	b.WriteString(fmt.Sprintf("*%s UPTIME :❯ %s*\n", st.HeaderRowL, uptimeHM))
+	b.WriteString(fmt.Sprintf("*%s PREFIX :❯ ❮ %s ❯*\n", st.HeaderRowL, prefix))
+	b.WriteString(st.RenderHeaderBot() + "\n\n")
+	b.WriteString(buildImportantCmds(prefix, importantKey, st))
 	return b.String()
 }
 
@@ -2079,7 +2079,7 @@ func importantKeyFor(cat string) string {
 // (e.g. the AI menu shows AIMENUPIC / AIMENUVIDEO / AIMENUVOICE). importantKey
 // is a menu slug (see goldcmds.MenuImportantCommands); when it is unknown the
 // block is omitted so a menu never advertises the wrong commands.
-func buildImportantCmds(prefix, importantKey string) string {
+func buildImportantCmds(prefix, importantKey string, st goldcmds.MenuStyle) string {
 	pic, video, voice, ok := goldcmds.MenuImportantCommands(importantKey)
 	if !ok {
 		return ""
@@ -2097,10 +2097,28 @@ func buildImportantCmds(prefix, importantKey string) string {
 	return b.String()
 }
 
+// menuStyleFor resolves a menu's effective style: per-menu override
+// ("menustyle:<key>") → bot-wide ("botmenustyle") → built-in style 1.
+func menuStyleFor(s *Session, key string) goldcmds.MenuStyle {
+	if s != nil && s.Manager != nil && s.Manager.Redis != nil {
+		if raw := s.Manager.Redis.GetSetting(s.JID, "menustyle:"+key, ""); strings.TrimSpace(raw) != "" {
+			if n, ok := goldcmds.ParseMenuStyleArg(raw); ok {
+				return goldcmds.MenuStyleAt(n)
+			}
+		}
+		if raw := s.Manager.Redis.GetSetting(s.JID, "botmenustyle", ""); strings.TrimSpace(raw) != "" {
+			if n, ok := goldcmds.ParseMenuStyleArg(raw); ok {
+				return goldcmds.MenuStyleAt(n)
+			}
+		}
+	}
+	return goldcmds.MenuStyleAt(1)
+}
+
 // buildLogoMenu renders the .logo menu in the SAME fancy boxed format as the
 // other category menus (owner order: .logo must show a proper menu, not plain
 // text). It lists .LOGO1 .. .LOGO1000 with the shared header block.
-func buildLogoMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView) string {
+func buildLogoMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView, st goldcmds.MenuStyle) string {
 	_ = pushName
 	_ = botName
 	_ = sessCount
@@ -2110,7 +2128,7 @@ func buildLogoMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 		uptimeHM = formatUptimeHM(uptime())
 	}
 	var b strings.Builder
-	b.WriteString(buildMenuHeader("LOGO", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.LogoCount, false, "logo"))
+	b.WriteString(buildMenuHeader("LOGO", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.LogoCount, false, "logo", st))
 	b.WriteString(goldcmds.MenuBorderTop + "\n")
 	b.WriteString("*| 🔰 | LOGO | 🔰 |*\n")
 	for n := 1; n <= goldcmds.LogoCount; n++ {
@@ -2120,7 +2138,7 @@ func buildLogoMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 	return b.String()
 }
 
-func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView, onlyCat string) string {
+func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView, onlyCat string, st goldcmds.MenuStyle) string {
 	// nil view → default (no renames, no mine-mode). Production always passes
 	// a live view; tests may pass nil.
 	if menuView == nil {
@@ -2237,7 +2255,7 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 			headerCount = len(l)
 		}
 	}
-	b.WriteString(buildMenuHeader(headerTitle, botNum, ownerNum, uptimeHM, prefix, menuCount, headerCount, onlyCat == "", importantKeyFor(onlyCat)))
+	b.WriteString(buildMenuHeader(headerTitle, botNum, ownerNum, uptimeHM, prefix, menuCount, headerCount, onlyCat == "", importantKeyFor(onlyCat), st))
 
 	pushName = strings.TrimSpace(pushName)
 	if pushName == "" {
@@ -2261,8 +2279,8 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 		// ka hissa nahi, khud ka command hai). .FONT ko yahan NAHI likhna —
 		// FONT ab CategoryOrder me hai, is liye loop se pehle hi aa jata hai
 		// (dobara likhne se .menu me FONT 2 bar dikhta tha).
-		b.WriteString(fmt.Sprintf("*| 🔰 | %sLOGO*\n", prefix))
-		b.WriteString(goldcmds.MenuBorderBottom + "\n")
+		b.WriteString(st.ListRow(prefix, "LOGO") + "\n")
+		b.WriteString(st.BorderBottom() + "\n")
 		return b.String()
 	}
 
@@ -2373,7 +2391,7 @@ func (s *Session) CmdLogoMenu(info types.MessageInfo, args []string, prefix stri
 	}
 
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
-	caption := buildLogoMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
+	caption := buildLogoMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView, menuStyleFor(s, "logo"))
 
 	// Owner-set custom bot video (.botvideo) takes precedence; otherwise the
 	// bot pic image (.botpic / default) is used, then a text-only menu.
@@ -2382,7 +2400,7 @@ func (s *Session) CmdLogoMenu(info types.MessageInfo, args []string, prefix stri
 
 // buildFontMenu renders the .font menu in the same fancy boxed format as the
 // .logo menu and the other category menus. It lists .FONT1 .. .FONT1000.
-func buildFontMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView) string {
+func buildFontMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView, st goldcmds.MenuStyle) string {
 	_ = pushName
 	_ = botName
 	_ = sessCount
@@ -2392,7 +2410,7 @@ func buildFontMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 		uptimeHM = formatUptimeHM(uptime())
 	}
 	var b strings.Builder
-	b.WriteString(buildMenuHeader("FONT", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.FontCount, false, "font"))
+	b.WriteString(buildMenuHeader("FONT", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.FontCount, false, "font", st))
 	b.WriteString(goldcmds.MenuBorderTop + "\n")
 	b.WriteString("*| 🔰 | FONT | 🔰 |*\n")
 	for n := 1; n <= goldcmds.FontCount; n++ {
@@ -2404,7 +2422,7 @@ func buildFontMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 
 // buildGameMenu renders the .game menu in the same fancy boxed format as the
 // .font / .equalizer menus. It lists .GAME1 .. .GAME1000.
-func buildGameMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView) string {
+func buildGameMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView, st goldcmds.MenuStyle) string {
 	_ = pushName
 	_ = botName
 	_ = sessCount
@@ -2414,7 +2432,7 @@ func buildGameMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 		uptimeHM = formatUptimeHM(uptime())
 	}
 	var b strings.Builder
-	b.WriteString(buildMenuHeader("GAME", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.GameMenuCount(), false, "game"))
+	b.WriteString(buildMenuHeader("GAME", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.GameMenuCount(), false, "game", st))
 	b.WriteString(goldcmds.MenuBorderTop + "\n")
 	b.WriteString("*| 🔰 | GAME | 🔰 |*\n")
 	for _, slug := range goldcmds.GameShortSlugs() {
@@ -2424,14 +2442,14 @@ func buildGameMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 	return b.String()
 }
 
-func buildEqualizerMenu(botNum, ownerNum, uptimeStr, prefix string, sessCount int) string {
+func buildEqualizerMenu(botNum, ownerNum, uptimeStr, prefix string, sessCount int, st goldcmds.MenuStyle) string {
 	_ = sessCount
 	uptimeHM := uptimeStr
 	if uptimeHM == "" {
 		uptimeHM = formatUptimeHM(uptime())
 	}
 	var b strings.Builder
-	b.WriteString(buildMenuHeader("EQUALIZER", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.EqCount, false, "equalizer"))
+	b.WriteString(buildMenuHeader("EQUALIZER", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.EqCount, false, "equalizer", st))
 	b.WriteString(goldcmds.MenuBorderTop + "\n")
 	b.WriteString("*| 🔰 | EQUALIZER | 🔰 |*\n")
 	for n := 1; n <= goldcmds.EqCount; n++ {
@@ -2476,7 +2494,7 @@ func (s *Session) CmdFontMenu(info types.MessageInfo, args []string, prefix stri
 	}
 
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
-	caption := buildFontMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
+	caption := buildFontMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView, menuStyleFor(s, "font"))
 
 	s.sendMenuHeader(info, "font", caption)
 }
@@ -2516,7 +2534,7 @@ func (s *Session) CmdGameMenu(info types.MessageInfo, args []string, prefix stri
 	}
 
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
-	caption := buildGameMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView)
+	caption := buildGameMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView, menuStyleFor(s, "game"))
 
 	s.sendMenuHeader(info, "game", caption)
 }
@@ -2555,7 +2573,7 @@ func (s *Session) CmdEqualizerMenu(info types.MessageInfo, args []string, prefix
 		}
 	}
 
-	caption := buildEqualizerMenu(menuUser, ownerNum, uptimeStr, prefix, sessCount)
+	caption := buildEqualizerMenu(menuUser, ownerNum, uptimeStr, prefix, sessCount, menuStyleFor(s, "equalizer"))
 
 	s.sendMenuHeader(info, "equalizer", caption)
 }
@@ -2612,14 +2630,13 @@ func (s *Session) CmdMenu(info types.MessageInfo, args []string, prefix string) 
 
 	// ── CMDNAME view: this bot's active command renames (nil → default menu)
 	menuView := goldcmds.CmdNameViewFor(&bridge{s: s})
-	caption := buildCategoryMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView, onlyCat)
-
-	// Per-menu media: the plain menu uses key "menu"; a category menu uses
-	// its slug (e.g. "converter"), falling back to the bot-wide pic/video.
+	// Per-menu media/style: the plain menu uses key "menu"; a category menu
+	// uses its slug (e.g. "converter"), falling back to bot-wide settings.
 	menuKey := "menu"
 	if onlyCat != "" {
 		menuKey = menuCategorySlug(onlyCat)
 	}
+	caption := buildCategoryMenu(menuUser, ownerNum, uptimeStr, prefix, info.PushName, botName, sessCount, menuView, onlyCat, menuStyleFor(s, menuKey))
 	s.sendMenuHeader(info, menuKey, caption)
 }
 

@@ -10,7 +10,7 @@ import (
 // TestEqualizerMenuRenders: buildEqualizerMenu must use the same fancy boxed
 // format as the .font / .logo menus and list .EQ1 .. .EQ1000.
 func TestEqualizerMenuRenders(t *testing.T) {
-	m := buildEqualizerMenu("UMAR", "92X", "0H 5M", ".", 1)
+	m := buildEqualizerMenu("UMAR", "92X", "0H 5M", ".", 1, menuStyleFor(nil, ""))
 	if !strings.Contains(m, "╔════ ≪ • 🔰 • ≫ ════╗") {
 		t.Errorf(".equalizer menu me fancy box header nahi hai\n%s", m)
 	}

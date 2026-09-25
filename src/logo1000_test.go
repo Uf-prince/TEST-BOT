@@ -52,7 +52,7 @@ func TestLogo1000MenusAndRegistry(t *testing.T) {
 
 	// 3) .menu caption build: logoN naam kabhi nahi, .LOGO naam hamesha
 	menuView := &goldcmds.CmdNameView{Renames: map[string]string{}, Mode: ""}
-	menu := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView, "AI & MEDIA")
+	menu := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView, "AI & MEDIA", menuStyleFor(nil, ""))
 	if !strings.Contains(menu, ".LOGO") {
 		t.Errorf(".menu me .LOGO entry nahi mili\n%s", menu)
 	}
@@ -63,7 +63,7 @@ func TestLogo1000MenusAndRegistry(t *testing.T) {
 	}
 
 	// 3b) plain .menu (category list) must ALSO show .LOGO (owner order)
-	plain := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView, "")
+	plain := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView, "", menuStyleFor(nil, ""))
 	if !strings.Contains(plain, ".LOGO") {
 		t.Errorf("plain .menu me .LOGO entry nahi mili\n%s", plain)
 	}
@@ -87,7 +87,7 @@ func TestLogo1000MenusAndRegistry(t *testing.T) {
 	fmt.Printf("plain .menu COMMANDS total = %d (includes %d logo cmds) — OK\n", n, goldcmds.LogoCount)
 
 	// 4) .logo menu: fancy boxed format (same as other category menus)
-	logoMenu := buildLogoMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView)
+	logoMenu := buildLogoMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, menuView, menuStyleFor(nil, ""))
 	if !strings.Contains(logoMenu, "╔════ ≪ • 🔰 • ≫ ════╗") {
 		t.Errorf(".logo menu missing fancy box header\n%s", logoMenu)
 	}

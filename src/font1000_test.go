@@ -10,7 +10,7 @@ import (
 // TestFontMenuRenders: buildFontMenu must use the same fancy boxed format as
 // the .logo menu and list .FONT1 .. .FONT1000.
 func TestFontMenuRenders(t *testing.T) {
-	m := buildFontMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil)
+	m := buildFontMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, menuStyleFor(nil, ""))
 	if !strings.Contains(m, "╔════ ≪ • 🔰 • ≫ ════╗") {
 		t.Errorf(".font menu me fancy box header nahi hai\n%s", m)
 	}
@@ -62,7 +62,7 @@ func itoaT(n int) string {
 
 // TestFontCategoryInMenu: plain .menu me .FONT line dikhni chahiye.
 func TestFontCategoryInMenu(t *testing.T) {
-	m := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, "")
+	m := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, "", menuStyleFor(nil, ""))
 	if !strings.Contains(m, ".FONT") {
 		t.Errorf("plain .menu me .FONT nazar nahi aata\n%s", m)
 	}
@@ -79,7 +79,7 @@ func TestFontCategoryInMenu(t *testing.T) {
 // TestEqualizerCategoryInMenu: .menu me .EQUALIZER line dikhni chahiye, aur us
 // category ke 5 effect commands registry me hone chahiye.
 func TestEqualizerCategoryInMenu(t *testing.T) {
-	m := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, "")
+	m := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, "", menuStyleFor(nil, ""))
 	if !strings.Contains(m, ".EQUALIZER") {
 		t.Errorf("plain .menu me .EQUALIZER nazar nahi aata\n%s", m)
 	}
@@ -103,7 +103,7 @@ func TestEqualizerCategoryMenu(t *testing.T) {
 	if cat != "EQUALIZER" {
 		t.Fatalf("slug equalizer -> %q, want EQUALIZER", cat)
 	}
-	m := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, "EQUALIZER")
+	m := buildCategoryMenu("UMAR", "92X", "0H 5M", ".", "USER", "GOLD-MD WHATSAPP BOT", 1, nil, "EQUALIZER", menuStyleFor(nil, ""))
 	for _, name := range []string{"SLOWED", "REVERT", "ROBOT", "BASS", "DJ"} {
 		if !strings.Contains(m, name) {
 			t.Errorf("EQUALIZER menu me %s missing\n%s", name, m)

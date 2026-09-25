@@ -17,7 +17,7 @@ func TestAICategoryInMenu(t *testing.T) {
 		t.Fatalf("re-resolve menuCategoryFromCommand(\"AI\") = (%q,%v)", got, ok)
 	}
 
-	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "")
+	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "", menuStyleFor(nil, ""))
 	if !strings.Contains(out, ".AI") {
 		t.Fatalf("category-list menu missing .AI entry\n%s", out)
 	}
@@ -26,7 +26,7 @@ func TestAICategoryInMenu(t *testing.T) {
 // TestAISingleCategoryMenu — .ai shows the AI category banner + commands,
 // in the SAME fancy boxed format as every other category.
 func TestAISingleCategoryMenu(t *testing.T) {
-	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "AI")
+	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "AI", menuStyleFor(nil, ""))
 	if !strings.Contains(out, "AI") {
 		t.Fatalf("AI single-category menu missing banner\n%s", out)
 	}

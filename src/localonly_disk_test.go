@@ -314,13 +314,14 @@ func TestMenuHeaderFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := stripComments2(string(b))
-	// Shared header helper renders all the header lines.
-	requireContains(t, src, `"*│🔰 USER:❯ %s*\n"`, "manager.go USER line")
-	requireContains(t, src, `"*│🔰 OWNER :❯ %s*\n"`, "manager.go OWNER line")
-	requireContains(t, src, `"*│🔰 MENUS:❯ ❮ %d ❯*\n"`, "manager.go MENUS line")
-	requireContains(t, src, `"*│🔰 COMMANDS :❯ ❮ %d ❯*\n"`, "manager.go COMMANDS line")
-	requireContains(t, src, `"*│🔰 UPTIME :❯ %s*\n"`, "manager.go UPTIME line")
-	requireContains(t, src, `"*│🔰 PREFIX :❯ ❮ %s ❯*\n"`, "manager.go PREFIX line")
+	// Shared header helper renders all the header lines. The leading
+	// decoration is the style's HeaderRowL (style 1 = "│🔰").
+	requireContains(t, src, `"*%s USER:❯ %s*\n"`, "manager.go USER line")
+	requireContains(t, src, `"*%s OWNER :❯ %s*\n"`, "manager.go OWNER line")
+	requireContains(t, src, `"*%s MENUS:❯ ❮ %d ❯*\n"`, "manager.go MENUS line")
+	requireContains(t, src, `"*%s COMMANDS :❯ ❮ %d ❯*\n"`, "manager.go COMMANDS line")
+	requireContains(t, src, `"*%s UPTIME :❯ %s*\n"`, "manager.go UPTIME line")
+	requireContains(t, src, `"*%s PREFIX :❯ ❮ %s ❯*\n"`, "manager.go PREFIX line")
 	// FULLMENU pointer must be GONE (owner order).
 	if strings.Contains(src, "FULLMENU") {
 		t.Errorf("manager.go still contains FULLMENU pointer — must be removed")

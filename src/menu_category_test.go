@@ -70,7 +70,7 @@ func TestMenuCategoryFromCommand(t *testing.T) {
 // TestBuildCategoryMenuCategoryListMode verifies .menu (no arg) shows ONLY
 // category names (slugs), not individual commands.
 func TestBuildCategoryMenuCategoryListMode(t *testing.T) {
-	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "")
+	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "", menuStyleFor(nil, ""))
 	for _, slug := range []string{"CORE", "GROUP", "PROTECTION", "DOWNLOADER", "UTILITY", "PRESENCE", "CONVERTER", "TOOLS"} {
 		if !strings.Contains(out, "."+slug) {
 			t.Fatalf("category-list menu missing slug .%s\n%s", slug, out)
@@ -85,7 +85,7 @@ func TestBuildCategoryMenuCategoryListMode(t *testing.T) {
 // TestBuildCategoryMenuSingleCategory verifies .group shows ONLY that
 // category's commands, in the same banner format.
 func TestBuildCategoryMenuSingleCategory(t *testing.T) {
-	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "GROUP MANAGEMENT")
+	out := buildCategoryMenu("92300", "92301", "1H 2M", ".", "Tester", "GOLD-MD", 0, nil, "GROUP MANAGEMENT", menuStyleFor(nil, ""))
 	if !strings.Contains(out, "GROUP MANAGEMENT") {
 		t.Fatalf("single-category menu missing its banner\n%s", out)
 	}

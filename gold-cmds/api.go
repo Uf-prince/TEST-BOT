@@ -172,6 +172,17 @@ type SessionBridge interface {
 	// VoiceURLPlayable reports whether a voice URL actually serves audio (not
 	// an HTML share/error page). Used to reject bad links before storing them.
 	VoiceURLPlayable(url string) bool
+	// GetMenuStyleSetting reads ONE menu's style override (Redis field
+	// "menustyle:<key>"). Returns def ("") when the menu inherits the bot-wide
+	// style. Set with ".<x>style SET <n>".
+	GetMenuStyleSetting(key, def string) string
+	// SetMenuStyleSetting writes ONE menu's style override. Empty clears it.
+	SetMenuStyleSetting(key, val string)
+	// GetBotMenuStyleSetting reads the bot-wide menu style (field
+	// "botmenustyle"). Empty means the built-in classic style.
+	GetBotMenuStyleSetting(def string) string
+	// SetBotMenuStyleSetting writes the bot-wide menu style. Empty clears it.
+	SetBotMenuStyleSetting(val string)
 	// GetMenuMediaSetting reads the custom media URL for ONE menu/category or
 	// the alive card (Redis field "menumedia:<key>", e.g. menumedia:logo).
 	// Returns def ("") when nothing is set for that key.

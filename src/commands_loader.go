@@ -1106,6 +1106,37 @@ func (b *bridge) VoiceURLPlayable(url string) bool {
 	return goldcmds.BotVoiceURLIsPlayable(url)
 }
 
+// GetMenuStyleSetting reads ONE menu's style override (Redis "menustyle:<key>").
+func (b *bridge) GetMenuStyleSetting(key, def string) string {
+	if b.s.Manager == nil || b.s.Manager.Redis == nil {
+		return def
+	}
+	return b.s.Manager.Redis.GetSetting(b.s.JID, "menustyle:"+key, def)
+}
+
+// SetMenuStyleSetting writes ONE menu's style override. Empty clears it.
+func (b *bridge) SetMenuStyleSetting(key, val string) {
+	if b.s.Manager == nil || b.s.Manager.Redis == nil {
+		warnRedisNil()
+		return
+	}
+	b.s.Manager.Redis.SetSetting(b.s.JID, "menustyle:"+key, val)
+}
+
+// GetBotMenuStyleSetting reads the bot-wide menu style.
+func (b *bridge) GetBotMenuStyleSetting(def string) string {
+	return b.s.Manager.Redis.GetSetting(b.s.JID, "botmenustyle", def)
+}
+
+// SetBotMenuStyleSetting writes the bot-wide menu style. Empty clears it.
+func (b *bridge) SetBotMenuStyleSetting(val string) {
+	if b.s.Manager.Redis == nil {
+		warnRedisNil()
+		return
+	}
+	b.s.Manager.Redis.SetSetting(b.s.JID, "botmenustyle", val)
+}
+
 // GetMenuMediaSetting reads the per-menu custom media URL (Redis field
 // "menumedia:<key>"). key is a menu slug such as "menu", "logo", "ai",
 // "converter" or "alive". Empty when nothing is set for that menu.
