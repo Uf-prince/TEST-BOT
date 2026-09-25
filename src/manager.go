@@ -2025,6 +2025,19 @@ func menuCategoryFromCommand(cmd string) (string, bool) {
 	return "", false
 }
 
+// categoryMenuShortcut decides whether a typed command should open a CATEGORY
+// menu instead of dispatching a registered command. A command that IS an exact
+// registered command (alive, ping, menu, logo, font, game, equalizer, ...) keeps
+// its own handler; anything else that matches a category slug or a category's
+// full/normalised name opens that category's menu. Extracted from
+// HandleMessage so the routing is unit-testable.
+func categoryMenuShortcut(command string) (string, bool) {
+	if _, isExactCmd := Commands[command]; isExactCmd {
+		return "", false
+	}
+	return menuCategoryFromCommand(command)
+}
+
 // buildMenuHeader renders the shared fancy header block used by .menu, every
 // category menu, and the .logo menu. title is the box title ("MENU" for the
 // plain menu, the category label for category menus, "LOGO" for .logo).

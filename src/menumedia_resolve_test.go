@@ -122,5 +122,40 @@ func TestPerMenuPicSuppressesBotWideVideo(t *testing.T) {
 	}
 }
 
+// .ai / .group / .tools ... must open the category menu even though a command
+// starting with the same letters exists (aiimage, groupban): the prefix-match
+// fallback is greedy, so without this routing `.ai` used to run `.aiimage` and
+// the category menu never appeared.
+func TestCategoryMenuShortcutBeatsPrefixMatch(t *testing.T) {
+	cases := map[string]string{
+		"ai":               "AI",
+		"group":            "GROUP MANAGEMENT",
+		"tools":            "TOOLS",
+		"converter":        "CONVERTER",
+		"protection":       "ANTI & PROTECTION",
+		"downloader":       "DOWNLOADER",
+		"presence":         "PRESENCE & STATUS",
+		"core":             "OWNER & SYSTEM",
+		"breaction":        "BREACTION",
+		"greaction":        "GREACTION",
+		"utility":          "AI & MEDIA",
+		"groupmanagement":  "GROUP MANAGEMENT",
+		"group management": "GROUP MANAGEMENT",
+	}
+	for in, want := range cases {
+		got, ok := categoryMenuShortcut(in)
+		if !ok || got != want {
+			t.Errorf("categoryMenuShortcut(%q) = %q,%v; want %q,true", in, got, ok, want)
+		}
+	}
+
+	// Dedicated commands and real commands must keep dispatching normally.
+	for _, in := range []string{"menu", "logo", "font", "game", "equalizer", "alive", "ping", "aiimage", "groupban"} {
+		if got, ok := categoryMenuShortcut(in); ok {
+			t.Errorf("categoryMenuShortcut(%q) = %q,true; want no shortcut", in, got)
+		}
+	}
+}
+
 var _ = time.Second
 var _ = types.MessageInfo{}

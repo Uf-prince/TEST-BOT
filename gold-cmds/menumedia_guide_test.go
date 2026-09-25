@@ -45,8 +45,9 @@ func TestMenuMediaGuideShowsRealCommandName(t *testing.T) {
 	}
 }
 
-// The success card must name the menu the owner actually changed and the exact
-// command they used — never a generic "ALIVE / MENU" reminder.
+// The success card must name the menu the owner actually changed AND point at
+// the command that OPENS that menu (.logo / .game / .ai), never the media
+// command (.logopic only sets the pic) and never a generic ALIVE/MENU hint.
 func TestMenuMediaConfirmationIsPerMenu(t *testing.T) {
 	b := newMMBridge()
 	commandByName(t, "logopic").Run(b, types.MessageInfo{}, []string{"https://x/p.jpg"}, ".")
@@ -54,25 +55,35 @@ func TestMenuMediaConfirmationIsPerMenu(t *testing.T) {
 	if !strings.Contains(got, "LOGO MENU PIC UPDATED") {
 		t.Errorf("confirmation missing menu label: %q", got)
 	}
-	if !strings.Contains(got, "❰ .logopic ❱") {
-		t.Errorf("confirmation missing its own command: %q", got)
+	if !strings.Contains(got, "❰ .logo ❱") {
+		t.Errorf("confirmation must point at the menu command: %q", got)
+	}
+	if strings.Contains(got, "❰ .logopic ❱") {
+		t.Errorf("confirmation must not point at the media command: %q", got)
 	}
 	if strings.Contains(got, "ALIVE") || strings.Contains(got, "❰ .menu ❱") {
 		t.Errorf("confirmation leaked the generic ALIVE/MENU hint: %q", got)
 	}
 
-	// Same for a video setter.
+	// Category menu: the hint is the category command (.game), not .gamevideo.
 	b = newMMBridge()
 	commandByName(t, "gamevideo").Run(b, types.MessageInfo{}, []string{"https://x/g.mp4"}, ".")
 	got = b.last()
 	if !strings.Contains(got, "GAME MENU VIDEO UPDATED") {
 		t.Errorf("video confirmation missing menu label: %q", got)
 	}
-	if !strings.Contains(got, "❰ .gamevideo ❱") {
-		t.Errorf("video confirmation missing its own command: %q", got)
+	if !strings.Contains(got, "❰ .game ❱") {
+		t.Errorf("video confirmation must point at the menu command: %q", got)
 	}
-	if strings.Contains(got, "ALIVE") || strings.Contains(got, "❰ .menu ❱") {
-		t.Errorf("video confirmation leaked the generic hint: %q", got)
+	if strings.Contains(got, "❰ .gamevideo ❱") {
+		t.Errorf("video confirmation must not point at the media command: %q", got)
+	}
+
+	// The AI menu is opened by `.ai` even though `.aimenupic` set the picture.
+	b = newMMBridge()
+	commandByName(t, "aimenupic").Run(b, types.MessageInfo{}, []string{"https://x/a.jpg"}, ".")
+	if got = b.last(); !strings.Contains(got, "❰ .ai ❱") {
+		t.Errorf("ai confirmation must point at .ai: %q", got)
 	}
 
 	// Resets are per-menu too.
@@ -80,6 +91,19 @@ func TestMenuMediaConfirmationIsPerMenu(t *testing.T) {
 	commandByName(t, "converterpic").Run(b, types.MessageInfo{}, []string{"reset"}, ".")
 	if got = b.last(); !strings.Contains(got, "CONVERTER MENU PIC RESET") {
 		t.Errorf("reset card missing menu label: %q", got)
+	}
+
+	// The hint is a complete bold token: exactly one pair of surrounding stars.
+	b = newMMBridge()
+	commandByName(t, "fontpic").Run(b, types.MessageInfo{}, []string{"https://x/f.jpg"}, ".")
+	hint := ""
+	for _, line := range strings.Split(b.last(), "\n") {
+		if strings.Contains(line, "FOR TEST TYPE") {
+			hint = line
+		}
+	}
+	if hint != "*FOR TEST TYPE ❰ .font ❱*" {
+		t.Errorf("hint not fully bold/malformed: %q", hint)
 	}
 }
 

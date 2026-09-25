@@ -252,16 +252,17 @@ func menuIsVideoMime(mime string) bool {
 // mediaURLRe matches a bare http(s) URL ending in an image or video extension.
 var mediaURLRe = regexp.MustCompile(`^(https?://\S+\.(jpe?g|png|gif|webp|mp4|3gp|webm|mov|mkv|avi))$`)
 
-// menuMediaTestHint names the EXACT command the owner just used so the
-// success card never sends them to an unrelated menu. The old card told
-// everyone to type ".alive" or ".menu" even when they had just changed
-// the logo or converter picture.
-func menuMediaTestHint(prefix, cmdName string) string {
-	return "*FOR TEST TYPE ❰ " + prefix + cmdName + " ❱"
+// menuMediaTestHint tells the owner which command OPENS the menu they just
+// customised, so they can actually verify the change: `.menu`, `.logo`,
+// `.ai`, `.tools`, ... . The media command itself (`.aimenupic`) only SETS
+// the picture and shows a guide — it does not render the menu, so pointing
+// the owner at it would be misleading.
+func menuMediaTestHint(prefix, menuCmd string) string {
+	return "*FOR TEST TYPE ❰ " + prefix + menuCmd + " ❱*"
 }
 
 // handleMenuPic sets the header picture for ONE menu.
-func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefix, key, cmdName string) {
+func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefix, key, cmdName, menuCmd string) {
 	if !s.IsOwner(info) {
 		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
 		return
@@ -278,7 +279,7 @@ func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefi
 		firstTok := strings.Fields(argRaw)[0]
 		if m := mediaURLRe.FindString(firstTok); m != "" && !isVideoExt(m) {
 			s.SetMenuMediaSetting(menuMediaSettingKey(key, "pic"), m)
-			s.Reply(info, fmt.Sprintf("*🔰 %s PIC UPDATED 🔰*\n\n*NEW PIC:*\n%s\n\n%s", label, m, menuMediaTestHint(prefix, cmdName)))
+			s.Reply(info, fmt.Sprintf("*🔰 %s PIC UPDATED 🔰*\n\n*NEW PIC:*\n%s\n\n%s", label, m, menuMediaTestHint(prefix, menuCmd)))
 			return
 		}
 		if strings.HasPrefix(strings.ToLower(firstTok), "http") {
@@ -330,12 +331,12 @@ func handleMenuPic(s SessionBridge, info types.MessageInfo, args []string, prefi
 		return
 	}
 	s.SetMenuMediaSetting(menuMediaSettingKey(key, "pic"), url)
-	s.Reply(info, fmt.Sprintf("*🔰 %s PIC UPDATED 🔰*\n\n*NEW PICTURE SAVED FOR THIS MENU ONLY*\n%s", label, menuMediaTestHint(prefix, cmdName)))
+	s.Reply(info, fmt.Sprintf("*🔰 %s PIC UPDATED 🔰*\n\n*NEW PICTURE SAVED FOR THIS MENU ONLY*\n%s", label, menuMediaTestHint(prefix, menuCmd)))
 }
 
 // handleMenuVideo sets the header video for ONE menu, normalising it to a
 // WhatsApp-safe MP4 first so it can never fail to play.
-func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, prefix, key, cmdName string) {
+func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, prefix, key, cmdName, menuCmd string) {
 	if !s.IsOwner(info) {
 		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
 		return
@@ -352,7 +353,7 @@ func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, pre
 		firstTok := strings.Fields(argRaw)[0]
 		if m := mediaURLRe.FindString(firstTok); m != "" && isVideoExt(m) {
 			s.SetMenuMediaSetting(menuMediaSettingKey(key, "video"), m)
-			s.Reply(info, fmt.Sprintf("*🔰 %s VIDEO UPDATED 🔰*\n\n*NEW VIDEO:*\n%s\n\n%s", label, m, menuMediaTestHint(prefix, cmdName)))
+			s.Reply(info, fmt.Sprintf("*🔰 %s VIDEO UPDATED 🔰*\n\n*NEW VIDEO:*\n%s\n\n%s", label, m, menuMediaTestHint(prefix, menuCmd)))
 			return
 		}
 		if strings.HasPrefix(strings.ToLower(firstTok), "http") {
@@ -444,7 +445,7 @@ func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, pre
 		return
 	}
 	s.SetMenuMediaSetting(menuMediaSettingKey(key, "video"), url)
-	s.Reply(info, fmt.Sprintf("*🔰 %s VIDEO UPDATED 🔰*\n\n*NEW VIDEO SAVED FOR THIS MENU ONLY*\n%s", label, menuMediaTestHint(prefix, cmdName)))
+	s.Reply(info, fmt.Sprintf("*🔰 %s VIDEO UPDATED 🔰*\n\n*NEW VIDEO SAVED FOR THIS MENU ONLY*\n%s", label, menuMediaTestHint(prefix, menuCmd)))
 }
 
 // isVideoExt reports whether a URL ends in a video extension.
@@ -463,6 +464,11 @@ type menuMediaCommand struct {
 	Name string
 	Key  string
 	Kind string // "pic" or "video"
+	// MenuCmd is the command the owner types to OPEN this menu (what the
+	// success card should tell them to check): ".menu" for the main menu,
+	// ".logo" / ".font" / ... for dedicated menus, and the category slug
+	// (".ai", ".tools", ...) for the rest. It is NOT the media command.
+	MenuCmd string
 }
 
 // menuMediaCommands is the full generated command set: for each menu one
@@ -470,23 +476,23 @@ type menuMediaCommand struct {
 // (grouppic/aipic/aivideo are taken, so the group/ai menus use distinct
 // names below).
 var menuMediaCommands = []menuMediaCommand{
-	{"menupic", "menu", "pic"}, {"menuvideo", "menu", "video"},
-	{"alivepic", "alive", "pic"}, {"alivevideo", "alive", "video"},
-	{"logopic", "logo", "pic"}, {"logovideo", "logo", "video"},
-	{"fontpic", "font", "pic"}, {"fontvideo", "font", "video"},
-	{"gamepic", "game", "pic"}, {"gamevideo", "game", "video"},
-	{"equalizerpic", "equalizer", "pic"}, {"equalizervideo", "equalizer", "video"},
-	{"aimenupic", "ai", "pic"}, {"aimenuvideo", "ai", "video"},
-	{"utilitypic", "utility", "pic"}, {"utilityvideo", "utility", "video"},
-	{"converterpic", "converter", "pic"}, {"convertervideo", "converter", "video"},
-	{"toolspic", "tools", "pic"}, {"toolsvideo", "tools", "video"},
-	{"downloaderpic", "downloader", "pic"}, {"downloadervideo", "downloader", "video"},
-	{"groupmenupic", "group", "pic"}, {"groupmenuvideo", "group", "video"},
-	{"protectionpic", "protection", "pic"}, {"protectionvideo", "protection", "video"},
-	{"presencepic", "presence", "pic"}, {"presencevideo", "presence", "video"},
-	{"corepic", "core", "pic"}, {"corevideo", "core", "video"},
-	{"breactionpic", "breaction", "pic"}, {"breactionvideo", "breaction", "video"},
-	{"greactionpic", "greaction", "pic"}, {"greactionvideo", "greaction", "video"},
+	{"menupic", "menu", "pic", "menu"}, {"menuvideo", "menu", "video", "menu"},
+	{"alivepic", "alive", "pic", "alive"}, {"alivevideo", "alive", "video", "alive"},
+	{"logopic", "logo", "pic", "logo"}, {"logovideo", "logo", "video", "logo"},
+	{"fontpic", "font", "pic", "font"}, {"fontvideo", "font", "video", "font"},
+	{"gamepic", "game", "pic", "game"}, {"gamevideo", "game", "video", "game"},
+	{"equalizerpic", "equalizer", "pic", "equalizer"}, {"equalizervideo", "equalizer", "video", "equalizer"},
+	{"aimenupic", "ai", "pic", "ai"}, {"aimenuvideo", "ai", "video", "ai"},
+	{"utilitypic", "utility", "pic", "utility"}, {"utilityvideo", "utility", "video", "utility"},
+	{"converterpic", "converter", "pic", "converter"}, {"convertervideo", "converter", "video", "converter"},
+	{"toolspic", "tools", "pic", "tools"}, {"toolsvideo", "tools", "video", "tools"},
+	{"downloaderpic", "downloader", "pic", "downloader"}, {"downloadervideo", "downloader", "video", "downloader"},
+	{"groupmenupic", "group", "pic", "group"}, {"groupmenuvideo", "group", "video", "group"},
+	{"protectionpic", "protection", "pic", "protection"}, {"protectionvideo", "protection", "video", "protection"},
+	{"presencepic", "presence", "pic", "presence"}, {"presencevideo", "presence", "video", "presence"},
+	{"corepic", "core", "pic", "core"}, {"corevideo", "core", "video", "core"},
+	{"breactionpic", "breaction", "pic", "breaction"}, {"breactionvideo", "breaction", "video", "breaction"},
+	{"greactionpic", "greaction", "pic", "greaction"}, {"greactionvideo", "greaction", "video", "greaction"},
 }
 
 // menuMediaVisible are the two headline commands shown in the menu (the other
@@ -505,7 +511,7 @@ func init() {
 				OwnerOnly: true,
 				Hidden:    hidden,
 				Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-					handleMenuVideo(s, info, args, prefix, mc.Key, mc.Name)
+					handleMenuVideo(s, info, args, prefix, mc.Key, mc.Name, mc.MenuCmd)
 				},
 			})
 			continue
@@ -517,7 +523,7 @@ func init() {
 			OwnerOnly: true,
 			Hidden:    hidden,
 			Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
-				handleMenuPic(s, info, args, prefix, mc.Key, mc.Name)
+				handleMenuPic(s, info, args, prefix, mc.Key, mc.Name, mc.MenuCmd)
 			},
 		})
 	}

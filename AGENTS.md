@@ -97,5 +97,11 @@ Don't chase these unless asked.
   `sendMenuHeader(info, key, caption)` renders it, with `menuPicURL(key)` /
   `menuVideoURL(key)` resolving it. An empty key means "no per-menu override".
   Wire every menu through `sendMenuHeader` — never call `botPicURL` directly.
-- Confirmation cards name the exact menu and command (`*LOGO MENU PIC UPDATED*`
-  + `*FOR TEST TYPE ❰ .logopic ❱*`); never a generic `.alive` / `.menu` hint.
+- Confirmation cards name the exact menu (`*LOGO MENU PIC UPDATED*`) and point
+  the owner at the command that OPENS it (`*FOR TEST TYPE ❰ .logo ❱*`, `.ai`,
+  `.game`). Never the media command itself (`.logopic` only SETS the picture)
+  and never a generic `.alive` / `.menu` hint.
+- Category menu shortcuts are resolved BEFORE the prefix-match fallback
+  (`categoryMenuShortcut` in handler.go). The fallback is greedy, so `.ai` and
+  `.group` were previously stolen by `aiimage` / `groupban` and those category
+  menus never opened. An exact registered command always wins.

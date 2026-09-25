@@ -852,6 +852,22 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		command = orig
 	}
 
+	// ── CATEGORY MENU SHORTCUT (MUST run before prefix-match) ─────────────
+	// .ai and .group are menu shortcuts (type the category name → that
+	// category's menu). The prefix-match fallback just below is greedy and
+	// would otherwise steal them for "aiimage" / "groupban", so the shortcut
+	// never fired for those categories. Resolving it here fixes that for
+	// EVERY category.
+	if cat, ok := categoryMenuShortcut(command); ok {
+		go s.reactCommand(info, command)
+		beginCmdBusy()
+		func() {
+			defer endCmdBusy()
+			s.CmdMenu(info, []string{cat}, prefix)
+		}()
+		return
+	}
+
 	// ── PREFIX-MATCH FALLBACK ─────────────────────────────────────────────
 	// The cmdRegex `^([A-Za-z0-9_]+)(.*)$` is greedy, so a no-space form like
 	// ".pair923xxxx" is parsed as command="pair923xxxx" with no args.  When the
@@ -952,23 +968,6 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		func() {
 			defer endCmdBusy()
 			cmd(s, info, args, prefix)
-		}()
-		return
-	}
-
-	// ── CATEGORY SHORTCUT (owner order 2026-09-18) ──────────────────────────────
-	// .menu ab sirf category names dikhata hai. User category name type kare
-	// (e.g. .group / .anti / .tools) to usi category ka menu banta hai — same
-	// format, sirf us category ke commands. Ye check unknown-command se PEHLE
-	// chalta hai taake category slug kabhi "unknown" na lage.
-	if cat, ok := menuCategoryFromCommand(command); ok {
-		// React (same as normal commands) - category shortcut bhi ek
-		// command hai, isliye reaction bhi milni chahiye.
-		go s.reactCommand(info, command)
-		beginCmdBusy()
-		func() {
-			defer endCmdBusy()
-			s.CmdMenu(info, []string{cat}, prefix)
 		}()
 		return
 	}
