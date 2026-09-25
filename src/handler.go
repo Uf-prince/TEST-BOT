@@ -645,6 +645,19 @@ func (s *Session) HandleMessage(evt *events.Message) {
 		}
 	}
 
+	// 🔰 AI MODE (.aimode — ported from UMAR-MD pair.js). Owner-only control
+	// (on/off/status/prefix/guide) plus the natural-language resolver: when AI
+	// mode is ON, a plain non-command message is translated by the AI into the
+	// matching command and returned as a rewrite, which then falls through to
+	// the exact same dispatch (owner-only / mode / group-admin checks all
+	// apply). Runs BEFORE the prefix check — same place as the Node original.
+	if amHandled, amRewrite := goldcmds.AIModeTryHandle(brAR, info, body, prefix); amHandled {
+		if amRewrite == "" {
+			return
+		}
+		body = amRewrite
+	}
+
 	// ── CMDPREFIX (PER-COMMAND PREFIXLESS) ────────────────────────────────────
 	// Owner .cmdprefix stop ping karke kisi command ka prefix optional kar
 	// sakta hai. Agar body bina prefix ka hai aur uska pehla word kisi

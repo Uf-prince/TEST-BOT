@@ -163,6 +163,22 @@ func cmdNameKnownSet() map[string]bool {
 	return set
 }
 
+// cmdNameKnownNames returns the full dispatchable command-name set supplied by
+// the main package (core commands like ping/menu/alive/uptime/sessions) plus
+// every gold-cmds registry name — lower-cased, de-duplicated, order-stable.
+func cmdNameKnownNames() []string {
+	var out []string
+	seen := map[string]bool{}
+	for name := range cmdNameKnownSet() {
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out
+}
+
 // ── dispatch hooks (called from handler.go) ──
 
 // CmdNameResolve maps a typed command name to the command that should run.
