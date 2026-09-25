@@ -2085,15 +2085,15 @@ func buildImportantCmds(prefix, importantKey string, st goldcmds.MenuStyle) stri
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(goldcmds.ImportantBorderTop + "\n")
-	b.WriteString("*🔰 IMPORTANT CMNDS 🔰*\n")
+	b.WriteString(st.ImpBorderTop() + "\n")
+	b.WriteString(st.ImpTitle("IMPORTANT CMNDS") + "\n")
 	for _, line := range []string{
 		"BOTPIC", "BOTVIDEO", "BOTVOICE",
 		pic, video, voice,
 	} {
-		b.WriteString(fmt.Sprintf("*|🔰| %s%s*\n", prefix, line))
+		b.WriteString(st.ImpRow(prefix, line) + "\n")
 	}
-	b.WriteString(goldcmds.ImportantBorderBottom + "\n\n")
+	b.WriteString(st.ImpBorderBottom() + "\n\n")
 	return b.String()
 }
 
@@ -2129,12 +2129,12 @@ func buildLogoMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 	}
 	var b strings.Builder
 	b.WriteString(buildMenuHeader("LOGO", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.LogoCount, false, "logo", st))
-	b.WriteString(goldcmds.MenuBorderTop + "\n")
-	b.WriteString("*| 🔰 | LOGO | 🔰 |*\n")
+	b.WriteString(st.BorderTop() + "\n")
+	b.WriteString(st.ListRow("", st.Styled("LOGO")) + "\n")
 	for n := 1; n <= goldcmds.LogoCount; n++ {
-		b.WriteString(fmt.Sprintf("*| 🔰 | %sLOGO%d ❮ YOUR NAME ❯*\n", prefix, n))
+		b.WriteString(st.ListRow(prefix, fmt.Sprintf("LOGO%d ❮ YOUR NAME ❯", n)) + "\n")
 	}
-	b.WriteString(goldcmds.MenuBorderBottom + "\n\n")
+	b.WriteString(st.BorderBottom() + "\n\n")
 	return b.String()
 }
 
@@ -2266,14 +2266,14 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	// Owner order: .menu likhe to box me category commands line by line dikhein,
 	// har line pe prefix laga ho (e.g. .CORE / .GROUP / .PROTECTION).
 	if onlyCat == "" {
-		b.WriteString(goldcmds.MenuBorderTop + "\n")
+		b.WriteString(st.BorderTop() + "\n")
 		for _, cat := range orderedCats {
 			list, ok := groups[cat]
 			if !ok || len(list) == 0 {
 				continue
 			}
 			slug := strings.ToUpper(menuCategorySlug(cat))
-			b.WriteString(fmt.Sprintf("*| 🔰 | %s%s*\n", prefix, slug))
+			b.WriteString(st.ListRow(prefix, slug) + "\n")
 		}
 		// OWNER ORDER: .LOGO ko plain .menu me alag se dikhao (ye category list
 		// ka hissa nahi, khud ka command hai). .FONT ko yahan NAHI likhna —
@@ -2290,17 +2290,13 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 	if !ok || len(list) == 0 {
 		return b.String()
 	}
-	emoji := goldcmds.CategoryEmoji[onlyCat]
-	if emoji == "" {
-		emoji = "🔰"
-	}
-	b.WriteString(goldcmds.MenuBorderTop + "\n")
-	b.WriteString(fmt.Sprintf("*| %s | %s | %s |*\n", emoji, menuCategoryLabel(onlyCat), emoji))
+	b.WriteString(st.BorderTop() + "\n")
+	b.WriteString(st.ListRow("", st.Styled(menuCategoryLabel(onlyCat))) + "\n")
 	for _, c := range list {
 		// OWNER ORDER: category menus me command names CAPS (ABCD) me dikhein.
-		b.WriteString(fmt.Sprintf("*| 🔰 | %s%s*\n", prefix, strings.ToUpper(c.Name)))
+		b.WriteString(st.ListRow(prefix, strings.ToUpper(c.Name)) + "\n")
 	}
-	b.WriteString(goldcmds.MenuBorderBottom + "\n\n")
+	b.WriteString(st.BorderBottom() + "\n\n")
 	// NOTE: the bot name footer is applied centrally by
 	// ReplyImageWithNewsletter / ReplyWithNewsletter (via
 	// withCaptionFooter / withFooter), so we do NOT append it here —
@@ -2411,12 +2407,12 @@ func buildFontMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 	}
 	var b strings.Builder
 	b.WriteString(buildMenuHeader("FONT", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.FontCount, false, "font", st))
-	b.WriteString(goldcmds.MenuBorderTop + "\n")
-	b.WriteString("*| 🔰 | FONT | 🔰 |*\n")
+	b.WriteString(st.BorderTop() + "\n")
+	b.WriteString(st.ListRow("", st.Styled("FONT")) + "\n")
 	for n := 1; n <= goldcmds.FontCount; n++ {
-		b.WriteString(fmt.Sprintf("*| 🔰 | %sFONT%d ❮ YOUR NAME ❯*\n", prefix, n))
+		b.WriteString(st.ListRow(prefix, fmt.Sprintf("FONT%d ❮ YOUR NAME ❯", n)) + "\n")
 	}
-	b.WriteString(goldcmds.MenuBorderBottom + "\n\n")
+	b.WriteString(st.BorderBottom() + "\n\n")
 	return b.String()
 }
 
@@ -2433,12 +2429,12 @@ func buildGameMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string
 	}
 	var b strings.Builder
 	b.WriteString(buildMenuHeader("GAME", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.GameMenuCount(), false, "game", st))
-	b.WriteString(goldcmds.MenuBorderTop + "\n")
-	b.WriteString("*| 🔰 | GAME | 🔰 |*\n")
+	b.WriteString(st.BorderTop() + "\n")
+	b.WriteString(st.ListRow("", st.Styled("GAME")) + "\n")
 	for _, slug := range goldcmds.GameShortSlugs() {
-		b.WriteString(fmt.Sprintf("*| 🔰 | %s%s*\n", prefix, strings.ToUpper(slug)))
+		b.WriteString(st.ListRow(prefix, strings.ToUpper(slug)) + "\n")
 	}
-	b.WriteString(goldcmds.MenuBorderBottom + "\n\n")
+	b.WriteString(st.BorderBottom() + "\n\n")
 	return b.String()
 }
 
@@ -2450,12 +2446,12 @@ func buildEqualizerMenu(botNum, ownerNum, uptimeStr, prefix string, sessCount in
 	}
 	var b strings.Builder
 	b.WriteString(buildMenuHeader("EQUALIZER", botNum, ownerNum, uptimeHM, prefix, 0, goldcmds.EqCount, false, "equalizer", st))
-	b.WriteString(goldcmds.MenuBorderTop + "\n")
-	b.WriteString("*| 🔰 | EQUALIZER | 🔰 |*\n")
+	b.WriteString(st.BorderTop() + "\n")
+	b.WriteString(st.ListRow("", st.Styled("EQUALIZER")) + "\n")
 	for n := 1; n <= goldcmds.EqCount; n++ {
-		b.WriteString(fmt.Sprintf("*| 🔰 | %sEQ%d ❮ %s ❯*\n", prefix, n, goldcmds.EqDesignName(n)))
+		b.WriteString(st.ListRow(prefix, fmt.Sprintf("EQ%d ❮ %s ❯", n, goldcmds.EqDesignName(n))) + "\n")
 	}
-	b.WriteString(goldcmds.MenuBorderBottom + "\n\n")
+	b.WriteString(st.BorderBottom() + "\n\n")
 	return b.String()
 }
 

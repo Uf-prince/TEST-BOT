@@ -126,7 +126,7 @@ func TestBaseGameLifeCapArmed(t *testing.T) {
 
 // The branded header must carry the owner/bot display name.
 func TestGameHeaderBrand(t *testing.T) {
-	h := gameHeader("DICE ROLL", "TEAM OWNER")
+	h := gameHeader(nil, "DICE ROLL", "TEAM OWNER")
 	if !strings.Contains(h, "DICE ROLL") || !strings.Contains(h, "TEAM OWNER") {
 		t.Errorf("header missing label/brand:\n%s", h)
 	}

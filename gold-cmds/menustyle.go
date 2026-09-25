@@ -59,6 +59,34 @@ type MenuStyle struct {
 // Styled renders a title/label in the style's decorative font.
 func (st MenuStyle) Styled(s string) string { return applyMenuFont(st.font, s) }
 
+// ResolveMenuStyle picks the effective style for one menu, reading the store
+// through the bridge: per-menu override ("menustyle:<key>") wins, then the
+// bot-wide style ("botmenustyle"), then the built-in classic style. Used by
+// gold-cmds' own renderers (game headers) that do not run inside src.
+func ResolveMenuStyle(s SessionBridge, key string) MenuStyle {
+	if s == nil {
+		return MenuStyleAt(1)
+	}
+	// A partially-implemented bridge (tests, early boot) must fall back to the
+	// classic style instead of returning a zero (borderless) style.
+	inner := func() (st MenuStyle) {
+		st = MenuStyleAt(1)
+		defer func() { _ = recover() }()
+		if raw := strings.TrimSpace(s.GetMenuStyleSetting(key, "")); raw != "" {
+			if n, ok := ParseMenuStyleArg(raw); ok {
+				return MenuStyleAt(n)
+			}
+		}
+		if raw := strings.TrimSpace(s.GetBotMenuStyleSetting("")); raw != "" {
+			if n, ok := ParseMenuStyleArg(raw); ok {
+				return MenuStyleAt(n)
+			}
+		}
+		return st
+	}
+	return inner()
+}
+
 // BorderTop/Bottom return the list border wrapped for WhatsApp bold.
 func (st MenuStyle) BorderTop() string    { return "*" + st.ListTop + "*" }
 func (st MenuStyle) BorderBottom() string { return "*" + st.ListBottom + "*" }
@@ -66,6 +94,12 @@ func (st MenuStyle) BorderBottom() string { return "*" + st.ListBottom + "*" }
 // ImpBorderTop/Bottom return the IMPORTANT CMNDS border, bold-wrapped.
 func (st MenuStyle) ImpBorderTop() string    { return "*" + st.ImpTop + "*" }
 func (st MenuStyle) ImpBorderBottom() string { return "*" + st.ImpBottom + "*" }
+
+// ImpTitle renders the IMPORTANT CMNDS block heading in the style's symbol and
+// decorative font, e.g. "*🔰 IMPORTANT CMNDS 🔰*" for the classic style.
+func (st MenuStyle) ImpTitle(title string) string {
+	return "*" + st.Sym + " " + st.Styled(title) + " " + st.Sym + "*"
+}
 
 // RenderHeaderTop/Bot render the header frame with the (styled) title.
 func (st MenuStyle) RenderHeaderTop(title string) string {

@@ -128,7 +128,7 @@ func (p *playSession) push() {
 		return
 	}
 	var b strings.Builder
-	b.WriteString(gameHeader(p.label, p.brand))
+	b.WriteString(gameHeader(p.s, p.label, p.brand))
 	b.WriteString(p.render())
 	if p.flash != "" {
 		b.WriteString("\n\n⚠️ *" + p.flash + "*")
@@ -143,15 +143,17 @@ func (p *playSession) push() {
 	p.s.EditMessage(p.info, p.msgID, b.String())
 }
 
-// gameHeader is the shared boxed header used by every game message.
-func gameHeader(label, brand string) string {
+// gameHeader is the shared boxed header used by every game message. It honours
+// the active menu style so a game board matches the rest of the bot.
+func gameHeader(s SessionBridge, label, brand string) string {
+	st := ResolveMenuStyle(s, "game")
 	var b strings.Builder
-	b.WriteString(MenuBorderTop + "\n")
-	b.WriteString("*🔰 " + label + " 🔰*\n")
+	b.WriteString(st.BorderTop() + "\n")
+	b.WriteString("*" + st.ListRowL + st.Styled(label) + st.ListRowR + "*\n")
 	if brand != "" {
-		b.WriteString("*| 🔰 | " + brand + "*\n")
+		b.WriteString(st.ListRow("", st.Styled(brand)) + "\n")
 	}
-	b.WriteString(MenuBorderBottom + "\n\n")
+	b.WriteString(st.BorderBottom() + "\n\n")
 	return b.String()
 }
 
@@ -181,7 +183,7 @@ func playIdleClose(p *playSession) {
 	}
 	p.over = true
 	p.flash = ""
-	txt := gameHeader(p.label, p.brand) + p.render() +
+	txt := gameHeader(p.s, p.label, p.brand) + p.render() +
 		"\n\n\u23f0 *30 SECOND IDLE \u2014 GAME CLOSED*" +
 		"\n_NEW GAME: " + p.prefix + p.slug + "_"
 	p.s.EditMessage(p.info, p.msgID, txt)
@@ -200,7 +202,7 @@ func playLifeClose(p *playSession) {
 	}
 	p.over = true
 	p.flash = ""
-	txt := gameHeader(p.label, p.brand) + p.render() +
+	txt := gameHeader(p.s, p.label, p.brand) + p.render() +
 		"\n\n\u231b *TIME UP \u2014 GAME CLOSED*" +
 		"\n_NEW GAME: " + p.prefix + p.slug + "_"
 	p.s.EditMessage(p.info, p.msgID, txt)
