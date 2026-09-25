@@ -113,3 +113,20 @@ Don't chase these unless asked.
   (`categoryMenuShortcut` in handler.go). The fallback is greedy, so `.ai` and
   `.group` were previously stolen by `aiimage` / `groupban` and those category
   menus never opened. An exact registered command always wins.
+
+## AI Mode (`.aimode`) — prefixless-command gate
+- The AI Mode wake-word (`aimodeprefix`) FALLS BACK to `aimDefaultPrefixWord`
+  (`"AI"`) when unset — same as pair.js `AIMODE_DEFAULT_PREFIX_WORD`. Never
+  treat an empty wake-word as "read every plain message": that let bare command
+  names dispatch without the bot prefix. The resolver only fires on messages
+  that start with the wake-word (`AIModeTryHandle`, `gold-cmds/aimode.go`).
+- `.aimode` texts live in `aimode.go` (`aimToggleText`, `aimStatusText`,
+  `aimPrefixInfoText`, `aimPrefixSetText`, `aimGuideText`, `aimUsageText`).
+  Follow the GOLD-MD design: bold, emoji marks, value/command brackets, and
+  `LABEL :` description rows. Owner rejection uses the bot-wide owner-only
+  notice.
+- The connected/startup card carries the live AI Mode state (`AIModeEnabledFor`
+  / `AIModeWakeWordFor`, read from Redis via `AIModeAttachSettingReader`, wired
+  in `src/main.go`). Example wake-word lines show ONLY when AI Mode is ON.
+- `.aimode on/off/prefix` re-sends the card through the unthrottled
+  `NotifyConnectedCard` bridge hook (pair.js `BilalSendConnectedNotice` parity).
