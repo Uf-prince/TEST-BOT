@@ -234,6 +234,18 @@ var aimGroupOnlyCommands = map[string]bool{
 	"bangcuser": true, "unbangcuser": true,
 }
 
+// aimCoreDescriptions supplies the MENU description for the main-package core
+// commands (ping/menu/alive/uptime/sessions), which live outside the gold-cmds
+// registry and therefore carry no Desc in the corpus. Without a description the
+// AI has no signal for them ("bot ki speed check karo" → ping).
+var aimCoreDescriptions = map[string]string{
+	"ping":     "Shows the bot response speed / ping time (bot ki speed check karo).",
+	"menu":     "Shows the full bot command menu with every category (menu dikhao / list all commands).",
+	"alive":    "Shows that the bot is alive and running with uptime info.",
+	"uptime":   "Shows how long the bot has been running (bot uptime check).",
+	"sessions": "Lists the paired bot sessions/numbers.",
+}
+
 // aimCorpus builds the live command corpus (name + description) — the Go
 // equivalent of BilalGetKnownCommandCorpus(): every gold-cmds registry command
 // (with its MENU description, fed to the AI as "command — description") plus the
@@ -248,14 +260,18 @@ func aimCorpus() []aimCorpusEntry {
 			continue
 		}
 		seen[name] = true
-		out = append(out, aimCorpusEntry{Command: name, Description: c.Desc})
+		d := c.Desc
+		if d == "" {
+			d = aimCoreDescriptions[name]
+		}
+		out = append(out, aimCorpusEntry{Command: name, Description: d})
 	}
 	for _, name := range cmdNameKnownNames() {
 		if seen[name] {
 			continue
 		}
 		seen[name] = true
-		out = append(out, aimCorpusEntry{Command: name})
+		out = append(out, aimCorpusEntry{Command: name, Description: aimCoreDescriptions[name]})
 	}
 	return out
 }
@@ -266,11 +282,241 @@ func aimEscapeRegexLiteral(s string) string {
 	return aimEscapeRe.ReplaceAllString(s, `\$0`)
 }
 
-// aimResolve is the Go port of BilalAiResolveCommandFromMessage: ONE AI call,
-// then the JS-level hard gates (corpus membership + group-only scope). Returns
-// ok=false on NO_COMMAND_FOUND or any gate failure.
-func aimResolve(userMessage string, corpus []aimCorpusEntry, isGroupChat bool) (string, bool) {
-	if strings.TrimSpace(userMessage) == "" || len(corpus) == 0 {
+// aimStopWords are the very common filler tokens that carry no command
+// signal — they are dropped before candidate scoring so "karo", "hai", "me"
+// etc. never inflate a match.
+var aimStopWords = map[string]bool{
+	"a": true, "an": true, "the": true, "is": true, "are": true, "am": true,
+	"to": true, "of": true, "in": true, "on": true, "off": true, "at": true,
+	"for": true, "and": true, "or": true, "my": true, "i": true,
+	"you": true, "your": true, "it": true, "this": true, "that": true,
+	"karo": true, "kar": true, "kro": true, "krdo": true, "kardo": true,
+	"hai": true, "ha": true, "ho": true, "hoon": true, "hun": true,
+	"ko": true, "ka": true, "ki": true, "ke": true, "se": true, "me": true,
+	"mein": true, "ye": true, "yeh": true, "wo": true, "plz": true, "please": true,
+	"bhai": true, "yaar": true, "bro": true, "sir": true, "bot": true,
+}
+
+// aimSynonyms adds extra scoring tokens (Roman-Urdu / casual phrasing) to a
+// command so a plain sentence still shortlists it even when the command NAME and
+// its MENU description share no letters (e.g. "gana" → play). These tokens are
+// ALSO appended to the description in the AI prompt, which can only help the
+// model — they never change a command's real MENU text.
+var aimSynonyms = map[string]string{
+	"play":       "gana song music mp3 audio gaana bajao sunao",
+	"play2":      "gana song music mp3 audio",
+	"play3":      "gana song music mp3 audio",
+	"video":      "youtube video clip film download uthao nikal do",
+	"video2":     "youtube video clip download",
+	"video3":     "youtube video clip download",
+	"fb":         "facebook fb reel video download",
+	"ping":       "speed check response fast slow",
+	"menu":       "list commands help sab commands dikhao",
+	"uptime":     "kitni der se chal raha running time",
+	"alive":      "zinda online check",
+	"statusseen": "status seen khud dekh gaya auto view",
+	"gcbotoff":   "group lock band kar do close",
+	"gcboton":    "group unlock khol do open",
+	"usergcban":  "member ko group me ban karo rok do",
+	"botblock":   "bot commands se ban karo rok do",
+	"anticall":   "calls auto reject band karo ring",
+}
+
+// aimDescFor returns the description used for scoring + the AI prompt, with the
+// synonym hints appended.
+func aimDescFor(c aimCorpusEntry) string {
+	if h := aimSynonyms[c.Command]; h != "" {
+		if c.Description == "" {
+			return h
+		}
+		return c.Description + " " + h
+	}
+	return c.Description
+}
+
+func aimTokenize(s string) []string {
+	var out []string
+	var cur strings.Builder
+	flush := func() {
+		if cur.Len() >= 2 {
+			out = append(out, strings.ToLower(cur.String()))
+		}
+		cur.Reset()
+	}
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			cur.WriteRune(r)
+		} else {
+			flush()
+		}
+	}
+	flush()
+	return out
+}
+
+// aimLev is the classic Levenshtein distance (same as the Node helper).
+func aimLev(a, b string) int {
+	m, n := len(a), len(b)
+	if m == 0 {
+		return n
+	}
+	if n == 0 {
+		return m
+	}
+	prev := make([]int, n+1)
+	cur := make([]int, n+1)
+	for j := 0; j <= n; j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= m; i++ {
+		cur[0] = i
+		for j := 1; j <= n; j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			cur[j] = min3(cur[j-1]+1, prev[j]+1, prev[j-1]+cost)
+		}
+		prev, cur = cur, prev
+	}
+	return prev[n]
+}
+
+func min3(a, b, c int) int {
+	if b < a {
+		a = b
+	}
+	if c < a {
+		a = c
+	}
+	return a
+}
+
+// aimSim returns the similarity (0..1) between two tokens.
+func aimSim(a, b string) float64 {
+	if a == b {
+		return 1
+	}
+	if len(a) >= 3 && len(b) >= 3 && (strings.Contains(a, b) || strings.Contains(b, a)) {
+		return 0.9
+	}
+	maxLen := len(a)
+	if len(b) > maxLen {
+		maxLen = len(b)
+	}
+	if maxLen == 0 {
+		return 0
+	}
+	return 1 - float64(aimLev(a, b))/float64(maxLen)
+}
+
+type aimIndexEntry struct {
+	entry      aimCorpusEntry
+	nameTokens []string
+	descTokens []string
+}
+
+var (
+	aimIndexOnce sync.Once
+	aimIndex     []aimIndexEntry
+	aimIndexList []aimCorpusEntry
+)
+
+// aimBuildIndex tokenizes the corpus ONCE (commands register at init, so the
+// index never goes stale) — per-message cost drops to just the message tokens.
+func aimBuildIndex() {
+	corpus := aimCorpus()
+	aimIndex = make([]aimIndexEntry, 0, len(corpus))
+	aimIndexList = make([]aimCorpusEntry, 0, len(corpus))
+	for _, c := range corpus {
+		aimIndex = append(aimIndex, aimIndexEntry{
+			entry:      c,
+			nameTokens: aimTokenize(c.Command),
+			descTokens: aimTokenize(aimDescFor(c)),
+		})
+		aimIndexList = append(aimIndexList, c)
+	}
+}
+
+// aimCorpusCached returns the full corpus (index built once).
+func aimCorpusCached() []aimCorpusEntry {
+	aimIndexOnce.Do(aimBuildIndex)
+	return aimIndexList
+}
+
+// aimCandidates returns the most promising corpus entries for a message, scored
+// by fuzzy token overlap against the command NAME (weight 1.0) and its
+// description (weight 0.9 — the symptom-matching signal). GOLD-MD has ~4000
+// commands, so the AI gets this shortlist instead of the whole corpus; the
+// corpus-membership hard gate afterwards still checks the FULL list, exactly
+// like the Node resolver.
+func aimCandidates(corpus []aimCorpusEntry, message string, max int, minScore float64) []aimCorpusEntry {
+	aimIndexOnce.Do(aimBuildIndex)
+	var sig []string
+	for _, t := range aimTokenize(message) {
+		if !aimStopWords[t] {
+			sig = append(sig, t)
+		}
+	}
+	if len(sig) == 0 {
+		return nil
+	}
+	type scored struct {
+		e     aimCorpusEntry
+		score float64
+	}
+	out := make([]scored, 0, 64)
+	for _, ie := range aimIndex {
+		total := 0.0
+		for _, t := range sig {
+			best := 0.0
+			for _, nt := range ie.nameTokens {
+				if s := aimSim(t, nt); s > best {
+					best = s
+				}
+			}
+			for _, dt := range ie.descTokens {
+				if s := aimSim(t, dt) * 0.9; s > best {
+					best = s
+				}
+			}
+			if best >= 0.6 {
+				total += best
+			}
+		}
+		if total >= minScore {
+			out = append(out, scored{e: ie.entry, score: total})
+		}
+	}
+	// insertion sort (desc) — the sliced list stays small.
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j].score > out[j-1].score; j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	if len(out) > max {
+		out = out[:max]
+	}
+	res := make([]aimCorpusEntry, 0, len(out))
+	for _, s := range out {
+		res = append(res, s.e)
+	}
+	return res
+}
+
+// aimResolve is the Go port of BilalAiResolveCommandFromMessage: the lexical
+// shortlist, ONE AI call, then the JS-level hard gates (corpus membership +
+// group-only scope). Returns ok=false on NO_COMMAND_FOUND or any gate failure.
+func aimResolve(userMessage string, isGroupChat bool) (string, bool) {
+	if strings.TrimSpace(userMessage) == "" {
+		return "", false
+	}
+	corpus := aimCorpusCached()
+	if len(corpus) == 0 {
+		return "", false
+	}
+	shortlist := aimCandidates(nil, userMessage, 40, 0.8)
+	if len(shortlist) == 0 {
 		return "", false
 	}
 	chatTypeLine := "CURRENT CHAT TYPE: INBOX/PRIVATE DM (yeh message kisi individual ki PRIVATE chat se aaya hai — koi group nahi hai)"
@@ -278,12 +524,16 @@ func aimResolve(userMessage string, corpus []aimCorpusEntry, isGroupChat bool) (
 		chatTypeLine = "CURRENT CHAT TYPE: GROUP (yeh message ek WhatsApp GROUP se aaya hai)"
 	}
 	var b strings.Builder
-	for i, c := range corpus {
+	for i, c := range shortlist {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		if c.Description != "" {
-			b.WriteString(c.Command + " — " + c.Description)
+		d := aimDescFor(c)
+		if len(d) > 200 {
+			d = d[:200]
+		}
+		if d != "" {
+			b.WriteString(c.Command + " — " + d)
 		} else {
 			b.WriteString(c.Command)
 		}
@@ -301,7 +551,7 @@ func aimResolve(userMessage string, corpus []aimCorpusEntry, isGroupChat bool) (
 	if raw == "" || strings.Contains(strings.ToUpper(raw), "NO_COMMAND_FOUND") {
 		return "", false
 	}
-	cleaned := strings.TrimSpace(strings.TrimLeft(raw, ".!/#$%&*;("))
+	cleaned := aimCleanResolved(raw)
 	parts := strings.Fields(cleaned)
 	if len(parts) == 0 {
 		return "", false
@@ -321,6 +571,17 @@ func aimResolve(userMessage string, corpus []aimCorpusEntry, isGroupChat bool) (
 		return "", false
 	}
 	return cleaned, true
+}
+
+// aimCleanResolved strips leading punctuation/prefix and any trailing markdown
+// or quote noise the model may tack on (e.g. "... off**"), while leaving the
+// command name and its verbatim argument untouched.
+func aimCleanResolved(raw string) string {
+	s := strings.TrimSpace(raw)
+	s = strings.TrimLeft(s, ".!/#$%&*;(")
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, "*`~_\"'”′ \t")
+	return strings.TrimSpace(s)
 }
 
 // ----------------------------------------------------------------------------
@@ -577,7 +838,7 @@ func AIModeTryHandle(s SessionBridge, info types.MessageInfo, body, prefix strin
 		if e, hit := aimCacheGet(cacheKey); hit {
 			resolved, ok = e.value, e.ok
 		} else {
-			resolved, ok = aimResolve(body2, corpus, isGroup)
+			resolved, ok = aimResolve(body2, isGroup)
 			aimCacheSet(cacheKey, resolved, ok)
 		}
 	}

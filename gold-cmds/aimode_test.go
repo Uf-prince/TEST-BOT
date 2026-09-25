@@ -278,6 +278,59 @@ func TestAIModeEscapeRegexLiteral(t *testing.T) {
 	}
 }
 
+func TestAIModeCleanResolvedStripsNoise(t *testing.T) {
+	cases := map[string]string{
+		"anticall off**":       "anticall off",
+		".ping":                "ping",
+		"**play shape of you":  "play shape of you",
+		"`menu`":               "menu",
+		"\"antilink on\"":      "antilink on",
+		"antilink action drop": "antilink action drop",
+	}
+	for in, want := range cases {
+		if got := aimCleanResolved(in); got != want {
+			t.Fatalf("aimCleanResolved(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestAIModeShortlistCoversIntent(t *testing.T) {
+	corpus := aimCorpus()
+	cases := map[string]string{
+		"bot ki speed check karo":                 "ping",
+		"calls auto reject ho rahi hai band karo": "anticall",
+		"gana bhejo shape of you":                 "play",
+		"facebook se video download karo":         "fb",
+		"menu dikhao":                             "menu",
+		"status auto seen band karo":              "statusseen",
+		"group ko lock kar do":                    "gcbotoff",
+	}
+	for msg, want := range cases {
+		cands := aimCandidates(corpus, msg, 40, 0.8)
+		found := false
+		for _, c := range cands {
+			if c.Command == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			names := make([]string, 0, len(cands))
+			for _, c := range cands {
+				names = append(names, c.Command)
+			}
+			t.Fatalf("shortlist for %q missing %q; got %v", msg, want, names)
+		}
+	}
+}
+
+func TestAIModeCandidatesEmptyForNoise(t *testing.T) {
+	corpus := aimCorpus()
+	if got := aimCandidates(corpus, "???", 40, 0.8); len(got) != 0 {
+		t.Fatalf("punctuation-only message must yield no candidates, got %d", len(got))
+	}
+}
+
 func TestAIModeKeyAtEnvOverride(t *testing.T) {
 	safeEnv(t)
 	os.Setenv("GOLD_API_KEY_1", "ENVKEY")
