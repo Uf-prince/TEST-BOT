@@ -21,6 +21,25 @@ import (
 // Style 1 = classic = skin OFF (text jaisa hai waisa).
 // ============================================================================
 
+// applySkinFont is the skin's font pass: it decorates letters but leaves
+// digits untouched, so numbers in a card (phone number, command count) stay
+// readable and copyable. The dedicated .font command keeps the full mapping.
+func applySkinFont(idx int, s string) string {
+	if idx <= 0 {
+		return strings.ToUpper(s)
+	}
+	var b strings.Builder
+	b.Grow(len(s) * 2)
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			continue
+		}
+		b.WriteRune(fontRune(idx, r))
+	}
+	return b.String()
+}
+
 // skinSym is the style's signature symbol ("" when the style has none).
 func (st MenuStyle) skinSym() string { return strings.TrimSpace(st.Sym) }
 
@@ -35,8 +54,9 @@ func (st MenuStyle) SkinText(s string) string {
 	// Identity rewrite runs BEFORE the font transform: the brand words are
 	// still plain ASCII here, so they can actually be matched and renamed.
 	s = st.skinIdentity(s, sym)
+	s = st.skinWording(s)
 	if st.font > 0 {
-		s = applyMenuFont(st.font, s)
+		s = applySkinFont(st.font, s)
 	}
 	s = skinAccents(s, sym)
 	return s
@@ -67,6 +87,61 @@ func (st MenuStyle) skinIdentity(s, sym string) string {
 		s = strings.ReplaceAll(s, r[0], r[1])
 	}
 	return s
+}
+
+// skinWording swaps the bot's stock tone phrases for a style-specific set, so
+// the TEXT itself changes (not just the font). Phrases are keyed to the style
+// group (styles 2..50 split into 7 moods), which keeps a style's whole "voice"
+// consistent. Only sentence-level stock phrases are touched - symmetry words
+// like USER / NUMBER / PREFIX stay intact so the layout stays readable.
+func (st MenuStyle) skinWording(s string) string {
+	if s == "" || st.N <= 1 {
+		return s
+	}
+	w := wordingPackFor(st.N)
+	repl := [][2]string{
+		{"HAS BEEN STARTED", w.started},
+		{"CONNECTED SUCCESSFULLY", w.connected},
+		{"IMPORTANT NOTE", w.note},
+		{"I AM ACTIVE NOW", w.active},
+		{"WORKING WELL", w.working},
+	}
+	for _, r := range repl {
+		s = strings.ReplaceAll(s, r[0], r[1])
+	}
+	return s
+}
+
+// wordingPack is one "voice" for the bot's stock phrases.
+type wordingPack struct {
+	started   string
+	connected string
+	note      string
+	active    string
+	working   string
+}
+
+// wordingPacks are the available voices. Picked deterministically by style
+// number so the same style always speaks the same way.
+var wordingPacks = []wordingPack{
+	{"HAS AWAKENED", "LINKED PERFECTLY", "MUST READ", "I AM AWAKE", "RUNNING SMOOTH"},
+	{"IS LIVE", "JOINED AS ONE", "KEY POINTS", "I AM LIVE", "ALL SYSTEMS GO"},
+	{"HAS RISEN", "BONDED WITH YOU", "TAKE NOTE", "I AM HERE", "GREEN ACROSS"},
+	{"IS UP", "PLUGGED IN", "READ TWICE", "I AM UP", "EVERYTHING FINE"},
+	{"IS ONLINE", "SYNCED NICELY", "HEADS UP", "I AM ONLINE", "GOING STRONG"},
+	{"HAS BEGUN", "ATTACHED CLEAN", "DO READ", "I AM BACK", "NOTHING BROKEN"},
+	{"IS READY", "UNITED NOW", "QUICK NOTE", "I AM READY", "SMOOTH SAILING"},
+}
+
+func wordingPackFor(n int) wordingPack {
+	if len(wordingPacks) == 0 {
+		return wordingPack{"HAS BEEN STARTED", "CONNECTED SUCCESSFULLY", "IMPORTANT NOTE", "I AM ACTIVE NOW", "WORKING WELL"}
+	}
+	idx := ((n - 2) / 7) % len(wordingPacks)
+	if idx < 0 {
+		idx = -idx
+	}
+	return wordingPacks[idx]
 }
 
 // SkinKey renders one command token (prefix + name) in the style's font, so a

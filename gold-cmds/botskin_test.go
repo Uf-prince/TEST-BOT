@@ -148,3 +148,37 @@ func TestSkinClassicKeepsBrand(t *testing.T) {
 		t.Fatalf("classic skin touched the brand: %q", got)
 	}
 }
+
+// The TEXT itself must change, not just the font: a skinned bot must not keep
+// repeating the stock phrases a user could recognise.
+func TestSkinRewritesWording(t *testing.T) {
+	st := MenuStyleAt(7)
+	out := st.SkinText("*GOLD-MD HAS BEEN STARTED*\n*CONNECTED SUCCESSFULLY*")
+	norm := SkinNormalizeInput(out)
+	if strings.Contains(norm, "HAS BEEN STARTED") {
+		t.Fatalf("stock start phrase survived: %q", norm)
+	}
+	if strings.Contains(norm, "CONNECTED SUCCESSFULLY") {
+		t.Fatalf("stock connected phrase survived: %q", norm)
+	}
+	if want := wordingPackFor(7).started; !strings.Contains(norm, want) {
+		t.Fatalf("style 7 wording pack not applied: want %q in %q", want, norm)
+	}
+}
+
+// Two different style groups must not speak the same stock phrases.
+func TestSkinWordingVariesByStyle(t *testing.T) {
+	a := SkinNormalizeInput(MenuStyleAt(2).SkinText("CONNECTED SUCCESSFULLY"))
+	b := SkinNormalizeInput(MenuStyleAt(40).SkinText("CONNECTED SUCCESSFULLY"))
+	if a == b {
+		t.Fatalf("style groups share the same wording: %q", a)
+	}
+}
+
+// Classic must keep the exact stock wording.
+func TestSkinClassicKeepsWording(t *testing.T) {
+	in := "*GOLD-MD HAS BEEN STARTED* CONNECTED SUCCESSFULLY"
+	if got := MenuStyleAt(1).SkinText(in); got != in {
+		t.Fatalf("classic skin changed wording: %q", got)
+	}
+}

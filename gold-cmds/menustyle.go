@@ -131,7 +131,7 @@ func (st MenuStyle) SkinRow(prefix, name string) string {
 	if st.font <= 0 || st.N <= 1 {
 		return prefix + name
 	}
-	return prefix + applyMenuFont(st.font, name)
+	return prefix + applySkinFont(st.font, name)
 }
 
 // ImpRow renders one IMPORTANT CMNDS row, bold.
