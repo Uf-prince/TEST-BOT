@@ -738,7 +738,13 @@ func (s *Session) HandleMessage(evt *events.Message) {
 
 	after := strings.TrimSpace(body[len(prefix):])
 
+	// A skinned bot shows command tokens in a decorative font; if the plain
+	// parse fails, normalise the fancy glyphs back to ASCII and retry, so
+	// the bot stays fully controllable in any skin.
 	match := cmdRegex.FindStringSubmatch(after)
+	if match == nil {
+		match = cmdRegex.FindStringSubmatch(goldcmds.SkinNormalizeInput(after))
+	}
 	if match == nil {
 		return
 	}
@@ -1128,7 +1134,10 @@ func sanitizeFooter(s string) string {
 // withFooter appends the bot name footer (two blank lines + name) to text.
 // Used by Reply / SendTextWithID / sendSimple for plain-text messages.
 func (s *Session) withFooter(text string) string {
-	return text + "\n\n" + s.botNameFooter()
+	// Bot-wide text skin (.botstyle) applies to EVERY outgoing message.
+	// Style 1 is a no-op, so unset skin leaves the text byte-identical.
+	st := s.botSkin()
+	return st.SkinText(text) + "\n\n" + st.SkinText(s.botNameFooter())
 }
 
 // withCaptionFooter appends the bot name footer to a media CAPTION.
@@ -1148,9 +1157,10 @@ func (s *Session) withCaptionFooter(caption string) string {
 	}
 	// dedup guard: avoid double-appending the footer
 	if strings.HasSuffix(caption, foot) {
-		return caption
+		return s.botSkin().SkinText(caption)
 	}
-	return caption + "\n\n" + foot
+	st := s.botSkin()
+	return st.SkinText(caption) + "\n\n" + st.SkinText(foot)
 }
 
 func (s *Session) Reply(info types.MessageInfo, text string) {
@@ -1191,6 +1201,7 @@ func (s *Session) EditMessage(info types.MessageInfo, messageID string, newText 
 		return false
 	}
 	// BuildEdit(chat, messageID, newMessage) — edits a message sent by the bot
+	newText = s.botSkin().SkinText(newText)
 	editedMsg := s.Client.BuildEdit(info.Chat, types.MessageID(messageID), &waProto.Message{
 		Conversation: proto.String(newText),
 	})

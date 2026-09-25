@@ -121,12 +121,22 @@ func (st MenuStyle) RenderHeaderBot() string {
 
 // ListRow renders one list row: "<deco> <prefix><name> <deco>", bold.
 func (st MenuStyle) ListRow(prefix, name string) string {
-	return "*" + st.ListRowL + prefix + name + st.ListRowR + "*"
+	return "*" + st.ListRowL + st.SkinRow(prefix, name) + st.ListRowR + "*"
+}
+
+// SkinRow renders one menu row's prefix+name in the style's decorative font so
+// a skinned bot looks consistent from frame to row. Style 1 is a no-op, so
+// classic menus (and every existing test) keep their exact ASCII output.
+func (st MenuStyle) SkinRow(prefix, name string) string {
+	if st.font <= 0 || st.N <= 1 {
+		return prefix + name
+	}
+	return prefix + applyMenuFont(st.font, name)
 }
 
 // ImpRow renders one IMPORTANT CMNDS row, bold.
 func (st MenuStyle) ImpRow(prefix, name string) string {
-	return "*" + st.ImpRowL + prefix + name + st.ImpRowR + "*"
+	return "*" + st.ImpRowL + st.SkinRow(prefix, name) + st.ImpRowR + "*"
 }
 
 // ── style 1: the classic look ──────────────────────────────────────────────

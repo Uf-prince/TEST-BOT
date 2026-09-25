@@ -59,6 +59,13 @@ type Session struct {
 	// cleanupSession. Login wapas aane pe reset. (515 relogin transient safe)
 	LoginDeadSince time.Time
 
+	// Bot-wide TEXT skin (.botstyle): the resolved style is cached per
+	// session so every send path does not re-read Redis. skinLoaded is
+	// cleared whenever .botstyle changes. Style 1 / empty == no skin.
+	skinStyle  goldcmds.MenuStyle
+	skinValue  string
+	skinLoaded bool
+
 	// Paired is true only after WhatsApp confirms the link
 	// (*events.PairSuccess / Store.ID != nil). Until then the session is
 	// "pending": a pairing code was generated but the user has NOT linked it
@@ -2095,6 +2102,28 @@ func buildImportantCmds(prefix, importantKey string, st goldcmds.MenuStyle) stri
 	}
 	b.WriteString(st.ImpBorderBottom() + "\n\n")
 	return b.String()
+}
+
+// botSkin resolves the bot-wide text skin (.botstyle) for this session. It is
+// cached (keyed on the stored value) so a busy bot reads Redis once per change
+// instead of once per message.
+func (s *Session) botSkin() goldcmds.MenuStyle {
+	if s == nil {
+		return goldcmds.MenuStyleAt(1)
+	}
+	raw := ""
+	if s.Manager != nil && s.Manager.Redis != nil {
+		raw = strings.TrimSpace(s.Manager.Redis.GetSetting(s.JID, "botstyle", ""))
+	}
+	if s.skinLoaded && raw == s.skinValue {
+		return s.skinStyle
+	}
+	st := goldcmds.MenuStyleAt(1)
+	if n, ok := goldcmds.ParseMenuStyleArg(raw); ok {
+		st = goldcmds.MenuStyleAt(n)
+	}
+	s.skinStyle, s.skinValue, s.skinLoaded = st, raw, true
+	return st
 }
 
 // menuStyleFor resolves a menu's effective style: per-menu override

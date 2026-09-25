@@ -1137,6 +1137,25 @@ func (b *bridge) SetBotMenuStyleSetting(val string) {
 	b.s.Manager.Redis.SetSetting(b.s.JID, "botmenustyle", val)
 }
 
+// GetBotSkinSetting reads the bot-wide text skin (.botstyle).
+func (b *bridge) GetBotSkinSetting(def string) string {
+	if b.s == nil || b.s.Manager == nil || b.s.Manager.Redis == nil {
+		return def
+	}
+	return b.s.Manager.Redis.GetSetting(b.s.JID, "botstyle", def)
+}
+
+// SetBotSkinSetting writes the bot-wide text skin and drops the session's
+// cached skin so the very next outgoing message re-reads it.
+func (b *bridge) SetBotSkinSetting(val string) {
+	if b.s == nil || b.s.Manager == nil || b.s.Manager.Redis == nil {
+		warnRedisNil()
+		return
+	}
+	b.s.Manager.Redis.SetSetting(b.s.JID, "botstyle", val)
+	b.s.skinLoaded = false
+}
+
 // GetMenuMediaSetting reads the per-menu custom media URL (Redis field
 // "menumedia:<key>"). key is a menu slug such as "menu", "logo", "ai",
 // "converter" or "alive". Empty when nothing is set for that menu.

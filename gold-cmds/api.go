@@ -183,6 +183,13 @@ type SessionBridge interface {
 	GetBotMenuStyleSetting(def string) string
 	// SetBotMenuStyleSetting writes the bot-wide menu style. Empty clears it.
 	SetBotMenuStyleSetting(val string)
+	// GetBotSkinSetting reads the bot-wide TEXT skin (.botstyle) - Redis
+	// field "botstyle". A style number 1..50, or "" / "1" for no skin. When
+	// set, every outgoing message is rendered in that style's font, marks
+	// and symbols (menus included).
+	GetBotSkinSetting(def string) string
+	// SetBotSkinSetting writes the bot-wide text skin. Empty clears it.
+	SetBotSkinSetting(val string)
 	// GetMenuMediaSetting reads the custom media URL for ONE menu/category or
 	// the alive card (Redis field "menumedia:<key>", e.g. menumedia:logo).
 	// Returns def ("") when nothing is set for that key.

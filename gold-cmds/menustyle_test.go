@@ -22,8 +22,10 @@ func TestMenuStyleAllFiftyResolve(t *testing.T) {
 				t.Fatalf("style %d (%s): empty frame field", n, st.Name)
 			}
 		}
+		// A styled preview renders command names in the style's decorative font,
+		// so normalise the token back to ASCII before checking it is usable.
 		preview := MenuStylePreview(n, "AI MENU", ".")
-		if preview == "" || !strings.Contains(preview, ".AI") {
+		if preview == "" || !strings.Contains(SkinNormalizeInput(preview), ".AI") {
 			t.Fatalf("style %d: unusable preview\n%s", n, preview)
 		}
 		if strings.Contains(preview, "%!") {
@@ -111,9 +113,18 @@ func TestMenuStyleChangesLook(t *testing.T) {
 	if styled.Styled("AI") == classic.Styled("AI") {
 		t.Error("style 25 must use a decorative font for titles")
 	}
-	// The decorative font must not touch ASCII command names.
-	if got := styled.ListRow(".", "AIMENUPIC"); !strings.Contains(got, ".AIMENUPIC") {
-		t.Errorf("command names must stay ASCII/copyable, got %q", got)
+	// A styled row renders the command name in the decorative font — it must
+	// still normalise back to the plain, usable command token.
+	got := styled.ListRow(".", "AIMENUPIC")
+	if !strings.Contains(got, styled.Sym) {
+		t.Errorf("styled row lost its row decoration: %q", got)
+	}
+	if norm := SkinNormalizeInput(got); !strings.Contains(norm, ".AIMENUPIC") {
+		t.Errorf("command names must normalise back to ASCII, got %q -> %q", got, norm)
+	}
+	// Style 1 stays plain ASCII so classic menus are unchanged.
+	if classicRow := classic.ListRow(".", "AIMENUPIC"); !strings.Contains(classicRow, ".AIMENUPIC") {
+		t.Errorf("classic row must stay ASCII, got %q", classicRow)
 	}
 }
 
