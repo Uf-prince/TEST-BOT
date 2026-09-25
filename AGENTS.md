@@ -135,3 +135,30 @@ Don't chase these unless asked.
   in `src/main.go`). Example wake-word lines show ONLY when AI Mode is ON.
 - `.aimode on/off/prefix` re-sends the card through the unthrottled
   `NotifyConnectedCard` bridge hook (pair.js `BilalSendConnectedNotice` parity).
+
+## Bot language (`.botlanguage`) — replies only, never command names
+- One command sets the language the bot REPLIES in: `gold-cmds/botlangcmd.go`.
+  Guide is ENGLISH on purpose (default user is English); the language list is
+  `trtLangs` in `gold-cmds/trt.go` (130+ Google NMT languages), each shown with
+  its English name.
+- Storage: Redis `settings:<botJID>.botlanguage` = a language code ("ur","hi",
+  ...). Empty/`en` = no translation. Use `Get/SetBotLanguageSetting` on the
+  SessionBridge (`src/commands_loader.go`).
+- The translation layer lives on `*Session` in `src/handler.go`: `botLanguage()`
+  (cached), `translateOut()` (8s timeout, falls back to English on error) and
+  `replyText()` = translate → skin → footer. `Reply`, `SendTextWithID`,
+  `sendSimple` and the group notices use `replyText`; media captions translate
+  in `withCaptionFooter`.
+- OWNER ORDER: COMMAND NAMES ARE NEVER TRANSLATED. `.ping`, `.menu` stay English
+  for every user; only the bot's own words change language. Command dispatch is
+  untouched by the language layer.
+
+## Style commands — only `.botstyle`
+- OWNER ORDER: the per-menu style commands (`menustyle`, `logostyle`,
+  `fontstyle`, `gamestyle`, `equalizerstyle`, `aimenustyle`, `botmenustyle`,
+  `botstylestyle`) are REMOVED. `gold-cmds/menustylecmd.go` no longer registers
+  anything; `.botstyle` (`gold-cmds/botskincmd.go`) is the ONLY style switch —
+  it writes both `botstyle` (text skin) and `botmenustyle` (menu chrome).
+- `menuStyleFor` (`src/manager.go`) resolves every menu from `botstyle` now;
+  legacy `menustyle:<key>` / `botmenustyle` values are still honoured.
+

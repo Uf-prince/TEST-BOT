@@ -309,7 +309,7 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 		}
 		notif := "*\U0001F530 DEAR @" + creatorNum + " REMOVED — GROUP CALL NOT ALLOWED*"
 		if s.Client != nil && s.Client.IsConnected() {
-			out := s.withFooter(notif)
+			out := s.replyText(notif)
 			_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
 				ExtendedTextMessage: &waProto.ExtendedTextMessage{
 					Text: proto.String(out),
@@ -333,7 +333,7 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 		}
 		notif := "*\U0001F530 DEAR @" + creatorNum + " REMOVED — GROUP CALLS NOT ALLOWED IN THIS GROUP (MAX WARNINGS REACHED)*"
 		if s.Client != nil && s.Client.IsConnected() {
-			out := s.withFooter(notif)
+			out := s.replyText(notif)
 			_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
 				ExtendedTextMessage: &waProto.ExtendedTextMessage{
 					Text: proto.String(out),
@@ -350,7 +350,7 @@ func (s *Session) gccallEnforce(from, creator, creatorAlt types.JID, callID stri
 	notif := "*\U0001F530 DEAR @" + creatorNum + " GROUP CALLS NOT ALLOWED IN THIS GROUP*"
 	notif += "\n*WARNING :❱ " + strconv.Itoa(newCount) + "/" + strconv.Itoa(maxW) + "*"
 	if s.Client != nil && s.Client.IsConnected() {
-		out := s.withFooter(notif)
+		out := s.replyText(notif)
 		_, _ = s.Client.SendMessage(context.Background(), groupJID, &waProto.Message{
 			ExtendedTextMessage: &waProto.ExtendedTextMessage{
 				Text: proto.String(out),
@@ -1450,7 +1450,7 @@ func (s *Session) sendSimple(chat types.JID, text string) {
 	if s.Client == nil {
 		return
 	}
-	out := s.withFooter(text)
+	out := s.replyText(text)
 	_, _ = s.Client.SendMessage(context.Background(), chat, &waProto.Message{
 		Conversation: &out,
 	})
@@ -1771,7 +1771,7 @@ func (s *Session) ReplyWithNewsletter(info types.MessageInfo, text string) {
 	// restart/pairing (no-op once resolved).
 	s.ensureNewsletterResolved()
 
-	text = s.withFooter(text)
+	text = s.replyText(text)
 
 	ctxInfo := s.newsletterCtxInfo()
 

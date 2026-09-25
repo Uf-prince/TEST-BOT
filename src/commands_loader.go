@@ -99,7 +99,7 @@ func (b *bridge) ReplyWithMentions(info types.MessageInfo, text string, mentione
 	if b.s.Client == nil || !b.s.Client.IsConnected() {
 		return
 	}
-	text = b.s.withFooter(text) // botname footer on every mention reply
+	text = b.s.replyText(text) // translated + botname footer on mention reply
 	msg := &waProto.Message{
 		ExtendedTextMessage: &waProto.ExtendedTextMessage{
 			Text: proto.String(text),
@@ -1154,6 +1154,25 @@ func (b *bridge) SetBotSkinSetting(val string) {
 	}
 	b.s.Manager.Redis.SetSetting(b.s.JID, "botstyle", val)
 	b.s.skinLoaded = false
+}
+
+// GetBotLanguageSetting reads the bot output language (Redis "botlanguage").
+func (b *bridge) GetBotLanguageSetting(def string) string {
+	if b.s == nil || b.s.Manager == nil || b.s.Manager.Redis == nil {
+		return def
+	}
+	return b.s.Manager.Redis.GetSetting(b.s.JID, "botlanguage", def)
+}
+
+// SetBotLanguageSetting writes the bot output language and drops the session's
+// cached language so the next outgoing message re-reads it.
+func (b *bridge) SetBotLanguageSetting(val string) {
+	if b.s == nil || b.s.Manager == nil || b.s.Manager.Redis == nil {
+		warnRedisNil()
+		return
+	}
+	b.s.Manager.Redis.SetSetting(b.s.JID, "botlanguage", val)
+	b.s.langLoaded = false
 }
 
 // GetMenuMediaSetting reads the per-menu custom media URL (Redis field
@@ -3352,7 +3371,7 @@ func (b *bridge) SendTextWithMentions(chat types.JID, text string, mentioned []s
 	if b.s.Client == nil || !b.s.Client.IsConnected() {
 		return fmt.Errorf("client not ready")
 	}
-	text = b.s.withFooter(text) // botname footer on every text
+	text = b.s.replyText(text) // translated + botname footer
 	msg := &waProto.Message{
 		ExtendedTextMessage: &waProto.ExtendedTextMessage{
 			Text: proto.String(text),

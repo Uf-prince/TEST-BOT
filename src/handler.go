@@ -1155,6 +1155,52 @@ func (s *Session) withFooter(text string) string {
 	return st.SkinText(text) + "\n\n" + st.SkinFooter(s.botNameFooter())
 }
 
+// botLanguage returns the session's chosen OUTPUT language code ("" = English).
+// Cached like the skin so the hot path reads Redis once per change.
+func (s *Session) botLanguage() string {
+	if s == nil || s.Manager == nil || s.Manager.Redis == nil {
+		return ""
+	}
+	raw := strings.TrimSpace(s.Manager.Redis.GetSetting(s.JID, "botlanguage", ""))
+	if s.langLoaded && raw == s.langValue {
+		return s.langValue
+	}
+	if _, ok := goldcmds.ResolveLanguage(raw); !ok {
+		raw = ""
+	}
+	s.langValue, s.langLoaded = raw, true
+	return raw
+}
+
+// translateOut translates an outgoing reply into the session's language.
+// OWNER ORDER: command NAMES stay English (.ping, .menu never change) — only
+// the bot's own words are translated. Best-effort with a short timeout: on any
+// error the ORIGINAL English text is sent, so a flaky translator can never
+// mute the bot.
+func (s *Session) translateOut(text string) string {
+	lang := s.botLanguage()
+	if lang == "" || lang == goldcmds.BotLanguageName {
+		return text
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	out, err := goldcmds.TranslateText(ctx, text, lang)
+	if err != nil || strings.TrimSpace(out) == "" {
+		return text
+	}
+	return out
+}
+
+// replyText is the single send path for plain text replies: skin → translate →
+// footer. Translation happens BEFORE the banner/footer so the signature is not
+// mangled by the translator.
+func (s *Session) replyText(text string) string {
+	if lang := s.botLanguage(); lang != "" && lang != goldcmds.BotLanguageName {
+		text = s.translateOut(text)
+	}
+	return s.withFooter(text)
+}
+
 // withCaptionFooter appends the bot name footer to a media CAPTION.
 // Unlike withFooter, if the caption is empty the footer is used on its own
 // (so even caption-less media still carries the bot signature). If the
@@ -1171,6 +1217,10 @@ func (s *Session) withCaptionFooter(caption string) string {
 		return foot
 	}
 	st := s.botSkin()
+	// Translate the caption (not the footer) when a bot language is set.
+	if lang := s.botLanguage(); lang != "" && lang != goldcmds.BotLanguageName {
+		caption = s.translateOut(caption)
+	}
 	// dedup guard: avoid double-appending the footer
 	if strings.HasSuffix(caption, foot) {
 		return st.SkinText(caption)
@@ -1182,7 +1232,7 @@ func (s *Session) Reply(info types.MessageInfo, text string) {
 	if s.Client == nil || !s.Client.IsConnected() {
 		return
 	}
-	text = s.withFooter(text)
+	text = s.replyText(text)
 	_, err := s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{
 		Conversation: proto.String(text),
 	})
@@ -1196,7 +1246,7 @@ func (s *Session) SendTextWithID(info types.MessageInfo, text string) string {
 	if s.Client == nil || !s.Client.IsConnected() {
 		return ""
 	}
-	text = s.withFooter(text)
+	text = s.replyText(text)
 	resp, err := s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{
 		Conversation: proto.String(text),
 	})

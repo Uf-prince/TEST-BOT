@@ -190,6 +190,12 @@ type SessionBridge interface {
 	GetBotSkinSetting(def string) string
 	// SetBotSkinSetting writes the bot-wide text skin. Empty clears it.
 	SetBotSkinSetting(val string)
+	// GetBotLanguageSetting reads the bot OUTPUT language (.botlanguage) -
+	// Redis field "botlanguage". A language code like "ur"/"hi", or "" for
+	// ENGLISH. Command NAMES are never translated; only the bot's replies are.
+	GetBotLanguageSetting(def string) string
+	// SetBotLanguageSetting writes the bot output language. Empty clears it.
+	SetBotLanguageSetting(val string)
 	// GetMenuMediaSetting reads the custom media URL for ONE menu/category or
 	// the alive card (Redis field "menumedia:<key>", e.g. menumedia:logo).
 	// Returns def ("") when nothing is set for that key.

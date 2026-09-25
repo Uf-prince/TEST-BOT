@@ -380,26 +380,6 @@ func ParseMenuStyleArg(arg string) (int, bool) {
 	return n, true
 }
 
-// menuStyleGuide renders the no-argument help card, ending with the shared
-// TOMP3 info line when a prefix is supplied.
-func menuStyleGuide(prefix, label, cmdName string) string {
-	cmd := prefix + strings.ToUpper(cmdName)
-	var b strings.Builder
-	b.WriteString("*🔰 " + label + " STYLE GUIDE 🔰*\n\n")
-	b.WriteString("*CHANGE THE WHOLE LOOK OF THIS MENU*\n")
-	b.WriteString("*" + fmt.Sprint(MenuStyleCount) + " FANCY DESIGNS — BORDERS, SYMBOLS AND FONT*\n\n")
-	b.WriteString("*❰ " + cmd + " ❱* → THIS GUIDE\n")
-	b.WriteString("*❰ " + cmd + " SET <1-" + fmt.Sprint(MenuStyleCount) + "> ❱* → APPLY A STYLE\n")
-	b.WriteString("*❰ " + cmd + " RESET ❱* → BACK TO BOT DEFAULT\n\n")
-	b.WriteString("*🔰 ALL " + fmt.Sprint(MenuStyleCount) + " STYLES 🔰*\n")
-	for n := 1; n <= MenuStyleCount; n++ {
-		b.WriteString(fmt.Sprintf("*❮ %s SET %d ❯*\n", cmd, n))
-	}
-	b.WriteString("\n*BOT-WIDE:* *❰ " + prefix + "BOTMENUSTYLE SET <1-" + fmt.Sprint(MenuStyleCount) + "> ❱*")
-	b.WriteString(menuStyleInfoLine(prefix))
-	return b.String()
-}
-
 // menuStyleInfoLine is the shared footer for the style guides.
 func menuStyleInfoLine(prefix string) string {
 	return "\n\n*TYPE ❮ " + prefix + "TOMP3 ❯ FOR INFO*"

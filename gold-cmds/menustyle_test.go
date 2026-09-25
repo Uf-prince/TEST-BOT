@@ -129,24 +129,45 @@ func TestMenuStyleChangesLook(t *testing.T) {
 	}
 }
 
-// The style guide lists all 1000 styles and ends with the shared TOMP3 info line.
-func TestMenuStyleGuide(t *testing.T) {
-	g := menuStyleGuide(".", "AI MENU", "aimenustyle")
-	if !strings.Contains(g, ".AIMENUSTYLE SET <1-1000>") {
+// OWNER ORDER: the per-menu style commands are gone. The registry must expose
+// ONLY .botstyle for styling — no .menustyle / .logostyle / .aimenustyle /
+// .fontstyle / .botmenustyle anywhere.
+func TestMenuStyleCommandsRemoved(t *testing.T) {
+	gone := map[string]bool{
+		"menustyle": true, "logostyle": true, "aimenustyle": true,
+		"fontstyle": true, "gamestyle": true, "equalizerstyle": true,
+		"botstylestyle": true, "botmenustyle": true,
+	}
+	for _, c := range Commands() {
+		if gone[strings.ToLower(c.Name)] {
+			t.Errorf("style command .%s must be REMOVED (only .botstyle allowed)", c.Name)
+		}
+	}
+	found := false
+	for _, c := range Commands() {
+		if strings.EqualFold(c.Name, "botstyle") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error(".botstyle must stay registered")
+	}
+}
+
+// botStyleGuide lists all 1000 styles with the set/reset usage.
+func TestBotStyleGuide(t *testing.T) {
+	g := botStyleGuide(".")
+	if !strings.Contains(g, ".BOTSTYLE SET <1-1000>") {
 		t.Errorf("guide missing SET usage\n%s", g)
 	}
-	if !strings.Contains(g, ".AIMENUSTYLE RESET") {
+	if !strings.Contains(g, ".BOTSTYLE RESET") {
 		t.Errorf("guide missing RESET usage\n%s", g)
 	}
-	if !strings.Contains(g, ".BOTMENUSTYLE SET <1-1000>") {
-		t.Errorf("guide missing bot-wide usage\n%s", g)
-	}
 	for n := 1; n <= MenuStyleCount; n++ {
-		if !strings.Contains(g, fmt.Sprintf(".AIMENUSTYLE SET %d", n)) {
+		if !strings.Contains(g, fmt.Sprintf(".BOTSTYLE%d", n)) {
 			t.Errorf("guide missing style %d row", n)
 		}
 	}
-	if !strings.HasSuffix(strings.TrimSpace(g), "*TYPE ❮ .TOMP3 ❯ FOR INFO*") {
-		t.Errorf("guide must end with the TOMP3 info line\n%s", g)
-	}
 }
+

@@ -802,12 +802,12 @@ func StartPanel(mgr *Manager, port int) {
 			})
 			return
 		}
-		if mgr.Count() >= 1 {
+		if mgr.LocalOnlyCount() >= 1 {
 			w.WriteHeader(http.StatusTooManyRequests)
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"status": "max_pairing_reached",
 				"error":  "MAX PAIRING REQUEST REACHED — direct instance already has 1 session",
-				"count":  mgr.Count(), "max": 1,
+				"count":  mgr.LocalOnlyCount(), "max": 1,
 			})
 			return
 		}
@@ -818,7 +818,7 @@ func StartPanel(mgr *Manager, port int) {
 		code, err := mgr.PairWithCodeDirect(phone)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(w).Encode(map[string]any{"status": "error", "error": err.Error(), "count": mgr.Count(), "max": 1})
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "error", "error": err.Error(), "count": mgr.LocalOnlyCount(), "max": 1})
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{

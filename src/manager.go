@@ -66,6 +66,11 @@ type Session struct {
 	skinValue  string
 	skinLoaded bool
 
+	// Bot OUTPUT language (.botlanguage): cached per session like the skin, so
+	// the hot send path reads Redis once per change. Empty == English.
+	langValue  string
+	langLoaded bool
+
 	// Paired is true only after WhatsApp confirms the link
 	// (*events.PairSuccess / Store.ID != nil). Until then the session is
 	// "pending": a pairing code was generated but the user has NOT linked it
@@ -308,6 +313,35 @@ func (m *Manager) Count() int {
 		}
 	}
 	return n
+}
+
+// LocalOnlyCount counts LIVE disk-only sessions — the ones the direct
+// /code?phone= endpoint creates (Session.LocalOnly, set from the pairing
+// marker). The direct panel caps at 1 of THESE, not at 1 session overall:
+// fleet/Storj-restored sessions booted by AutoLoad are unrelated and must not
+// consume the owner's direct pairing slot. Counting them made /code?phone=
+// answer "MAX PAIRING REQUEST REACHED" on an otherwise-empty direct instance.
+func (m *Manager) LocalOnlyCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, s := range m.sessions {
+		if sessionLiveLocalOnly(s) {
+			n++
+		}
+	}
+	return n
+}
+
+// sessionLiveLocalOnly: is this session a LIVE (WhatsApp-truth) disk-only one?
+// Pending pairings (code generated, never linked) have no client/Store.ID and
+// therefore never occupy the direct slot — the 120s watchdog reaps them.
+func sessionLiveLocalOnly(s *Session) bool {
+	if s == nil || !s.LocalOnly {
+		return false
+	}
+	return s.Paired && s.Client != nil && s.Client.IsConnected() &&
+		s.Client.Store != nil && s.Client.Store.ID != nil
 }
 
 // cleanupPending removes a session that never completed pairing (the user
@@ -2166,8 +2200,11 @@ func (s *Session) botSkin() goldcmds.MenuStyle {
 	return st
 }
 
-// menuStyleFor resolves a menu's effective style: per-menu override
-// ("menustyle:<key>") → bot-wide ("botmenustyle") → built-in style 1.
+// menuStyleFor resolves a menu's effective style. OWNER ORDER: the per-menu
+// style commands are gone, so every menu simply uses the bot-wide .botstyle
+// skin (which applyBotStyle writes to both "botstyle" and "botmenustyle").
+// Legacy "menustyle:<key>" / "botmenustyle" values written by the removed
+// commands are still honoured for back-compat.
 func menuStyleFor(s *Session, key string) goldcmds.MenuStyle {
 	if s != nil && s.Manager != nil && s.Manager.Redis != nil {
 		if raw := s.Manager.Redis.GetSetting(s.JID, "menustyle:"+key, ""); strings.TrimSpace(raw) != "" {
@@ -2176,6 +2213,11 @@ func menuStyleFor(s *Session, key string) goldcmds.MenuStyle {
 			}
 		}
 		if raw := s.Manager.Redis.GetSetting(s.JID, "botmenustyle", ""); strings.TrimSpace(raw) != "" {
+			if n, ok := goldcmds.ParseMenuStyleArg(raw); ok {
+				return goldcmds.MenuStyleAt(n)
+			}
+		}
+		if raw := s.Manager.Redis.GetSetting(s.JID, "botstyle", ""); strings.TrimSpace(raw) != "" {
 			if n, ok := goldcmds.ParseMenuStyleArg(raw); ok {
 				return goldcmds.MenuStyleAt(n)
 			}
