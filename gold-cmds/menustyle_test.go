@@ -1,11 +1,12 @@
 package goldcmds
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
 
-// All 50 styles must resolve to a complete, renderable design.
+// All 1000 styles must resolve to a complete, renderable design.
 func TestMenuStyleAllFiftyResolve(t *testing.T) {
 	seen := map[string]bool{}
 	for n := 1; n <= MenuStyleCount; n++ {
@@ -51,7 +52,7 @@ func TestMenuStyleAllFiftyResolve(t *testing.T) {
 // MenuStyleAt clamps out-of-range input back to the classic design instead of
 // panicking or returning a half-built style.
 func TestMenuStyleOutOfRange(t *testing.T) {
-	for _, n := range []int{-5, 0, 51, 999} {
+	for _, n := range []int{-5, 0, 1001, 99999} {
 		st := MenuStyleAt(n)
 		if st.N != 1 || st.Name != classicStyle.Name {
 			t.Fatalf("MenuStyleAt(%d) should clamp to classic, got %+v", n, st)
@@ -61,14 +62,14 @@ func TestMenuStyleOutOfRange(t *testing.T) {
 
 // ParseMenuStyleArg accepts the documented forms and rejects the rest.
 func TestParseMenuStyleArg(t *testing.T) {
-	ok := map[string]int{"1": 1, "50": 50, "SET 7": 7, "set 12": 12, " 3 ": 3}
+	ok := map[string]int{"1": 1, "50": 50, "1000": 1000, "SET 7": 7, "set 12": 12, " 3 ": 3}
 	for in, want := range ok {
 		got, good := ParseMenuStyleArg(in)
 		if !good || got != want {
 			t.Errorf("ParseMenuStyleArg(%q) = %d,%v want %d,true", in, got, good, want)
 		}
 	}
-	for _, in := range []string{"", "0", "51", "abc", "set", "set 0", "set 51", "-1", "7x"} {
+	for _, in := range []string{"", "0", "1001", "abc", "set", "set 0", "set 1001", "-1", "7x"} {
 		if _, good := ParseMenuStyleArg(in); good {
 			t.Errorf("ParseMenuStyleArg(%q) should fail", in)
 		}
@@ -116,8 +117,8 @@ func TestMenuStyleChangesLook(t *testing.T) {
 	// A styled row renders the command name in the decorative font — it must
 	// still normalise back to the plain, usable command token.
 	got := styled.ListRow(".", "AIMENUPIC")
-	if !strings.Contains(got, styled.Sym) {
-		t.Errorf("styled row lost its row decoration: %q", got)
+	if !strings.Contains(styled.ListTop, styled.Sym) {
+		t.Errorf("styled frame lost its symbol decoration: %q", styled.ListTop)
 	}
 	if norm := SkinNormalizeInput(got); !strings.Contains(norm, ".AIMENUPIC") {
 		t.Errorf("command names must normalise back to ASCII, got %q -> %q", got, norm)
@@ -128,21 +129,21 @@ func TestMenuStyleChangesLook(t *testing.T) {
 	}
 }
 
-// The style guide lists all 50 styles and ends with the shared TOMP3 info line.
+// The style guide lists all 1000 styles and ends with the shared TOMP3 info line.
 func TestMenuStyleGuide(t *testing.T) {
 	g := menuStyleGuide(".", "AI MENU", "aimenustyle")
-	if !strings.Contains(g, ".AIMENUSTYLE SET <1-50>") {
+	if !strings.Contains(g, ".AIMENUSTYLE SET <1-1000>") {
 		t.Errorf("guide missing SET usage\n%s", g)
 	}
 	if !strings.Contains(g, ".AIMENUSTYLE RESET") {
 		t.Errorf("guide missing RESET usage\n%s", g)
 	}
-	if !strings.Contains(g, ".BOTMENUSTYLE SET <1-50>") {
+	if !strings.Contains(g, ".BOTMENUSTYLE SET <1-1000>") {
 		t.Errorf("guide missing bot-wide usage\n%s", g)
 	}
 	for n := 1; n <= MenuStyleCount; n++ {
-		if !strings.Contains(g, MenuStyleName(n)) {
-			t.Errorf("guide missing style %d name %q", n, MenuStyleName(n))
+		if !strings.Contains(g, fmt.Sprintf(".AIMENUSTYLE SET %d", n)) {
+			t.Errorf("guide missing style %d row", n)
 		}
 	}
 	if !strings.HasSuffix(strings.TrimSpace(g), "*TYPE ❮ .TOMP3 ❯ FOR INFO*") {

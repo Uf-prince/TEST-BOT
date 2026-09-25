@@ -1473,9 +1473,9 @@ func registerFont1000Commands() {
 }
 
 // ============================================================================
-// GOLD-MD - botstyle1..botstyle50 hidden command registrations (main package)
+// GOLD-MD - botstyle1..botstyle1000 hidden command registrations (main package)
 // ============================================================================
-// OWNER ORDER: .menu me SIRF .BOTSTYLE dikhta hai. botstyle1..botstyle50
+// OWNER ORDER: .menu me SIRF .BOTSTYLE dikhta hai. botstyle1..botstyle1000
 // Commands map me direct register hote hain (gold-cmds registry me nahi) +
 // hiddenCommands set me hain, is liye menus unhe skip karte hain. Bare
 // .botstyle boxed list kholta hai (ShowBotStyleMenu -> manager.go

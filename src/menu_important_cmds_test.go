@@ -15,6 +15,7 @@ func TestImportantCmdsBlockOnEveryMenu(t *testing.T) {
 		goldcmds.ImportantBorderTop,
 		"*🔰 IMPORTANT CMNDS 🔰*",
 		"*|🔰| .BOTPIC*",
+		"*|🔰| .BOTSTYLE*",
 		"*|🔰| .BOTVIDEO*",
 		"*|🔰| .BOTVOICE*",
 		"*|🔰| .MENUPIC*",

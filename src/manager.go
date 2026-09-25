@@ -2119,7 +2119,7 @@ func buildImportantCmds(prefix, importantKey string, st goldcmds.MenuStyle) stri
 	b.WriteString(st.ImpBorderTop() + "\n")
 	b.WriteString(st.ImpTitle("IMPORTANT CMNDS") + "\n")
 	for _, line := range []string{
-		"BOTPIC", "BOTVIDEO", "BOTVOICE",
+		"BOTPIC", "BOTSTYLE", "BOTVIDEO", "BOTVOICE",
 		pic, video, voice,
 	} {
 		b.WriteString(st.ImpRow(prefix, line) + "\n")
@@ -2507,8 +2507,7 @@ func buildEqualizerMenu(botNum, ownerNum, uptimeStr, prefix string, sessCount in
 }
 
 // buildBotStyleMenu renders the .botstyle menu in the same fancy boxed format
-// as the other category menus. It lists .BOTSTYLE1 .. .BOTSTYLE50, each row
-// carrying that style's name (CROWN ROYALE, ROYAL DIAMOND, ...).
+// as the other category menus. It lists .BOTSTYLE1 .. .BOTSTYLE1000.
 func buildBotStyleMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName string, sessCount int, menuView *goldcmds.CmdNameView, st goldcmds.MenuStyle) string {
 	_ = pushName
 	_ = botName
@@ -2531,7 +2530,7 @@ func buildBotStyleMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 
 // CmdBotStyleMenu renders the .botstyle menu in the SAME fancy boxed format as
 // the other category menus (owner order). Bare .botstyle opens it; each row
-// .BOTSTYLE1..50 applies that style to the whole bot.
+// .BOTSTYLE1..1000 applies that style to the whole bot.
 func (s *Session) CmdBotStyleMenu(info types.MessageInfo, args []string, prefix string) {
 	uptimeStr := formatUptime(uptime())
 	sessCount := s.Manager.Count()

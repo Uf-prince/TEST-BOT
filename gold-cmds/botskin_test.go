@@ -136,7 +136,7 @@ func TestSkinRewritesBrandIdentity(t *testing.T) {
 	if strings.Contains(out, "GOLD") {
 		t.Fatalf("stock brand survived the skin: %q", out)
 	}
-	if !strings.Contains(SkinNormalizeInput(out), "CROWN ROYALE") {
+	if !strings.Contains(SkinNormalizeInput(out), MenuStyleName(7)) {
 		t.Fatalf("style name missing from the rebranded line: %q", out)
 	}
 }
@@ -196,7 +196,7 @@ func TestSkinFooterKeepsNameButTakesFont(t *testing.T) {
 	if !strings.Contains(SkinNormalizeInput(out), "GOLD-MD WHATSAPP BOT") {
 		t.Fatalf("footer name was rewritten (must stay user-owned): %q", out)
 	}
-	if strings.Contains(SkinNormalizeInput(out), "CROWN ROYALE") {
+	if strings.Contains(SkinNormalizeInput(out), MenuStyleName(7)) {
 		t.Fatalf("footer must not be rebranded like the body: %q", out)
 	}
 }

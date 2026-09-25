@@ -26,7 +26,8 @@ import (
 // ============================================================================
 
 // MenuStyleCount is how many designs the owner can pick from.
-const MenuStyleCount = 50
+// Owner order: 1000 (was 50).
+const MenuStyleCount = 1000
 
 // MenuStyleOff sentinel is unused today but reserved: a per-menu style override
 // is cleared with RESET; there is no "silence the style" concept.
@@ -166,38 +167,6 @@ var classicStyle = MenuStyle{
 
 // ── generated design pools ─────────────────────────────────────────────────
 
-// 50 signature symbols, one per style.
-var styleSymbols = []string{
-	"🔰", "❈", "✦", "❃", "✿", "❖", "★", "◆", "♛", "⚜",
-	"☬", "✵", "❂", "✹", "☯", "⚝", "✷", "❋", "✺", "❀",
-	"◈", "▣", "⬢", "⧫", "⬟", "⭓", "⟁", "⌘", "⚹", "✧",
-	"❉", "❊", "❇", "☸", "✤", "✜", "✥", "✢", "⊛", "◎",
-	"◉", "▩", "▤", "▦", "▧", "▨", "▥", "⬣", "⬡", "⯃",
-}
-
-// 10 border templates. {S} = the style symbol, {T} = the styled title.
-var styleBorders = []struct{ Top, Bot string }{
-	{"╔════ ≪ • {S} • ≫ ════╗", "╚════ ≪ • {S} • ≫ ════╝"},
-	{"✦━━━━ ❖ {S} ❖ ━━━━✦", "✦━━━━ ❖ {S} ❖ ━━━━✦"},
-	{"╔═◤ {S} ◥════════╗", "╚═◣ {S} ◢════════╝"},
-	{"✧･ﾟ: ✩ {S} ✩ :･ﾟ✧", "✧･ﾟ: ✩ {S} ✩ :･ﾟ✧"},
-	{"╔══════【 {S} 】══════╗", "╚══════【 {S} 】══════╝"},
-	{"▀▄▀▄▀▄ {S} ▄▀▄▀▄▀", "▀▄▀▄▀▄ {S} ▄▀▄▀▄▀"},
-	{"╭━━━━❰ {S} ❱━━━━╮", "╰━━━━❰ {S} ❱━━━━╯"},
-	{"⋆｡°✩ {S} ✩°｡⋆", "⋆｡°✩ {S} ✩°｡⋆"},
-	{"╔╦═══ ≼ {S} ≽ ═══╦╗", "╚╩═══ ≼ {S} ≽ ═══╩╝"},
-	{"❃━❃━❃❃ {S} ❃❃━❃━❃", "❃━❃━❃❃ {S} ❃❃━❃━❃"},
-}
-
-// 5 row-decoration templates. {S} = the style symbol.
-var styleRows = []struct{ L, R string }{
-	{"❃ ", " ❃"},
-	{"✦ ▸ ", ""},
-	{"【{S}】 ", ""},
-	{"║ {S} ║ ", ""},
-	{"⟦ {S} ⟧ ", ""},
-}
-
 // ── decorative fonts ───────────────────────────────────────────────────────
 
 // applyMenuFont renders s in decorative font idx (0 = plain). Unknown runes and
@@ -318,20 +287,6 @@ var smallCapsLower = map[rune]rune{
 	'z': 0x1D22,
 }
 
-// styleNames are the pretty labels shown in the style guide.
-var styleNames = []string{
-	"CLASSIC RING", "ROYAL DIAMOND", "NEON BLAZE", "VELVET ROSES", "GOLD STAR",
-	"OBSIDIAN GEM", "CROWN ROYALE", "MIDNIGHT ROSE", "QUEEN'S MARK", "IMPERIAL GOLD",
-	"SHADOW SCROLL", "AURORA SPARK", "COSMIC EYE", "FIRE GEM", "ZEN BALANCE",
-	"STAR CROSS", "PRISM LIGHT", "FROST BLOOM", "BLOSSOM GLOW", "SAKURA PETAL",
-	"CRYSTAL GRID", "MOSAIC TILE", "HONEYCOMB", "THORN MARK", "DIAMOND SHIELD",
-	"ROYAL TRIAD", "GLASS SHARD", "TERMINAL", "SPARK SEAL", "INK WHISPER",
-	"SEED OF LIFE", "LOTUS RING", "FLORAL SEAL", "WHEEL OF LIFE", "CLOVER MARK",
-	"ARROW FEATHER", "CROSS STAR", "TRIBE MARK", "BUBBLE WRAP", "TARGET EYE",
-	"BULLSEYE", "WOVEN SILK", "CHECKER BOARD", "LATTICE", "BRICK WALL",
-	"DOTTED VEIL", "WAVE CREST", "HEX SHIELD", "HEX CORE", "TRIBAL EDGE",
-}
-
 // MenuStyleAt resolves a stored style number (1..50; anything else → classic).
 func MenuStyleAt(n int) MenuStyle {
 	if n <= 1 || n > MenuStyleCount {
@@ -345,11 +300,15 @@ func MenuStyleAt(n int) MenuStyle {
 	if n-1 < len(styleSymbols) {
 		sym = styleSymbols[n-1]
 	}
-	border := styleBorders[(n-2)%len(styleBorders)]
-	row := styleRows[((n-2)/len(styleBorders))%len(styleRows)]
+	// 1000 designs come from pairing each of the 20 row decorations with one of
+	// the 50 borders: idx = n-2, border = idx%50, row = (idx/50)%20. That covers
+	// exactly 1000 combinations, so no two styles share a frame.
+	idx := n - 2
+	border := styleBorders[idx%len(styleBorders)]
+	row := styleRows[(idx/len(styleBorders))%len(styleRows)]
 	// Every styled style MUST change the font too (owner report: "sirf symbol
-	// badla, font wahi hai"). The old (n-2)%10 gave font 0 to styles
-	// 2, 12, 22, 32, 42 - which left the letters untouched. Rotate 1..9 instead.
+	// badla, font wahi hai"). Rotate 1..9 so the letters always change; the old
+	// (n-2)%9 gaps that left font 0 are gone.
 	font := 1 + (n-2)%9
 
 	fill := func(tpl, title string) string {
@@ -428,13 +387,13 @@ func menuStyleGuide(prefix, label, cmdName string) string {
 	var b strings.Builder
 	b.WriteString("*🔰 " + label + " STYLE GUIDE 🔰*\n\n")
 	b.WriteString("*CHANGE THE WHOLE LOOK OF THIS MENU*\n")
-	b.WriteString("*50 FANCY DESIGNS — BORDERS, SYMBOLS AND FONT*\n\n")
+	b.WriteString("*" + fmt.Sprint(MenuStyleCount) + " FANCY DESIGNS — BORDERS, SYMBOLS AND FONT*\n\n")
 	b.WriteString("*❰ " + cmd + " ❱* → THIS GUIDE\n")
 	b.WriteString("*❰ " + cmd + " SET <1-" + fmt.Sprint(MenuStyleCount) + "> ❱* → APPLY A STYLE\n")
 	b.WriteString("*❰ " + cmd + " RESET ❱* → BACK TO BOT DEFAULT\n\n")
 	b.WriteString("*🔰 ALL " + fmt.Sprint(MenuStyleCount) + " STYLES 🔰*\n")
 	for n := 1; n <= MenuStyleCount; n++ {
-		b.WriteString(fmt.Sprintf("*%d❯ %s*\n", n, MenuStyleName(n)))
+		b.WriteString(fmt.Sprintf("*❮ %s SET %d ❯*\n", cmd, n))
 	}
 	b.WriteString("\n*BOT-WIDE:* *❰ " + prefix + "BOTMENUSTYLE SET <1-" + fmt.Sprint(MenuStyleCount) + "> ❱*")
 	b.WriteString(menuStyleInfoLine(prefix))

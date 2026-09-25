@@ -113,8 +113,7 @@ func botStyleGuide(prefix string) string {
 	b.WriteString("*❰ " + prefix + "BOTSTYLE RESET ❱* → BACK TO CLASSIC\n\n")
 	b.WriteString("*🔰 ALL " + fmt.Sprint(MenuStyleCount) + " STYLES 🔰*\n")
 	for n := 1; n <= MenuStyleCount; n++ {
-		st := MenuStyleAt(n)
-		b.WriteString(fmt.Sprintf("*%s %d • %s*\n", st.Sym, n, st.Styled(st.Name)))
+		b.WriteString(fmt.Sprintf("*❮ %sBOTSTYLE%d ❯*\n", prefix, n))
 	}
 	b.WriteString("\n*NOTE: COMMANDS WAHI RAHENGE — SIRF DESIGN BADLEGA*")
 	return b.String()
