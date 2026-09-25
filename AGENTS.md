@@ -56,6 +56,10 @@ Don't chase these unless asked.
   single "best" kind — that is the bug where a sticker got shadowed by an image
   or an image by a video. Voices are delivered separately by
   `applyVoiceTrigger`, so `voice` is not part of `AssetTriggerOrder`.
+- `.addtext` auto-send is edit-style: `sendAssetTextEdited` sends the saved text
+  then edits that same message to the same text after `assetEditDelay` (1s),
+  mirroring `arRunReplyJob` in `gold-cmds/autoreply.go` so the message carries
+  the "Edited" mark. Do not change it to a plain reply.
 - Durable backup: every asset and voice is mirrored to Storj
   (`src/assets_storj.go`, write-through on save, read-through on cache miss).
   Namespaces `goldmd:assets:<kind>/<jid>/<name>` and `goldmd:voices/<jid>/<name>`;

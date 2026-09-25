@@ -60,6 +60,36 @@ func sanitiseAssetName(name string) string {
 	}, strings.ToLower(strings.TrimSpace(name)))
 }
 
+// ---------------------------------------------------------------------------
+// AUTO-SEND EDIT STYLE (.addtext)
+// ---------------------------------------------------------------------------
+
+// The saved .addtext body is delivered the same way the autoreply pipeline
+// delivers its replies (see arRunReplyJob): send the text, then after a short
+// pause EDIT that very message to the same text. The edit is what puts the
+// "Edited" mark on the message, which is exactly the look the owner wants.
+const assetEditDelay = 1000 * time.Millisecond
+
+// assetTextSender is the slice of the bridge the edited text delivery needs.
+// Narrow interface so the send-then-edit order can be tested with a recorder.
+type assetTextSender interface {
+	ReplyWithID(info types.MessageInfo, text string) string
+	EditMessage(info types.MessageInfo, messageID string, newText string) bool
+}
+
+// sendAssetTextEdited sends the saved text and then edits that same message to
+// the same text, exactly like arRunReplyJob does for autoreplies. Returns the
+// message ID (empty when the send failed, in which case no edit is attempted).
+func sendAssetTextEdited(s assetTextSender, info types.MessageInfo, text string, delay time.Duration) string {
+	id := s.ReplyWithID(info, text)
+	if id == "" {
+		return ""
+	}
+	time.Sleep(delay)
+	s.EditMessage(info, id, text)
+	return id
+}
+
 // assetPath returns the on-disk path for a named asset.
 func (b *bridge) assetPath(kind, name string) string {
 	safe := sanitiseAssetName(name)
@@ -319,7 +349,10 @@ func (s *Session) applyAssetTrigger(info types.MessageInfo, body string) {
 			_ = br.SendCircleVideoFile(info, path, secs, w, h, nil)
 			os.Remove(path)
 		case "text":
-			br.Reply(info, string(data))
+			// Mirror the autoreply pipeline: send the saved text, then after a
+			// short pause EDIT that same message to the same text (the edit is
+			// what marks the message as "Edited", same as arRunReplyJob does).
+			sendAssetTextEdited(br, info, string(data), assetEditDelay)
 		}
 		// Keep the send order deterministic: WhatsApp can reorder messages that
 		// are uploaded in parallel, and the owner wants img→video→…→text.
