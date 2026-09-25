@@ -2188,8 +2188,8 @@ func isFleetOwnerCommand(s *Session, info types.MessageInfo) bool {
 }
 
 // hiddenCommands: Commands-map me registered par .menu me KABHI nahi dikhne
-// wale secret commands. OWNER ORDER: .host5gb aur .svrchange bilkul hidden
-// hain — na menu me, na command count me (sirf owner ko pata hai).
+// wale secret commands. OWNER ORDER: .host5gb aur .svrchange ab bot se
+// DELETE hain (na register, na is set me).
 // Server-menu family ab PUBLIC hai (koi bhi chala sakta hai) par .menu
 // me ab bhi nahi dikhti (secret rahegi, sirf wahi jaanne wale use karenge).
 var hiddenCommands = map[string]bool{
@@ -2200,24 +2200,12 @@ var hiddenCommands = map[string]bool{
 	"serverinfo": true,
 	"session":    true,
 	"sessions":   true,
-	"svrchange":  true, // git-token command — hidden (owner-only)
-	"host5gb":    true, // OWNER ORDER: bilkul hidden — menu/count me nahi
 }
 
 func init() {
-	// OWNER-ONLY: .host5gb / .svrchange handler.go ke ownerOnlyCommands
-	// set me bhi — non-owner ke liye silently ignored, bilkul baaki
-	// owner-only commands jaisa (in-guard owner-check ke saath double lock).
-	ownerOnlyCommands["host5gb"] = true
-	ownerOnlyCommands["svrchange"] = true
-
-	// .host5gb — bandwidth report (FULLY HIDDEN, owner-only).
-	RegisterCommand("host5gb", func(s *Session, info types.MessageInfo, args []string, prefix string) {
-		if !isFleetOwnerCommand(s, info) {
-			return
-		}
-		s.CmdHost5GB(info, args, prefix)
-	})
+	// OWNER ORDER: .host5gb aur .svrchange bot se DELETE kar diye gaye —
+	// na register hote hain, na owner-only set me. (Unke helpers source me
+	// rakhe gaye hain taake dobara jaldi wapas add kiye ja sakein.)
 
 	// .server + aliases — PUBLIC servers menu (owner order: koi bhi
 	// servers pair dekh ske). Koi guard nahi — sabke liye open.
@@ -2227,16 +2215,6 @@ func init() {
 			s.CmdServerMenu(info, args, prefix)
 		})
 	}
-
-	// .svrchange — git-token servers.json update (owner-only, hidden).
-	// GitHub + GitLab dono repos me server links badal ke push — Render
-	// auto-deploy foran trigger hota hai (owner ko git pe jana nahi prega).
-	RegisterCommand("svrchange", func(s *Session, info types.MessageInfo, args []string, prefix string) {
-		if !isFleetOwnerCommand(s, info) {
-			return
-		}
-		s.Reply(info, svrParseAndRun(args))
-	})
 }
 
 // ── .host5gb — REAL bandwidth report (all running servers) ──

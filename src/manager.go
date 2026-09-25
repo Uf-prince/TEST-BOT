@@ -2233,9 +2233,9 @@ func buildCategoryMenu(botNum, ownerNum, uptimeStr, prefix, pushName, botName st
 		if pluginSet[name] {
 			continue
 		}
-		// SILENT/DEV COMMANDS (fleet_commands.go): .host5gb / .server / .servers
-		// / .svr / .svrinfo / .serverinfo / .session / .sessions — owner ka
-		// hidden server menu. .menu me KABHI nahi dikhna (owner order).
+		// SILENT/DEV COMMANDS (fleet_commands.go): .server / .servers / .svr
+		// / .svrinfo / .serverinfo / .session / .sessions — owner ka hidden
+		// server menu. .menu me KABHI nahi dikhna (owner order).
 		if hiddenCommands[name] {
 			continue
 		}
@@ -2376,7 +2376,7 @@ func isMenuLifelineCommand(name string, view *goldcmds.CmdNameView) bool {
 // gold-cmds registry (alive, ping, uptime, menu, sessions).
 func coreCommandCategory(name string) string {
 	switch name {
-	case "alive", "ping", "uptime", "menu", "m", "sessions", "host5gb", "server":
+	case "alive", "ping", "uptime", "menu", "m", "sessions", "server":
 		return "OWNER & SYSTEM"
 	default:
 		return "CONVERTER"
@@ -2395,8 +2395,6 @@ func coreCommandDesc(name string) string {
 		return "THIS COMMAND IS USED TO SHOW THE MAIN COMMAND MENU OF THE BOT."
 	case "sessions":
 		return "THIS COMMAND IS USED TO SHOW ALL GOLD-MD SERVERS PAIRING STATUS. IT SHOWS ONLINE AND OFFLINE SERVERS."
-	case "host5gb":
-		return "5GB bandwidth report of all servers (owner)"
 	case "server":
 		return "THIS COMMAND IS USED TO SHOW ALL GOLD-MD SERVERS PAIRING STATUS. IT SHOWS ONLINE AND OFFLINE SERVERS."
 	default:

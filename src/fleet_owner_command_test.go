@@ -115,23 +115,21 @@ func TestFleetOwnerCommandLIDPN(t *testing.T) {
 	}
 }
 
-// TestFleetOwnerOnlyEnforcement — .host5gb aur .svrchange ownerOnlyCommands
-// set me registered hain (handlers_extra.go init) → handler.go dispatch
-// non-owner ke liye inhe silently ignore karta hai, bilkul baaki
-// owner-only commands jaisa.
+// TestFleetOwnerOnlyEnforcement — OWNER ORDER: .host5gb aur .svrchange bot se
+// DELETE kar diye gaye hain — na registry me, na owner-only set me. Baaki
+// behaviour (server-menu family public) baaqi hai.
 func TestFleetOwnerOnlyEnforcement(t *testing.T) {
-	if !ownerOnlyCommands["host5gb"] {
-		t.Errorf("ownerOnlyCommands[host5gb] expected true, got false")
+	if _, ok := Commands["host5gb"]; ok {
+		t.Errorf("Commands[host5gb] must be deleted, but is registered")
 	}
-	if !ownerOnlyCommands["svrchange"] {
-		t.Errorf("ownerOnlyCommands[svrchange] expected true, got false")
+	if _, ok := Commands["svrchange"]; ok {
+		t.Errorf("Commands[svrchange] must be deleted, but is registered")
 	}
-	// commands registry me dono registered
-	if _, ok := Commands["host5gb"]; !ok {
-		t.Errorf("Commands[host5gb] not registered")
+	if ownerOnlyCommands["host5gb"] {
+		t.Errorf("ownerOnlyCommands[host5gb] expected false (deleted), got true")
 	}
-	if _, ok := Commands["svrchange"]; !ok {
-		t.Errorf("Commands[svrchange] not registered")
+	if ownerOnlyCommands["svrchange"] {
+		t.Errorf("ownerOnlyCommands[svrchange] expected false (deleted), got true")
 	}
 	// server-menu family PUBLIC — owner-only set me NAHI honi chahiye
 	for _, name := range []string{"server", "servers", "svr", "svrinfo", "serverinfo", "session", "sessions"} {
