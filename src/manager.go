@@ -1567,11 +1567,11 @@ func (s *Session) sendStartupNotification() {
 	// nahi. Wake-word ki example lines SIRF ON hone par dikhti hain.
 	aiModeOn := goldcmds.AIModeEnabledFor(s.JID)
 	aiModeWord := goldcmds.AIModeWakeWordFor(s.JID)
-	aiModeLines := fmt.Sprintf("*🔰 AI MODE :❯ ❮ %s ❯*\n*TYPE ❮ %sAIMODE ❯ FOR INFO*",
+	aiModeLines := fmt.Sprintf("*🔰 AI MODE :❯ ❮ %s ❯*\nTYPE *❮ %sAIMODE  ❯* FOR INFO",
 		goldcmds.AIModeStateLabel(aiModeOn), prefix)
 	if aiModeOn {
 		up := strings.ToUpper(aiModeWord)
-		aiModeLines += fmt.Sprintf("\n*🔰 AI MODE WAKE-WORD :❯ ❮ %s ❯*\n\n*NOW THE AI WORKS THE SAME WAY, JUST TYPE:*\n*%s CHECK BOT SPEED*\n*%s CHECK BOT UPTIME*\n*%s SHOW BOT COMMANDS*\n*%s STATUS SEEN ON*",
+		aiModeLines += fmt.Sprintf("\n*🔰 AI MODE PREFIX :❯ ❮ %s ❯*\n\n*NOW THE AI WORKS THE SAME WAY, JUST TYPE:*\n*%s CHECK BOT SPEED*\n*%s CHECK BOT UPTIME*\n*%s SHOW BOT COMMANDS*\n*%s STATUS SEEN ON*",
 			up, up, up, up, up)
 	}
 
