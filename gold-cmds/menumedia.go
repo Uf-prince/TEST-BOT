@@ -89,14 +89,34 @@ func menuMediaFullLabel(key string) string {
 
 // menuMediaSettingKey is the single source of truth for the Redis field suffix
 // of one menu's media. Pictures use the bare key, videos the "<key>:video"
-// variant, so a menu can hold both at once.
+// variant and voices the "<key>:voice" variant, so a menu can hold all three
+// at once.
 func menuMediaSettingKey(key, kind string) string {
 	key = strings.ToLower(strings.TrimSpace(key))
-	if strings.ToLower(strings.TrimSpace(kind)) == "video" {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "video":
 		return key + ":video"
+	case "voice":
+		return key + ":voice"
 	}
 	return key
 }
+
+// MenuMediaVoiceOff is the sentinel stored for a voice field to mean "this
+// menu has no voice at all" (distinct from "not set", which falls back to the
+// bot-wide voice and then to the built-in default). The owner gets it with
+// `.logovoice reset`.
+const MenuMediaVoiceOff = "off"
+
+// DefaultMenuVoiceURL is the voice every menu and the .alive card carry when
+// the owner has not chosen one — the built-in GOLD-MD intro clip.
+const DefaultMenuVoiceURL = "https://d.uguu.se/WHyKzyzH.mp3"
+
+// MenuMediaDefaultVoiceURL is the exported default for the src send path.
+func MenuMediaDefaultVoiceURL() string { return DefaultMenuVoiceURL }
+
+// MenuMediaVoiceOffValue is the exported "off" sentinel for the src send path.
+func MenuMediaVoiceOffValue() string { return MenuMediaVoiceOff }
 
 // MenuMediaSettingKey is the exported form used by the src renderers, so the
 // menu header lookup and the setter can never drift apart.
@@ -251,6 +271,9 @@ func menuIsVideoMime(mime string) bool {
 
 // mediaURLRe matches a bare http(s) URL ending in an image or video extension.
 var mediaURLRe = regexp.MustCompile(`^(https?://\S+\.(jpe?g|png|gif|webp|mp4|3gp|webm|mov|mkv|avi))$`)
+
+// voiceURLRe matches a bare http(s) URL ending in an audio extension.
+var voiceURLRe = regexp.MustCompile(`^(https?://\S+\.(mp3|m4a|aac|ogg|opus|wav|weba))$`)
 
 // menuMediaTestHint tells the owner which command OPENS the menu they just
 // customised, so they can actually verify the change: `.menu`, `.logo`,
@@ -448,6 +471,247 @@ func handleMenuVideo(s SessionBridge, info types.MessageInfo, args []string, pre
 	s.Reply(info, fmt.Sprintf("*🔰 %s VIDEO UPDATED 🔰*\n\n*NEW VIDEO SAVED FOR THIS MENU ONLY*\n%s", label, menuMediaTestHint(prefix, menuCmd)))
 }
 
+// ── VOICE (mp3) NORMALISATION ───────────────────────────────────────────────
+
+// menuVoiceIsAudioMime reports a genuine audio mimetype (mp3/m4a/ogg/opus/wav).
+// Videos are accepted too — the handler extracts their audio track.
+func menuVoiceIsAudioMime(mime string) bool {
+	m := strings.ToLower(mime)
+	return strings.Contains(m, "audio") || strings.Contains(m, "mpeg") ||
+		strings.Contains(m, "mp3") || strings.Contains(m, "ogg") ||
+		strings.Contains(m, "opus") || strings.Contains(m, "wav") ||
+		strings.Contains(m, "m4a") || strings.Contains(m, "aac") ||
+		strings.Contains(m, "webm")
+}
+
+// menuVoiceExt returns a file extension for an audio mimetype.
+func menuVoiceExt(mime string) string {
+	m := strings.ToLower(mime)
+	switch {
+	case strings.Contains(m, "ogg"):
+		return ".ogg"
+	case strings.Contains(m, "opus"):
+		return ".opus"
+	case strings.Contains(m, "wav"):
+		return ".wav"
+	case strings.Contains(m, "m4a"), strings.Contains(m, "aac"):
+		return ".m4a"
+	default:
+		return ".mp3"
+	}
+}
+
+// BotVoiceURLIsPlayable does a ranged GET (browser UA + Referer) and confirms
+// the server answers with real audio bytes rather than an HTML share/error
+// page. This is what guarantees a stored voice URL will actually play.
+func BotVoiceURLIsPlayable(raw string) bool {
+	raw = resolveDirectMediaURL(strings.TrimSpace(raw))
+	if raw == "" {
+		return false
+	}
+	req, err := http.NewRequest(http.MethodGet, raw, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("User-Agent", browserUA)
+	if ref := MediaReferer(raw); ref != "" {
+		req.Header.Set("Referer", ref)
+	}
+	req.Header.Set("Range", "bytes=0-4095")
+	resp, err := (&http.Client{Timeout: 25 * time.Second}).Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		return false
+	}
+	buf := make([]byte, 2048)
+	n, _ := io.ReadFull(resp.Body, buf)
+	if n <= 0 {
+		return false
+	}
+	head := strings.TrimSpace(strings.ToLower(string(buf[:n])))
+	if strings.HasPrefix(head, "<") || strings.Contains(head, "<!doctype html") || strings.Contains(head, "<html") {
+		return false
+	}
+	ct := strings.ToLower(http.DetectContentType(buf[:n]))
+	if strings.HasPrefix(ct, "text/") || strings.Contains(ct, "html") {
+		return false
+	}
+	return true
+}
+
+// menuVoiceToMP3 converts any media file to a normalised MP3 (mono 64k is
+// plenty for a short intro clip and keeps the upload small). Falls back to the
+// input file when ffmpeg is unavailable.
+func menuVoiceToMP3(inPath string) (string, error) {
+	out := inPath + ".voice.mp3"
+	cmd := exec.Command("ffmpeg", "-y", "-v", "error", "-i", inPath,
+		"-vn", "-codec:a", "libmp3lame", "-b:a", "96k", "-ar", "44100", "-ac", "2", out)
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
+// menuVoiceGuide is the no-argument help card for one menu's voice command.
+func menuVoiceGuide(prefix, label, cmdName string, menuCmd string) string {
+	cmd := prefix + cmdName
+	return "*🔰 " + label + " VOICE GUIDE 🔰*\n\n" +
+		"*DO YOU WANT TO CHANGE YOUR " + label + " VOICE*\n" +
+		"*THE VOICE PLAYS RIGHT AFTER THIS MENU IS SENT*\n\n" +
+		"*1❯ SIMPLY SEND YOUR AUDIO HERE*\n" +
+		"*2❯ REPLY TO THE AUDIO AND TYPE ❰ " + cmd + " ❱*\n" +
+		"*3❯ OR SEND A LINK:*\n" +
+		"*❰ " + cmd + " <MP3-URL> ❱*\n\n" +
+		"*TO REMOVE THE VOICE TYPE*\n" +
+		"*❰ " + cmd + " RESET ❱*\n\n" +
+		"*FOR TEST TYPE ❰ " + prefix + menuCmd + " ❱*"
+}
+
+// handleMenuVoice sets the voice (mp3) that plays right after ONE menu / the
+// .alive card is sent. Same setter flow as .botvoice / .botpic / .botvideo.
+func handleMenuVoice(s SessionBridge, info types.MessageInfo, args []string, prefix, key, cmdName, menuCmd string) {
+	if !s.IsOwner(info) {
+		s.Reply(info, "*THIS COMMAND IS ONLY FOR ME 😎*")
+		return
+	}
+	label := menuMediaFullLabel(key)
+	argRaw := strings.TrimSpace(strings.Join(args, " "))
+
+	if strings.ToLower(argRaw) == "reset" {
+		s.SetMenuMediaSetting(menuMediaSettingKey(key, "voice"), MenuMediaVoiceOff)
+		s.Reply(info, fmt.Sprintf("*🔰 %s VOICE RESET 🔰*\n\n*VOICE REMOVED FOR THIS MENU*\n*THIS MENU IS NOW SILENT*", label))
+		return
+	}
+	if argRaw != "" {
+		firstTok := strings.Fields(argRaw)[0]
+		if m := voiceURLRe.FindString(firstTok); m != "" {
+			if !s.VoiceURLPlayable(m) {
+				s.Reply(info, "*🔰 VOICE LINK FAIL 🔰*\n\n*YE LINK SE VOICE NIKAL NAHI PAYI*\n*DOBARA PROPER MP3 LINK YA AUDIO BHEJ KAR TRY KARO*")
+				return
+			}
+			s.SetMenuMediaSetting(menuMediaSettingKey(key, "voice"), m)
+			s.Reply(info, fmt.Sprintf("*🔰 %s VOICE UPDATED 🔰*\n\n*NEW VOICE:*\n%s\n\n%s", label, m, menuMediaTestHint(prefix, menuCmd)))
+			return
+		}
+		if strings.HasPrefix(strings.ToLower(firstTok), "http") {
+			s.Reply(info, "*🔰 INVALID VOICE LINK 🔰*\n\n*LINK .mp3 / .m4a / .ogg / .opus / .wav PE KHATAM HONI CHAHIYE*")
+			return
+		}
+	}
+
+	data, mime, ok := s.DownloadQuotedMedia(info)
+	if !ok || len(data) == 0 || !menuVoiceIsAudioMime(mime) {
+		guide := menuVoiceGuide(prefix, label, cmdName, menuCmd)
+		if key == "menu" {
+			guide += menuVoiceFullList(prefix)
+		}
+		s.Reply(info, guide)
+		return
+	}
+
+	waitID := s.ReplyWithID(info, "*🔰 "+label+" VOICE UPLOAD HO RAHI HAI...*\n*PROCESSING: 00%*")
+	stop := make(chan struct{})
+	go func() {
+		p := 0
+		tk := time.NewTicker(500 * time.Millisecond)
+		defer tk.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-tk.C:
+				if p >= 90 {
+					continue
+				}
+				p += 7
+				if p > 90 {
+					p = 90
+				}
+				s.EditMessage(info, waitID, fmt.Sprintf("*CHANGING %s VOICE*\n*PROCESSING: %02d%%*", label, p))
+			}
+		}
+	}()
+
+	in, err := os.CreateTemp("", "goldmd-menuvoice-in-*"+menuVoiceExt(mime))
+	if err != nil {
+		close(stop)
+		s.DeleteMessage(info, waitID)
+		s.Reply(info, "🔰 *Temp file fail*")
+		return
+	}
+	inPath := in.Name()
+	defer os.Remove(inPath)
+	if _, err := in.Write(data); err != nil {
+		in.Close()
+		close(stop)
+		s.DeleteMessage(info, waitID)
+		s.Reply(info, fmt.Sprintf("🔰 *Write fail:* %v", err))
+		return
+	}
+	in.Close()
+
+	// Normalise to MP3 (also extracts the track when a video was sent).
+	outPath, nerr := menuVoiceToMP3(inPath)
+	if nerr != nil || outPath == "" {
+		// ffmpeg missing/failed — upload the original bytes rather than refuse.
+		if up, _, uerr := uploadAnyHost(data, "goldmd-menu-"+key+menuVoiceExt(mime), "audio/mpeg"); uerr == nil && up != "" {
+			if direct := resolveDirectMediaURL(up); direct != "" {
+				up = direct
+			}
+			close(stop)
+			s.DeleteMessage(info, waitID)
+			s.SetMenuMediaSetting(menuMediaSettingKey(key, "voice"), up)
+			s.Reply(info, fmt.Sprintf("*🔰 %s VOICE UPDATED 🔰*\n\n*NEW VOICE SAVED FOR THIS MENU ONLY*\n%s", label, menuMediaTestHint(prefix, menuCmd)))
+			return
+		}
+		close(stop)
+		s.DeleteMessage(info, waitID)
+		s.Reply(info, "🔰 *VOICE CONVERT FAIL*")
+		return
+	}
+	defer os.Remove(outPath)
+	norm, rerr := os.ReadFile(outPath)
+	if rerr != nil || len(norm) == 0 {
+		norm = data
+	}
+
+	url, _, uerr := uploadAnyHost(norm, "goldmd-menu-"+key+".mp3", "audio/mpeg")
+	close(stop)
+	s.DeleteMessage(info, waitID)
+	if uerr != nil || url == "" {
+		s.Reply(info, fmt.Sprintf("🔰 *Upload fail:* %v", uerr))
+		return
+	}
+	if direct := resolveDirectMediaURL(url); direct != "" {
+		url = direct
+	}
+	if !BotVoiceURLIsPlayable(url) {
+		s.Reply(info, "*🔰 VOICE SETUP FAIL 🔰*\n\n*UPLOADED FILE PLAYABLE AUDIO NAHI NIKLI*\n*DOBARA PROPER MP3 BHEJ KAR TRY KARO*")
+		return
+	}
+	s.SetMenuMediaSetting(menuMediaSettingKey(key, "voice"), url)
+	s.Reply(info, fmt.Sprintf("*🔰 %s VOICE UPDATED 🔰*\n\n*NEW VOICE SAVED FOR THIS MENU ONLY*\n%s", label, menuMediaTestHint(prefix, menuCmd)))
+}
+
+// menuVoiceFullList lists every per-menu voice command on the .menuvoice guide.
+func menuVoiceFullList(prefix string) string {
+	var b strings.Builder
+	b.WriteString("\n\n*🔰 ALL MENU VOICE COMMANDS 🔰*\n")
+	for _, mc := range menuMediaCommands {
+		b.WriteString(fmt.Sprintf("*❰ %s%s ❱ → %s VOICE*\n", prefix, menuVoiceCommandName(mc), menuMediaLabel(mc.Key)))
+	}
+	return b.String()
+}
+
+// menuVoiceCommandName maps a pic/video command to its voice sibling
+// (logopic/logovideo → logovoice; aimenupic → aimenuvoice).
+func menuVoiceCommandName(mc menuMediaCommand) string {
+	return mc.VoiceCmd
+}
+
 // isVideoExt reports whether a URL ends in a video extension.
 func isVideoExt(u string) bool {
 	lu := strings.ToLower(u)
@@ -469,6 +733,9 @@ type menuMediaCommand struct {
 	// ".logo" / ".font" / ... for dedicated menus, and the category slug
 	// (".ai", ".tools", ...) for the rest. It is NOT the media command.
 	MenuCmd string
+	// VoiceCmd is the name of this menu's voice sibling (.logovoice,
+	// .aimenuvoice, ...). One per menu, registered alongside pic/video.
+	VoiceCmd string
 }
 
 // menuMediaCommands is the full generated command set: for each menu one
@@ -476,23 +743,38 @@ type menuMediaCommand struct {
 // (grouppic/aipic/aivideo are taken, so the group/ai menus use distinct
 // names below).
 var menuMediaCommands = []menuMediaCommand{
-	{"menupic", "menu", "pic", "menu"}, {"menuvideo", "menu", "video", "menu"},
-	{"alivepic", "alive", "pic", "alive"}, {"alivevideo", "alive", "video", "alive"},
-	{"logopic", "logo", "pic", "logo"}, {"logovideo", "logo", "video", "logo"},
-	{"fontpic", "font", "pic", "font"}, {"fontvideo", "font", "video", "font"},
-	{"gamepic", "game", "pic", "game"}, {"gamevideo", "game", "video", "game"},
-	{"equalizerpic", "equalizer", "pic", "equalizer"}, {"equalizervideo", "equalizer", "video", "equalizer"},
-	{"aimenupic", "ai", "pic", "ai"}, {"aimenuvideo", "ai", "video", "ai"},
-	{"utilitypic", "utility", "pic", "utility"}, {"utilityvideo", "utility", "video", "utility"},
-	{"converterpic", "converter", "pic", "converter"}, {"convertervideo", "converter", "video", "converter"},
-	{"toolspic", "tools", "pic", "tools"}, {"toolsvideo", "tools", "video", "tools"},
-	{"downloaderpic", "downloader", "pic", "downloader"}, {"downloadervideo", "downloader", "video", "downloader"},
-	{"groupmenupic", "group", "pic", "group"}, {"groupmenuvideo", "group", "video", "group"},
-	{"protectionpic", "protection", "pic", "protection"}, {"protectionvideo", "protection", "video", "protection"},
-	{"presencepic", "presence", "pic", "presence"}, {"presencevideo", "presence", "video", "presence"},
-	{"corepic", "core", "pic", "core"}, {"corevideo", "core", "video", "core"},
-	{"breactionpic", "breaction", "pic", "breaction"}, {"breactionvideo", "breaction", "video", "breaction"},
-	{"greactionpic", "greaction", "pic", "greaction"}, {"greactionvideo", "greaction", "video", "greaction"},
+	{"menupic", "menu", "pic", "menu", "menuvoice"}, {"menuvideo", "menu", "video", "menu", "menuvoice"},
+	{"alivepic", "alive", "pic", "alive", "alivevoice"}, {"alivevideo", "alive", "video", "alive", "alivevoice"},
+	{"logopic", "logo", "pic", "logo", "logovoice"}, {"logovideo", "logo", "video", "logo", "logovoice"},
+	{"fontpic", "font", "pic", "font", "fontvoice"}, {"fontvideo", "font", "video", "font", "fontvoice"},
+	{"gamepic", "game", "pic", "game", "gamevoice"}, {"gamevideo", "game", "video", "game", "gamevoice"},
+	{"equalizerpic", "equalizer", "pic", "equalizer", "equalizervoice"}, {"equalizervideo", "equalizer", "video", "equalizer", "equalizervoice"},
+	{"aimenupic", "ai", "pic", "ai", "aimenuvoice"}, {"aimenuvideo", "ai", "video", "ai", "aimenuvoice"},
+	{"utilitypic", "utility", "pic", "utility", "utilityvoice"}, {"utilityvideo", "utility", "video", "utility", "utilityvoice"},
+	{"converterpic", "converter", "pic", "converter", "convertervoice"}, {"convertervideo", "converter", "video", "converter", "convertervoice"},
+	{"toolspic", "tools", "pic", "tools", "toolsvoice"}, {"toolsvideo", "tools", "video", "tools", "toolsvoice"},
+	{"downloaderpic", "downloader", "pic", "downloader", "downloadervoice"}, {"downloadervideo", "downloader", "video", "downloader", "downloadervoice"},
+	{"groupmenupic", "group", "pic", "group", "groupmenuvoice"}, {"groupmenuvideo", "group", "video", "group", "groupmenuvoice"},
+	{"protectionpic", "protection", "pic", "protection", "protectionvoice"}, {"protectionvideo", "protection", "video", "protection", "protectionvoice"},
+	{"presencepic", "presence", "pic", "presence", "presencevoice"}, {"presencevideo", "presence", "video", "presence", "presencevoice"},
+	{"corepic", "core", "pic", "core", "corevoice"}, {"corevideo", "core", "video", "core", "corevoice"},
+	{"breactionpic", "breaction", "pic", "breaction", "breactionvoice"}, {"breactionvideo", "breaction", "video", "breaction", "breactionvoice"},
+	{"greactionpic", "greaction", "pic", "greaction", "greactionvoice"}, {"greactionvideo", "greaction", "video", "greaction", "greactionvoice"},
+}
+
+// menuVoiceCommands is the per-menu voice set, derived from menuMediaCommands
+// (one voice command per menu — the VoiceCmd of the pic entry).
+func menuVoiceCommands() []menuMediaCommand {
+	seen := map[string]bool{}
+	var out []menuMediaCommand
+	for _, mc := range menuMediaCommands {
+		if mc.Kind != "pic" || seen[mc.VoiceCmd] {
+			continue
+		}
+		seen[mc.VoiceCmd] = true
+		out = append(out, mc)
+	}
+	return out
 }
 
 // menuMediaVisible are the two headline commands shown in the menu (the other
@@ -524,6 +806,22 @@ func init() {
 			Hidden:    hidden,
 			Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
 				handleMenuPic(s, info, args, prefix, mc.Key, mc.Name, mc.MenuCmd)
+			},
+		})
+	}
+
+	// One VOICE command per menu (.menuvoice / .logovoice / .aimenuvoice ...).
+	// Hidden: the .menuvoice guide lists them all, so they stay out of the menu.
+	for _, mc := range menuVoiceCommands() {
+		mc := mc
+		Register(Command{
+			Name:      mc.VoiceCmd,
+			Category:  "OWNER & SYSTEM",
+			Desc:      "THIS COMMAND IS USED TO CHANGE ONE MENU'S VOICE (MP3). REPLY TO AN AUDIO AND USE THIS COMMAND. THE VOICE PLAYS RIGHT AFTER THAT MENU IS SENT.",
+			OwnerOnly: true,
+			Hidden:    true,
+			Run: func(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
+				handleMenuVoice(s, info, args, prefix, mc.Key, mc.VoiceCmd, mc.MenuCmd)
 			},
 		})
 	}

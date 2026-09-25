@@ -1949,6 +1949,46 @@ func (s *Session) ReplyImageWithNewsletter(info types.MessageInfo, imgData []byt
 	return true
 }
 
+// SendVoiceWithNewsletter sends the owner-set menu/alive VOICE as an audio
+// message carrying the forwarded channel link button. Sent as a normal audio
+// message (not a PTT voice note): the stored files are MP3, and WhatsApp only
+// renders a PTT note correctly for opus/ogg, so playing MP3 as audio is the
+// form that actually works. Returns false when nothing could be sent.
+func (s *Session) SendVoiceWithNewsletter(info types.MessageInfo, data []byte) bool {
+	if s.Client == nil || !s.Client.IsConnected() || len(data) == 0 {
+		return false
+	}
+	s.ensureNewsletterResolved()
+
+	uploaded, err := s.Client.Upload(context.Background(), data, whatsmeow.MediaAudio)
+	if err != nil {
+		ErrLog("[%s] menu voice upload failed: %v", s.JID, err)
+		return false
+	}
+
+	ctxInfo := s.newsletterCtxInfo()
+
+	audioMsg := &waProto.AudioMessage{
+		Mimetype:      proto.String("audio/mpeg"),
+		PTT:           proto.Bool(false),
+		URL:           proto.String(uploaded.URL),
+		DirectPath:    proto.String(uploaded.DirectPath),
+		MediaKey:      uploaded.MediaKey,
+		FileEncSHA256: uploaded.FileEncSHA256,
+		FileSHA256:    uploaded.FileSHA256,
+		FileLength:    proto.Uint64(uint64(len(data))),
+		ContextInfo:   ctxInfo,
+	}
+
+	if _, err := s.Client.SendMessage(context.Background(), info.Chat, &waProto.Message{
+		AudioMessage: audioMsg,
+	}); err != nil {
+		ErrLog("[%s] menu voice send failed: %v", s.JID, err)
+		return false
+	}
+	return true
+}
+
 // wakeNewsletterFollow kicks off the channel follow in the background with a
 // small random delay (mirrors pair.js's staggered follow to look human and
 // avoid ban risk).  Called from EventHandler's *events.Connected case.

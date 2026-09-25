@@ -41,6 +41,10 @@ func (b *mmBridge) GetMenuMediaSetting(key, def string) string {
 }
 func (b *mmBridge) SetMenuMediaSetting(key, url string) { b.media[key] = url }
 
+// Voice URL checks hit the network in production; the tests treat every link
+// as playable so the setter paths can be exercised offline.
+func (b *mmBridge) VoiceURLPlayable(url string) bool { return true }
+
 func (b *mmBridge) last() string {
 	if len(b.replies) == 0 {
 		return ""

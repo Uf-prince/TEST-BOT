@@ -101,6 +101,14 @@ Don't chase these unless asked.
   the owner at the command that OPENS it (`*FOR TEST TYPE ❰ .logo ❱*`, `.ai`,
   `.game`). Never the media command itself (`.logopic` only SETS the picture)
   and never a generic `.alive` / `.menu` hint.
+- Voice (MP3) siblings: `.botvoice` is bot-wide, and one hidden command per
+  menu (`.menuvoice`, `.logovoice`, `.aimenuvoice`, `.fontvoice`, `.gamevoice`,
+  ...). The voice plays right AFTER the menu / `.alive` header is sent (see
+  `sendMenuHeader` -> `sendMenuVoice`). Resolution: per-menu -> bot-wide ->
+  built-in default (`goldcmds.DefaultMenuVoiceURL`). A per-menu `.xvoice reset`
+  stores the `off` sentinel and silences JUST that menu; `.botvoice reset`
+  silences all. Redis fields: `botvoice`, `menumedia:<key>:voice`.
+
 - Category menu shortcuts are resolved BEFORE the prefix-match fallback
   (`categoryMenuShortcut` in handler.go). The fallback is greedy, so `.ai` and
   `.group` were previously stolen by `aiimage` / `groupban` and those category

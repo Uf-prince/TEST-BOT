@@ -1079,6 +1079,33 @@ func (b *bridge) SetBotVideoSetting(url string) {
 	b.s.Manager.Redis.SetSetting(b.s.JID, "botvideo", url)
 }
 
+// GetBotVoiceSetting reads the custom bot menu/alive VOICE (audio) URL from
+// Redis (field "botvoice").
+func (b *bridge) GetBotVoiceSetting(def string) string {
+	if b.s.Manager.Redis == nil {
+		warnRedisNil()
+		return def
+	}
+	return b.s.Manager.Redis.GetSetting(b.s.JID, "botvoice", def)
+}
+
+// SetBotVoiceSetting writes the custom bot menu/alive VOICE URL to Redis. An
+// empty value clears it (back to the built-in default);
+// goldcmds.MenuMediaVoiceOff stores the "off" sentinel and silences it.
+func (b *bridge) SetBotVoiceSetting(url string) {
+	if b.s.Manager.Redis == nil {
+		warnRedisNil()
+		return
+	}
+	b.s.Manager.Redis.SetSetting(b.s.JID, "botvoice", url)
+}
+
+// VoiceURLPlayable reports whether a voice URL actually serves audio rather
+// than an HTML share/error page, which is what makes WhatsApp play it.
+func (b *bridge) VoiceURLPlayable(url string) bool {
+	return goldcmds.BotVoiceURLIsPlayable(url)
+}
+
 // GetMenuMediaSetting reads the per-menu custom media URL (Redis field
 // "menumedia:<key>"). key is a menu slug such as "menu", "logo", "ai",
 // "converter" or "alive". Empty when nothing is set for that menu.

@@ -32,6 +32,9 @@ func (b *bvBridge) IsOwner(info types.MessageInfo) bool { return true }
 func (b *bvBridge) DownloadQuotedMedia(info types.MessageInfo) ([]byte, string, bool) {
 	return nil, "", false
 }
+func (b *bvBridge) VoiceURLPlayable(url string) bool     { return true }
+func (b *bvBridge) GetBotVoiceSetting(def string) string { return def }
+func (b *bvBridge) SetBotVoiceSetting(url string)        {}
 func (b *bvBridge) GetBotVideoSetting(def string) string {
 	if b.video == "" {
 		return def

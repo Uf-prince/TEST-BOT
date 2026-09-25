@@ -2623,8 +2623,10 @@ func (s *Session) menuPicURL(key string) string {
 // sendMenuHeader delivers one menu's caption with the best available header:
 // per-menu (then bot-wide) video first, otherwise per-menu (then bot-wide)
 // picture, otherwise a text-only menu. Shared by every menu renderer so all
-// menus behave identically.
+// menus behave identically. The menu's VOICE (per-menu → bot-wide → default)
+// follows the header, and only when the owner has not silenced it.
 func (s *Session) sendMenuHeader(info types.MessageInfo, key, caption string) {
+	defer s.sendMenuVoice(info, key)
 	if vid := s.menuVideoURL(key); vid != "" {
 		if s.SendAliveVideoWithNewsletter(info, vid, caption) {
 			return
@@ -2691,6 +2693,55 @@ func (s *Session) botVideoURL() string {
 		}
 	}
 	return ""
+}
+
+// botVoiceURL returns the bot-wide VOICE URL (Redis field "botvoice"). Three
+// states, because a voice is always expected unless silenced:
+//   - "off"    → "" (the owner silenced it with .botvoice reset)
+//   - set URL  → that URL
+//   - unset    → the built-in DefaultMenuVoiceURL, so every menu carries a
+//     voice out of the box.
+func (s *Session) botVoiceURL() string {
+	if s.Manager != nil && s.Manager.Redis != nil {
+		if v := s.Manager.Redis.GetSetting(s.JID, "botvoice", ""); v != "" {
+			if v == goldcmds.MenuMediaVoiceOffValue() {
+				return ""
+			}
+			return v
+		}
+	}
+	return goldcmds.MenuMediaDefaultVoiceURL()
+}
+
+// menuVoiceURL resolves the voice for one menu. Order: per-menu override →
+// bot-wide .botvoice → built-in default. A per-menu "off" silences JUST that
+// menu without touching the bot-wide voice.
+func (s *Session) menuVoiceURL(key string) string {
+	if key != "" && s.Manager != nil && s.Manager.Redis != nil {
+		if v := s.Manager.Redis.GetSetting(s.JID, "menumedia:"+goldcmds.MenuMediaSettingKey(key, "voice"), ""); v != "" {
+			if v == goldcmds.MenuMediaVoiceOffValue() {
+				return ""
+			}
+			return v
+		}
+	}
+	return s.botVoiceURL()
+}
+
+// sendMenuVoice fetches and sends one menu's voice as a push-to-talk-style
+// audio message carrying the forwarded channel button. It returns true when an
+// audio message was actually sent. All failures are silent: the menu itself
+// has already been delivered, so a missing voice must never surface an error.
+func (s *Session) sendMenuVoice(info types.MessageInfo, key string) bool {
+	url := s.menuVoiceURL(key)
+	if strings.TrimSpace(url) == "" {
+		return false
+	}
+	data, err := fetchMediaBytes(goldcmds.ResolveDirectMediaURL(url))
+	if err != nil || len(data) == 0 {
+		return false
+	}
+	return s.SendVoiceWithNewsletter(info, data)
 }
 
 // init registers the four core status commands into the Commands map so the

@@ -163,6 +163,15 @@ type SessionBridge interface {
 	GetBotVideoSetting(def string) string
 	// SetBotVideoSetting writes the custom bot menu/alive VIDEO URL to Redis.
 	SetBotVideoSetting(url string)
+	// GetBotVoiceSetting reads the custom bot menu/alive VOICE (audio) URL from
+	// Redis (field "botvoice"). Returns def ("") if not set.
+	GetBotVoiceSetting(def string) string
+	// SetBotVoiceSetting writes the custom bot menu/alive VOICE URL to Redis.
+	// The special value "off" (goldcmds.MenuMediaVoiceOff) silences the voice.
+	SetBotVoiceSetting(url string)
+	// VoiceURLPlayable reports whether a voice URL actually serves audio (not
+	// an HTML share/error page). Used to reject bad links before storing them.
+	VoiceURLPlayable(url string) bool
 	// GetMenuMediaSetting reads the custom media URL for ONE menu/category or
 	// the alive card (Redis field "menumedia:<key>", e.g. menumedia:logo).
 	// Returns def ("") when nothing is set for that key.
