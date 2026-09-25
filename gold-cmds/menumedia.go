@@ -570,6 +570,12 @@ func menuVoiceGuide(prefix, label, cmdName string, menuCmd string) string {
 		"*FOR TEST TYPE ❰ " + prefix + menuCmd + " ❱*"
 }
 
+// menuVoiceInfoLine is the shared footer appended to the very end of every
+// voice command's guidance card.
+func menuVoiceInfoLine(prefix string) string {
+	return "\n\n*TYPE ❮ " + prefix + "TOMP3 ❯ FOR INFO*"
+}
+
 // handleMenuVoice sets the voice (mp3) that plays right after ONE menu / the
 // .alive card is sent. Same setter flow as .botvoice / .botpic / .botvideo.
 func handleMenuVoice(s SessionBridge, info types.MessageInfo, args []string, prefix, key, cmdName, menuCmd string) {
@@ -608,6 +614,7 @@ func handleMenuVoice(s SessionBridge, info types.MessageInfo, args []string, pre
 		if key == "menu" {
 			guide += menuVoiceFullList(prefix)
 		}
+		guide += menuVoiceInfoLine(prefix)
 		s.Reply(info, guide)
 		return
 	}
@@ -700,8 +707,8 @@ func handleMenuVoice(s SessionBridge, info types.MessageInfo, args []string, pre
 func menuVoiceFullList(prefix string) string {
 	var b strings.Builder
 	b.WriteString("\n\n*🔰 ALL MENU VOICE COMMANDS 🔰*\n")
-	for _, mc := range menuMediaCommands {
-		b.WriteString(fmt.Sprintf("*❰ %s%s ❱ → %s VOICE*\n", prefix, menuVoiceCommandName(mc), menuMediaLabel(mc.Key)))
+	for _, mc := range menuVoiceCommands() {
+		b.WriteString(fmt.Sprintf("*❰ %s%s ❱ → %s VOICE*\n", prefix, mc.VoiceCmd, menuMediaLabel(mc.Key)))
 	}
 	return b.String()
 }

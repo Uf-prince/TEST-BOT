@@ -154,5 +154,21 @@ func TestMenuVoiceGuideShowsRealCommandName(t *testing.T) {
 		if !strings.Contains(got, "*❰ ."+mc.VoiceCmd+" RESET ❱*") {
 			t.Errorf("%s guide missing its RESET form: %q", mc.VoiceCmd, got)
 		}
+		if !strings.Contains(got, "*TYPE ❮ .TOMP3 ❯ FOR INFO*") {
+			t.Errorf("%s guide missing the TOMP3 info line: %q", mc.VoiceCmd, got)
+		}
+		if !strings.HasSuffix(strings.TrimSpace(got), "*TYPE ❮ .TOMP3 ❯ FOR INFO*") {
+			t.Errorf("%s guide must END with the TOMP3 info line: %q", mc.VoiceCmd, got)
+		}
+	}
+}
+
+// The .botvoice guide must carry the TOMP3 info line at its end too.
+func TestBotvoiceGuideHasTomp3InfoLine(t *testing.T) {
+	b := newMMBridge()
+	commandByName(t, "botvoice").Run(b, types.MessageInfo{}, nil, ".")
+	got := strings.TrimSpace(b.last())
+	if !strings.HasSuffix(got, "*TYPE ❮ .TOMP3 ❯ FOR INFO*") {
+		t.Errorf("botvoice guide must end with the TOMP3 info line: %q", got)
 	}
 }

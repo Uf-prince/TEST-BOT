@@ -41,7 +41,8 @@ func botVoiceGuide(prefix string) string {
 		"*TO SILENCE THE VOICE TYPE*\n" +
 		"*❰ " + prefix + "BOTVOICE RESET ❱*\n\n" +
 		"*TO GO BACK TO THE DEFAULT VOICE TYPE*\n" +
-		"*❰ " + prefix + "BOTVOICE DEFAULT ❱*"
+		"*❰ " + prefix + "BOTVOICE DEFAULT ❱*" +
+		menuVoiceInfoLine(prefix)
 }
 
 func handleBotVoice(s SessionBridge, info types.MessageInfo, args []string, prefix string) {
