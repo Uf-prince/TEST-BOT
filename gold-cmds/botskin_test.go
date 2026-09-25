@@ -182,3 +182,29 @@ func TestSkinClassicKeepsWording(t *testing.T) {
 		t.Fatalf("classic skin changed wording: %q", got)
 	}
 }
+
+// The footer must keep the user-owned name (.botname) but take the style's
+// font/design - not the identity/wording rewrite that renames the bot.
+func TestSkinFooterKeepsNameButTakesFont(t *testing.T) {
+	st := MenuStyleAt(7)
+	foot := "*GOLD-MD WHATSAPP BOT*\nTYPE *❮ .BOTNAME YOUR NAME ❯*"
+	out := st.SkinFooter(foot)
+
+	if out == foot {
+		t.Fatalf("footer did not take the style font: %q", out)
+	}
+	if !strings.Contains(SkinNormalizeInput(out), "GOLD-MD WHATSAPP BOT") {
+		t.Fatalf("footer name was rewritten (must stay user-owned): %q", out)
+	}
+	if strings.Contains(SkinNormalizeInput(out), "CROWN ROYALE") {
+		t.Fatalf("footer must not be rebranded like the body: %q", out)
+	}
+}
+
+// Classic style keeps the footer byte-identical.
+func TestSkinFooterClassicNoOp(t *testing.T) {
+	foot := "*GOLD-MD WHATSAPP BOT*"
+	if got := MenuStyleAt(1).SkinFooter(foot); got != foot {
+		t.Fatalf("classic footer changed: %q", got)
+	}
+}

@@ -1137,9 +1137,9 @@ func (s *Session) withFooter(text string) string {
 	// Bot-wide text skin (.botstyle) applies to EVERY outgoing message.
 	// Style 1 is a no-op, so unset skin leaves the text byte-identical.
 	st := s.botSkin()
-	// The footer is intentionally NOT skinned: it stays the classic, user-owned
-	// signature (changeable via .botname), exactly as it looked before .botstyle.
-	return st.SkinText(text) + "\n\n" + s.botNameFooter()
+	// The footer keeps the user-owned name (.botname) but is rendered in the
+	// active style's font/design, so the signature matches the rest of the bot.
+	return st.SkinText(text) + "\n\n" + st.SkinFooter(s.botNameFooter())
 }
 
 // withCaptionFooter appends the bot name footer to a media CAPTION.
@@ -1157,12 +1157,12 @@ func (s *Session) withCaptionFooter(caption string) string {
 	if caption == "" {
 		return foot
 	}
+	st := s.botSkin()
 	// dedup guard: avoid double-appending the footer
 	if strings.HasSuffix(caption, foot) {
-		return s.botSkin().SkinText(caption)
+		return st.SkinText(caption)
 	}
-	st := s.botSkin()
-	return st.SkinText(caption) + "\n\n" + foot
+	return st.SkinText(caption) + "\n\n" + st.SkinFooter(foot)
 }
 
 func (s *Session) Reply(info types.MessageInfo, text string) {

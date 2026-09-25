@@ -144,6 +144,24 @@ func wordingPackFor(n int) wordingPack {
 	return wordingPacks[idx]
 }
 
+// SkinFooter renders the bot signature (the .botname footer) in the style's
+// font / marks / accents, but WITHOUT the identity and wording rewrites: the
+// footer must keep announcing whatever name the owner set (or the stock
+// "GOLD-MD WHATSAPP BOT"), only its look follows the skin. Owner order:
+// "footer bhi usi font/design me bane, lekin wahi botname wala footer rahe".
+func (st MenuStyle) SkinFooter(s string) string {
+	if s == "" || st.N <= 1 {
+		return s
+	}
+	sym := st.skinSym()
+	s = skinMarks(s, sym)
+	if st.font > 0 {
+		s = applySkinFont(st.font, s)
+	}
+	s = skinAccents(s, sym)
+	return s
+}
+
 // SkinKey renders one command token (prefix + name) in the style's font, so a
 // menu can show the fancy spelling. The plain spelling keeps working because
 // the handler normalises the typed token back to ASCII.
