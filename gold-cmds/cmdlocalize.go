@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	clMapField = "cmdlocalize" // "<lang>:<code1:name1|code2:name2|...>"
+	clMapField = "cmdlocalize" // "<lang>:<local=canon|...>"
 )
 
 // clEntry is one localized command name for the current language.
@@ -76,8 +76,11 @@ func clCanonicalNames() []string {
 	add := func(n string) {
 		n = strings.ToLower(strings.TrimSpace(n))
 		// A command token cannot contain a space, so a name like "dance
-		// diffusion" is not typeable and has nothing to localize.
-		if n == "" || seen[n] || n == "botlanguage" || strings.ContainsAny(n, " \t") {
+		// diffusion" is not typeable and has nothing to localize. Internal
+		// "com." module names are skipped too: Google strips the prefix and hands
+		// back an ASCII name, which would only become a useless alias row.
+		if n == "" || seen[n] || n == "botlanguage" || strings.ContainsAny(n, " \t") ||
+			strings.HasPrefix(n, "com.") {
 			return
 		}
 		seen[n] = true
@@ -97,7 +100,7 @@ func clCanonicalNames() []string {
 	return out
 }
 
-// clParse decodes the stored field "lang:code|local:canon|..." into a state.
+// clParse decodes the stored field "lang:local=canon|..." into a state.
 func clParse(raw string) *clState {
 	st := &clState{ByLoc: map[string]string{}}
 	raw = strings.TrimSpace(raw)
@@ -155,18 +158,36 @@ func clLoad(s SessionBridge) *clState {
 	clMu.Unlock()
 
 	// If the stored map does not match the bot's current language, rebuild it.
+	// A map still holding "com.*" rows was built by the old rule set, so it is
+	// rebuilt once to drop that junk (the rebuild merges, keeping the good rows).
 	lang := strings.TrimSpace(s.GetBotLanguageSetting(""))
-	if st.Lang != lang {
+	if st.Lang != lang || clMapHasLegacyJunk(st) {
 		clBuildAsync(s, botJID, lang)
 	}
 	return st
+}
+
+// clMapHasLegacyJunk reports whether a stored map carries rows produced by the
+// old build rules, which translated internal "com.*" module names into useless
+// ASCII aliases.
+func clMapHasLegacyJunk(st *clState) bool {
+	if st == nil {
+		return false
+	}
+	for _, canon := range st.ByLoc {
+		if strings.HasPrefix(canon, "com.") {
+			return true
+		}
+	}
+	return false
 }
 
 // clBuildAsync prepares "cmdlocalize" in the background: translate all command
 // names in ONE call (newline-separated), then persist. Failures are silent so
 // English names always remain the working path.
 func clBuildAsync(s SessionBridge, botJID, lang string) {
-	if clTranslator == nil || lang == "" || lang == BotLanguageName {
+	tr := clTranslator
+	if tr == nil || lang == "" || lang == BotLanguageName {
 		return
 	}
 	clMu.Lock()
@@ -212,7 +233,7 @@ func clBuildAsync(s SessionBridge, botJID, lang string) {
 				end = len(names)
 			}
 			part := names[start:end]
-			out, err := clTranslator(ctx, strings.Join(part, "\n"), lang)
+			out, err := tr(ctx, strings.Join(part, "\n"), lang)
 			if err != nil {
 				continue
 			}
@@ -238,7 +259,26 @@ func clBuildAsync(s SessionBridge, botJID, lang string) {
 		if len(pairs) == 0 {
 			return
 		}
-		s.SetStatusSetting(clMapField, clEncode(lang, pairs))
+		// Merge with the existing map instead of replacing it: a chunk that failed
+		// (Google throttling) must not wipe aliases that already work, while rows
+		// built from the old "com.*" rule set are dropped.
+		old := clParse(s.GetStatusSetting(clMapField, ""))
+		merged := pairs
+		if old.Lang == lang {
+			known := map[string]bool{}
+			for _, p := range pairs {
+				known[p[1]] = true
+			}
+			for local, canon := range old.ByLoc {
+				if strings.HasPrefix(canon, "com.") || reserved[local] || seenLocal[local] || known[canon] {
+					continue
+				}
+				seenLocal[local] = true
+				known[canon] = true
+				merged = append(merged, [2]string{local, canon})
+			}
+		}
+		s.SetStatusSetting(clMapField, clEncode(lang, merged))
 		clMu.Lock()
 		delete(clCache, botJID)
 		clMu.Unlock()

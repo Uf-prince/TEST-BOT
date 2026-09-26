@@ -1,0 +1,164 @@
+package goldcmds
+
+import (
+	"context"
+	"strings"
+	"time"
+	"testing"
+)
+
+func TestLineHasCommandToken(t *testing.T) {
+	yes := []string{
+		"*❰ .BOTPIC ❱ CHANGE BOT PIC (MENU + ALIVE)*",
+		"❮ .ping ❯ CHECK SPEED",
+		"*❰ /menu ❱ SHOW ALL MENUS*",
+		"*❮ BOTPIC ❯ CHANGE BOT PIC*",
+	}
+	for _, s := range yes {
+		if !LineHasCommandToken(s) {
+			t.Errorf("expected token in %q", s)
+		}
+	}
+	no := []string{
+		"*🔰 CONVERTER MENU 🔰*",
+		"*USER:❯ 923158930864*",
+		"*PREFIX :❯ ❮ . ❱*",
+		"CHANGE BOT PIC (MENU + ALIVE)",
+		"SEND A DIRECT IMAGE LINK ENDING IN .jpg, .png OR .gif",
+		"*EXAMPLE ❮ https://example.com/photo.jpg ❯*",
+		"",
+	}
+	for _, s := range no {
+		if LineHasCommandToken(s) {
+			t.Errorf("unexpected token in %q", s)
+		}
+	}
+}
+
+func TestTranslatePreservingCommandTokensSkipsTokenLines(t *testing.T) {
+	called := 0
+	var sent string
+	old := clTranslator
+	clTranslator = func(ctx context.Context, text, target string) (string, error) {
+		called++
+		sent = text
+		// Tag every line so the test can tell exactly which lines were translated.
+		parts := strings.Split(text, "\n")
+		for i := range parts {
+			parts[i] = strings.ToUpper(parts[i]) + "[" + target + "]"
+		}
+		return strings.Join(parts, "\n"), nil
+	}
+	defer func() { clTranslator = old }()
+
+	in := "*🔰 MENU 🔰*\n*❰ .BOTPIC ❱ CHANGE BOT PIC*\nHELLO"
+	out, err := TranslatePreservingCommandTokens(context.Background(), in, "ar")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// The token itself must survive byte-for-byte ...
+	if !strings.Contains(out, "*❰ .BOTPIC ❱") {
+		t.Errorf("token was mangled: %q", out)
+	}
+	// ... while the description after it is still translated.
+	if !strings.Contains(out, "CHANGE BOT PIC*[ar]") {
+		t.Errorf("description not translated: %q", out)
+	}
+	// The token must never reach the translator, only the description.
+	if strings.Contains(sent, "❰") || strings.Contains(sent, ".BOTPIC") {
+		t.Errorf("token was sent to the translator: %q", sent)
+	}
+	if called != 1 {
+		t.Errorf("expected 1 batched call, got %d", called)
+	}
+}
+
+func TestTranslatePreservingCommandTokensTokenOnlyLine(t *testing.T) {
+	old := clTranslator
+	clTranslator = func(ctx context.Context, text, target string) (string, error) {
+		return "TRANSLATED", nil
+	}
+	defer func() { clTranslator = old }()
+
+	// A line that is nothing but a token has no description to translate.
+	out, err := TranslatePreservingCommandTokens(context.Background(), "❰ .PING ❱", "ar")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != "❰ .PING ❱" {
+		t.Errorf("token-only line must pass through unchanged, got %q", out)
+	}
+}
+
+func TestTranslatePreservingCommandTokensLineDriftFallsBack(t *testing.T) {
+	old := clTranslator
+	clTranslator = func(ctx context.Context, text, target string) (string, error) {
+		return "only-one-line", nil
+	}
+	defer func() { clTranslator = old }()
+
+	in := "LINE ONE\nLINE TWO\n❰ .PING ❱ SPEED"
+	out, err := TranslatePreservingCommandTokens(context.Background(), in, "ar")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != in {
+		t.Errorf("drift must fall back to source, got %q", out)
+	}
+}
+
+func TestClCanonicalNamesSkipsInternalModules(t *testing.T) {
+	for _, n := range clCanonicalNames() {
+		if strings.HasPrefix(n, "com.") {
+			t.Errorf("internal module name %q must not be localized", n)
+		}
+		if strings.ContainsAny(n, " \t") {
+			t.Errorf("untypeable name %q must not be localized", n)
+		}
+	}
+}
+
+func TestClMapHasLegacyJunk(t *testing.T) {
+	junk := clParse(clEncode("ar", [][2]string{{"اضفصوت", "com.addvoice"}, {"القائمة", "menu"}}))
+	if !clMapHasLegacyJunk(junk) {
+		t.Error("map with com.* rows must be reported as legacy junk")
+	}
+	clean := clParse(clEncode("ar", [][2]string{{"القائمة", "menu"}}))
+	if clMapHasLegacyJunk(clean) {
+		t.Error("clean map must not be reported as legacy junk")
+	}
+}
+
+// A rebuild must not wipe aliases that already work when a chunk fails (Google
+// throttling), while dropping the useless com.* rows from the old rule set.
+func TestClBuildMergesAndDropsJunk(t *testing.T) {
+	b := newBLBridge()
+	b.SetBotLanguageSetting("ur")
+	// Pre-existing map: one good alias plus one legacy junk row.
+	b.SetStatusSetting(clMapField, clEncode("ur", [][2]string{
+		{"مینو", "menu"}, {"اضفصوت", "com.addvoice"},
+	}))
+	clMu.Lock()
+	delete(clCache, b.jid)
+	clMu.Unlock()
+
+	canon := clCanonicalNames()
+	if len(canon) == 0 {
+		t.Fatal("no canonical names")
+	}
+	// Translator returns nothing usable (simulates every chunk failing).
+	CmdLocalizeAttachTranslator(func(ctx context.Context, text, target string) (string, error) {
+		return "", context.DeadlineExceeded
+	})
+	defer CmdLocalizeAttachTranslator(nil)
+
+	clBuildAsync(b, b.jid, "ur")
+	time.Sleep(120 * time.Millisecond)
+
+	// The builder persists nothing when every chunk fails, so the stored map must
+	// still hold the working alias and must NOT have grown junk.
+	st := clParse(b.GetStatusSetting(clMapField, ""))
+	if st.ByLoc["مینو"] != "menu" {
+		t.Errorf("working alias was lost: %#v", st.ByLoc)
+	}
+}

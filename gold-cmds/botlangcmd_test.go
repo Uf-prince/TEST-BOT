@@ -3,6 +3,7 @@ package goldcmds
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -12,6 +13,7 @@ import (
 type blBridge struct {
 	SessionBridge
 	jid  string
+	mu   sync.Mutex
 	vals map[string]string
 }
 
@@ -21,19 +23,31 @@ func newBLBridge() *blBridge {
 
 func (f *blBridge) GetJID() string { return f.jid }
 func (f *blBridge) GetStatusSetting(field, def string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if v, ok := f.vals[field]; ok && v != "" {
 		return v
 	}
 	return def
 }
-func (f *blBridge) SetStatusSetting(field, val string) { f.vals[field] = val }
+func (f *blBridge) SetStatusSetting(field, val string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.vals[field] = val
+}
 func (f *blBridge) GetBotLanguageSetting(def string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if v, ok := f.vals["botlanguage"]; ok && v != "" {
 		return v
 	}
 	return def
 }
-func (f *blBridge) SetBotLanguageSetting(val string) { f.vals["botlanguage"] = val }
+func (f *blBridge) SetBotLanguageSetting(val string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.vals["botlanguage"] = val
+}
 
 // .botlanguage must be registered (owner-only) with its hidden aliases.
 func TestBotLanguageRegistered(t *testing.T) {

@@ -1214,12 +1214,29 @@ func (s *Session) translateOut(text string) string {
 	return out
 }
 
+// translateOutPreservingTokens translates a reply into the bot language while
+// leaving any line that carries a ".command" token untouched, so menus keep
+// advertising tokens the user can actually type.
+func (s *Session) translateOutPreservingTokens(text string) string {
+	lang := s.botLanguage()
+	if lang == "" || lang == goldcmds.BotLanguageName {
+		return text
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	out, err := goldcmds.TranslatePreservingCommandTokens(ctx, text, lang)
+	if err != nil || strings.TrimSpace(out) == "" {
+		return text
+	}
+	return out
+}
+
 // replyText is the single send path for plain text replies: skin → translate →
 // footer. Translation happens BEFORE the banner/footer so the signature is not
 // mangled by the translator.
 func (s *Session) replyText(text string) string {
 	if lang := s.botLanguage(); lang != "" && lang != goldcmds.BotLanguageName {
-		text = s.translateOut(text)
+		text = s.translateOutPreservingTokens(text)
 	}
 	return s.withFooter(text)
 }
@@ -1242,7 +1259,7 @@ func (s *Session) withCaptionFooter(caption string) string {
 	st := s.botSkin()
 	// Translate the caption (not the footer) when a bot language is set.
 	if lang := s.botLanguage(); lang != "" && lang != goldcmds.BotLanguageName {
-		caption = s.translateOut(caption)
+		caption = s.translateOutPreservingTokens(caption)
 	}
 	// dedup guard: avoid double-appending the footer
 	if strings.HasSuffix(caption, foot) {

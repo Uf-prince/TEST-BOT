@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 	"time"
 
 	"go.mau.fi/whatsmeow/types"
@@ -284,9 +285,42 @@ func trtGuide(prefix string) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// trtTranslate calls the Google Translate free endpoint and returns the
-// translated text plus the detected source language.
+// trtTranslate translates text into target. Google's free web endpoint is tried
+// first; when it rate-limits or errors, MyMemory (also key-less and free) is used
+// as a fallback so replies keep getting translated instead of silently reverting
+// to English.
 func trtTranslate(ctx context.Context, text, target string) (string, string, error) {
+	out, detected, err := trtTranslateGoogle(ctx, text, target)
+	if err == nil && trtPlausible(text, out) {
+		return out, detected, nil
+	}
+	// Google's free endpoint throttles heavy callers by returning a degenerate
+	// one-character "translation" rather than an HTTP error, so an implausible
+	// result is treated as a failure and the key-less fallback takes over.
+	if fb, ferr := trtTranslateMyMemory(ctx, text, target); ferr == nil {
+		return fb, "", nil
+	}
+	if err == nil {
+		return "", "", fmt.Errorf("implausible translation")
+	}
+	return "", "", err
+}
+
+// trtPlausible rejects the degenerate output the free Google endpoint returns
+// when it throttles a caller: a multi-word phrase coming back as one character.
+// Without this the throttled reply would silently replace a menu line with "ت".
+func trtPlausible(src, out string) bool {
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return false
+	}
+	if strings.ContainsAny(src, " \t\n") && utf8.RuneCountInString(out) < 3 {
+		return false
+	}
+	return true
+}
+
+func trtTranslateGoogle(ctx context.Context, text, target string) (string, string, error) {
 	u := "https://clients5.google.com/translate_a/t?client=dict-chrome-ex" +
 		"&sl=auto&tl=" + url.QueryEscape(target) + "&q=" + url.QueryEscape(text)
 
@@ -328,6 +362,81 @@ func trtTranslate(ctx context.Context, text, target string) (string, string, err
 		return "", "", fmt.Errorf("empty translation")
 	}
 	return translated, detected, nil
+}
+
+// trtTranslateMyMemory is the key-less fallback used when Google rate-limits.
+// The endpoint caps `q` at 500 bytes, so long text is sent in newline-joined
+// chunks and stitched back, preserving the line count callers rely on.
+func trtTranslateMyMemory(ctx context.Context, text, target string) (string, error) {
+	lines := strings.Split(text, "\n")
+	const maxQ = 480
+	var out []string
+	var chunk []string
+	size := 0
+	flush := func() error {
+		if len(chunk) == 0 {
+			return nil
+		}
+		res, err := trtMyMemoryCall(ctx, strings.Join(chunk, "\n"), target)
+		if err != nil {
+			return err
+		}
+		got := strings.Split(res, "\n")
+		if len(got) != len(chunk) {
+			return fmt.Errorf("mymemory line drift")
+		}
+		out = append(out, got...)
+		chunk, size = nil, 0
+		return nil
+	}
+	for _, ln := range lines {
+		if size+len(ln)+1 > maxQ {
+			if err := flush(); err != nil {
+				return "", err
+			}
+		}
+		chunk = append(chunk, ln)
+		size += len(ln) + 1
+	}
+	if err := flush(); err != nil {
+		return "", err
+	}
+	return strings.Join(out, "\n"), nil
+}
+
+func trtMyMemoryCall(ctx context.Context, text, target string) (string, error) {
+	u := "https://api.mymemory.translated.net/get?langpair=en|" + url.QueryEscape(target) +
+		"&q=" + url.QueryEscape(text)
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("mymemory http %d", resp.StatusCode)
+	}
+	var parsed struct {
+		ResponseData struct {
+			TranslatedText string `json:"translatedText"`
+		} `json:"responseData"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", fmt.Errorf("mymemory parse error")
+	}
+	res := strings.TrimSpace(parsed.ResponseData.TranslatedText)
+	if res == "" {
+		return "", fmt.Errorf("empty translation")
+	}
+	return res, nil
 }
 
 // trtSplitArgs separates an optional leading language token from the text.
