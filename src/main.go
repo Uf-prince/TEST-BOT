@@ -265,6 +265,12 @@ func main() {
 		return names
 	})
 
+	// ── menu tokens: typeable rows that are NOT registered commands ──
+	// Category shortcuts (.CORE / .GROUP / .PROTECTION / .AI / .UTILITY / ...)
+	// dispatch through categoryMenuShortcut, so they are absent from Commands
+	// and from the rename hook above. They are attached by manager.go's init()
+	// (CmdNameAttachMenuTokens) so tests exercise the same set as production.
+
 	// ── localized command names: share the translator with gold-cmds ──
 	// .botlanguage ke saath us language ke command names bhi chalein
 	// (.مینو / .मेनू). Translation transport gold-cmds me duplicate nahi hota

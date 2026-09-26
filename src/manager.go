@@ -2113,6 +2113,27 @@ func menuCategoryFromCommand(cmd string) (string, bool) {
 	return "", false
 }
 
+// menuTranslationTokens lists every token a user can type from a menu but which
+// is NOT a registered command, so the translation pipeline still treats it as a
+// command token and never localises it. categoryMenuFromCommand accepts two
+// space-free forms per category: the short slug (.group) and the normalised full
+// name (.groupmanagement). The space-containing full name is not a single
+// typeable token — ".anti & protection" parses as the registered ".anti" plus
+// args — so it is not listed here.
+func menuTranslationTokens() []string {
+	out := make([]string, 0, len(menuCategorySlugs)*2)
+	for cat, slug := range menuCategorySlugs {
+		out = append(out, slug, menuCategoryNorm(cat))
+	}
+	return out
+}
+
+// Attached here rather than in main() so the translation tests (which never run
+// main) exercise the real token set instead of a silently empty one.
+func init() {
+	goldcmds.CmdNameAttachMenuTokens(menuTranslationTokens)
+}
+
 // categoryMenuShortcut decides whether a typed command should open a CATEGORY
 // menu instead of dispatching a registered command. A command that IS an exact
 // registered command (alive, ping, menu, logo, font, game, equalizer, ...) keeps

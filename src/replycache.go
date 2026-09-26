@@ -79,7 +79,7 @@ func rcInit() {
 // changes (e.g. the caps-softening and prefix-sentinel fixes), because entries
 // written by an older pipeline are wrong and must not be served again — the old
 // keys are simply never looked up, so stale translations cannot resurface.
-const rcVersion = "v3"
+const rcVersion = "v4"
 
 func rcHash(line string) string {
 	h := sha256.Sum256([]byte(rcVersion + "\x00" + line))

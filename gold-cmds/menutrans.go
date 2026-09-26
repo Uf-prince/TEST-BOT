@@ -31,6 +31,16 @@ var bracketTokenRe = regexp.MustCompile(`[❰❮«<]\s*([^❱❯»>]{1,80}?)\s*[
 // prefixTokenRe matches a bare prefix token (".botpic", "/menu", "!ping").
 var prefixTokenRe = regexp.MustCompile(`(?i)[./!#]([a-z][a-z0-9_]{0,30})`)
 
+// clMenuTokenHook lets the main package advertise typeable menu tokens that are
+// not registered commands (category shortcuts like .core / .group). It is
+// deliberately separate from cmdNameKnownHook: that hook feeds .cmdname /
+// .cmdprefix validation, where a category slug must NOT become a renamable
+// command. This one is used only for translation token protection.
+var clMenuTokenHook func() []string
+
+// CmdNameAttachMenuTokens registers the main package's menu-only token supplier.
+func CmdNameAttachMenuTokens(fn func() []string) { clMenuTokenHook = fn }
+
 // clKnownCommandNames returns every registered command name (visible and hidden
 // alias) plus the core names the main package knows about.
 func clKnownCommandNames() map[string]bool {
@@ -48,6 +58,20 @@ func clKnownCommandNames() map[string]bool {
 	}
 	if cmdNameKnownHook != nil {
 		for _, n := range cmdNameKnownHook() {
+			if n = strings.ToLower(strings.TrimSpace(n)); n != "" {
+				known[n] = true
+			}
+		}
+	}
+	// Menu-advertised tokens that are NOT registered commands. The category
+	// shortcuts (.CORE / .GROUP / .PROTECTION / .AI / .UTILITY / ...) are
+	// dispatched by the main package's categoryMenuShortcut, so they appear in
+	// neither Commands() nor the registered-name hook. Missing them meant the
+	// menu printed ".کور" / ".گروپ" — a token no user can type. This is
+	// language-independent: the token was translated in EVERY language, while
+	// registered siblings (.EQUALIZER / .FONT / .GAME) stayed ASCII.
+	if clMenuTokenHook != nil {
+		for _, n := range clMenuTokenHook() {
 			if n = strings.ToLower(strings.TrimSpace(n)); n != "" {
 				known[n] = true
 			}
@@ -250,6 +274,14 @@ func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (s
 					if trtAllCaps(src) {
 						v = strings.ToUpper(v)
 					}
+					// Translators strip the leading space of a tail, which glued the
+					// description to the token (".LOGO5❮ آپ کا نام ❯"). Put the
+					// original spacing back so the row keeps its shape.
+					if prefix[miss[at+n]] != "" {
+						if lead := trtLeadingSpace(src); lead != "" && !strings.HasPrefix(v, lead) {
+							v = lead + strings.TrimLeft(v, " \t")
+						}
+					}
 				}
 				hit[miss[at+n]] = v
 				if tcPut != nil && botJID != "" && v != src {
@@ -324,4 +356,10 @@ func trtHasLetters(s string) bool {
 		}
 	}
 	return false
+}
+
+// trtLeadingSpace returns the leading whitespace run of s. Translators trim it
+// from each line, so it is restored when a split line is put back together.
+func trtLeadingSpace(s string) string {
+	return s[:len(s)-len(strings.TrimLeft(s, " \t"))]
 }

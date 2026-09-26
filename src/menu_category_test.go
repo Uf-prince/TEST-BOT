@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -63,6 +64,55 @@ func TestMenuCategoryFromCommand(t *testing.T) {
 	for _, in := range []string{"ping", "menu", "owner", "system", "xyz", ""} {
 		if got, ok := menuCategoryFromCommand(in); ok {
 			t.Fatalf("menuCategoryFromCommand(%q) unexpectedly = %q", in, got)
+		}
+	}
+}
+
+// TestMenuCategoryTokensSurviveTranslation is the regression guard for the
+// owner-reported bug: the category shortcuts shown in .menu (".CORE", ".GROUP",
+// ".PROTECTION", …) are dispatched by categoryMenuShortcut, NOT registered
+// commands, so the translation pipeline did not recognise them as command tokens
+// and sent them to the translator. In EVERY language the menu then came back
+// with ".کور" / ".گروپ" — a token no user can type. Registered siblings
+// (.EQUALIZER / .FONT / .GAME) were unaffected, which is what made the bug look
+// language-specific when it was really about the known-token set.
+//
+// Runs offline: every line here is a pure token, so the pipeline skips the whole
+// batch and returns the text untouched without any translator call.
+func TestMenuCategoryTokensSurviveTranslation(t *testing.T) {
+	if toks := menuTranslationTokens(); len(toks) == 0 {
+		t.Fatal("menuTranslationTokens() khali hai — hook attach nahi hua")
+	}
+
+	for _, cat := range goldcmds.CategoryOrder {
+		slug := menuCategorySlug(cat)
+		line := "*| 🔰 | ." + strings.ToUpper(slug) + "*"
+		if !goldcmds.LineHasCommandToken(line) {
+			t.Errorf("category token .%s command token ke tor pe detect nahi hua: %q", slug, line)
+		}
+	}
+
+	// Every advertised form must be a recognised token, not just the slug:
+	// menuCategoryFromCommand also accepts the full and normalised category name.
+	for _, tok := range menuTranslationTokens() {
+		line := "*| 🔰 | ." + strings.ToUpper(tok) + "*"
+		if !goldcmds.LineHasCommandToken(line) {
+			t.Errorf("typeable menu token .%s protect nahi hua: %q", tok, line)
+		}
+	}
+
+	var b strings.Builder
+	for _, cat := range goldcmds.CategoryOrder {
+		b.WriteString("*| 🔰 | ." + strings.ToUpper(menuCategorySlug(cat)) + "*\n")
+	}
+	out, err := goldcmds.TranslatePreservingCommandTokens(context.Background(), b.String(), "ur")
+	if err != nil {
+		t.Fatalf("translate error: %v", err)
+	}
+	for _, cat := range goldcmds.CategoryOrder {
+		tok := "." + strings.ToUpper(menuCategorySlug(cat))
+		if !strings.Contains(out, tok) {
+			t.Errorf("token %s translate ho gaya — user type nahi kar sakta\n%s", tok, out)
 		}
 	}
 }
