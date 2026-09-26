@@ -19,6 +19,42 @@ Roman Urdu with `*BOLD UPPERCASE*` formatting.
   visible command breaks them — update the pinned numbers in the same change if
   the count test is meant to track reality.
 
+## Reply translation cache (bot speed — owner order)
+
+`TranslatePreservingCommandTokens` used to hit Google on EVERY reply, so a
+language-set bot paid one HTTP round-trip per menu. Now every translatable LINE
+is translated once and cached in three layers:
+
+1. RAM — `rcRAM` in `src/replycache.go`; the hot path (`rcGet`) reads RAM only.
+2. DISK — `nexstore/replycache/<sha>.json` per bot+language (gitignored with
+   `nexstore/`); survives restarts.
+3. STORJ — per-bot setting field `replycache:<lang>`, read only when the disk
+   copy is missing (fresh container), then written back to disk.
+
+Lookup order is RAM → DISK → STORJ. Only cache misses go to the translator, in
+ONE batched request. Cache is line-level on purpose: menus carry uptime/counts
+that change every minute, but their headers, descriptions and guidance lines
+repeat across every menu and user.
+
+- `gold-cmds/trtcache.go` declares the hooks (`TrtCacheAttach`,
+  `TrtCacheWithBot`); the bot JID travels via context so
+  `TranslatePreservingCommandTokens`' signature (and its tests) stay unchanged.
+- `src/replycache.go` `init()` attaches the cache, so every entry point (and
+  tests) gets it without remembering to wire it.
+- `.botlanguage set <code>` calls `prewarmOnLanguageSet` →
+  `prewarmAllTranslations` (`src/translateprewarm.go`): renders every menu
+  (`.logo`, `.font`, `.game`, `.equalizer`, `.botstyle`, main menu, every
+  category from `goldcmds.Categories()`) once in the background and caches their
+  translated lines. The owner's reply is not blocked.
+- Writes are coalesced (one flush per bot+language per second) and the Storj
+  mirror is capped (`rcMaxFieldBytes`); the disk layer always keeps everything.
+- Identity/empty translations are never cached, and each language gets its own
+  entry per bot.
+
+Never add a live-network test to the default suite for this — the offline tests
+in `src/replycache_test.go` and `gold-cmds/trtcache_test.go` prove RAM/disk
+round-trip, partial-hit behaviour, and the no-cache fallback.
+
 ## Known pre-existing test failures (not caused by new work)
 
 Clean tree still fails: `TestConverterCategoryCount`, `TestFunPackRegistered`,

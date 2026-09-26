@@ -120,6 +120,7 @@ func main() {
 	// 5 min) cross-server freshness ke liye. Is se fleet watchdog ke
 	// per-60s HGETALL/SMEMBERS Storj reads ~90% kam → Render 5GB bachta hai.
 	diskCacheInit()
+	rcInit()         // translation cache dir (nexstore/replycache) — boot pe ready
 	go dcGuardLoad() // background — boot block na ho (read-through miss safe hai)
 	dcGuardLoop()    // continuous guard — disk khali ho to foran reload (0 bandwidth check)
 	dcStartRefresher()

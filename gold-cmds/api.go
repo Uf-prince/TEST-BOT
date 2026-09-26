@@ -2,6 +2,7 @@ package goldcmds
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"go.mau.fi/whatsmeow"
@@ -722,6 +723,24 @@ func CommandsCount() int {
 		}
 	}
 	return count
+}
+
+// Categories returns every category slug that has at least one registered
+// command, sorted. Used to render each category menu once when the bot's
+// language is set, so those menus are translated and cached up front.
+func Categories() []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, 16)
+	for _, c := range registry {
+		cat := strings.TrimSpace(c.Category)
+		if cat == "" || seen[cat] {
+			continue
+		}
+		seen[cat] = true
+		out = append(out, cat)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // OwnerOnlySet returns the set of command names (lower-cased) that are marked

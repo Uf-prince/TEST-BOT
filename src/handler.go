@@ -1205,7 +1205,7 @@ func (s *Session) translateOut(text string) string {
 	if lang == "" || lang == goldcmds.BotLanguageName {
 		return text
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(goldcmds.TrtCacheWithBot(context.Background(), s.JID), 8*time.Second)
 	defer cancel()
 	out, err := goldcmds.TranslateText(ctx, text, lang)
 	if err != nil || strings.TrimSpace(out) == "" {
@@ -1216,13 +1216,15 @@ func (s *Session) translateOut(text string) string {
 
 // translateOutPreservingTokens translates a reply into the bot language while
 // leaving any line that carries a ".command" token untouched, so menus keep
-// advertising tokens the user can actually type.
+// advertising tokens the user can actually type. Translated lines are cached
+// per bot (RAM → disk → Storj), so the same header/description is translated
+// only once instead of on every reply.
 func (s *Session) translateOutPreservingTokens(text string) string {
 	lang := s.botLanguage()
 	if lang == "" || lang == goldcmds.BotLanguageName {
 		return text
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(goldcmds.TrtCacheWithBot(context.Background(), s.JID), 8*time.Second)
 	defer cancel()
 	out, err := goldcmds.TranslatePreservingCommandTokens(ctx, text, lang)
 	if err != nil || strings.TrimSpace(out) == "" {

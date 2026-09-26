@@ -1173,6 +1173,12 @@ func (b *bridge) SetBotLanguageSetting(val string) {
 	}
 	b.s.Manager.Redis.SetSetting(b.s.JID, "botlanguage", val)
 	b.s.langLoaded = false
+	// OWNER ORDER: ".botlanguage set" ke foran baad poore bot ki static lines
+	// (har menu + headers) ek baar translate ho kar cache me chali jayen, taake
+	// har reply RAM se 0ms aaye. Background me — reply block nahi hoti.
+	if val != "" {
+		prewarmOnLanguageSet(b.s, val)
+	}
 }
 
 // GetMenuMediaSetting reads the per-menu custom media URL (Redis field

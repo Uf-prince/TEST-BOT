@@ -1280,6 +1280,11 @@ func (s *Session) EventHandler(raw interface{}) {
 		// .welcome reset which must NOT be treated as "missing").
 		if s.Manager.Redis != nil {
 			s.Manager.Redis.PreloadSettings(s.JID, s.Manager.cfg.DefaultPrefix)
+			// Reply-cache: bind the Redis handle so the background flush can
+			// mirror translated lines to Storj, and warm the cache for the
+			// bot's current language (disk → Storj) before the first reply.
+			rcBind(s.JID, s.Manager.Redis)
+			rcWarm(s.JID, s.botLanguage())
 		}
 
 		// ── Startup Notification ───────────────────────────────────────────

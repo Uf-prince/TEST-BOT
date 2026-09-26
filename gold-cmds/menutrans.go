@@ -154,22 +154,59 @@ func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (s
 	if len(batch) == 0 {
 		return text, nil
 	}
+
+	// Cache first (owner order: bar bar translate na ho). Only the lines that
+	// miss are sent to the translator, in ONE batched request, so a warm cache
+	// costs zero HTTP calls and a cold one costs exactly one.
+	botJID := tcBotFromCtx(ctx)
+	miss := make([]int, 0, len(batch))
+	missText := make([]string, 0, len(batch))
+	hit := make([]string, len(batch))
+	if tcGet != nil && botJID != "" {
+		for n, ln := range batch {
+			if v, ok := tcGet(botJID, lang, ln); ok {
+				hit[n] = v
+				continue
+			}
+			miss = append(miss, n)
+			missText = append(missText, ln)
+		}
+	} else {
+		for n := range batch {
+			miss = append(miss, n)
+			missText = append(missText, batch[n])
+		}
+	}
+	if len(miss) == 0 {
+		for n, i := range idx {
+			lines[i] = prefix[i] + hit[n]
+		}
+		return strings.Join(lines, "\n"), nil
+	}
+
 	tr := clTranslator
 	if tr == nil {
 		tr = TranslateText
 	}
-	out, err := tr(ctx, strings.Join(batch, "\n"), lang)
+	out, err := tr(ctx, strings.Join(missText, "\n"), lang)
 	if err != nil {
 		return text, err
 	}
 	got := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(got) != len(batch) {
+	if len(got) != len(missText) {
 		// Line-count drift means we cannot map translations back onto the original
 		// lines; keeping the source text is safer than scrambling the menu.
 		return text, nil
 	}
+	for n, src := range missText {
+		v := got[n]
+		hit[miss[n]] = v
+		if tcPut != nil && botJID != "" && strings.TrimSpace(v) != "" && v != src {
+			tcPut(botJID, lang, src, v)
+		}
+	}
 	for n, i := range idx {
-		lines[i] = prefix[i] + got[n]
+		lines[i] = prefix[i] + hit[n]
 	}
 	return strings.Join(lines, "\n"), nil
 }
