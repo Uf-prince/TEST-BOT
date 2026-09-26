@@ -1226,15 +1226,16 @@ func (s *Session) translateOutPreservingTokens(text string) string {
 	}
 	base := goldcmds.TrtCacheWithBot(context.Background(), s.JID)
 	base = goldcmds.TrtWithPrefix(base, s.resolvePrefix(s.JID))
-	ctx, cancel := context.WithTimeout(base, 8*time.Second)
+	ctx, cancel := context.WithTimeout(base, 20*time.Second)
 	defer cancel()
 	out, err := goldcmds.TranslatePreservingCommandTokens(ctx, text, lang)
 	if err != nil || strings.TrimSpace(out) == "" {
 		return text
 	}
-	// .menu category shortcuts survive translation as English tokens (they are
-	// protected), so swap them for their localized names now. See catlocalize.go.
-	return s.localizeCategoryTokens(out)
+	// Command tokens survive translation as English (they are protected), so
+	// swap each one for its localized name now (.FONT1 -> .فونٹ1, .CORE ->
+	// .بنیادی, ...). See catlocalize.go.
+	return s.localizeCommandTokens(out)
 }
 
 // replyText is the single send path for plain text replies: skin → translate →

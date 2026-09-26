@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func TestLiveBespokeMenus(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s/%s: %v", lang, key, err)
 			}
-			out = replaceCategoryToken(out, ".", key, "LOCALIZED_"+key)
+			out = strings.ReplaceAll(out, "."+key, "LOCALIZED_"+key)
 			fmt.Printf("\n===== %s / %s =====\n%s\n", lang, key, firstLines(out, 12))
 		}
 	}
