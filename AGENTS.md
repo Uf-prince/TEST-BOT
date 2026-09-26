@@ -61,10 +61,16 @@ Don't chase these unless asked.
   cannot wipe aliases that already work. Maps carrying `com.*` rows are rebuilt
   once to drop that legacy junk (`clMapHasLegacyJunk`).
 
-## Translator (.trt) — language catalog and Pakistani script
+## Language catalog (.botlanguage / .trt) — one shared list, Pakistani script
 
-- `trtLangs` (`gold-cmds/trt.go`) is the whole language catalog: **252 codes**.
-  Google's own live endpoint (`https://translate.google.com/translate_a/l?client=gtx&alpha=true&hl=en`)
+- `.botlanguage` (bot output language) and `.trt` (translate a message) share ONE
+  catalog: `LanguageCatalog()` in `gold-cmds/botlangcmd.go` returns `trtLangs`
+  from `gold-cmds/trt.go`. Adding a language to `trtLangs` therefore makes it
+  settable via `.botlanguage` AND usable via `.trt`; there is no separate list to
+  update. `.botlanguage` is the surface that matters most — it is what changes
+  every reply the bot sends.
+- The catalog is **252 codes**. Google's own live endpoint
+  (`https://translate.google.com/translate_a/l?client=gtx&alpha=true&hl=en`)
   reports 249; the extra three (`fil`, `he`, `jv`) are legacy codes Google no
   longer lists but the translate endpoint still accepts. Do not regenerate the
   table from the Cloud docs page — that page mixes in region variants
