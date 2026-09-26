@@ -75,18 +75,24 @@ func rcInit() {
 	})
 }
 
+// rcVersion tags every cache key. Bump it whenever the translation PIPELINE
+// changes (e.g. the caps-softening and prefix-sentinel fixes), because entries
+// written by an older pipeline are wrong and must not be served again — the old
+// keys are simply never looked up, so stale translations cannot resurface.
+const rcVersion = "v2"
+
 func rcHash(line string) string {
-	h := sha256.Sum256([]byte(line))
+	h := sha256.Sum256([]byte(rcVersion + "\x00" + line))
 	return hex.EncodeToString(h[:])
 }
 
 func rcFile(botJID, lang string) string {
-	h := sha256.Sum256([]byte(botJID + "\x00" + lang))
+	h := sha256.Sum256([]byte(rcVersion + "\x00" + botJID + "\x00" + lang))
 	return filepath.Join(rcDir, hex.EncodeToString(h[:])+".json")
 }
 
 func rcField(lang string) string {
-	return "replycache:" + strings.ToLower(strings.TrimSpace(lang))
+	return "replycache:" + rcVersion + ":" + strings.ToLower(strings.TrimSpace(lang))
 }
 
 // rcBind records which Redis handle serves a bot, so the background flush can

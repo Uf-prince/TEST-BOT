@@ -55,6 +55,35 @@ Never add a live-network test to the default suite for this — the offline test
 in `src/replycache_test.go` and `gold-cmds/trtcache_test.go` prove RAM/disk
 round-trip, partial-hit behaviour, and the no-cache fallback.
 
+## Full-reply translation fixes (owner report: "kuch cmnds English reh jate")
+
+Three separate bugs made parts of a menu stay English, all fixed in
+`gold-cmds/menutrans.go` + `gold-cmds/trtsoft.go`:
+
+1. **HTTP 413.** Every translatable line of a menu was sent as ONE batched GET.
+   Google's free endpoint rejects a large GET with 413, and the old code treated
+   any error as "keep the whole reply English". Lines are now chunked
+   (`trtChunkBytes`) and a chunk that fails — or comes back with a different line
+   count — is retried per line, so one bad line can never blank a reply.
+2. **ALL-CAPS echo.** The endpoint treats an all-caps token as a proper noun and
+   returns it untouched ("UPTIME" -> "UPTIME" but "Uptime" -> "اپ ٹائم"). Every
+   menu label is caps, so exactly the labels the owner complained about were
+   echoed. `trtSoftCaps` Title-cases caps runs for the request and `trtAllCaps`
+   re-applies the caps house style to the translated line.
+3. **Prefix mangling.** A bare "." is rewritten as the target's full stop
+   (Bengali showed "❮। ❯"). `trtProtectPrefixes` swaps a standalone prefix for a
+   private-use sentinel and `trtRestorePrefixes` puts it back.
+
+Local digits (`gold-cmds/digits.go`): `LocalizeDigits` maps ASCII 0-9 to the
+target's own numerals for every language whose script has them (Urdu ۰۱۲,
+Hindi ०१२, Arabic ٠١٢, Bengali ০১২, …). Latin-script targets keep ASCII digits.
+Digits inside a command token (".logo1") are never localised, so the menu still
+shows a typeable token.
+
+`rcVersion` in `src/replycache.go` tags every cache key: bump it whenever the
+translation pipeline changes, otherwise the old (wrong) translations keep being
+served from RAM/disk/Storj.
+
 ## Known pre-existing test failures (not caused by new work)
 
 Clean tree still fails: `TestConverterCategoryCount`, `TestFunPackRegistered`,

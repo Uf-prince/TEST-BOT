@@ -100,7 +100,9 @@ func TestTranslateCachePartialHitOnlySendsMisses(t *testing.T) {
 	mu.Lock()
 	got := append([]string(nil), sent...)
 	mu.Unlock()
-	if len(got) != 1 || got[0] != "NEW LINE" {
+	// House-style caps are softened for the request (NEW LINE -> New Line), so
+	// only the missing line is sent, in its softened form.
+	if len(got) != 1 || !strings.EqualFold(got[0], "NEW LINE") {
 		t.Fatalf("sirf miss honi chahiye thi, bheja: %#v", got)
 	}
 }

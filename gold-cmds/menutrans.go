@@ -117,10 +117,35 @@ func isWordByte(b byte) bool {
 	return b == '_' || (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
+// trtChunkBytes bounds one batched translation request. Google's free web
+// endpoint rejects large GETs with HTTP 413, which used to revert a WHOLE menu to
+// English (owner report: "kuch cmnds ke texts ki ho rhe, kch English reh jate").
+// Lines are therefore sent in several requests, each under this budget.
+const trtChunkBytes = 1200
+
+// chunkLines groups lines so that no single batch exceeds trtChunkBytes.
+func chunkLines(lines []string) [][]string {
+	var chunks [][]string
+	var cur []string
+	size := 0
+	for _, ln := range lines {
+		n := len(ln) + 1
+		if size+n > trtChunkBytes && len(cur) > 0 {
+			chunks = append(chunks, cur)
+			cur, size = nil, 0
+		}
+		cur = append(cur, ln)
+		size += n
+	}
+	if len(cur) > 0 {
+		chunks = append(chunks, cur)
+	}
+	return chunks
+}
+
 // TranslatePreservingCommandTokens translates text into lang while leaving every
-// line that carries a command token exactly as it was. Returns the original text
-// (and nil error) whenever the translation cannot be applied safely, so a reply
-// is never mangled.
+// line that carries a command token exactly as it was. A line that cannot be
+// translated keeps its ORIGINAL text, so one bad line never blanks a reply.
 func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (string, error) {
 	if strings.TrimSpace(text) == "" {
 		return text, nil
@@ -156,8 +181,8 @@ func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (s
 	}
 
 	// Cache first (owner order: bar bar translate na ho). Only the lines that
-	// miss are sent to the translator, in ONE batched request, so a warm cache
-	// costs zero HTTP calls and a cold one costs exactly one.
+	// miss are sent to the translator, so a warm cache costs zero HTTP calls and
+	// a cold one costs one request per chunk.
 	botJID := tcBotFromCtx(ctx)
 	miss := make([]int, 0, len(batch))
 	missText := make([]string, 0, len(batch))
@@ -177,38 +202,75 @@ func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (s
 			missText = append(missText, batch[n])
 		}
 	}
-	if len(miss) == 0 {
-		for n, i := range idx {
-			lines[i] = prefix[i] + hit[n]
+	if len(miss) > 0 {
+		// Two free-endpoint quirks are neutralised here, before the request:
+		// ALL-CAPS labels are echoed back untranslated, and a bare "." prefix is
+		// rewritten as the target's full stop. See trtsoft.go.
+		prep := make([]string, len(missText))
+		for n, src := range missText {
+			prep[n] = trtProtectPrefixes(trtSoftCaps(src))
 		}
-		return strings.Join(lines, "\n"), nil
-	}
-
-	tr := clTranslator
-	if tr == nil {
-		tr = TranslateText
-	}
-	out, err := tr(ctx, strings.Join(missText, "\n"), lang)
-	if err != nil {
-		return text, err
-	}
-	got := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(got) != len(missText) {
-		// Line-count drift means we cannot map translations back onto the original
-		// lines; keeping the source text is safer than scrambling the menu.
-		return text, nil
-	}
-	for n, src := range missText {
-		v := got[n]
-		hit[miss[n]] = v
-		if tcPut != nil && botJID != "" && strings.TrimSpace(v) != "" && v != src {
-			tcPut(botJID, lang, src, v)
+		// Chunked so a big menu never trips Google's 413. A chunk that fails (or
+		// comes back with a different line count) falls back to per-line requests,
+		// and a single line that still fails keeps its ORIGINAL text.
+		tr := clTranslator
+		if tr == nil {
+			tr = TranslateText
+		}
+		at := 0
+		for _, chunk := range chunkLines(prep) {
+			got, ok := trtTranslateChunk(ctx, tr, chunk, lang)
+			if !ok {
+				for _, src := range chunk {
+					if v, err := tr(ctx, src, lang); err == nil && strings.TrimSpace(v) != "" {
+						got = append(got, v)
+					} else {
+						got = append(got, src)
+					}
+				}
+			}
+			for n, v := range got {
+				src := missText[at+n]
+				if strings.TrimSpace(v) == "" {
+					v = src
+				} else {
+					// Restore the real prefix, then put the caps house style back so
+					// the translated label looks like the rest of the menu.
+					v = trtRestorePrefixes(v)
+					if trtAllCaps(src) {
+						v = strings.ToUpper(v)
+					}
+				}
+				hit[miss[at+n]] = v
+				if tcPut != nil && botJID != "" && v != src {
+					tcPut(botJID, lang, src, v)
+				}
+			}
+			at += len(chunk)
 		}
 	}
 	for n, i := range idx {
-		lines[i] = prefix[i] + hit[n]
+		// Digits are localised on the TRANSLATED part only. The verbatim token head
+		// (prefix[i]) keeps ASCII digits, so ".logo1000" is still typed as-is
+		// (owner order: "yeh 0123 numbers b usy zaban usy country k numbers me").
+		lines[i] = prefix[i] + LocalizeDigits(lang, hit[n])
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+// trtTranslateChunk translates one batch and reports whether the result maps
+// back onto the input line-for-line. A false return means the caller must fall
+// back (per-line), never that the reply should stay English.
+func trtTranslateChunk(ctx context.Context, tr func(context.Context, string, string) (string, error), chunk []string, lang string) ([]string, bool) {
+	out, err := tr(ctx, strings.Join(chunk, "\n"), lang)
+	if err != nil {
+		return nil, false
+	}
+	got := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(got) != len(chunk) {
+		return nil, false
+	}
+	return got, true
 }
 
 // splitTokenLine splits a line at the end of its last command token, returning

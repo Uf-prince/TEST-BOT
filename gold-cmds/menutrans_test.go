@@ -3,8 +3,8 @@ package goldcmds
 import (
 	"context"
 	"strings"
-	"time"
 	"testing"
+	"time"
 )
 
 func TestLineHasCommandToken(t *testing.T) {
@@ -60,8 +60,9 @@ func TestTranslatePreservingCommandTokensSkipsTokenLines(t *testing.T) {
 	if !strings.Contains(out, "*❰ .BOTPIC ❱") {
 		t.Errorf("token was mangled: %q", out)
 	}
-	// ... while the description after it is still translated.
-	if !strings.Contains(out, "CHANGE BOT PIC*[ar]") {
+	// ... while the description after it is still translated. House-style caps
+	// are softened for the request and re-applied after, so compare case-insensitively.
+	if !strings.Contains(strings.ToUpper(out), "CHANGE BOT PIC*[AR]") {
 		t.Errorf("description not translated: %q", out)
 	}
 	// The token must never reach the translator, only the description.
@@ -90,20 +91,39 @@ func TestTranslatePreservingCommandTokensTokenOnlyLine(t *testing.T) {
 	}
 }
 
+// TestTranslatePreservingCommandTokensLineDriftFallsBack: jab batched request
+// line count todh de, to per-line retry ho — ek kharab chunk poore reply ko
+// English me nahi giraata, aur har line apni jagah rehti hai.
 func TestTranslatePreservingCommandTokensLineDriftFallsBack(t *testing.T) {
 	old := clTranslator
+	var batched, single int
 	clTranslator = func(ctx context.Context, text, target string) (string, error) {
-		return "only-one-line", nil
+		if strings.Contains(text, "\n") {
+			batched++
+			return "only-one-line", nil // collapses the batch: drift
+		}
+		single++
+		return strings.ToUpper(text) + "[ar]", nil
 	}
 	defer func() { clTranslator = old }()
 
-	in := "LINE ONE\nLINE TWO\n❰ .PING ❱ SPEED"
+	in := "LINE ONE\nLINE TWO\n❮ .PING ❯ SPEED"
 	out, err := TranslatePreservingCommandTokens(context.Background(), in, "ar")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out != in {
-		t.Errorf("drift must fall back to source, got %q", out)
+	// The batch drifted, so each line was retried on its own and every line
+	// still came back translated in place. Caps are re-applied by the pipeline,
+	// so compare case-insensitively.
+	up := strings.ToUpper(out)
+	if !strings.Contains(up, "LINE ONE[AR]") || !strings.Contains(up, "LINE TWO[AR]") {
+		t.Errorf("per-line fallback ne lines translate nahi kin: %q", out)
+	}
+	if !strings.Contains(up, "❮ .PING ❯ SPEED[AR]") {
+		t.Errorf("token line ka tail translate nahi hua: %q", out)
+	}
+	if batched != 1 || single != 3 {
+		t.Errorf("chahiye 1 batched + 3 single, mila %d + %d", batched, single)
 	}
 }
 
