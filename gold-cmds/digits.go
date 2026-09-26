@@ -122,6 +122,13 @@ func LocalizeDigits(lang, text string) string {
 			skip[i] = true
 		}
 	}
+	// URLs are never localised either: a link's digits must stay ASCII or the
+	// link breaks (owner report: command ke saath link bhi translate ho jata).
+	for _, sp := range trtURLSpans(text) {
+		for i := sp[0]; i < sp[1] && i < len(skip); i++ {
+			skip[i] = true
+		}
+	}
 	var b strings.Builder
 	b.Grow(len(text) + 8)
 	for i, r := range text {

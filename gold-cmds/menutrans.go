@@ -222,6 +222,7 @@ func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (s
 	idx := make([]int, 0, len(lines))    // line indices that need translation
 	prot := make([]string, len(lines))   // line with tokens swapped for sentinels
 	toks := make([][]string, len(lines)) // the token spans, in order
+	urls := make([][]string, len(lines)) // the URL spans, in order (protected too)
 	batch := make([]string, 0, len(lines))
 	for i, ln := range lines {
 		// Blank lines are kept verbatim: sending them makes translators collapse
@@ -230,7 +231,11 @@ func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (s
 		if strings.TrimSpace(ln) == "" {
 			continue
 		}
-		p, tk := trtProtectTokenSpans(ln, prefix)
+		// URLs are protected FIRST (whole link -> sentinel) so the translator
+		// never sees them and the token scanner can never mistake a ".fb" inside
+		// a link for a command. See urlprotect.go.
+		p0, ur := trtProtectURLs(ln)
+		p, tk := trtProtectTokenSpans(p0, prefix)
 		// A line with NO letters carries nothing to translate — it is pure
 		// box-drawing / symbols / digits (a menu border, a bare count row) or a
 		// token-only row ("*| 🔰 | .CORE*"). Sending it anyway let Google rewrite
@@ -240,6 +245,7 @@ func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (s
 		}
 		prot[i] = p
 		toks[i] = tk
+		urls[i] = ur
 		idx = append(idx, i)
 		batch = append(batch, p)
 	}
@@ -298,7 +304,7 @@ func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (s
 				n := miss[at+k]
 				i := idx[n]
 				orig := lines[i]
-				v = trtFinishLine(v, orig, toks[i])
+				v = trtFinishLine(v, orig, toks[i], urls[i])
 				hit[n] = v
 				if tcPut != nil && botJID != "" && v != orig {
 					tcPut(botJID, lang, orig, v)
@@ -320,13 +326,18 @@ func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (s
 // restores the prefix sentinels and the command tokens, and re-applies the bot's
 // caps house style. When the translator dropped a token sentinel (rare) it
 // returns the ORIGINAL line, so a token is never lost.
-func trtFinishLine(v, orig string, toks []string) string {
+func trtFinishLine(v, orig string, toks []string, urls []string) string {
 	if strings.TrimSpace(v) == "" {
 		return orig
 	}
 	v = trtRestorePrefixes(v)
 	restored, ok := trtRestoreTokenSpans(v, toks)
 	if !ok {
+		return orig
+	}
+	// Put the links back byte-for-byte. A dropped URL sentinel means the
+	// translator ate the link, so keep the original line rather than lose it.
+	if restored, ok = trtRestoreURLs(restored, urls); !ok {
 		return orig
 	}
 	// Translators trim each line's leading space; put it back so a menu row keeps
