@@ -117,10 +117,10 @@ func TestBotLanguageResolve(t *testing.T) {
 // actually supports (owner order: har sheher / har gaon ki zuban).
 func TestBotLanguageResolvesRegionsAndDialects(t *testing.T) {
 	cases := map[string]string{
-		"saraiki":            "pa",
-		"hindko":             "pa",
-		"pothwari":           "pa",
-		"lahore":             "pa",
+		"saraiki":            "pa-Arab",
+		"hindko":             "pa-Arab",
+		"pothwari":           "pa-Arab",
+		"lahore":             "pa-Arab",
 		"karachi":            "ur",
 		"islamabad":          "ur",
 		"kashmiri":           "ur",
@@ -137,7 +137,12 @@ func TestBotLanguageResolvesRegionsAndDialects(t *testing.T) {
 		"tokyo":              "ja",
 		"nepal":              "ne",
 		"dhaka":              "bn",
-		"punjabi (pakistan)": "pa",
+		"punjabi (pakistan)": "pa-Arab",
+		// Pakistani Punjab must land on Shahmukhi (pa-Arab), never Gurmukhi.
+		"punjabi (india)": "pa",
+		"muhajir":         "ur",
+		"multan":          "pa-Arab",
+		"rawalpindi":      "pa-Arab",
 	}
 	for tok, want := range cases {
 		code, ok := ResolveLanguage(tok)

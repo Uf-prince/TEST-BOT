@@ -27,8 +27,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"unicode/utf8"
 	"time"
+	"unicode/utf8"
 
 	"go.mau.fi/whatsmeow/types"
 )
@@ -40,43 +40,79 @@ type trtLang struct {
 }
 
 // trtLangs is the full Google Translate NMT language list (code -> name).
-// Order is alphabetical by name for a clean guidance message.
+// Sourced from Google's own live language endpoint, which reports 249
+// languages; three legacy codes it no longer lists (fil/he/jv) are kept
+// because the translate endpoint still accepts them. Order is
+// alphabetical by name for a clean guidance message.
 var trtLangs = []trtLang{
-	{"af", "AFRIKAANS"}, {"ak", "AKAN"}, {"sq", "ALBANIAN"}, {"am", "AMHARIC"}, {"ar", "ARABIC"},
-	{"hy", "ARMENIAN"}, {"as", "ASSAMESE"}, {"ay", "AYMARA"}, {"az", "AZERBAIJANI"},
-	{"bal", "BALOCHI"}, {"bm", "BAMBARA"}, {"eu", "BASQUE"}, {"be", "BELARUSIAN"}, {"bn", "BENGALI"},
-	{"bho", "BHOJPURI"}, {"bs", "BOSNIAN"}, {"bg", "BULGARIAN"}, {"ca", "CATALAN"},
-	{"ceb", "CEBUANO"}, {"ny", "CHICHEWA"}, {"zh-CN", "CHINESE (SIMPLIFIED)"},
-	{"zh-TW", "CHINESE (TRADITIONAL)"}, {"co", "CORSICAN"}, {"hr", "CROATIAN"},
-	{"cs", "CZECH"}, {"da", "DANISH"}, {"dv", "DIVEHI"}, {"doi", "DOGRI"}, {"dz", "DZONGKHA"},
-	{"nl", "DUTCH"}, {"en", "ENGLISH"}, {"eo", "ESPERANTO"}, {"et", "ESTONIAN"},
-	{"ee", "EWE"}, {"fil", "FILIPINO"}, {"fi", "FINNISH"}, {"fr", "FRENCH"},
-	{"fy", "FRISIAN"}, {"gl", "GALICIAN"}, {"ka", "GEORGIAN"}, {"de", "GERMAN"},
-	{"el", "GREEK"}, {"gn", "GUARANI"}, {"gu", "GUJARATI"}, {"ht", "HAITIAN CREOLE"},
-	{"ha", "HAUSA"}, {"haw", "HAWAIIAN"}, {"he", "HEBREW"}, {"hi", "HINDI"},
-	{"hmn", "HMONG"}, {"hu", "HUNGARIAN"}, {"is", "ICELANDIC"}, {"ig", "IGBO"},
-	{"ilo", "ILOKO"}, {"id", "INDONESIAN"}, {"ga", "IRISH"}, {"it", "ITALIAN"},
-	{"ja", "JAPANESE"}, {"jv", "JAVANESE"}, {"kn", "KANNADA"}, {"kk", "KAZAKH"},
-	{"km", "KHMER"}, {"rw", "KINYARWANDA"}, {"gom", "KONKANI"}, {"ko", "KOREAN"},
-	{"kri", "KRIO"}, {"ku", "KURDISH (KURMANJI)"}, {"ckb", "KURDISH (SORANI)"},
-	{"ky", "KYRGYZ"}, {"lo", "LAO"}, {"la", "LATIN"}, {"lv", "LATVIAN"},
-	{"ln", "LINGALA"}, {"lt", "LITHUANIAN"}, {"lg", "LUGANDA"}, {"lb", "LUXEMBOURGISH"},
-	{"mk", "MACEDONIAN"}, {"mai", "MAITHILI"}, {"mg", "MALAGASY"}, {"ms", "MALAY"},
-	{"ml", "MALAYALAM"}, {"mt", "MALTESE"}, {"mi", "MAORI"}, {"mr", "MARATHI"},
-	{"mni-Mtei", "MEITEILON (MANIPURI)"}, {"lus", "MIZO"}, {"mn", "MONGOLIAN"},
-	{"my", "MYANMAR (BURMESE)"}, {"ne", "NEPALI"}, {"no", "NORWEGIAN"},
-	{"or", "ODIA (ORIYA)"}, {"om", "OROMO"}, {"ps", "PASHTO"}, {"fa", "PERSIAN"},
-	{"pl", "POLISH"}, {"pt", "PORTUGUESE"}, {"pa", "PUNJABI"}, {"qu", "QUECHUA"},
-	{"ro", "ROMANIAN"}, {"ru", "RUSSIAN"}, {"sm", "SAMOAN"}, {"sa", "SANSKRIT"},
-	{"sat", "SANTALI"}, {"gd", "SCOTS GAELIC"}, {"nso", "SEPEDI"}, {"sr", "SERBIAN"},
-	{"st", "SESOTHO"}, {"sn", "SHONA"}, {"sd", "SINDHI"}, {"si", "SINHALA"},
-	{"sk", "SLOVAK"}, {"sl", "SLOVENIAN"}, {"so", "SOMALI"}, {"es", "SPANISH"},
-	{"su", "SUNDANESE"}, {"sw", "SWAHILI"}, {"sv", "SWEDISH"}, {"tg", "TAJIK"},
-	{"ta", "TAMIL"}, {"tt", "TATAR"}, {"te", "TELUGU"}, {"th", "THAI"},
-	{"ti", "TIGRINYA"}, {"ts", "TSONGA"}, {"tr", "TURKISH"}, {"tk", "TURKMEN"},
+	{"ab", "ABKHAZ"}, {"ace", "ACEHNESE"}, {"ach", "ACHOLI"}, {"aa", "AFAR"},
+	{"af", "AFRIKAANS"}, {"ak", "AKAN"}, {"sq", "ALBANIAN"}, {"alz", "ALUR"},
+	{"am", "AMHARIC"}, {"ar", "ARABIC"}, {"hy", "ARMENIAN"}, {"as", "ASSAMESE"},
+	{"av", "AVAR"}, {"awa", "AWADHI"}, {"ay", "AYMARA"}, {"az", "AZERBAIJANI"},
+	{"ban", "BALINESE"}, {"bal", "BALOCHI"}, {"bm", "BAMBARA"}, {"bci", "BAOULÉ"},
+	{"ba", "BASHKIR"}, {"eu", "BASQUE"}, {"btx", "BATAK KARO"},
+	{"bts", "BATAK SIMALUNGUN"}, {"bbc", "BATAK TOBA"}, {"be", "BELARUSIAN"},
+	{"bem", "BEMBA"}, {"bn", "BENGALI"}, {"bew", "BETAWI"}, {"bho", "BHOJPURI"},
+	{"bik", "BIKOL"}, {"bs", "BOSNIAN"}, {"br", "BRETON"}, {"bg", "BULGARIAN"},
+	{"bua", "BURYAT"}, {"yue", "CANTONESE"}, {"ca", "CATALAN"}, {"ceb", "CEBUANO"},
+	{"ch", "CHAMORRO"}, {"ce", "CHECHEN"}, {"ny", "CHICHEWA"},
+	{"zh-CN", "CHINESE (SIMPLIFIED)"}, {"zh-TW", "CHINESE (TRADITIONAL)"},
+	{"chk", "CHUUKESE"}, {"cv", "CHUVASH"}, {"co", "CORSICAN"},
+	{"crh", "CRIMEAN TATAR (CYRILLIC)"}, {"crh-Latn", "CRIMEAN TATAR (LATIN)"},
+	{"hr", "CROATIAN"}, {"cs", "CZECH"}, {"da", "DANISH"}, {"fa-AF", "DARI"},
+	{"din", "DINKA"}, {"dv", "DIVEHI"}, {"doi", "DOGRI"}, {"dov", "DOMBE"},
+	{"nl", "DUTCH"}, {"dyu", "DYULA"}, {"dz", "DZONGKHA"}, {"en", "ENGLISH"},
+	{"eo", "ESPERANTO"}, {"et", "ESTONIAN"}, {"ee", "EWE"}, {"fo", "FAROESE"},
+	{"fj", "FIJIAN"}, {"fil", "FILIPINO"}, {"fi", "FINNISH"}, {"fon", "FON"},
+	{"fr", "FRENCH"}, {"fr-CA", "FRENCH (CANADA)"}, {"fy", "FRISIAN"}, {"fur", "FRIULIAN"},
+	{"ff", "FULANI"}, {"gaa", "GA"}, {"gl", "GALICIAN"}, {"ka", "GEORGIAN"},
+	{"de", "GERMAN"}, {"el", "GREEK"}, {"gn", "GUARANI"}, {"gu", "GUJARATI"},
+	{"ht", "HAITIAN CREOLE"}, {"cnh", "HAKHA CHIN"}, {"ha", "HAUSA"}, {"haw", "HAWAIIAN"},
+	{"he", "HEBREW"}, {"iw", "HEBREW (IW)"}, {"hil", "HILIGAYNON"}, {"hi", "HINDI"},
+	{"hmn", "HMONG"}, {"hu", "HUNGARIAN"}, {"hrx", "HUNSRIK"}, {"iba", "IBAN"},
+	{"is", "ICELANDIC"}, {"ig", "IGBO"}, {"ilo", "ILOKO"}, {"id", "INDONESIAN"},
+	{"iu-Latn", "INUKTUT (LATIN)"}, {"iu", "INUKTUT (SYLLABICS)"}, {"ga", "IRISH"},
+	{"it", "ITALIAN"}, {"jam", "JAMAICAN PATOIS"}, {"ja", "JAPANESE"}, {"jv", "JAVANESE"},
+	{"jw", "JAVANESE (JW)"}, {"kac", "JINGPO"}, {"kl", "KALAALLISUT"}, {"kn", "KANNADA"},
+	{"kr", "KANURI"}, {"pam", "KAPAMPANGAN"}, {"kk", "KAZAKH"}, {"kha", "KHASI"},
+	{"km", "KHMER"}, {"cgg", "KIGA"}, {"kg", "KIKONGO"}, {"rw", "KINYARWANDA"},
+	{"ktu", "KITUBA"}, {"trp", "KOKBOROK"}, {"kv", "KOMI"}, {"gom", "KONKANI"},
+	{"ko", "KOREAN"}, {"kri", "KRIO"}, {"ku", "KURDISH (KURMANJI)"},
+	{"ckb", "KURDISH (SORANI)"}, {"ky", "KYRGYZ"}, {"lo", "LAO"}, {"ltg", "LATGALIAN"},
+	{"la", "LATIN"}, {"lv", "LATVIAN"}, {"lij", "LIGURIAN"}, {"li", "LIMBURGISH"},
+	{"ln", "LINGALA"}, {"lt", "LITHUANIAN"}, {"lmo", "LOMBARD"}, {"lg", "LUGANDA"},
+	{"luo", "LUO"}, {"lb", "LUXEMBOURGISH"}, {"mk", "MACEDONIAN"}, {"mad", "MADURESE"},
+	{"mai", "MAITHILI"}, {"mak", "MAKASSAR"}, {"mg", "MALAGASY"}, {"ms", "MALAY"},
+	{"ms-Arab", "MALAY (JAWI)"}, {"ml", "MALAYALAM"}, {"mt", "MALTESE"}, {"mam", "MAM"},
+	{"gv", "MANX"}, {"mi", "MAORI"}, {"mr", "MARATHI"}, {"mh", "MARSHALLESE"},
+	{"mwr", "MARWADI"}, {"mfe", "MAURITIAN CREOLE"}, {"chm", "MEADOW MARI"},
+	{"mni-Mtei", "MEITEILON (MANIPURI)"}, {"min", "MINANG"}, {"lus", "MIZO"},
+	{"mn", "MONGOLIAN"}, {"my", "MYANMAR (BURMESE)"},
+	{"nhe", "NAHUATL (EASTERN HUASTECA)"}, {"ndc-ZW", "NDAU"}, {"nr", "NDEBELE (SOUTH)"},
+	{"new", "NEPALBHASA (NEWARI)"}, {"ne", "NEPALI"}, {"bm-Nkoo", "NKO"},
+	{"no", "NORWEGIAN"}, {"nus", "NUER"}, {"oc", "OCCITAN"}, {"or", "ODIA (ORIYA)"},
+	{"om", "OROMO"}, {"os", "OSSETIAN"}, {"pag", "PANGASINAN"}, {"pap", "PAPIAMENTO"},
+	{"ps", "PASHTO"}, {"fa", "PERSIAN"}, {"pl", "POLISH"}, {"pt", "PORTUGUESE"},
+	{"pt-PT", "PORTUGUESE (PORTUGAL)"}, {"pa", "PUNJABI"},
+	{"pa-Arab", "PUNJABI (SHAHMUKHI)"}, {"qu", "QUECHUA"}, {"kek", "QʼEQCHIʼ"},
+	{"rom", "ROMANI"}, {"ro", "ROMANIAN"}, {"rn", "RUNDI"}, {"ru", "RUSSIAN"},
+	{"se", "SAMI (NORTH)"}, {"sm", "SAMOAN"}, {"sg", "SANGO"}, {"sa", "SANSKRIT"},
+	{"sat", "SANTALI"}, {"sat-Latn", "SANTALI (LATIN)"}, {"gd", "SCOTS GAELIC"},
+	{"nso", "SEPEDI"}, {"sr", "SERBIAN"}, {"st", "SESOTHO"}, {"crs", "SEYCHELLOIS CREOLE"},
+	{"shn", "SHAN"}, {"sn", "SHONA"}, {"scn", "SICILIAN"}, {"szl", "SILESIAN"},
+	{"sd", "SINDHI"}, {"si", "SINHALA"}, {"sk", "SLOVAK"}, {"sl", "SLOVENIAN"},
+	{"so", "SOMALI"}, {"es", "SPANISH"}, {"su", "SUNDANESE"}, {"sus", "SUSU"},
+	{"sw", "SWAHILI"}, {"ss", "SWATI"}, {"sv", "SWEDISH"}, {"tl", "TAGALOG"},
+	{"ty", "TAHITIAN"}, {"tg", "TAJIK"}, {"ber-Latn", "TAMAZIGHT"},
+	{"ber", "TAMAZIGHT (TIFINAGH)"}, {"ta", "TAMIL"}, {"tt", "TATAR"}, {"te", "TELUGU"},
+	{"tet", "TETUM"}, {"th", "THAI"}, {"bo", "TIBETAN"}, {"ti", "TIGRINYA"},
+	{"tiv", "TIV"}, {"tpi", "TOK PISIN"}, {"to", "TONGAN"}, {"lua", "TSHILUBA"},
+	{"ts", "TSONGA"}, {"tn", "TSWANA"}, {"tcy", "TULU"}, {"tum", "TUMBUKA"},
+	{"tr", "TURKISH"}, {"tk", "TURKMEN"}, {"tyv", "TUVAN"}, {"udm", "UDMURT"},
 	{"uk", "UKRAINIAN"}, {"ur", "URDU"}, {"ug", "UYGHUR"}, {"uz", "UZBEK"},
-	{"vi", "VIETNAMESE"}, {"cy", "WELSH"}, {"xh", "XHOSA"}, {"yi", "YIDDISH"},
-	{"yo", "YORUBA"}, {"zu", "ZULU"},
+	{"ve", "VENDA"}, {"vec", "VENETIAN"}, {"vi", "VIETNAMESE"}, {"war", "WARAY"},
+	{"cy", "WELSH"}, {"wo", "WOLOF"}, {"xh", "XHOSA"}, {"sah", "YAKUT"}, {"yi", "YIDDISH"},
+	{"yo", "YORUBA"}, {"yua", "YUCATEC MAYA"}, {"zap", "ZAPOTEC"}, {"zu", "ZULU"},
 }
 
 // trtRegionAliases maps a COUNTRY / CITY / TOWN / VILLAGE / DIALECT name to the
@@ -89,17 +125,26 @@ var trtLangs = []trtLang{
 // Keys are lower-case; values are trtLangs codes.
 var trtRegionAliases = map[string]string{
 	// ── Pakistan — provinces, cities, dialects ──
+	// PAKISTANI PUNJAB IS SHAHMUKHI, NOT GURMUKHI: Google exposes Punjabi
+	// twice — "pa" is Gurmukhi (Indian script) and "pa-Arab" is Shahmukhi
+	// (Pakistani script). Every Punjab-Pakistan city/dialect below therefore
+	// resolves to pa-Arab, so a Lahori or Multani user gets their own script
+	// instead of the Indian one.
 	"pakistan": "ur", "pakistani": "ur", "pak": "ur",
-	"punjabi (pakistan)": "pa", "lahnda": "pa", "western punjabi": "pa",
-	"lahore": "pa", "lahori": "pa", "faisalabad": "pa", "gujranwala": "pa",
-	"sialkot": "pa", "multan": "pa", "multani": "pa", "rawalpindi": "pa",
+	"muhajir": "ur", "muhajiri": "ur", "mohajir": "ur",
+	"punjabi (pakistan)": "pa-Arab", "lahnda": "pa-Arab", "western punjabi": "pa-Arab",
+	"shahmukhi": "pa-Arab", "punjabi shahmukhi": "pa-Arab", "pakistani punjabi": "pa-Arab",
+	"lahore": "pa-Arab", "lahori": "pa-Arab", "faisalabad": "pa-Arab", "gujranwala": "pa-Arab",
+	"sialkot": "pa-Arab", "multan": "pa-Arab", "multani": "pa-Arab", "rawalpindi": "pa-Arab",
 	"islamabad": "ur", "karachi": "ur", "karachite": "ur", "hyderabad (pakistan)": "ur",
 	"peshawar": "ps", "peshawari": "ps", "khyber": "ps", "kpk": "ps",
 	"quetta": "bal", "balochistan": "bal", "balochi": "bal", "brahui": "bal",
 	"gilgit": "ur", "gilgiti": "ur", "skardu": "ur", "baltistan": "ur",
-	"kashmir (pakistan)": "ur", "azad kashmir": "ur", "mirpur": "pa", "muzaffarabad": "ur",
-	"saraiki": "pa", "seraiki": "pa", "siraiki": "pa", "riyasati": "pa",
-	"hindko": "pa", "hindku": "pa", "pothwari": "pa", "potohari": "pa", "pahari": "pa",
+	"kashmir (pakistan)": "ur", "azad kashmir": "ur", "mirpur": "pa-Arab", "muzaffarabad": "ur",
+	"saraiki": "pa-Arab", "seraiki": "pa-Arab", "siraiki": "pa-Arab", "riyasati": "pa-Arab",
+	"hindko": "pa-Arab", "hindku": "pa-Arab", "pothwari": "pa-Arab", "potohari": "pa-Arab",
+	"pahari": "pa-Arab", "jhangvi": "pa-Arab", "dera ghazi khan": "pa-Arab",
+	"bahawalpur": "pa-Arab", "sargodha": "pa-Arab", "sahiwal": "pa-Arab", "okara": "pa-Arab",
 	"chitrali": "ps", "khowar": "ps", "shina": "ur", "burushaski": "ur", "wakhi": "ps",
 	"mewati": "hi", "haryanvi": "hi", "rangri": "hi",
 	// ── India — states, cities, dialects ──
@@ -214,9 +259,12 @@ var trtRegionAliases = map[string]string{
 	"guyana": "en", "suriname": "nl", "haiti": "ht", "haitian creole": "ht",
 	"jamaica": "en", "trinidad": "en", "quebec": "fr", "montreal": "fr",
 	// ── Native-script language names (users type their language in its own script) ──
-	"اردو": "ur", "हिन्दी": "hi", "हिंदी": "hi", "پنجابی": "pa", "ਪੰਜਾਬੀ": "pa",
+	// Punjabi appears in both scripts, and each maps to its own code: Shahmukhi
+	// (پنجابی, Pakistan) -> pa-Arab, Gurmukhi (ਪੰਜਾਬੀ, India) -> pa.
+	"اردو": "ur", "हिन्दी": "hi", "हिंदी": "hi", "پنجابی": "pa-Arab", "ਪੰਜਾਬੀ": "pa",
+	"سرائیکی": "pa-Arab", "ہندکو": "pa-Arab", "مہاجر": "ur",
 	"سنڌي": "sd", "سندھی": "sd", "پشتو": "ps", "بلوچی": "bal",
-	"العربية": "ar", "فارسی": "fa", "دری": "fa", "کوردی": "ku",
+	"العربية": "ar", "فارسی": "fa", "دری": "fa-AF", "کوردی": "ku",
 	"中文": "zh-CN", "中国": "zh-CN", "日本語": "ja", "한국어": "ko",
 	"Русский": "ru", "Українська": "uk", "Español": "es", "Français": "fr",
 	"Deutsch": "de", "Português": "pt", "Italiano": "it", "Türkçe": "tr",
@@ -241,7 +289,13 @@ var trtLangIndex = func() map[string]string {
 	m["mandarin"] = "zh-CN"
 	m["tagalog"] = "fil"
 	m["farsi"] = "fa"
-	m["punjabi (pakistan)"] = "pa"
+	m["dari"] = "fa-AF"
+	m["punjabi (pakistan)"] = "pa-Arab"
+	m["pakistani punjabi"] = "pa-Arab"
+	m["shahmukhi"] = "pa-Arab"
+	m["saraiki"] = "pa-Arab"
+	m["hindko"] = "pa-Arab"
+	m["muhajir"] = "ur"
 	m["roman urdu"] = "ur"
 	m["roman hindi"] = "hi"
 	m["roman punjabi"] = "pa"
@@ -271,7 +325,7 @@ func trtLangName(code string) string {
 func trtGuide(prefix string) string {
 	var b strings.Builder
 	b.WriteString("*🔰 TRANSLATOR 🔰*\n\n")
-	b.WriteString("*TRANSLATE ANY TEXT INTO 130+ LANGUAGES INSTANTLY*\n\n")
+	b.WriteString("*TRANSLATE ANY TEXT INTO 250+ LANGUAGES INSTANTLY*\n\n")
 	b.WriteString("*HOW TO USE:*\n")
 	b.WriteString("*❮ " + prefix + "TRT <LANG> <TEXT> ❯*\n")
 	b.WriteString("*EXAMPLE ❮ " + prefix + "TRT UR HELLO BROTHER ❯*\n\n")
@@ -501,7 +555,7 @@ func handleTRTAsync(ctx context.Context, s SessionBridge, info types.MessageInfo
 }
 
 func init() {
-	Register(Command{Name: "trt", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO TRANSLATE ANY TEXT INTO 130+ LANGUAGES USING GOOGLE TRANSLATE. USE IT AS .TRT <LANG> <TEXT> OR REPLY TO A MESSAGE WITH .TRT <LANG>.", Run: handleTRT})
+	Register(Command{Name: "trt", Category: "TOOLS", Desc: "THIS COMMAND IS USED TO TRANSLATE ANY TEXT INTO 250+ LANGUAGES USING GOOGLE TRANSLATE. USE IT AS .TRT <LANG> <TEXT> OR REPLY TO A MESSAGE WITH .TRT <LANG>.", Run: handleTRT})
 
 	// aliases (Hidden)
 	Register(Command{Name: "translate", Hidden: true, Run: handleTRT})
