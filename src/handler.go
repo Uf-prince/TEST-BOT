@@ -1232,7 +1232,9 @@ func (s *Session) translateOutPreservingTokens(text string) string {
 	if err != nil || strings.TrimSpace(out) == "" {
 		return text
 	}
-	return out
+	// .menu category shortcuts survive translation as English tokens (they are
+	// protected), so swap them for their localized names now. See catlocalize.go.
+	return s.localizeCategoryTokens(out)
 }
 
 // replyText is the single send path for plain text replies: skin → translate →

@@ -107,6 +107,30 @@ func handleBotLanguage(s SessionBridge, info types.MessageInfo, args []string, p
 func botLanguageCommandList(prefix string, s SessionBridge) string {
 	lang := strings.TrimSpace(s.GetBotLanguageSetting(""))
 	pairs := LocalizedCommandList(s)
+	// Category shortcuts (.core / .group / ...) are advertised by the .menu
+	// itself; keep this list to real commands so it never shows a category as
+	// ".CORE = .بنیادی" (which the menu localizer would then rewrite to
+	// ".بنیادی = .بنیادی").
+	if clMenuTokenHook != nil {
+		cat := map[string]bool{}
+		for _, n := range clMenuTokenHook() {
+			cat[strings.ToLower(strings.TrimSpace(n))] = true
+		}
+		kept := pairs[:0]
+		for _, p := range pairs {
+			if cat[strings.ToLower(strings.TrimSpace(p[0]))] {
+				continue
+			}
+			// A multi-word localized name is not typeable — it is only the
+			// .menu display name — so it does not belong in a list of names
+			// the user can actually type.
+			if strings.ContainsAny(p[1], " \t") {
+				continue
+			}
+			kept = append(kept, p)
+		}
+		pairs = kept
+	}
 	if lang == "" || lang == BotLanguageName || len(pairs) == 0 {
 		return "*🔰 LOCALIZED COMMAND NAMES 🔰*\n\n*NO LANGUAGE SET YET, OR THE NAMES ARE STILL BEING PREPARED*\n*SET ONE WITH ❮ " + strings.ToUpper(prefix+"BOTLANGUAGE SET <CODE> ❯") + " , THEN ASK AGAIN*"
 	}

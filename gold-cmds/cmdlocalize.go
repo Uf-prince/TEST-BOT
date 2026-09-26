@@ -35,7 +35,11 @@ import (
 )
 
 const (
-	clMapField = "cmdlocalize" // "<lang>:<local=canon|...>"
+	clMapField = "cmdlocalize" // "<ver>|<lang>:<local=canon|...>"
+	// clVersion is bumped whenever the canonical-name set changes so stored maps
+	// are rebuilt once. v2 added the .menu category shortcuts (.core / .group /
+	// .protection / ...) so they localize like every other command name.
+	clVersion = "v2"
 )
 
 // clEntry is one localized command name for the current language.
@@ -46,6 +50,7 @@ type clEntry struct {
 
 type clState struct {
 	Lang  string
+	Ver   string            // encoding version (clVersion); a mismatch forces a rebuild
 	ByLoc map[string]string // localized -> canonical
 }
 
@@ -97,6 +102,16 @@ func clCanonicalNames() []string {
 			add(n)
 		}
 	}
+	// Menu category shortcuts (.core / .group / .protection / .ai / .utility /
+	// ...) are typeable rows that are NOT registered commands, so they were
+	// never localized — the .menu category list stayed English in every
+	// language (owner report). Adding them here makes each category name
+	// translate and become a working alias, exactly like a normal command name.
+	if clMenuTokenHook != nil {
+		for _, n := range clMenuTokenHook() {
+			add(n)
+		}
+	}
 	return out
 }
 
@@ -111,7 +126,13 @@ func clParse(raw string) *clState {
 	if !ok {
 		return st
 	}
-	st.Lang = strings.TrimSpace(head)
+	head = strings.TrimSpace(head)
+	if ver, lang, ok := strings.Cut(head, "|"); ok {
+		st.Ver = strings.TrimSpace(ver)
+		st.Lang = strings.TrimSpace(lang)
+	} else {
+		st.Lang = head
+	}
 	for _, row := range strings.Split(body, "|") {
 		l, c, ok := strings.Cut(row, "=")
 		if !ok {
@@ -133,7 +154,7 @@ func clEncode(lang string, pairs [][2]string) string {
 	for _, p := range pairs {
 		rows = append(rows, p[0]+"="+p[1])
 	}
-	return lang + ":" + strings.Join(rows, "|")
+	return clVersion + "|" + lang + ":" + strings.Join(rows, "|")
 }
 
 // clLoad returns the cached localized map for this bot's current language.
@@ -161,7 +182,7 @@ func clLoad(s SessionBridge) *clState {
 	// A map still holding "com.*" rows was built by the old rule set, so it is
 	// rebuilt once to drop that junk (the rebuild merges, keeping the good rows).
 	lang := strings.TrimSpace(s.GetBotLanguageSetting(""))
-	if st.Lang != lang || clMapHasLegacyJunk(st) {
+	if st.Lang != lang || st.Ver != clVersion || clMapHasLegacyJunk(st) {
 		clBuildAsync(s, botJID, lang)
 	}
 	return st
@@ -248,7 +269,11 @@ func clBuildAsync(s SessionBridge, botJID, lang string) {
 				// collision with an existing English/hidden command name, or a
 				// duplicate local form already claimed by an earlier command
 				// (otherwise the dispatch target would be nondeterministic).
-				if local == "" || local == canon || strings.ContainsAny(local, " \t") ||
+				// A multi-word localized name is KEPT: it cannot be typed, but the
+				// .menu shows it as the category's display name (the English token
+				// keeps working), so dropping it would leave that category in
+				// English forever.
+				if local == "" || local == canon ||
 					reserved[local] || seenLocal[local] {
 					continue
 				}
@@ -264,7 +289,7 @@ func clBuildAsync(s SessionBridge, botJID, lang string) {
 		// built from the old "com.*" rule set are dropped.
 		old := clParse(s.GetStatusSetting(clMapField, ""))
 		merged := pairs
-		if old.Lang == lang {
+		if old.Lang == lang && old.Ver == clVersion {
 			known := map[string]bool{}
 			for _, p := range pairs {
 				known[p[1]] = true
