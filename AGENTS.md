@@ -61,6 +61,35 @@ Don't chase these unless asked.
   cannot wipe aliases that already work. Maps carrying `com.*` rows are rebuilt
   once to drop that legacy junk (`clMapHasLegacyJunk`).
 
+## Translator (.trt) — language catalog and Pakistani script
+
+- `trtLangs` (`gold-cmds/trt.go`) is the whole language catalog: **252 codes**.
+  Google's own live endpoint (`https://translate.google.com/translate_a/l?client=gtx&alpha=true&hl=en`)
+  reports 249; the extra three (`fil`, `he`, `jv`) are legacy codes Google no
+  longer lists but the translate endpoint still accepts. Do not regenerate the
+  table from the Cloud docs page — that page mixes in region variants
+  (`en-GB`, `es-MX`, `ar-SA`) that the free endpoint rejects; always diff
+  against the live endpoint and then verify each new code actually translates.
+- Every code in the table was verified to return a real translation through the
+  same endpoint the bot uses (`clients5.google.com/translate_a/t`). A code that
+  returns HTTP error is not supported, and one that echoes the English input
+  unchanged is a fake pass (Kashmiri `kas` does exactly this) — never add those.
+- Pakistani Punjab is **Shahmukhi, not Gurmukhi**. Google exposes Punjabi twice:
+  `pa` = Gurmukhi (Indian script), `pa-Arab` = Shahmukhi (Pakistani script). All
+  Punjab-Pakistan cities and dialects (Lahore, Multan, Rawalpindi, Saraiki,
+  Hindko, Pothwari, Jhangvi, ...) resolve to `pa-Arab`. Only `punjabi (india)`,
+  Amritsar and Chandigarh use `pa`. Keep it that way or Pakistani users get
+  Indian-script Punjabi back.
+- Languages Google genuinely does not support (Saraiki, Hindko, Brahui, Western
+  Punjabi `pnb`, Khowar, Shina) resolve to the nearest supported code rather than
+  being added — adding them would produce an HTTP error at reply time.
+- Mistral (the autoreply model) is **not** a translation engine. Asked to
+  translate into Saraiki/Hindko it hallucinates (`سَبحانِ خُدا`), and for
+  Shahmukhi Punjabi it returns Gurmukhi. It also self-reports "over 100
+  languages" and admits it does not know all ~7,000. Keep translation on the
+  Google/MyMemory path; do not route `.trt` through the AI pool.
+- `TestNewLanguagesLive` is opt-in: `GOLDMD_LIVE_TEST=1 go test -run TestNewLanguagesLive ./gold-cmds/`.
+
 ## Public tunnel
 
 - `nohup cloudflared tunnel --url http://localhost:48467 > /tmp/cf_tunnel.log 2>&1 &`
