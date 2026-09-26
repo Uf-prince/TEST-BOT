@@ -41,6 +41,33 @@ Don't chase these unless asked.
 - Local run (panel + sessions): `PORT=48467 GOLDMD_PANEL_ENABLED=1 nohup ./gold-md > /tmp/bot_gold.log 2>&1 &`
   Session status: `curl -s localhost:48467/sessions`.
 
+## Reply translation (.botlanguage) — token safety
+
+- Every reply passes through `goldcmds.TranslatePreservingCommandTokens`
+  (`gold-cmds/menutrans.go`) from `src/handler.go`. A line advertising a command
+  is split at its last token: the bracketed token stays verbatim while the
+  description after it is translated. Never send a menu line whole to a
+  translator — Google returns just the bracket and every command name vanishes.
+- Token detection is registry-based (`clKnownCommandNames`), so prose like "e.g."
+  or "photo.jpg" is not mistaken for a command. Blank lines are excluded from the
+  batch because they make translators collapse the run, which trips the
+  line-count guard and reverts the whole reply to English.
+- `trtTranslate` (`gold-cmds/trt.go`) tries Google's free endpoint first and falls
+  back to MyMemory (key-less). Google throttles by returning a ONE-CHARACTER
+  "translation" instead of an error, so `trtPlausible` rejects that and triggers
+  the fallback. Keep that check — without it a throttled reply silently replaces
+  a menu line with a single letter.
+- `clBuildAsync` MERGES the name map instead of replacing it, so a throttled chunk
+  cannot wipe aliases that already work. Maps carrying `com.*` rows are rebuilt
+  once to drop that legacy junk (`clMapHasLegacyJunk`).
+
+## Public tunnel
+
+- `nohup cloudflared tunnel --url http://localhost:48467 > /tmp/cf_tunnel.log 2>&1 &`
+  then read the URL from `/tmp/cf_tunnel.log` (changes on every restart).
+- `GITHUB_TOKEN` has no write access to this repo; pushing `main` needs the
+  user's PAT in the remote URL.
+
 ## Media features
 
 - Named asset store (`SaveCustomAsset`/`GetCustomAsset`/`ListCustomAssets`/
