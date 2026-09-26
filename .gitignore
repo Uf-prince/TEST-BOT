@@ -5,6 +5,7 @@ gold-md.exe
 
 # Data / sessions (runtime generated)
 nexstore/
+.diskbackup/
 *.db
 *.db-journal
 *.db-wal
