@@ -1224,7 +1224,9 @@ func (s *Session) translateOutPreservingTokens(text string) string {
 	if lang == "" || lang == goldcmds.BotLanguageName {
 		return text
 	}
-	ctx, cancel := context.WithTimeout(goldcmds.TrtCacheWithBot(context.Background(), s.JID), 8*time.Second)
+	base := goldcmds.TrtCacheWithBot(context.Background(), s.JID)
+	base = goldcmds.TrtWithPrefix(base, s.resolvePrefix(s.JID))
+	ctx, cancel := context.WithTimeout(base, 8*time.Second)
 	defer cancel()
 	out, err := goldcmds.TranslatePreservingCommandTokens(ctx, text, lang)
 	if err != nil || strings.TrimSpace(out) == "" {

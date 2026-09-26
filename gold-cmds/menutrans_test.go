@@ -12,7 +12,6 @@ func TestLineHasCommandToken(t *testing.T) {
 		"*❰ .BOTPIC ❱ CHANGE BOT PIC (MENU + ALIVE)*",
 		"❮ .ping ❯ CHECK SPEED",
 		"*❰ /menu ❱ SHOW ALL MENUS*",
-		"*❮ BOTPIC ❯ CHANGE BOT PIC*",
 	}
 	for _, s := range yes {
 		if !LineHasCommandToken(s) {
@@ -26,6 +25,9 @@ func TestLineHasCommandToken(t *testing.T) {
 		"CHANGE BOT PIC (MENU + ALIVE)",
 		"SEND A DIRECT IMAGE LINK ENDING IN .jpg, .png OR .gif",
 		"*EXAMPLE ❮ https://example.com/photo.jpg ❯*",
+		// A bare word in brackets is a PLACEHOLDER, not a token, when the bot has
+		// a real prefix: "❮ QUERY ❯" / "❮ LINK ❯" must be translated.
+		"*❮ BOTPIC ❯ CHANGE BOT PIC*",
 		"",
 	}
 	for _, s := range no {

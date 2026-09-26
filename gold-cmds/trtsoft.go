@@ -21,6 +21,7 @@ package goldcmds
 // ============================================================================
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -145,3 +146,58 @@ func trtAllCaps(s string) bool {
 }
 
 func isAsciiUpper(r rune) bool { return r >= 'A' && r <= 'Z' }
+
+// ============================================================================
+// HOUSE-TOKEN EXPANSION  (owner order: "hr text usy country language me")
+// ============================================================================
+// Two classes of the bot's own shorthand survived translation in EVERY language
+// (owner report: "kuch cmnds texts English default reh jate"):
+//
+//  1. ABBREVIATIONS. The IMPORTANT CMNDS block writes "CMNDS", which is not a
+//     dictionary word, so Google echoed it back untouched ("اہم CMNDS").
+//
+//  2. TIME UNITS. The menu uptime is "02H 14M" / "3D 02H". A lone "H"/"M"/"S"/
+//     "D" is never translated, so only the digits localised and the letters
+//     stayed ASCII ("۲H ۵M").
+//
+// Both are expanded to their full words for the TRANSLATION REQUEST ONLY. The
+// original English line is kept by the caller (it is the fallback when a
+// translation fails), so English output never changes and no test string moves.
+// ============================================================================
+
+// trtHouseAbbr maps the bot's short labels to the full word a translator knows.
+var trtHouseAbbr = []struct{ from, to string }{
+	{"CMNDS", "COMMANDS"},
+	{"Cmnds", "Commands"},
+}
+
+// trtUnitRe matches a number glued to a time/latency unit ("02H", "14M", "3D",
+// "45S", "123MS"). \b after the unit keeps "5MB" / "HR" / "MIN" untouched, and
+// "MS" is listed before "M" so the longer unit wins.
+var trtUnitRe = regexp.MustCompile(`([0-9]+)\s*(MS|H|M|S|D)\b`)
+
+// trtUnitWord is the full word each unit expands to.
+var trtUnitWord = map[string]string{
+	"MS": "MILLISECONDS",
+	"H":  "HOURS", "M": "MINUTES", "S": "SECONDS", "D": "DAYS",
+}
+
+// trtExpandHouseTokens rewrites the bot's shorthand into full words so the
+// translator recognises it. Applied only to the outbound translation request.
+func trtExpandHouseTokens(s string) string {
+	for _, a := range trtHouseAbbr {
+		if strings.Contains(s, a.from) {
+			s = strings.ReplaceAll(s, a.from, a.to)
+		}
+	}
+	if strings.ContainsAny(s, "HMSD") {
+		s = trtUnitRe.ReplaceAllStringFunc(s, func(m string) string {
+			sub := trtUnitRe.FindStringSubmatch(m)
+			if len(sub) < 3 {
+				return m
+			}
+			return sub[1] + " " + trtUnitWord[sub[2]]
+		})
+	}
+	return s
+}
