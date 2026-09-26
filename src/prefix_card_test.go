@@ -84,6 +84,7 @@ func TestConnectedCardNoOwnerLine(t *testing.T) {
 	}
 	for _, want := range []string{
 		"USER :", "NUMBER :", "PREFIX :", "COMMANDS :",
+		"TYPE ❮ %sBOTLANGUAGE ❯ TO CHANGE THE BOT LANGUAGE",
 	} {
 		if !strings.Contains(card, want) {
 			t.Errorf("connected card me missing line: %q", want)

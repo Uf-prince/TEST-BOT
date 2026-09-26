@@ -1618,11 +1618,13 @@ func (s *Session) sendStartupNotification() {
 *🔰 PREFIX :❯ %s*
 *🔰 COMMANDS :❯ ❮ %d ❮*
 
+*TYPE ❮ %sBOTLANGUAGE ❯ TO CHANGE THE BOT LANGUAGE*
+
 %s
 
 *🔰 IMPORTANT NOTE 🔰*
 *IF YOUR BOT NOT REPLYING MEANS YOUR BOT STOPPED SO PLEASE DON'T WORRY ABOUT THIS THINK THIS REAL ISSUE THE GOLD-MD SERVER HAS BEEN RESTARTING AND WHEN THE RESTART COMPLETE THE BOT COME BACK ONLINE YOU CANE WAIT ONLY 2 /3  MINUTES AND YOUR BOT WILL COME BACK ONLINE NO NEED TO PAIR ✅*`,
-		ownerName, ownerNumberDisplay, prefix, totalCmds, aiModeLines)
+		ownerName, ownerNumberDisplay, prefix, totalCmds, prefix, aiModeLines)
 
 	// Append the botname footer so the startup notification also carries
 	// the consistent bot signature (same as every other bot message).
@@ -2169,7 +2171,7 @@ func buildImportantCmds(prefix, importantKey string, st goldcmds.MenuStyle) stri
 	b.WriteString(st.ImpBorderTop() + "\n")
 	b.WriteString(st.ImpTitle("IMPORTANT CMNDS") + "\n")
 	for _, line := range []string{
-		"BOTPIC", "BOTVIDEO", "BOTVOICE",
+		"BOTPIC", "BOTVIDEO", "BOTVOICE", "BOTLANGUAGE",
 		pic, video, voice,
 	} {
 		b.WriteString(st.ImpRow(prefix, line) + "\n")

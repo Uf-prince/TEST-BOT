@@ -61,6 +61,23 @@ Don't chase these unless asked.
   cannot wipe aliases that already work. Maps carrying `com.*` rows are rebuilt
   once to drop that legacy junk (`clMapHasLegacyJunk`).
 
+## Menu header + IMPORTANT CMNDS block
+
+- `buildMenuHeader` (`src/manager.go`) renders the header for EVERY menu (.menu,
+  every category, .logo, .font, .game, .equalizer, .botstyle) and then calls
+  `buildImportantCmds`. Adding a row there reaches all menus at once — do not add
+  per-menu copies.
+- The IMPORTANT CMNDS block carries the three bot-wide setters first
+  (`BOTPIC`, `BOTVIDEO`, `BOTVOICE`, `BOTLANGUAGE`) and then that menu's own three
+  setters from `goldcmds.MenuImportantCommands(key)`. `.BOTLANGUAGE` is a
+  bot-wide setting, so it belongs in the shared prefix, not in a per-menu row.
+- The startup card (`src/manager.go`, the `*GOLD-MD HAS BEEN STARTED*` template)
+  carries `*TYPE ❮ <prefix>BOTLANGUAGE ❯ TO CHANGE THE BOT LANGUAGE*` right after
+  the COMMANDS line. Its prefix comes from the same `prefix` arg as the PREFIX
+  line, so a custom prefix is reflected there too.
+- `src/menu_important_cmds_test.go` and `src/prefix_card_test.go` pin both, so
+  the block/card cannot silently lose the BOTLANGUAGE line.
+
 ## Language catalog (.botlanguage / .trt) — one shared list, Pakistani script
 
 - `.botlanguage` (bot output language) and `.trt` (translate a message) share ONE

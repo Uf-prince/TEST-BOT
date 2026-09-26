@@ -17,6 +17,7 @@ func TestImportantCmdsBlockOnEveryMenu(t *testing.T) {
 		"*|🔰| .BOTPIC*",
 		"*|🔰| .BOTVIDEO*",
 		"*|🔰| .BOTVOICE*",
+		"*|🔰| .BOTLANGUAGE*",
 		"*|🔰| .MENUPIC*",
 		"*|🔰| .MENUVIDEO*",
 		"*|🔰| .MENUVOICE*",
