@@ -127,6 +127,59 @@ func TestTranslatePreservingCommandTokensLineDriftFallsBack(t *testing.T) {
 	}
 }
 
+// TestSplitTokenLineCoversBareTokens: menu me do shaklen hain — bracketed
+// ("❰ .BOTPIC ❱ DESC") aur bare ("| 🔰 | .LOGO5 ❮ YOUR NAME ❯"). Dono me token
+// verbatim rehna chahiye, warna user wo type nahi kar sakta.
+func TestSplitTokenLineCoversBareTokens(t *testing.T) {
+	Register(Command{Name: "botvideo", Hidden: true})
+	Register(Command{Name: "logopic", Hidden: true})
+
+	cases := []struct{ in, wantHead, wantTail string }{
+		{"*❰ .BOTPIC ❱ CHANGE BOT PIC*", "*❰ .BOTPIC ❱", " CHANGE BOT PIC*"},
+		{"*|🔰| .BOTVIDEO*", "*|🔰| .BOTVIDEO", "*"},
+		{"*| 🔰 | .LOGO5 ❮ YOUR NAME ❯*", "*| 🔰 | .LOGO5", " ❮ YOUR NAME ❯*"},
+		{"*| 🔰 | .LOGO1000 ❮ YOUR NAME ❯*", "*| 🔰 | .LOGO1000", " ❮ YOUR NAME ❯*"},
+	}
+	for _, c := range cases {
+		head, tail, ok := splitTokenLine(c.in)
+		if !ok {
+			t.Errorf("token nahi mila: %q", c.in)
+			continue
+		}
+		if head != c.wantHead || tail != c.wantTail {
+			t.Errorf("splitTokenLine(%q) = (%q, %q), want (%q, %q)", c.in, head, tail, c.wantHead, c.wantTail)
+		}
+	}
+	// Non-tokens must stay whole so they still get translated.
+	for _, in := range []string{"*🔰 LOGO MENU 🔰*", "SEND A LINK ENDING IN .jpg", "*USER:❯ 923158930864*"} {
+		if _, _, ok := splitTokenLine(in); ok {
+			t.Errorf("non-token line split ho gayi: %q", in)
+		}
+	}
+}
+
+// TestTokenDigitsSurviveTranslation: ".logo5" ka digit ASCII hi rehna chahiye
+// chahe baaki line Urdu ho jaye.
+func TestTokenDigitsSurviveTranslation(t *testing.T) {
+	old := clTranslator
+	clTranslator = func(ctx context.Context, text, target string) (string, error) {
+		return "آپ کا نام", nil
+	}
+	defer func() { clTranslator = old }()
+
+	in := "*| 🔰 | .LOGO5 ❮ YOUR NAME ❯*"
+	out, err := TranslatePreservingCommandTokens(context.Background(), in, "ur")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if !strings.Contains(out, ".LOGO5") {
+		t.Errorf("token ka digit localize ho gaya, user type nahi kar payega: %q", out)
+	}
+	if strings.Contains(out, "۵") {
+		t.Errorf("ASCII digit ke bajaye Urdu numeral aa gaya: %q", out)
+	}
+}
+
 func TestClCanonicalNamesSkipsInternalModules(t *testing.T) {
 	for _, n := range clCanonicalNames() {
 		if strings.HasPrefix(n, "com.") {

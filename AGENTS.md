@@ -80,6 +80,15 @@ Hindi ०१२, Arabic ٠١٢, Bengali ০১২, …). Latin-script targets ke
 Digits inside a command token (".logo1") are never localised, so the menu still
 shows a typeable token.
 
+**Command tokens are never translated.** `splitTokenLine` covers both shapes a
+menu uses: a BRACKETED token ("❰ .BOTPIC ❱ CHANGE BOT PIC") and a BARE token
+("| 🔰 | .LOGO5 ❮ YOUR NAME ❯"). Only the bracketed shape used to be detected,
+so ".LOGO5" and ".BOTVIDEO" went through the translator and came back as
+"لوگو۵" / ".بوٹویڈیو" — a token the user could never type. `logo1..logo1000`
+are generated into `clKnownCommandNames` from `LogoCount` because the main
+package registers them, so they are absent from the plugin registry and from
+the hook during gold-cmds-only tests.
+
 `rcVersion` in `src/replycache.go` tags every cache key: bump it whenever the
 translation pipeline changes, otherwise the old (wrong) translations keep being
 served from RAM/disk/Storj.

@@ -19,7 +19,9 @@ package goldcmds
 import (
 	"context"
 	"regexp"
+	"strconv"
 	"strings"
+	"unicode"
 )
 
 // bracketTokenRe captures the content inside the decorative brackets every menu
@@ -37,6 +39,12 @@ func clKnownCommandNames() map[string]bool {
 		if n := strings.ToLower(strings.TrimSpace(c.Name)); n != "" {
 			known[n] = true
 		}
+	}
+	// logo1..logo1000 are registered by the main package, so they are absent from
+	// the plugin registry above and from the hook in gold-cmds-only tests. They
+	// are generated here from LogoCount so ".logo5" is protected everywhere.
+	for n := 1; n <= LogoCount; n++ {
+		known["logo"+strconv.Itoa(n)] = true
 	}
 	if cmdNameKnownHook != nil {
 		for _, n := range cmdNameKnownHook() {
@@ -159,10 +167,12 @@ func TranslatePreservingCommandTokens(ctx context.Context, text, lang string) (s
 		// verbatim (that is the text the user must type) while the description after
 		// it is still translated.
 		if head, tail, ok := splitTokenLine(ln); ok {
-			if strings.TrimSpace(tail) == "" {
+			prefix[i] = head
+			// A tail of pure decoration ("*", "❯") carries nothing to translate and
+			// would only risk mangling or a line-count drift.
+			if !trtHasLetters(tail) {
 				continue
 			}
-			prefix[i] = head
 			idx = append(idx, i)
 			batch = append(batch, tail)
 			continue
@@ -276,6 +286,11 @@ func trtTranslateChunk(ctx context.Context, tr func(context.Context, string, str
 // splitTokenLine splits a line at the end of its last command token, returning
 // the verbatim head (through the closing bracket) and the translatable tail.
 // ok is false when the line carries no command token.
+//
+// Both shapes a menu uses are covered: a BRACKETED token ("❰ .BOTPIC ❱ CHANGE
+// BOT PIC") and a BARE token ("| 🔰 | .LOGO5 ❮ YOUR NAME ❯"). Missing the bare
+// shape sent ".LOGO5" and ".BOTVIDEO" through the translator, which returned
+// "لوگو۵" / ".بوٹویڈیو" — a token the user could never type.
 func splitTokenLine(line string) (head, tail string, ok bool) {
 	known := clKnownCommandNames()
 	end := -1
@@ -284,8 +299,29 @@ func splitTokenLine(line string) (head, tail string, ok bool) {
 			end = m[1]
 		}
 	}
+	for _, m := range prefixTokenRe.FindAllStringSubmatchIndex(line, -1) {
+		// Same guard as LineHasCommandToken: ".jpg" in "photo.jpg" is not a token.
+		if m[0] > 0 && isWordByte(line[m[0]-1]) {
+			continue
+		}
+		if known[strings.ToLower(line[m[2]:m[3]])] && m[1] > end {
+			end = m[1]
+		}
+	}
 	if end < 0 {
 		return "", "", false
 	}
 	return line[:end], line[end:], true
+}
+
+// trtHasLetters reports whether s carries anything a translator could translate.
+// A tail of pure decoration ("*", "❯", "─━─") must not be sent: it would come
+// back mangled and could drift the batch's line count.
+func trtHasLetters(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
 }
